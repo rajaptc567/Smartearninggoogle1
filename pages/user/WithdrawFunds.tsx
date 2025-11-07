@@ -22,7 +22,8 @@ const WithdrawFunds: React.FC = () => {
     
     const activePlanPrices = useMemo(() => 
         [...new Set(investmentPlans.filter(p => p.status === Status.Active).map(p => p.price))]
-        .sort((a,b) => a - b), 
+        // FIX: Explicitly define types for sort callback parameters to resolve TypeScript inference error.
+        .sort((a, b) => a - b), 
     [investmentPlans]);
 
     const selectedMethod: PaymentMethod | undefined = useMemo(() =>
