@@ -1,11 +1,19 @@
 import { User } from '../types';
 
-// The base URL of your backend API.
-// In development, this points to your local server.
-// When you deploy, you'll set an environment variable (e.g., VITE_API_URL on Vercel)
-// to your live Render backend URL.
-// FIX: Cast `import.meta` to `any` to address the TypeScript error "Property 'env' does not exist on type 'ImportMeta'". This is a workaround for when Vite's client types are not included in the TypeScript configuration.
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
+// The base URL of your backend API is determined at runtime.
+// This allows the same code to work for both local development and live deployment.
+function getApiBaseUrl() {
+  const hostname = window.location.hostname;
+  // Check if running on localhost for development
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000/api/v1';
+  }
+  // Otherwise, use the live production URL
+  return 'https://smartearning-api.onrender.com/api/v1';
+}
+
+const API_BASE_URL = getApiBaseUrl();
+
 
 // A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
