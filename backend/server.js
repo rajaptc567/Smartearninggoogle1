@@ -18,7 +18,17 @@ const app = express();
 app.use(express.json());
 
 // Enable CORS
+// For production, you should restrict the origin to your Vercel frontend URL
+/*
+const corsOptions = {
+  origin: 'https://your-vercel-app-name.vercel.app',
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+*/
+// For development, allowing all origins is fine.
 app.use(cors());
+
 
 // A simple test route
 app.get('/', (req, res) => {

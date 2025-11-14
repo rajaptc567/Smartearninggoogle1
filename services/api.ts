@@ -4,7 +4,7 @@ import { User } from '../types';
 // In development, this points to your local server.
 // When you deploy, you'll set an environment variable (e.g., VITE_API_URL on Vercel)
 // to your live Render backend URL.
-const API_BASE_URL = process.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 // A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
