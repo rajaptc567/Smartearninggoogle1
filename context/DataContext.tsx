@@ -31,7 +31,7 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
     },
     notifications: mockNotifications,
-    currentUser: null, // Start with no user logged in
+    currentUser: null, // This will be hydrated from localStorage by the initializer
 };
 
 type Action =
@@ -82,6 +82,15 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
         // AUTH ACTIONS
         case 'SET_CURRENT_USER':
+            try {
+                if (action.payload) {
+                    localStorage.setItem('currentUser', JSON.stringify(action.payload));
+                } else {
+                    localStorage.removeItem('currentUser');
+                }
+            } catch (error) {
+                console.error("Could not access localStorage:", error);
+            }
             return { ...state, currentUser: action.payload };
 
         // NOTIFICATION ACTIONS
@@ -116,7 +125,17 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         }
         case 'UPDATE_USER': {
             const updatedUsers = state.users.map(u => u._id === action.payload._id ? action.payload : u);
-            const updatedCurrentUser = state.currentUser?._id === action.payload._id ? action.payload : state.currentUser;
+            let updatedCurrentUser = state.currentUser;
+
+            if (state.currentUser?._id === action.payload._id) {
+                updatedCurrentUser = action.payload;
+                try {
+                    localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser));
+                } catch (error) {
+                    console.error("Could not access localStorage:", error);
+                }
+            }
+
             return {
                 ...state,
                 users: updatedUsers,
@@ -488,8 +507,23 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
     dispatch: () => null,
 });
 
+// This function runs once to initialize the state, attempting to load the user from localStorage.
+const initializer = (initialState: AppState) => {
+    try {
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+            return { ...initialState, currentUser: JSON.parse(savedUser) as User };
+        }
+    } catch (error) {
+        console.error("Could not parse user from localStorage", error);
+        // If parsing fails, clear the invalid item
+        localStorage.removeItem('currentUser');
+    }
+    return initialState;
+};
+
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [state, dispatch] = useReducer(dataReducer, initialState);
+    const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
 
     useEffect(() => {
         const fetchInitialData = async () => {
