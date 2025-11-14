@@ -32,6 +32,22 @@ export const getUser = async (req, res, next) => {
 // @access  Public
 export const createUser = async (req, res, next) => {
     try {
+        const { sponsor } = req.body;
+
+        // If a sponsor is provided, validate that they exist
+        if (sponsor) {
+            // Use a case-insensitive regex to find the sponsor
+            const sponsorExists = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
+            if (!sponsorExists) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `Sponsor with username '${sponsor}' not found. Please check the username or leave the field blank.` 
+                });
+            }
+             // Normalize the sponsor username to match the database casing for data integrity
+            req.body.sponsor = sponsorExists.username;
+        }
+
         const user = await User.create(req.body);
         // In a real app, you would hash the password here before saving
         // and return a JWT token for authentication.

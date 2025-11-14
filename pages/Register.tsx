@@ -7,7 +7,7 @@ import { createUser as apiCreateUser } from '../services/api';
 
 const Register: React.FC = () => {
     const navigate = useNavigate();
-    const { dispatch } = useData();
+    const { state, dispatch } = useData();
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -26,6 +26,15 @@ const Register: React.FC = () => {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Client-side validation to check if sponsor exists, if one is provided
+        if (formData.sponsor) {
+            const sponsorExists = state.users.some(user => user.username.toLowerCase() === formData.sponsor.toLowerCase());
+            if (!sponsorExists) {
+                alert(`Sponsor with username "${formData.sponsor}" does not exist. Please check the username or leave it blank.`);
+                return;
+            }
+        }
         
         const newUserPayload: Partial<User> = {
             ...formData,
@@ -89,8 +98,8 @@ const Register: React.FC = () => {
                         <input id="country" name="country" type="text" value={formData.country} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
                     </div>
                      <div>
-                        <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username</label>
-                        <input id="sponsor" name="sponsor" type="text" value={formData.sponsor} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username (Optional)</label>
+                        <input id="sponsor" name="sponsor" type="text" value={formData.sponsor} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
                     </div>
                     <div>
                         <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
