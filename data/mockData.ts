@@ -7,12 +7,7 @@ export const mockUsers: User[] = [
   { _id: '4', username: 'chris.green', fullName: 'Chris Green', email: 'chris.green@example.com', phone: '456-789-0123', whatsapp: '4567890123', country: 'Australia', walletBalance: 55.20, activePlan: 'Bronze Plan', registrationDate: '2023-10-23', status: Status.Blocked, sponsor: 'john.doe' },
 ];
 
-export const mockDeposits: Deposit[] = [
-  { _id: 'DEP1001', userId: '2', userName: 'jane.smith', method: 'USDT', amount: 250, transactionId: 'TXN-ABC-123', receiptUrl: 'https://picsum.photos/200/300', status: Status.Pending, date: '2023-10-27' },
-  { _id: 'DEP1002', userId: '1', userName: 'john.doe', method: 'Easypaisa', amount: 250, transactionId: 'TXN-DEF-456', status: Status.Approved, date: '2023-10-26', adminNotes: 'Verified' },
-  { _id: 'DEP1003', userId: '4', userName: 'chris.green', method: 'BTC', amount: 500, transactionId: 'TXN-GHI-789', status: Status.Rejected, date: '2023-10-25', adminNotes: 'Invalid transaction hash' },
-  { _id: 'DEP1004', userId: '2', userName: 'jane.smith', method: 'JazzCash', amount: 50, transactionId: 'TXN-JKL-101', status: Status.Approved, date: '2023-10-24', userNotes: 'Urgent deposit for plan upgrade.' },
-];
+export const mockDeposits: Deposit[] = [];
 
 export const mockWithdrawals: Withdrawal[] = [
     { _id: 'WDR2001', userId: '1', userName: 'john.doe', method: 'Easypaisa', amount: 50, fee: 2.5, finalAmount: 47.5, status: Status.Paid, date: '2023-10-26', accountTitle: 'John Doe', accountNumber: '03001234567' },
@@ -100,27 +95,11 @@ export const mockTransfers: Transfer[] = [
     { _id: 'TRF4002', senderId: '2', senderName: 'jane.smith', recipientId: '4', recipientName: 'chris.green', amount: 50, status: Status.Approved, date: '2023-10-27', adminNotes: 'Approved' },
 ];
 
-export const mockTransactions: Transaction[] = [
-    { _id: 'TRN3001', userId: '1', userName: 'john.doe', type: 'Deposit', amount: 250, date: '2023-10-26', description: 'Approved Deposit #DEP1002', status: 'Approved' },
-    { _id: 'TRN3002', userId: '2', userName: 'jane.smith', type: 'Withdrawal Request', amount: -100, date: '2023-10-27', description: 'Pending Withdrawal #WDR2002', status: 'Pending' },
-    { _id: 'TRN3003', userId: '1', userName: 'john.doe', type: 'Commission', amount: 20, date: '2023-10-26', description: 'From jane.smith', level: 1, status: 'Approved' },
-    { _id: 'TRN3005', userId: '1', userName: 'john.doe', type: 'Commission', amount: 1, date: '2023-10-25', description: 'From sam.wilson', level: 2, status: 'Approved' },
-    { _id: 'TRN3004', userId: '4', userName: 'chris.green', type: 'Manual Debit', amount: -20, date: '2023-10-25', description: 'Correction for incorrect bonus.', status: 'Approved' },
-    { _id: 'TRN3006', userId: '1', userName: 'john.doe', type: 'Transfer Request', amount: -25, date: '2023-10-28', description: 'Transfer to jane.smith #TRF4001', status: 'Pending' },
-    { _id: 'TRN3007', userId: '2', userName: 'jane.smith', type: 'Transfer Sent', amount: -50, date: '2023-10-27', description: 'Transfer to chris.green #TRF4002', status: 'Approved' },
-    { _id: 'TRN3008', userId: '4', userName: 'chris.green', type: 'Transfer Received', amount: 50, date: '2023-10-27', description: 'From jane.smith #TRF4002', status: 'Approved' },
-    { _id: 'TRN3009', userId: '1', userName: 'john.doe', type: 'Withdrawal Request', amount: -50, date: '2023-10-26', description: 'Withdrawal #WDR2001', status: 'Approved' },
-    { _id: 'TRN_PENDING_COMM', userId: '1', userName: 'john.doe', type: 'Commission', amount: 37.5, date: '2023-10-27', description: 'From jane.smith (Deposit #DEP1001)', level: 1, status: 'Pending' },
-];
+export const mockTransactions: Transaction[] = [];
 
 export const mockRules: Rule[] = [
     { _id: '1', fromPlan: 'Bronze Plan', toPlan: 'Silver Plan', requiredEarnings: 500 },
     { _id: '2', fromPlan: 'Silver Plan', toPlan: 'Gold Plan', requiredEarnings: 2000 },
 ];
 
-export const mockNotifications: Notification[] = [
-    { _id: '1', userId: '1', message: "Your withdrawal request #WDR2001 for $50.00 has been paid.", date: "2023-10-26", read: true },
-    { _id: '2', userId: '1', message: "You have received a Level 1 commission of $20.00 from jane.smith.", date: "2023-10-26", read: true },
-    { _id: '3', userId: '1', message: "Your transfer request to jane.smith for $25.00 is pending.", date: "2023-10-28", read: false },
-    { _id: '4', userId: '2', message: "Your deposit #DEP1004 for $50.00 has been approved.", date: "2023-10-24", read: false },
-];
+export const mockNotifications: Notification[] = [];

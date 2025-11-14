@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Deposit, PaymentMethod, Status, Withdrawal } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
+import { createDeposit } from '../../services/api';
 
 const DepositFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -12,6 +13,7 @@ const DepositFunds: React.FC = () => {
     const [transactionId, setTransactionId] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const [userNotes, setUserNotes] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [matchedWithdrawal, setMatchedWithdrawal] = useState<Withdrawal | null>(null);
 
@@ -56,30 +58,34 @@ const DepositFunds: React.FC = () => {
         return selectedMethod;
     }, [selectedMethod, matchedWithdrawal]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedMethod || !amount || !transactionId || !receipt || !currentUser) {
             alert('Please fill all fields and upload a receipt.');
             return;
         }
         
-        const newDeposit: Deposit = {
-            _id: `DEP${Date.now()}`,
-            userId: currentUser._id,
-            userName: currentUser.username,
-            method: selectedMethod.name,
-            amount: parseFloat(amount),
-            transactionId: transactionId,
-            receiptUrl: URL.createObjectURL(receipt),
-            status: Status.Pending,
-            date: new Date().toISOString().split('T')[0],
-            userNotes: userNotes,
-            matchedWithdrawalId: matchedWithdrawal ? matchedWithdrawal._id : undefined,
-        };
+        setIsSubmitting(true);
+        const formData = new FormData();
+        formData.append('userId', currentUser._id);
+        formData.append('userName', currentUser.username);
+        formData.append('method', selectedMethod.name);
+        formData.append('amount', amount);
+        formData.append('transactionId', transactionId);
+        formData.append('receipt', receipt);
+        if(userNotes) formData.append('userNotes', userNotes);
+        if(matchedWithdrawal) formData.append('matchedWithdrawalId', matchedWithdrawal._id);
 
-        dispatch({ type: 'ADD_DEPOSIT', payload: newDeposit });
-        
-        setIsSubmitted(true);
+        try {
+            const newDeposit = await createDeposit(formData);
+            dispatch({ type: 'ADD_DEPOSIT', payload: newDeposit });
+            setIsSubmitted(true);
+        } catch (error) {
+            console.error("Failed to create deposit:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not submit deposit.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (isSubmitted) {
@@ -156,7 +162,7 @@ const DepositFunds: React.FC = () => {
                 )}
                  {selectedMethod && (
                     <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
-                        <Button type="submit">Submit Deposit Request</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Deposit Request'}</Button>
                     </div>
                  )}
             </form>

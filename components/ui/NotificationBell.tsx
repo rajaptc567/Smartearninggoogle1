@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Notification } from '../../types';
 import { useData } from '../../hooks/useData';
+import { markNotificationsAsRead } from '../../services/api';
 
 interface NotificationBellProps {
   notifications: Notification[];
@@ -13,11 +14,18 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ notifications, user
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
-  const handleToggle = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen && unreadCount > 0 && userId) {
-      // Mark as read when the panel is opened
-      dispatch({ type: 'MARK_NOTIFICATIONS_AS_READ', payload: userId });
+  const handleToggle = async () => {
+    const nextIsOpen = !isOpen;
+    setIsOpen(nextIsOpen);
+    
+    if (nextIsOpen && unreadCount > 0 && userId) {
+      try {
+        // Mark as read when the panel is opened
+        const updatedNotifications = await markNotificationsAsRead(userId);
+        dispatch({ type: 'MARK_NOTIFICATIONS_AS_READ', payload: updatedNotifications });
+      } catch (error) {
+        console.error("Failed to mark notifications as read:", error);
+      }
     }
   };
 
@@ -42,7 +50,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ notifications, user
               notifications.map(notif => (
                 <div key={notif._id} className={`p-4 border-b dark:border-gray-700 ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                   <p className="text-sm text-gray-700 dark:text-gray-300">{notif.message}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.date}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{new Date(notif.date).toLocaleDateString()}</p>
                 </div>
               ))
             ) : (

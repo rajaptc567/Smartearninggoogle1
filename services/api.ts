@@ -1,4 +1,4 @@
-import { User } from '../types';
+import { User, Deposit, Transaction, Notification } from '../types';
 
 // The base URL of your backend API is determined at runtime.
 // This allows the same code to work for both local development and live deployment.
@@ -12,6 +12,14 @@ function getApiBaseUrl() {
   return 'https://smartearning-api.onrender.com/api/v1';
 }
 
+export function getUploadsBaseUrl() {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:5000';
+    }
+    return 'https://smartearning-api.onrender.com';
+}
+
 const API_BASE_URL = getApiBaseUrl();
 
 
@@ -22,64 +30,84 @@ const handleResponse = async (response: Response) => {
         const error = (data && data.error) || response.statusText;
         throw new Error(error);
     }
-    return data.data;
+    return data; // Return the full response object { success, data, count }
 };
 
 // --- User API Functions ---
 
-/**
- * Fetches all users from the backend.
- * @returns {Promise<User[]>} A promise that resolves to an array of users.
- */
 export const getUsers = async (): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`);
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result.data;
 };
 
-/**
- * Creates a new user.
- * @param {Partial<User>} userData - The data for the new user.
- * @returns {Promise<User>} A promise that resolves to the newly created user.
- */
 export const createUser = async (userData: Partial<User>): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
     });
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result.data;
 };
 
-/**
- * Updates an existing user.
- * @param {string} id - The ID of the user to update.
- * @param {Partial<User>} userData - The updated data for the user.
- * @returns {Promise<User>} A promise that resolves to the updated user.
- */
 export const updateUser = async (id: string, userData: Partial<User>): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}`, {
         method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
     });
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result.data;
 };
 
-/**
- * Deletes a user.
- * @param {string} id - The ID of the user to delete.
- * @returns {Promise<any>} A promise that resolves when the user is deleted.
- */
-export const deleteUser = async (id: string): Promise<any> => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
-        method: 'DELETE',
+// --- Deposit API Functions ---
+
+export const getDeposits = async (): Promise<Deposit[]> => {
+    const response = await fetch(`${API_BASE_URL}/deposits`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createDeposit = async (formData: FormData): Promise<Deposit> => {
+    const response = await fetch(`${API_BASE_URL}/deposits`, {
+        method: 'POST',
+        body: formData, // Don't set Content-Type header, browser does it for FormData
     });
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result.data;
 };
 
-// --- TODO: Add API functions for other resources ---
-// e.g., getDeposits, updateDeposit, etc.
+export const updateDeposit = async (id: string, updateData: Partial<Deposit>): Promise<{deposit: Deposit, user: User}> => {
+    const response = await fetch(`${API_BASE_URL}/deposits/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+// --- Transaction API Functions ---
+
+export const getTransactions = async (): Promise<Transaction[]> => {
+    const response = await fetch(`${API_BASE_URL}/transactions`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+// --- Notification API Functions ---
+
+export const getNotifications = async (): Promise<Notification[]> => {
+    const response = await fetch(`${API_BASE_URL}/notifications`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
+    const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {
+        method: 'PUT',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};

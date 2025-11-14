@@ -5,6 +5,8 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useData } from '../hooks/useData';
+import { updateDeposit } from '../services/api';
+import { getUploadsBaseUrl } from '../services/api';
 
 const Deposits: React.FC = () => {
     const { state, dispatch } = useData();
@@ -19,6 +21,9 @@ const Deposits: React.FC = () => {
     const [selectedDeposit, setSelectedDeposit] = useState<Deposit | null>(null);
     const [adminNotes, setAdminNotes] = useState('');
     const [currentStatus, setCurrentStatus] = useState<Deposit['status']>(Status.Pending);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const UPLOADS_URL = getUploadsBaseUrl();
 
     useEffect(() => {
         if (selectedDeposit) {
@@ -27,21 +32,31 @@ const Deposits: React.FC = () => {
         }
     }, [selectedDeposit]);
 
-    const handleSaveChanges = () => {
+    const handleSaveChanges = async () => {
         if (selectedDeposit) {
-            const updatedDeposit = {
-                ...selectedDeposit,
-                status: currentStatus,
-                adminNotes: adminNotes,
-            };
-            dispatch({ type: 'UPDATE_DEPOSIT', payload: updatedDeposit });
-            handleCloseDetailModal();
+            setIsSaving(true);
+            try {
+                const result = await updateDeposit(selectedDeposit._id, {
+                    status: currentStatus,
+                    adminNotes: adminNotes,
+                });
+                // The API now returns the updated deposit and user
+                dispatch({ type: 'UPDATE_DEPOSIT', payload: result });
+                // We should also refetch transactions and notifications to see changes
+                // For simplicity, we can let the user refresh or build a refetch mechanism
+                handleCloseDetailModal();
+            } catch (error) {
+                console.error("Failed to update deposit:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not update deposit.'}`);
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
 
     const handleViewReceipt = (e: React.MouseEvent, receiptUrl: string) => {
         e.stopPropagation(); 
-        setSelectedReceipt(receiptUrl);
+        setSelectedReceipt(`${UPLOADS_URL}${receiptUrl}`);
         setIsImageModalOpen(true);
     };
     
@@ -78,14 +93,14 @@ const Deposits: React.FC = () => {
                         <td className="px-4 py-3">
                             {deposit.receiptUrl ? (
                                 <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <img src={deposit.receiptUrl} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
+                                    <img src={`${UPLOADS_URL}${deposit.receiptUrl}`} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
                                 </button>
                             ) : (
                                 'N/A'
                             )}
                         </td>
                         <td className="px-4 py-3"><Badge status={deposit.status} /></td>
-                        <td className="px-4 py-3 text-sm">{deposit.date}</td>
+                        <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
                     </tr>
                 ))}
             </Table>
@@ -111,7 +126,7 @@ const Deposits: React.FC = () => {
                             <div><span className="font-semibold">User:</span> {selectedDeposit.userName} (ID: {selectedDeposit.userId})</div>
                             <div><span className="font-semibold">Amount:</span> ${selectedDeposit.amount.toFixed(2)}</div>
                             <div><span className="font-semibold">Method:</span> {selectedDeposit.method}</div>
-                            <div><span className="font-semibold">Date:</span> {selectedDeposit.date}</div>
+                            <div><span className="font-semibold">Date:</span> {new Date(selectedDeposit.date).toLocaleString()}</div>
                             <div className="md:col-span-2"><span className="font-semibold">Transaction ID:</span> <span className="font-mono">{selectedDeposit.transactionId}</span></div>
                         </div>
 
@@ -129,11 +144,13 @@ const Deposits: React.FC = () => {
                                 value={currentStatus} 
                                 onChange={(e) => setCurrentStatus(e.target.value as Deposit['status'])}
                                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                disabled={selectedDeposit.status !== Status.Pending}
                             >
                                 <option value={Status.Pending}>Pending</option>
                                 <option value={Status.Approved}>Approved</option>
                                 <option value={Status.Rejected}>Rejected</option>
                             </select>
+                            {selectedDeposit.status !== Status.Pending && <p className="text-xs text-yellow-500 mt-1">This deposit has already been processed and its status cannot be changed.</p>}
                         </div>
 
                          <div className="mt-6">
@@ -151,13 +168,15 @@ const Deposits: React.FC = () => {
                         {selectedDeposit.receiptUrl && (
                             <div className="mt-6">
                                 <h4 className="font-semibold mb-2">Receipt</h4>
-                                <img src={selectedDeposit.receiptUrl} alt="Deposit receipt" className="rounded-lg w-full max-w-lg mx-auto shadow-md" />
+                                <img src={`${UPLOADS_URL}${selectedDeposit.receiptUrl}`} alt="Deposit receipt" className="rounded-lg w-full max-w-lg mx-auto shadow-md" />
                             </div>
                         )}
 
                         <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
                             <Button variant="secondary" onClick={handleCloseDetailModal}>Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
+                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving || selectedDeposit.status !== Status.Pending}>
+                                {isSaving ? 'Saving...' : 'Save Changes'}
+                            </Button>
                         </div>
                     </div>
                 </Modal>
