@@ -25,12 +25,18 @@ const API_BASE_URL = getApiBaseUrl();
 
 // A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
-    const data = await response.json();
-    if (!response.ok) {
-        const error = (data && data.error) || response.statusText;
-        throw new Error(error);
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (!response.ok) {
+            const error = (data && data.error) || response.statusText;
+            throw new Error(error);
+        }
+        return data; // Return the full response object { success, data, count }
+    } else {
+         const text = await response.text();
+         throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
     }
-    return data; // Return the full response object { success, data, count }
 };
 
 // --- User API Functions ---
