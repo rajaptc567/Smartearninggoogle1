@@ -30,7 +30,7 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
     },
     notifications: mockNotifications,
-    currentUser: mockUsers[0] || null, // Keep a mock user for member panel demo
+    currentUser: null, // Start with no user logged in
 };
 
 type Action =
@@ -57,7 +57,8 @@ type Action =
     | { type: 'ADD_TRANSFER'; payload: Omit<Transfer, '_id' | 'status' | 'date'> }
     | { type: 'UPDATE_TRANSFER'; payload: Transfer }
     | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, '_id'> }
-    | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: string }; // userId
+    | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: string } // userId
+    | { type: 'SET_CURRENT_USER'; payload: User | null };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -78,6 +79,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     };
     
     switch (action.type) {
+        // AUTH ACTIONS
+        case 'SET_CURRENT_USER':
+            return { ...state, currentUser: action.payload };
+
         // NOTIFICATION ACTIONS
         case 'ADD_NOTIFICATION':
             const newNotification = { ...action.payload, _id: String(Date.now()) };

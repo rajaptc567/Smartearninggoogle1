@@ -1,15 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import { useData } from '../hooks/useData';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
+    const { state, dispatch } = useData();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        // In a real app, you'd have authentication logic here.
-        // For this demo, we'll just navigate to the member dashboard.
-        navigate('/member');
+        
+        // Find user by email (in a real app, you'd send this to a backend API)
+        const user = state.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+        // For this demo, we are not checking the password
+        if (user) {
+            dispatch({ type: 'SET_CURRENT_USER', payload: user });
+            navigate('/member');
+        } else {
+            alert('Invalid credentials. Please try again.');
+        }
     };
 
     return (
@@ -29,7 +41,8 @@ const Login: React.FC = () => {
                             type="email"
                             autoComplete="email"
                             required
-                            defaultValue="john.doe@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                     </div>
@@ -41,7 +54,8 @@ const Login: React.FC = () => {
                             type="password"
                             autoComplete="current-password"
                             required
-                            defaultValue="password123"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         />
                     </div>
