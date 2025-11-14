@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, ReactNode, useEffect, useState } from 'react';
+import React, { createContext, useReducer, ReactNode } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification } from '../types';
 import { mockUsers, mockDeposits, mockWithdrawals, mockPaymentMethods, mockInvestmentPlans, mockTransactions, mockRules, mockTransfers, mockNotifications } from '../data/mockData';
 
@@ -17,12 +17,12 @@ interface AppState {
 }
 
 const initialState: AppState = {
-    users: [],
-    deposits: [],
-    withdrawals: [],
-    transfers: [],
-    paymentMethods: [],
-    investmentPlans: [],
+    users: mockUsers,
+    deposits: mockDeposits,
+    withdrawals: mockWithdrawals,
+    transfers: mockTransfers,
+    paymentMethods: mockPaymentMethods,
+    investmentPlans: mockInvestmentPlans,
     transactions: mockTransactions,
     rules: mockRules,
     settings: {
@@ -30,11 +30,10 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
     },
     notifications: mockNotifications,
-    currentUser: null,
+    currentUser: mockUsers[0] || null,
 };
 
 type Action =
-    | { type: 'SET_STATE'; payload: Partial<AppState> }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
     | { type: 'TOGGLE_USER_STATUS'; payload: number }
@@ -78,8 +77,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     };
     
     switch (action.type) {
-        case 'SET_STATE':
-            return { ...state, ...action.payload };
         // NOTIFICATION ACTIONS
         case 'ADD_NOTIFICATION':
             const newNotification = { ...action.payload, id: Date.now() };
@@ -484,84 +481,6 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const API_BASE_URL = 'http://localhost:5001/api';
-        const fetchData = async () => {
-            try {
-                const [
-                    usersRes, 
-                    depositsRes, 
-                    withdrawalsRes, 
-                    transfersRes,
-                    paymentMethodsRes,
-                    investmentPlansRes,
-                ] = await Promise.all([
-                    fetch(`${API_BASE_URL}/users`),
-                    fetch(`${API_BASE_URL}/deposits`),
-                    fetch(`${API_BASE_URL}/withdrawals`),
-                    fetch(`${API_BASE_URL}/transfers`),
-                    fetch(`${API_BASE_URL}/payment-methods`),
-                    fetch(`${API_BASE_URL}/investment-plans`),
-                ]);
-
-                if (!usersRes.ok || !depositsRes.ok || !withdrawalsRes.ok || !transfersRes.ok || !paymentMethodsRes.ok || !investmentPlansRes.ok) {
-                    throw new Error('Network response was not ok');
-                }
-
-                const users = await usersRes.json();
-                const deposits = await depositsRes.json();
-                const withdrawals = await withdrawalsRes.json();
-                const transfers = await transfersRes.json();
-                const paymentMethods = await paymentMethodsRes.json();
-                const investmentPlans = await investmentPlansRes.json();
-                
-                dispatch({ 
-                    type: 'SET_STATE', 
-                    payload: { 
-                        users, 
-                        deposits, 
-                        withdrawals, 
-                        transfers, 
-                        paymentMethods, 
-                        investmentPlans,
-                        currentUser: users.find((u: User) => u.email === 'john.doe@example.com') || users[0] || null,
-                    }
-                });
-
-            } catch (error) {
-                console.error("Failed to fetch data from backend, using mock data as fallback:", error);
-                dispatch({
-                    type: 'SET_STATE',
-                    payload: {
-                        users: mockUsers,
-                        deposits: mockDeposits,
-                        withdrawals: mockWithdrawals,
-                        transfers: mockTransfers,
-                        paymentMethods: mockPaymentMethods,
-                        investmentPlans: mockInvestmentPlans,
-                        currentUser: mockUsers.find(u => u.email === 'john.doe@example.com') || mockUsers[0] || null,
-                    }
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
-    }, []);
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
-                    <p className="mt-4 text-lg text-gray-700 dark:text-gray-300">Loading SmartEarning Panel...</p>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <DataContext.Provider value={{ state, dispatch }}>
