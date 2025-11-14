@@ -4,7 +4,8 @@ import { User } from '../types';
 // In development, this points to your local server.
 // When you deploy, you'll set an environment variable (e.g., VITE_API_URL on Vercel)
 // to your live Render backend URL.
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+// FIX: Cast `import.meta` to `any` to address the TypeScript error "Property 'env' does not exist on type 'ImportMeta'". This is a workaround for when Vite's client types are not included in the TypeScript configuration.
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 // A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
