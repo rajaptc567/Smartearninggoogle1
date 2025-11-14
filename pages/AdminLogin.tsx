@@ -50,7 +50,7 @@ const AdminLogin: React.FC = () => {
                 </form>
                  <p className="text-sm text-center text-gray-600 dark:text-gray-400">
                     <Link to="/login" className="font-medium text-gray-500 hover:text-gray-400">
-                        Return to user login
+                        Return to member login
                     </Link>
                 </p>
             </div>

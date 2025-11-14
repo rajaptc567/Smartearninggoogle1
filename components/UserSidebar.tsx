@@ -28,7 +28,6 @@ const userNavLinks = [
   { to: '/member/transactions', label: 'Transactions', icon: <WalletIcon />, condition: null },
   { to: '/member/referrals', label: 'My Network', icon: <UsersIcon />, condition: null },
   { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
-  { to: '/admin', label: 'Admin Panel', icon: <AdminViewIcon />, condition: null },
 ];
 
 const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {

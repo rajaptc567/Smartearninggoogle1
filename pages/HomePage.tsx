@@ -17,7 +17,7 @@ const HomePage: React.FC = () => {
                     <div className="flex justify-between items-center py-4">
                         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
                         <nav className="space-x-2">
-                            <Button variant="secondary" onClick={() => navigate('/login')}>Login</Button>
+                            <Button variant="secondary" onClick={() => navigate('/login')}>Member Login</Button>
                             <Button onClick={() => navigate('/register')}>Register</Button>
                         </nav>
                     </div>
