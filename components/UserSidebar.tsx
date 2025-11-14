@@ -31,11 +31,16 @@ const userNavLinks = [
 ];
 
 const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
-    const { state } = useData();
+    const { state, dispatch } = useData();
 
     const baseLinkClass = "flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200";
     const inactiveLinkClass = "text-gray-400 hover:bg-gray-700 hover:text-white";
     const activeLinkClass = "bg-blue-600 text-white";
+
+    const handleLogout = () => {
+        dispatch({ type: 'SET_CURRENT_USER', payload: null });
+        setSidebarOpen(false);
+    };
 
     return (
         <>
@@ -69,7 +74,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                 <div className="px-4 pb-6">
                      <NavLink
                         to="/"
-                        onClick={() => setSidebarOpen(false)}
+                        onClick={handleLogout}
                         className={`${baseLinkClass} ${inactiveLinkClass} mt-2`}
                     >
                         <LogoutIcon />

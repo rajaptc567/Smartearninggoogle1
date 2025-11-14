@@ -1,6 +1,7 @@
-import React, { createContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification } from '../types';
 import { mockUsers, mockDeposits, mockWithdrawals, mockPaymentMethods, mockInvestmentPlans, mockTransactions, mockRules, mockTransfers, mockNotifications } from '../data/mockData';
+import { getUsers as apiGetUsers } from '../services/api';
 
 interface AppState {
     users: User[];
@@ -489,6 +490,19 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState);
+
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            try {
+                const users = await apiGetUsers();
+                dispatch({ type: 'SET_USERS', payload: users });
+            } catch (error) {
+                console.error("Failed to fetch initial user data:", error);
+            }
+        };
+
+        fetchInitialData();
+    }, []);
 
     return (
         <DataContext.Provider value={{ state, dispatch }}>

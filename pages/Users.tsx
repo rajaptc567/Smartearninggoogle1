@@ -5,38 +5,19 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { getUsers as apiGetUsers, updateUser as apiUpdateUser, createUser as apiCreateUser } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users: contextUsers, deposits, withdrawals, transactions } = state;
-
-    const [users, setUsers] = useState<User[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { users, deposits, withdrawals, transactions } = state;
+    
+    // The user data is now loaded from the global context, so local loading state is simpler.
+    const isLoading = users.length === 0;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
     const [searchTerm, setSearchTerm] = useState('');
-
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                setIsLoading(true);
-                const fetchedUsers = await apiGetUsers();
-                setUsers(fetchedUsers);
-                dispatch({ type: 'SET_USERS', payload: fetchedUsers });
-            } catch (error) {
-                console.error("Failed to fetch users:", error);
-                // Optionally, load from context as a fallback
-                setUsers(contextUsers);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchUsers();
-    }, []); // Runs once on component mount
-
 
     const handleOpenModal = (user: User | null = null, mode: 'edit' | 'details' = 'edit') => {
         setEditingUser(user);

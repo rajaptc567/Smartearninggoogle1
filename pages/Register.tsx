@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { User, Status } from '../types';
+import { createUser as apiCreateUser } from '../services/api';
 
 const Register: React.FC = () => {
     const navigate = useNavigate();
@@ -23,26 +24,31 @@ const Register: React.FC = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleRegister = (e: React.FormEvent) => {
+    const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        const newUser: User = {
-            _id: String(Date.now()),
+        const newUserPayload: Partial<User> = {
             ...formData,
-            walletBalance: 0,
-            activePlan: 'None',
-            registrationDate: new Date().toISOString().split('T')[0],
             status: Status.Active,
         };
 
-        // Add the new user to the global state
-        dispatch({ type: 'ADD_USER', payload: newUser });
-        
-        // Set the new user as the currently logged-in user
-        dispatch({ type: 'SET_CURRENT_USER', payload: newUser });
+        try {
+            const createdUser = await apiCreateUser(newUserPayload);
 
-        alert('Registration successful! Redirecting to your dashboard...');
-        navigate('/member');
+            // Add the new user to the global state
+            dispatch({ type: 'ADD_USER', payload: createdUser });
+            
+            // Set the new user as the currently logged-in user
+            dispatch({ type: 'SET_CURRENT_USER', payload: createdUser });
+
+            alert('Registration successful! Redirecting to your dashboard...');
+            navigate('/member');
+
+        } catch (error) {
+            console.error("Registration failed:", error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            alert(`Registration failed: ${errorMessage}`);
+        }
     };
 
     return (
