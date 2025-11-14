@@ -37,14 +37,4 @@ const DepositSchema = new mongoose.Schema({
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
-// The _id field is automatically added by Mongoose.
-DepositSchema.virtual('id').get(function(){
-    return this._id.toHexString();
-});
-
-DepositSchema.set('toJSON', {
-    virtuals: true
-});
-
-
 export default mongoose.model('Deposit', DepositSchema);

@@ -28,6 +28,27 @@ const handleResponse = async (response: Response) => {
 // A helper to format date strings from the backend
 const formatDate = (isoString: string) => new Date(isoString).toISOString().split('T')[0];
 
+// --- Auth API Functions ---
+
+/**
+ * Logs in a user.
+ * @param {string} email - The user's email.
+ * @param {string} password - The user's password.
+ * @returns {Promise<User>} A promise that resolves to the logged-in user.
+ */
+export const login = async (email: string, password: string): Promise<User> => {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+    });
+    const data = await handleResponse(response);
+    return { ...data, registrationDate: formatDate(data.registrationDate) };
+};
+
+
 // --- User API Functions ---
 
 /**

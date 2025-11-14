@@ -5,7 +5,7 @@ import Deposit from '../models/Deposit.js';
 // @access  Private/Admin
 export const getDeposits = async (req, res, next) => {
     try {
-        const deposits = await Deposit.find().sort({ date: -1 });
+        const deposits = await Deposit.find().sort({ date: -1 }).lean();
         res.status(200).json({ success: true, count: deposits.length, data: deposits });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

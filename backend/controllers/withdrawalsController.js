@@ -5,7 +5,7 @@ import Withdrawal from '../models/Withdrawal.js';
 // @access  Private/Admin
 export const getWithdrawals = async (req, res, next) => {
     try {
-        const withdrawals = await Withdrawal.find().sort({ date: -1 });
+        const withdrawals = await Withdrawal.find().sort({ date: -1 }).lean();
         res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

@@ -5,7 +5,7 @@ import User from '../models/User.js';
 // @access  Private/Admin
 export const getUsers = async (req, res, next) => {
     try {
-        const users = await User.find();
+        const users = await User.find().lean();
         res.status(200).json({ success: true, count: users.length, data: users });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

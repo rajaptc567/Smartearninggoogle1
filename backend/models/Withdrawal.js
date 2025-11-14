@@ -46,13 +46,4 @@ const WithdrawalSchema = new mongoose.Schema({
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
-// The _id field is automatically added by Mongoose.
-WithdrawalSchema.virtual('id').get(function(){
-    return this._id.toHexString();
-});
-
-WithdrawalSchema.set('toJSON', {
-    virtuals: true
-});
-
 export default mongoose.model('Withdrawal', WithdrawalSchema);
