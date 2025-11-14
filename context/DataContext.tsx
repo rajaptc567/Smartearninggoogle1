@@ -1,7 +1,7 @@
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification } from '../types';
-import { mockPaymentMethods, mockInvestmentPlans, mockTransactions, mockRules, mockTransfers, mockNotifications } from '../data/mockData';
-import { getUsers as apiGetUsers, getDeposits as apiGetDeposits, getWithdrawals as apiGetWithdrawals } from '../services/api';
+import { mockUsers, mockDeposits, mockWithdrawals, mockPaymentMethods, mockInvestmentPlans, mockTransactions, mockRules, mockTransfers, mockNotifications } from '../data/mockData';
+import { getUsers as apiGetUsers } from '../services/api';
 
 interface AppState {
     users: User[];
@@ -19,8 +19,8 @@ interface AppState {
 
 const initialState: AppState = {
     users: [], // Will be loaded from API
-    deposits: [], // Will be loaded from API
-    withdrawals: [], // Will be loaded from API
+    deposits: mockDeposits,
+    withdrawals: mockWithdrawals,
     transfers: mockTransfers,
     paymentMethods: mockPaymentMethods,
     investmentPlans: mockInvestmentPlans,
@@ -36,8 +36,6 @@ const initialState: AppState = {
 
 type Action =
     | { type: 'SET_USERS'; payload: User[] }
-    | { type: 'SET_DEPOSITS'; payload: Deposit[] }
-    | { type: 'SET_WITHDRAWALS'; payload: Withdrawal[] }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
     | { type: 'TOGGLE_USER_STATUS'; payload: string }
@@ -82,14 +80,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     };
     
     switch (action.type) {
-        // DATA LOADING
-        case 'SET_USERS':
-            return { ...state, users: action.payload };
-        case 'SET_DEPOSITS':
-            return { ...state, deposits: action.payload };
-        case 'SET_WITHDRAWALS':
-            return { ...state, withdrawals: action.payload };
-
         // AUTH ACTIONS
         case 'SET_CURRENT_USER':
             try {
@@ -116,6 +106,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             };
 
         // USER ACTIONS
+        case 'SET_USERS':
+            return { ...state, users: action.payload };
         case 'ADD_USER': {
             const newUser = action.payload;
             let newNotifications = state.notifications;
@@ -278,7 +270,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_WITHDRAWAL': {
              const newWithdrawal = action.payload;
              const updatedUsers = state.users.map(u => u._id === newWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - newWithdrawal.amount } : u);
-             const newTransaction: Transaction = { _id: `TRN_WDR_${newWithdrawal._id}`, userId: newWithdrawal.userId, userName: newWithdrawal.userName, type: 'Withdrawal Request', amount: -newWithdrawal.amount, date: newWithdrawal.date, description: `Pending Withdrawal #${newWithdrawal._id}`, status: 'Pending' };
+             const newTransaction: Transaction = { _id: `TRN${Date.now()}`, userId: newWithdrawal.userId, userName: newWithdrawal.userName, type: 'Withdrawal Request', amount: -newWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Pending Withdrawal #${newWithdrawal._id}`, status: 'Pending' };
              const newNotifications = createNotification(state.notifications, newWithdrawal.userId, `Your withdrawal request #${newWithdrawal._id} for $${newWithdrawal.amount.toFixed(2)} is pending.`);
 
              return {
@@ -293,9 +285,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_WITHDRAWAL': {
             const updatedWithdrawal = action.payload;
             const originalWithdrawal = state.withdrawals.find(w => w._id === updatedWithdrawal._id);
-            if (!originalWithdrawal || originalWithdrawal.status === updatedWithdrawal.status) {
-                 return { ...state, withdrawals: state.withdrawals.map(w => w._id === updatedWithdrawal._id ? updatedWithdrawal : w) };
-            }
+            if (!originalWithdrawal || originalWithdrawal.status === updatedWithdrawal.status) return state;
 
             let newNotifications = createNotification(state.notifications, updatedWithdrawal.userId, `Your withdrawal request #${updatedWithdrawal._id} has been updated to ${updatedWithdrawal.status}.`);
 
@@ -309,7 +299,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             
             if (originalWithdrawal.status !== Status.Rejected && updatedWithdrawal.status === Status.Rejected) {
                 newUsers = state.users.map(u => u._id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance + updatedWithdrawal.amount } : u);
-                newTransactions.unshift({ _id: `TRN_REFUND_${updatedWithdrawal._id}`, userId: updatedWithdrawal.userId, userName: updatedWithdrawal.userName, type: 'Withdrawal Refund', amount: updatedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Refund for Rejected Withdrawal #${updatedWithdrawal._id}`, status: 'Approved' });
+                newTransactions.unshift({ _id: `TRN${Date.now()}`, userId: updatedWithdrawal.userId, userName: updatedWithdrawal.userName, type: 'Withdrawal Refund', amount: updatedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Refund for Rejected Withdrawal #${updatedWithdrawal._id}`, status: 'Approved' });
             }
              if (originalWithdrawal.status === Status.Rejected && updatedWithdrawal.status !== Status.Rejected) {
                 newUsers = state.users.map(u => u._id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - updatedWithdrawal.amount } : u);
@@ -357,7 +347,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             };
 
             const newTransaction: Transaction = {
-                _id: `TRN_PLAN_${Date.now()}`,
+                _id: `TRN${Date.now()}`,
                 userId: userId,
                 userName: user.username,
                 type: 'Plan Purchase',
@@ -400,7 +390,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             );
 
             const newTransaction: Transaction = {
-                _id: `TRN_MANUAL_${Date.now()}`,
+                _id: `TRN${Date.now()}`,
                 userId: userId,
                 userName: user.username,
                 type: amount > 0 ? 'Manual Credit' : 'Manual Debit',
@@ -447,7 +437,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
             const updatedUsers = state.users.map(u => u._id === senderId ? { ...u, walletBalance: u.walletBalance - amount } : u);
             const newTransaction: Transaction = {
-                _id: `TRN_XFER_${newTransfer._id}`,
+                _id: `TRN${Date.now()}`,
                 userId: senderId,
                 userName: sender.username,
                 type: 'Transfer Request',
@@ -479,7 +469,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
             if (updatedTransfer.status === Status.Approved) {
                 newUsers = newUsers.map(u => u._id === updatedTransfer.recipientId ? { ...u, walletBalance: u.walletBalance + updatedTransfer.amount } : u);
-                newTransactions.unshift({ _id: `TRN_XFER_RX_${updatedTransfer._id}`, userId: updatedTransfer.recipientId, userName: updatedTransfer.recipientName, type: 'Transfer Received', amount: updatedTransfer.amount, date: new Date().toISOString().split('T')[0], description: `From ${updatedTransfer.senderName} #${updatedTransfer._id}`, status: 'Approved' });
+                newTransactions.unshift({ _id: `TRN${Date.now()}`, userId: updatedTransfer.recipientId, userName: updatedTransfer.recipientName, type: 'Transfer Received', amount: updatedTransfer.amount, date: new Date().toISOString().split('T')[0], description: `From ${updatedTransfer.senderName} #${updatedTransfer._id}`, status: 'Approved' });
                 if (originalTx) {
                     originalTx.type = 'Transfer Sent';
                     originalTx.status = 'Approved';
@@ -538,16 +528,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [users, deposits, withdrawals] = await Promise.all([
-                    apiGetUsers(),
-                    apiGetDeposits(),
-                    apiGetWithdrawals(),
-                ]);
+                const users = await apiGetUsers();
                 dispatch({ type: 'SET_USERS', payload: users });
-                dispatch({ type: 'SET_DEPOSITS', payload: deposits });
-                dispatch({ type: 'SET_WITHDRAWALS', payload: withdrawals });
             } catch (error) {
-                console.error("Failed to fetch initial data:", error);
+                console.error("Failed to fetch initial user data:", error);
             }
         };
 

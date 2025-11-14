@@ -6,7 +6,7 @@ import User from '../models/User.js';
 export const getUsers = async (req, res, next) => {
     try {
         const users = await User.find();
-        res.status(200).json({ success: true, count: users.length, data: JSON.parse(JSON.stringify(users)) });
+        res.status(200).json({ success: true, count: users.length, data: users });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -21,7 +21,7 @@ export const getUser = async (req, res, next) => {
         if (!user) {
             return res.status(404).json({ success: false, error: `User not found with id of ${req.params.id}` });
         }
-        res.status(200).json({ success: true, data: JSON.parse(JSON.stringify(user)) });
+        res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -51,8 +51,7 @@ export const createUser = async (req, res, next) => {
         const user = await User.create(req.body);
         // In a real app, you would hash the password here before saving
         // and return a JWT token for authentication.
-        // Use a robust method to ensure a clean JSON response
-        res.status(201).json({ success: true, data: JSON.parse(JSON.stringify(user)) });
+        res.status(201).json({ success: true, data: user });
     } catch (err) {
         let errorMessage = 'An unexpected error occurred during registration.';
 
@@ -85,7 +84,7 @@ export const updateUser = async (req, res, next) => {
         if (!user) {
             return res.status(404).json({ success: false, error: `User not found with id of ${req.params.id}` });
         }
-        res.status(200).json({ success: true, data: JSON.parse(JSON.stringify(user)) });
+        res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

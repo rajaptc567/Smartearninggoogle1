@@ -2,30 +2,25 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { login as apiLogin } from '../services/api';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { dispatch } = useData();
+    const { state, dispatch } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
-        setIsSubmitting(true);
+        
+        // Find user by email (in a real app, you'd send this to a backend API)
+        const user = state.users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-        try {
-            const user = await apiLogin(email, password);
+        // For this demo, we are not checking the password
+        if (user) {
             dispatch({ type: 'SET_CURRENT_USER', payload: user });
             navigate('/member');
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-            setError(errorMessage);
-        } finally {
-            setIsSubmitting(false);
+        } else {
+            alert('Invalid credentials. Please try again.');
         }
     };
 
@@ -37,13 +32,6 @@ const Login: React.FC = () => {
                     <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Member Login</h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to access your member dashboard.</p>
                 </div>
-
-                {error && (
-                    <div className="p-3 my-2 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/50 dark:text-red-300" role="alert">
-                        <span className="font-medium">Login failed:</span> {error}
-                    </div>
-                )}
-
                 <form className="space-y-6" onSubmit={handleLogin}>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
@@ -72,8 +60,8 @@ const Login: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? 'Signing In...' : 'Sign In'}
+                        <Button type="submit" size="lg" className="w-full">
+                            Sign In
                         </Button>
                     </div>
                 </form>

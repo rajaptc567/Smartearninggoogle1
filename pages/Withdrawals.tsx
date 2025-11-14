@@ -5,12 +5,10 @@ import Button from '../components/ui/Button';
 import { Status, Withdrawal } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateWithdrawal as apiUpdateWithdrawal } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
   const { withdrawals } = state;
-  const isLoading = state.withdrawals.length === 0;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
@@ -34,20 +32,15 @@ const Withdrawals: React.FC = () => {
     setSelectedWithdrawal(null);
   };
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = () => {
     if (selectedWithdrawal) {
-      const updatePayload = {
+      const updatedWithdrawal = {
+        ...selectedWithdrawal,
         status: currentStatus,
         adminNotes: adminNotes,
       };
-      try {
-          const updatedWithdrawal = await apiUpdateWithdrawal(selectedWithdrawal._id, updatePayload);
-          dispatch({ type: 'UPDATE_WITHDRAWAL', payload: updatedWithdrawal });
-          handleCloseModal();
-      } catch (error) {
-          console.error("Failed to update withdrawal:", error);
-          alert(`Error: Could not update withdrawal. ${error instanceof Error ? error.message : ''}`);
-      }
+      dispatch({ type: 'UPDATE_WITHDRAWAL', payload: updatedWithdrawal });
+      handleCloseModal();
     }
   };
 
@@ -57,27 +50,25 @@ const Withdrawals: React.FC = () => {
   return (
     <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
       <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Withdrawal Requests</h2>
-      {isLoading ? <p>Loading withdrawals...</p> : (
-        <Table headers={tableHeaders}>
-          {withdrawals.map((w: Withdrawal) => (
-            <tr 
-              key={w._id} 
-              className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-              onClick={() => handleRowClick(w)}
-            >
-              <td className="px-4 py-3">{w.userName}</td>
-              <td className="px-4 py-3">${w.amount.toFixed(2)}</td>
-              <td className="px-4 py-3 font-semibold">${w.finalAmount.toFixed(2)}</td>
-              <td className="px-4 py-3">{w.method}</td>
-              <td className="px-4 py-3"><Badge status={w.status} /></td>
-              <td className="px-4 py-3 text-sm">
-                  {w.status === Status.Matching && w.matchRemainingAmount !== undefined ? `$${w.matchRemainingAmount?.toFixed(2)}` : 'N/A'}
-              </td>
-              <td className="px-4 py-3 text-sm">{w.date}</td>
-            </tr>
-          ))}
-        </Table>
-      )}
+      <Table headers={tableHeaders}>
+        {withdrawals.map((w: Withdrawal) => (
+          <tr 
+            key={w._id} 
+            className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            onClick={() => handleRowClick(w)}
+          >
+            <td className="px-4 py-3">{w.userName}</td>
+            <td className="px-4 py-3">${w.amount.toFixed(2)}</td>
+            <td className="px-4 py-3 font-semibold">${w.finalAmount.toFixed(2)}</td>
+            <td className="px-4 py-3">{w.method}</td>
+            <td className="px-4 py-3"><Badge status={w.status} /></td>
+            <td className="px-4 py-3 text-sm">
+                {w.status === Status.Matching ? `$${w.matchRemainingAmount?.toFixed(2)}` : 'N/A'}
+            </td>
+            <td className="px-4 py-3 text-sm">{w.date}</td>
+          </tr>
+        ))}
+      </Table>
       
       {selectedWithdrawal && (
         <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
@@ -114,7 +105,6 @@ const Withdrawals: React.FC = () => {
                       value={currentStatus} 
                       onChange={(e) => setCurrentStatus(e.target.value as Withdrawal['status'])}
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      disabled={selectedWithdrawal.status !== Status.Pending && selectedWithdrawal.status !== Status.Matching}
                   >
                       <option value={Status.Pending}>Pending</option>
                       <option value={Status.Matching}>Matching (P2P)</option>
@@ -122,7 +112,6 @@ const Withdrawals: React.FC = () => {
                       <option value={Status.Paid}>Paid</option>
                       <option value={Status.Rejected}>Rejected</option>
                   </select>
-                   { (selectedWithdrawal.status !== Status.Pending && selectedWithdrawal.status !== Status.Matching) && <p className="text-xs text-yellow-500 mt-1">This withdrawal has already been processed and cannot be changed.</p>}
               </div>
 
               <div className="mt-6">
@@ -139,7 +128,7 @@ const Withdrawals: React.FC = () => {
 
               <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
                   <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                  <Button variant="primary" onClick={handleSaveChanges} disabled={selectedWithdrawal.status !== Status.Pending && selectedWithdrawal.status !== Status.Matching}>Save Changes</Button>
+                  <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
               </div>
           </div>
         </Modal>

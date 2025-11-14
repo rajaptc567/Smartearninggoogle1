@@ -5,12 +5,10 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useData } from '../hooks/useData';
-import { updateDeposit as apiUpdateDeposit } from '../services/api';
 
 const Deposits: React.FC = () => {
     const { state, dispatch } = useData();
     const { deposits } = state;
-    const isLoading = state.deposits.length === 0;
 
     const tableHeaders = ['User', 'Amount', 'Method', 'Transaction ID', 'Receipt', 'Status', 'Date'];
     
@@ -29,20 +27,15 @@ const Deposits: React.FC = () => {
         }
     }, [selectedDeposit]);
 
-    const handleSaveChanges = async () => {
+    const handleSaveChanges = () => {
         if (selectedDeposit) {
-            const updatePayload = {
+            const updatedDeposit = {
+                ...selectedDeposit,
                 status: currentStatus,
                 adminNotes: adminNotes,
             };
-            try {
-                const updatedDeposit = await apiUpdateDeposit(selectedDeposit._id, updatePayload);
-                dispatch({ type: 'UPDATE_DEPOSIT', payload: updatedDeposit });
-                handleCloseDetailModal();
-            } catch (error) {
-                console.error("Failed to update deposit:", error);
-                alert(`Error: Could not update deposit. ${error instanceof Error ? error.message : ''}`);
-            }
+            dispatch({ type: 'UPDATE_DEPOSIT', payload: updatedDeposit });
+            handleCloseDetailModal();
         }
     };
 
@@ -71,37 +64,35 @@ const Deposits: React.FC = () => {
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Deposit Requests</h2>
-            {isLoading ? <p>Loading deposits...</p> : (
-                <Table headers={tableHeaders}>
-                    {deposits.map((deposit: Deposit) => (
-                        <tr 
-                          key={deposit._id} 
-                          className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
-                          onClick={() => handleRowClick(deposit)}
-                        >
-                            <td className="px-4 py-3">{deposit.userName}</td>
-                            <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
-                            <td className="px-4 py-3">{deposit.method}</td>
-                            <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
-                            <td className="px-4 py-3">
-                                {deposit.receiptUrl ? (
-                                    <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                        <img src={deposit.receiptUrl} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
-                                    </button>
-                                ) : (
-                                    'N/A'
-                                )}
-                            </td>
-                            <td className="px-4 py-3"><Badge status={deposit.status} /></td>
-                            <td className="px-4 py-3 text-sm">{deposit.date}</td>
-                        </tr>
-                    ))}
-                </Table>
-            )}
+            <Table headers={tableHeaders}>
+                {deposits.map((deposit: Deposit) => (
+                    <tr 
+                      key={deposit._id} 
+                      className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
+                      onClick={() => handleRowClick(deposit)}
+                    >
+                        <td className="px-4 py-3">{deposit.userName}</td>
+                        <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3">{deposit.method}</td>
+                        <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
+                        <td className="px-4 py-3">
+                            {deposit.receiptUrl ? (
+                                <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    <img src={deposit.receiptUrl} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
+                                </button>
+                            ) : (
+                                'N/A'
+                            )}
+                        </td>
+                        <td className="px-4 py-3"><Badge status={deposit.status} /></td>
+                        <td className="px-4 py-3 text-sm">{deposit.date}</td>
+                    </tr>
+                ))}
+            </Table>
 
             <Modal isOpen={isImageModalOpen} onClose={handleCloseImageModal}>
                 {selectedReceipt && (
-                    <img src={selectedReceipt} alt="Full-size receipt" className="rounded-md object-contain max-h-[80vh]" />
+                    <img src={selectedReceipt} alt="Full-size receipt" className="rounded-md" />
                 )}
             </Modal>
 
@@ -138,13 +129,11 @@ const Deposits: React.FC = () => {
                                 value={currentStatus} 
                                 onChange={(e) => setCurrentStatus(e.target.value as Deposit['status'])}
                                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                disabled={selectedDeposit.status !== Status.Pending}
                             >
                                 <option value={Status.Pending}>Pending</option>
                                 <option value={Status.Approved}>Approved</option>
                                 <option value={Status.Rejected}>Rejected</option>
                             </select>
-                            {selectedDeposit.status !== Status.Pending && <p className="text-xs text-yellow-500 mt-1">This deposit has already been processed and cannot be changed.</p>}
                         </div>
 
                          <div className="mt-6">
@@ -168,7 +157,7 @@ const Deposits: React.FC = () => {
 
                         <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
                             <Button variant="secondary" onClick={handleCloseDetailModal}>Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveChanges} disabled={selectedDeposit.status !== Status.Pending}>Save Changes</Button>
+                            <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
                         </div>
                     </div>
                 </Modal>
