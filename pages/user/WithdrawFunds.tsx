@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentMethod, Status } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
+import { createWithdrawal as apiCreateWithdrawal } from '../../services/api';
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -14,6 +15,7 @@ const WithdrawFunds: React.FC = () => {
     const [accountNumber, setAccountNumber] = useState('');
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const withdrawalMethods = useMemo(() =>
         paymentMethods.filter(method => method.type === 'Withdrawal' && method.status === 'Enabled'),
@@ -46,7 +48,7 @@ const WithdrawFunds: React.FC = () => {
         }
     }, [amount, selectedMethod]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
 
@@ -60,9 +62,10 @@ const WithdrawFunds: React.FC = () => {
         if (numericAmount < selectedMethod.minAmount || numericAmount > selectedMethod.maxAmount) {
             return alert(`Amount must be between $${selectedMethod.minAmount} and $${selectedMethod.maxAmount}.`);
         }
+        
+        setIsSubmitting(true);
 
-        const newWithdrawal = {
-            _id: `WDR${Date.now()}`,
+        const newWithdrawalPayload = {
             userId: currentUser._id,
             userName: currentUser.username,
             method: selectedMethod.name,
@@ -70,15 +73,21 @@ const WithdrawFunds: React.FC = () => {
             fee: fee,
             finalAmount: finalAmount,
             status: Status.Pending as Status.Pending,
-            date: new Date().toISOString().split('T')[0],
             accountTitle: accountTitle,
             accountNumber: accountNumber,
             userNotes: userNotes,
         };
         
-        dispatch({ type: 'ADD_WITHDRAWAL', payload: newWithdrawal });
-        
-        setIsSubmitted(true);
+        try {
+            const createdWithdrawal = await apiCreateWithdrawal(newWithdrawalPayload);
+            dispatch({ type: 'ADD_WITHDRAWAL', payload: createdWithdrawal });
+            setIsSubmitted(true);
+        } catch (error) {
+            console.error("Failed to submit withdrawal request:", error);
+            alert(`Error: Could not submit request. ${error instanceof Error ? error.message : ''}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!currentUser) return <div>Loading...</div>;
@@ -159,7 +168,9 @@ const WithdrawFunds: React.FC = () => {
                 )}
                  {selectedMethod && (
                     <div className="pt-4 flex justify-end">
-                        <Button type="submit">Submit Withdrawal Request</Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                           {isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}
+                        </Button>
                     </div>
                  )}
             </form>

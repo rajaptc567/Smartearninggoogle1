@@ -1,0 +1,58 @@
+import mongoose from 'mongoose';
+
+const WithdrawalSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    userName: {
+        type: String,
+        required: true
+    },
+    method: {
+        type: String,
+        required: true
+    },
+    amount: {
+        type: Number,
+        required: true
+    },
+    fee: {
+        type: Number,
+        required: true
+    },
+    finalAmount: {
+        type: Number,
+        required: true
+    },
+    accountTitle: {
+        type: String,
+        required: true
+    },
+    accountNumber: {
+        type: String,
+        required: true
+    },
+    status: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Paid', 'Rejected', 'Matching'],
+        default: 'Pending'
+    },
+    adminNotes: String,
+    userNotes: String,
+    matchRemainingAmount: Number
+}, {
+    timestamps: { createdAt: 'date', updatedAt: true }
+});
+
+// The _id field is automatically added by Mongoose.
+WithdrawalSchema.virtual('id').get(function(){
+    return this._id.toHexString();
+});
+
+WithdrawalSchema.set('toJSON', {
+    virtuals: true
+});
+
+export default mongoose.model('Withdrawal', WithdrawalSchema);

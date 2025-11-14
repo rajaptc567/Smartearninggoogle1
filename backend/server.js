@@ -5,6 +5,8 @@ import connectDB from './config/db.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
+import depositRoutes from './routes/depositRoutes.js';
+import withdrawalRoutes from './routes/withdrawalRoutes.js';
 
 // Load env vars
 dotenv.config();
@@ -14,8 +16,8 @@ connectDB();
 
 const app = express();
 
-// Body parser middleware
-app.use(express.json());
+// Body parser middleware - increase limit to handle base64 images
+app.use(express.json({ limit: '10mb' }));
 
 // Enable CORS
 // For production, you should restrict the origin to your Vercel frontend URL
@@ -37,9 +39,8 @@ app.get('/', (req, res) => {
 
 // Mount routers
 app.use('/api/v1/users', userRoutes);
-// TODO: Add other routes here, e.g.,
-// import depositRoutes from './routes/depositRoutes.js';
-// app.use('/api/v1/deposits', depositRoutes);
+app.use('/api/v1/deposits', depositRoutes);
+app.use('/api/v1/withdrawals', withdrawalRoutes);
 
 
 const PORT = process.env.PORT || 5000;
