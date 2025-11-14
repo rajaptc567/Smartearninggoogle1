@@ -5,8 +5,8 @@ import Withdrawal from '../models/Withdrawal.js';
 // @access  Private/Admin
 export const getWithdrawals = async (req, res, next) => {
     try {
-        const withdrawals = await Withdrawal.find().sort({ date: -1 }).lean();
-        res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+        const withdrawals = await Withdrawal.find().sort({ date: -1 });
+        res.status(200).json({ success: true, count: withdrawals.length, data: JSON.parse(JSON.stringify(withdrawals)) });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -18,7 +18,7 @@ export const getWithdrawals = async (req, res, next) => {
 export const createWithdrawal = async (req, res, next) => {
     try {
         const withdrawal = await Withdrawal.create(req.body);
-        res.status(201).json({ success: true, data: withdrawal });
+        res.status(201).json({ success: true, data: JSON.parse(JSON.stringify(withdrawal)) });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -40,7 +40,7 @@ export const updateWithdrawal = async (req, res, next) => {
         if (!withdrawal) {
             return res.status(404).json({ success: false, error: `Withdrawal not found with id of ${req.params.id}` });
         }
-        res.status(200).json({ success: true, data: withdrawal });
+        res.status(200).json({ success: true, data: JSON.parse(JSON.stringify(withdrawal)) });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

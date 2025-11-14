@@ -13,24 +13,24 @@ export const login = async (req, res, next) => {
 
     try {
         // Check for user. Use a case-insensitive regex for better UX.
-        // Add .lean() to get a plain JS object instead of a Mongoose document to prevent serialization issues.
-        const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } }).select('+password').lean();
+        const userDoc = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } }).select('+password');
 
-        if (!user) {
+        if (!userDoc) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
         // Check if password matches
         // In a real production application, you should use a library like bcrypt to compare hashed passwords.
         // const isMatch = await bcrypt.compare(password, user.password);
-        const isMatch = password === user.password;
+        const isMatch = password === userDoc.password;
 
         if (!isMatch) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
         
-        // Since .lean() was used, user is already a plain object. No .toObject() needed.
-        const userResponse = user;
+        // Create a clean object for the response to avoid any serialization issues.
+        const userResponse = JSON.parse(JSON.stringify(userDoc));
+        
         // Ensure the password is not sent back in the response
         delete userResponse.password;
 
