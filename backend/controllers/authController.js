@@ -13,7 +13,8 @@ export const login = async (req, res, next) => {
 
     try {
         // Check for user. Use a case-insensitive regex for better UX.
-        const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } }).select('+password');
+        // Add .lean() to get a plain JS object instead of a Mongoose document to prevent serialization issues.
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } }).select('+password').lean();
 
         if (!user) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
@@ -28,8 +29,8 @@ export const login = async (req, res, next) => {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
         
-        // Convert mongoose doc to a plain object to manipulate it
-        const userResponse = user.toObject();
+        // Since .lean() was used, user is already a plain object. No .toObject() needed.
+        const userResponse = user;
         // Ensure the password is not sent back in the response
         delete userResponse.password;
 
