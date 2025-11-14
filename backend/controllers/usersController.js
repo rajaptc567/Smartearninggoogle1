@@ -37,7 +37,22 @@ export const createUser = async (req, res, next) => {
         // and return a JWT token for authentication.
         res.status(201).json({ success: true, data: user });
     } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        let errorMessage = 'An unexpected error occurred during registration.';
+
+        if (err.code === 11000) {
+            // Handle E11000 duplicate key error from MongoDB
+            const field = Object.keys(err.keyValue)[0]; // e.g., 'username' or 'email'
+            const value = err.keyValue[field];
+            errorMessage = `An account with the ${field} '${value}' already exists. Please choose a different ${field}.`;
+        } else if (err.name === 'ValidationError') {
+            // Handle other Mongoose validation errors (e.g., required fields)
+            errorMessage = Object.values(err.errors).map(val => val.message).join(', ');
+        } else {
+            // Fallback for other types of errors
+            errorMessage = err.message;
+        }
+        
+        res.status(400).json({ success: false, error: errorMessage });
     }
 };
 
