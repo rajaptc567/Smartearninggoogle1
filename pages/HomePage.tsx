@@ -47,7 +47,7 @@ const HomePage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {featuredPlans.map(plan => (
-                            <div key={plan.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 flex flex-col border border-gray-200 dark:border-gray-700">
+                            <div key={plan._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 flex flex-col border border-gray-200 dark:border-gray-700">
                                 <h4 className="text-xl font-bold text-blue-600 dark:text-blue-400">{plan.name}</h4>
                                 <p className="text-4xl font-bold my-4">${plan.price}</p>
                                 <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-grow">

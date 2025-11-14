@@ -12,7 +12,7 @@ const Transactions: React.FC = () => {
         return <div>Loading...</div>;
     }
 
-    const userTransactions = transactions.filter(t => t.userId === currentUser.id);
+    const userTransactions = transactions.filter(t => t.userId === currentUser._id);
     const tableHeaders = ['ID', 'Type', 'Amount', 'Status', 'Date', 'Description'];
 
     return (
@@ -21,8 +21,8 @@ const Transactions: React.FC = () => {
             {userTransactions.length > 0 ? (
                 <Table headers={tableHeaders}>
                     {userTransactions.map((tx: Transaction) => (
-                         <tr key={tx.id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm font-mono">{tx.id}</td>
+                         <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
+                            <td className="px-4 py-3 text-sm font-mono">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)}

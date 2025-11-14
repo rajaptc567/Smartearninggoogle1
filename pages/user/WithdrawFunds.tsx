@@ -26,7 +26,7 @@ const WithdrawFunds: React.FC = () => {
     [investmentPlans]);
 
     const selectedMethod: PaymentMethod | undefined = useMemo(() =>
-        withdrawalMethods.find(method => method.id.toString() === selectedMethodId),
+        withdrawalMethods.find(method => method._id.toString() === selectedMethodId),
         [selectedMethodId, withdrawalMethods]
     );
 
@@ -61,8 +61,8 @@ const WithdrawFunds: React.FC = () => {
         }
 
         const newWithdrawal = {
-            id: `WDR${Date.now()}`,
-            userId: currentUser.id,
+            _id: `WDR${Date.now()}`,
+            userId: currentUser._id,
             userName: currentUser.username,
             method: selectedMethod.name,
             amount: numericAmount,
@@ -110,7 +110,7 @@ const WithdrawFunds: React.FC = () => {
                     <select id="withdrawMethod" value={selectedMethodId} onChange={(e) => setSelectedMethodId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
                         <option value="">-- Choose a method --</option>
                         {withdrawalMethods.map(method => (
-                            <option key={method.id} value={method.id}>{method.name}</option>
+                            <option key={method._id} value={method._id}>{method.name}</option>
                         ))}
                     </select>
                 </div>

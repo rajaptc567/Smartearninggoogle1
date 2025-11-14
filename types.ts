@@ -10,7 +10,7 @@ export enum Status {
 }
 
 export interface User {
-  id: number;
+  _id: string;
   username: string;
   fullName: string;
   email: string;
@@ -25,8 +25,8 @@ export interface User {
 }
 
 export interface Deposit {
-  id: string;
-  userId: number;
+  _id: string;
+  userId: string;
   userName: string;
   method: string;
   amount: number;
@@ -40,8 +40,8 @@ export interface Deposit {
 }
 
 export interface Withdrawal {
-    id: string;
-    userId: number;
+    _id: string;
+    userId: string;
     userName: string;
     method: string;
     amount: number;
@@ -57,10 +57,10 @@ export interface Withdrawal {
 }
 
 export interface Transfer {
-  id: string;
-  senderId: number;
+  _id: string;
+  senderId: string;
   senderName: string;
-  recipientId: number;
+  recipientId: string;
   recipientName: string;
   amount: number;
   status: Status.Pending | Status.Approved | Status.Rejected;
@@ -69,7 +69,7 @@ export interface Transfer {
 }
 
 export interface PaymentMethod {
-    id: number;
+    _id: string;
     name: string;
     type: 'Deposit' | 'Withdrawal';
     accountTitle: string;
@@ -91,7 +91,7 @@ export interface Commission {
 }
 
 export interface InvestmentPlan {
-    id: number;
+    _id: string;
     name: string;
     price: number;
     durationDays: number; // 0 for unlimited
@@ -111,7 +111,7 @@ export interface InvestmentPlan {
     
     autoUpgrade: {
         enabled: boolean;
-        toPlanId?: number; // ID of the plan to upgrade to
+        toPlanId?: string; // ID of the plan to upgrade to
     };
 
     holdPosition: {
@@ -122,8 +122,8 @@ export interface InvestmentPlan {
 
 
 export interface Transaction {
-    id: string;
-    userId: number;
+    _id: string;
+    userId: string;
     userName: string;
     type: 'Deposit' | 'Withdrawal' | 'Commission' | 'Manual Credit' | 'Manual Debit' | 'Withdrawal Request' | 'Withdrawal Refund' | 'Plan Purchase' | 'Transfer Sent' | 'Transfer Received' | 'Transfer Request' | 'Transfer Refund';
     amount: number;
@@ -134,7 +134,7 @@ export interface Transaction {
 }
 
 export interface Rule {
-    id: number;
+    _id: string;
     fromPlan: string;
     toPlan: string;
     requiredEarnings: number;
@@ -147,8 +147,8 @@ export interface Settings {
 }
 
 export interface Notification {
-  id: number;
-  userId: number; // User who receives the notification
+  _id: string;
+  userId: string; // User who receives the notification
   message: string;
   date: string;
   read: boolean;

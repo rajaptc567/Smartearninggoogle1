@@ -53,7 +53,7 @@ const Withdrawals: React.FC = () => {
       <Table headers={tableHeaders}>
         {withdrawals.map((w: Withdrawal) => (
           <tr 
-            key={w.id} 
+            key={w._id} 
             className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
             onClick={() => handleRowClick(w)}
           >
@@ -73,7 +73,7 @@ const Withdrawals: React.FC = () => {
       {selectedWithdrawal && (
         <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
            <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
-              <h3 className="text-xl font-bold mb-4">Withdrawal Details - <span className="text-blue-600 dark:text-blue-400">{selectedWithdrawal.id}</span></h3>
+              <h3 className="text-xl font-bold mb-4">Withdrawal Details - <span className="text-blue-600 dark:text-blue-400">{selectedWithdrawal._id}</span></h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                   <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>

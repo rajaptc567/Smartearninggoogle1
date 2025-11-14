@@ -26,13 +26,13 @@ const PaymentMethods: React.FC = () => {
         if (editingMethod) {
             dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: method });
         } else {
-            const newMethod = { ...method, id: Date.now() };
+            const newMethod = { ...method, _id: String(Date.now()) };
             dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
         }
         handleCloseModal();
     };
     
-    const handleDelete = (methodId: number) => {
+    const handleDelete = (methodId: string) => {
         if (window.confirm('Are you sure you want to delete this method? This action cannot be undone.')) {
             dispatch({ type: 'DELETE_PAYMENT_METHOD', payload: methodId });
             alert('Payment method deleted successfully.');
@@ -47,7 +47,7 @@ const PaymentMethods: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {paymentMethods.map(method => (
-                    <div key={method.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                    <div key={method._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name}</h3>
@@ -62,7 +62,7 @@ const PaymentMethods: React.FC = () => {
                         </div>
                         <div className="mt-6 flex justify-end space-x-2">
                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(method)}>Edit</Button>
-                           <Button size="sm" variant="danger" onClick={() => handleDelete(method.id)}>Delete</Button>
+                           <Button size="sm" variant="danger" onClick={() => handleDelete(method._id)}>Delete</Button>
                         </div>
                     </div>
                 ))}

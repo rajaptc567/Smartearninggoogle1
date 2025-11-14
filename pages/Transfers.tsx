@@ -53,7 +53,7 @@ const Transfers: React.FC = () => {
             <Table headers={tableHeaders}>
                 {transfers.map((transfer: Transfer) => (
                     <tr 
-                      key={transfer.id} 
+                      key={transfer._id} 
                       className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
                       onClick={() => handleRowClick(transfer)}
                     >
@@ -69,7 +69,7 @@ const Transfers: React.FC = () => {
             {selectedTransfer && (
                  <Modal isOpen={isDetailModalOpen} onClose={handleCloseDetailModal}>
                     <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
-                        <h3 className="text-xl font-bold mb-4">Transfer Details - <span className="text-blue-600 dark:text-blue-400">{selectedTransfer.id}</span></h3>
+                        <h3 className="text-xl font-bold mb-4">Transfer Details - <span className="text-blue-600 dark:text-blue-400">{selectedTransfer._id}</span></h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                             <div><span className="font-semibold">From:</span> {selectedTransfer.senderName} (ID: {selectedTransfer.senderId})</div>

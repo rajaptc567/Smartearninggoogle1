@@ -23,7 +23,7 @@ const Wallet: React.FC = () => {
         e.preventDefault();
         
         const targetUser = users.find(u => 
-            u.id.toString() === identifier ||
+            u._id.toString() === identifier ||
             u.username.toLowerCase() === identifier.toLowerCase() ||
             u.email.toLowerCase() === identifier.toLowerCase() ||
             u.phone === identifier
@@ -45,7 +45,7 @@ const Wallet: React.FC = () => {
         dispatch({
             type: 'MANUAL_WALLET_ADJUSTMENT',
             payload: {
-                userId: targetUser.id,
+                userId: targetUser._id,
                 amount: adjustmentAmount,
                 description: reason
             }
@@ -75,7 +75,7 @@ const Wallet: React.FC = () => {
                         />
                         <datalist id="users-datalist">
                           {users.map(user => (
-                            <option key={user.id} value={user.username} label={`${user.fullName} (${user.email})`}/>
+                            <option key={user._id} value={user.username} label={`${user.fullName} (${user.email})`}/>
                           ))}
                         </datalist>
                     </div>
@@ -105,8 +105,8 @@ const Wallet: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Transaction Log</h2>
                 <Table headers={tableHeaders}>
                     {sortedTransactions.map((tx: Transaction) => (
-                        <tr key={tx.id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm">{tx.id}</td>
+                        <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
+                            <td className="px-4 py-3 text-sm">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.userName}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>

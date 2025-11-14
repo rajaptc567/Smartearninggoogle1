@@ -8,12 +8,12 @@ import Badge from '../components/ui/Badge';
 type ReportType = 'deposits' | 'withdrawals' | 'users' | 'commissions' | 'transfers' | 'all_transactions';
 
 const reportConfigs: { [key in ReportType]: { label: string; key: keyof any }[] } = {
-    deposits: [ { label: 'ID', key: 'id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Transaction ID', key: 'transactionId' }, ],
-    withdrawals: [ { label: 'ID', key: 'id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Final Amount', key: 'finalAmount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
-    transfers: [ { label: 'ID', key: 'id' }, { label: 'Sender', key: 'senderName' }, { label: 'Recipient', key: 'recipientName' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
-    users: [ { label: 'ID', key: 'id' }, { label: 'Username', key: 'username' }, { label: 'Full Name', key: 'fullName' }, { label: 'Email', key: 'email' }, { label: 'Active Plan', key: 'activePlan' }, { label: 'Status', key: 'status' }, { label: 'Registration Date', key: 'registrationDate' }, ],
-    commissions: [ { label: 'ID', key: 'id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Level', key: 'level' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
-    all_transactions: [ { label: 'ID', key: 'id' }, { label: 'User Name', key: 'userName' }, { label: 'Type', key: 'type' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
+    deposits: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Transaction ID', key: 'transactionId' }, ],
+    withdrawals: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Final Amount', key: 'finalAmount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
+    transfers: [ { label: 'ID', key: '_id' }, { label: 'Sender', key: 'senderName' }, { label: 'Recipient', key: 'recipientName' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
+    users: [ { label: 'ID', key: '_id' }, { label: 'Username', key: 'username' }, { label: 'Full Name', key: 'fullName' }, { label: 'Email', key: 'email' }, { label: 'Active Plan', key: 'activePlan' }, { label: 'Status', key: 'status' }, { label: 'Registration Date', key: 'registrationDate' }, ],
+    commissions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Level', key: 'level' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
+    all_transactions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Type', key: 'type' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
 };
 
 const Reports: React.FC = () => {
@@ -67,7 +67,7 @@ const Reports: React.FC = () => {
             // Keyword Filter
             if (keyword) {
                 const term = keyword.toLowerCase();
-                const searchableFields = ['id', 'userName', 'fullName', 'email', 'method', 'transactionId', 'description', 'senderName', 'recipientName'];
+                const searchableFields = ['_id', 'userName', 'fullName', 'email', 'method', 'transactionId', 'description', 'senderName', 'recipientName'];
                 const found = searchableFields.some(field => 
                     item[field] && item[field].toString().toLowerCase().includes(term)
                 );
@@ -165,7 +165,7 @@ const Reports: React.FC = () => {
                     {generatedData.length > 0 ? (
                         <Table headers={reportHeaders}>
                             {generatedData.map((row, index) => (
-                                <tr key={row.id || index} className="text-gray-700 dark:text-gray-400">
+                                <tr key={row._id || index} className="text-gray-700 dark:text-gray-400">
                                     {reportConfigs[reportType].map(col => (
                                         <td key={String(col.key)} className="px-4 py-3 text-sm">
                                             {col.key === 'status' && row[col.key as keyof typeof row] ? 

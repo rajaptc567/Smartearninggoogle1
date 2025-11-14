@@ -1,5 +1,5 @@
 {
-  "name": "copy-of-smartearning-admin-panel",
+  "name": "12.1",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,11 @@
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "express": "^5.1.0",
+    "dotenv": "^17.2.3",
+    "cors": "^2.8.5",
+    "mongoose": "^8.19.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

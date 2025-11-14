@@ -1,19 +1,42 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Status, Deposit, Withdrawal, Transaction } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
+import { getUsers as apiGetUsers, updateUser as apiUpdateUser, createUser as apiCreateUser } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users } = state;
+    const { users: contextUsers, deposits, withdrawals, transactions } = state;
+
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
     const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                setIsLoading(true);
+                const fetchedUsers = await apiGetUsers();
+                setUsers(fetchedUsers);
+                dispatch({ type: 'SET_USERS', payload: fetchedUsers });
+            } catch (error) {
+                console.error("Failed to fetch users:", error);
+                // Optionally, load from context as a fallback
+                setUsers(contextUsers);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchUsers();
+    }, []); // Runs once on component mount
+
 
     const handleOpenModal = (user: User | null = null, mode: 'edit' | 'details' = 'edit') => {
         setEditingUser(user);
@@ -26,22 +49,37 @@ const Users: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleSaveUser = (user: User) => {
-        if (editingUser) {
-            dispatch({ type: 'UPDATE_USER', payload: user });
-        } else {
-            // This is a simplified add user, a real one would need more fields
-            const newUser = { ...user, id: Date.now(), walletBalance: 0, activePlan: 'None', registrationDate: new Date().toISOString().split('T')[0], status: Status.Active };
-            dispatch({ type: 'ADD_USER', payload: newUser });
+    const handleSaveUser = async (user: User) => {
+        try {
+            if (editingUser) {
+                const updatedUser = await apiUpdateUser(user._id, user);
+                dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            } else {
+                 // In a real app, password would be handled securely
+                const newUserPayload = { ...user, password: 'password123', walletBalance: 0, activePlan: 'None', status: Status.Active };
+                const newUser = await apiCreateUser(newUserPayload);
+                dispatch({ type: 'ADD_USER', payload: newUser });
+            }
+        } catch (error) {
+            console.error("Failed to save user:", error);
+            alert("Error: Could not save user.");
+        } finally {
+            handleCloseModal();
         }
-        handleCloseModal();
     };
 
-    const handleToggleStatus = (userId: number) => {
-        dispatch({ type: 'TOGGLE_USER_STATUS', payload: userId });
+    const handleToggleStatus = async (user: User) => {
+        const newStatus = user.status === Status.Blocked ? Status.Active : Status.Blocked;
+        try {
+            const updatedUser = await apiUpdateUser(user._id, { ...user, status: newStatus });
+            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+        } catch (error) {
+            console.error("Failed to toggle user status:", error);
+            alert("Error: Could not update user status.");
+        }
     }
 
-    const filteredUsers = useMemo(() => users.filter(user => {
+    const filteredUsers = useMemo(() => state.users.filter(user => {
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
         return (
@@ -49,9 +87,9 @@ const Users: React.FC = () => {
             user.fullName.toLowerCase().includes(term) ||
             user.email.toLowerCase().includes(term) ||
             user.phone.includes(term) ||
-            user.id.toString().includes(term)
+            user._id.toString().includes(term)
         );
-    }), [users, searchTerm]);
+    }), [state.users, searchTerm]);
 
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plan', 'Status', 'Actions'];
 
@@ -70,37 +108,39 @@ const Users: React.FC = () => {
                     <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
                 </div>
             </div>
-             <Table headers={tableHeaders}>
-                {filteredUsers.map((user: User) => (
-                    <tr key={user.id} className="text-gray-700 dark:text-gray-400">
-                        <td className="px-4 py-3">
-                            <div className="flex items-center text-sm">
-                                <div>
-                                    <p className="font-semibold">{user.fullName}</p>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400">@{user.username} (ID: {user.id})</p>
+             {isLoading ? <p>Loading users...</p> : (
+                 <Table headers={tableHeaders}>
+                    {filteredUsers.map((user: User) => (
+                        <tr key={user._id} className="text-gray-700 dark:text-gray-400">
+                            <td className="px-4 py-3">
+                                <div className="flex items-center text-sm">
+                                    <div>
+                                        <p className="font-semibold">{user.fullName}</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">@{user.username} (ID: {user._id})</p>
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                            {user.email}<br/>
-                            <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">${user.walletBalance.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-sm">{user.activePlan}</td>
-                        <td className="px-4 py-3 text-xs">
-                           <Badge status={user.status} />
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                            <div className="flex items-center space-x-2">
-                                <Button size="sm" variant="secondary" onClick={() => handleOpenModal(user, 'details')}>Details</Button>
-                                <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user.id)}>
-                                    {user.status === Status.Blocked ? 'Unblock' : 'Block'}
-                                </Button>
-                            </div>
-                        </td>
-                    </tr>
-                ))}
-            </Table>
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                                {user.email}<br/>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
+                            </td>
+                            <td className="px-4 py-3 text-sm">${user.walletBalance.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-sm">{user.activePlan}</td>
+                            <td className="px-4 py-3 text-xs">
+                               <Badge status={user.status} />
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                                <div className="flex items-center space-x-2">
+                                    <Button size="sm" variant="secondary" onClick={() => handleOpenModal(user, 'details')}>Details</Button>
+                                    <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user)}>
+                                        {user.status === Status.Blocked ? 'Unblock' : 'Block'}
+                                    </Button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </Table>
+             )}
             {isModalOpen && (
                 <UserFormModal 
                     user={editingUser}
@@ -180,24 +220,24 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
     const { state } = useData();
     const { users, deposits, withdrawals, transactions } = state;
     
-    const userDeposits = useMemo(() => deposits.filter(d => d.userId === user.id), [deposits, user.id]);
-    const userWithdrawals = useMemo(() => withdrawals.filter(w => w.userId === user.id), [withdrawals, user.id]);
-    const userTransactions = useMemo(() => transactions.filter(t => t.userId === user.id), [transactions, user.id]);
+    const userDeposits = useMemo(() => deposits.filter(d => d.userId === user._id), [deposits, user._id]);
+    const userWithdrawals = useMemo(() => withdrawals.filter(w => w.userId === user._id), [withdrawals, user._id]);
+    const userTransactions = useMemo(() => transactions.filter(t => t.userId === user._id), [transactions, user._id]);
 
-    const buildGenealogy = (userId: number, allUsers: User[]): { user: User, children: any[] }[] => {
-        const directReferrals = allUsers.filter(u => u.sponsor === users.find(mainUser => mainUser.id === userId)?.username);
+    const buildGenealogy = (userId: string, allUsers: User[]): { user: User, children: any[] }[] => {
+        const directReferrals = allUsers.filter(u => u.sponsor === users.find(mainUser => mainUser._id === userId)?.username);
         if (!directReferrals.length) return [];
         return directReferrals.map(child => ({
             user: child,
-            children: buildGenealogy(child.id, allUsers),
+            children: buildGenealogy(child._id, allUsers),
         }));
     };
-    const genealogyTree = useMemo(() => buildGenealogy(user.id, users), [user.id, users]);
+    const genealogyTree = useMemo(() => buildGenealogy(user._id, users), [user._id, users]);
 
     const renderTree = (nodes: { user: User, children: any[] }[]) => (
         <ul className="pl-4 border-l border-gray-200 dark:border-gray-700">
             {nodes.map(node => (
-                <li key={node.user.id} className="mt-2">
+                <li key={node.user._id} className="mt-2">
                     <p className="text-sm">
                         <span className="font-semibold">{node.user.fullName}</span> (@{node.user.username}) - <Badge status={node.user.status} />
                     </p>
@@ -215,8 +255,8 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                 {type === 'transactions' && <thead><tr className="text-left text-xs uppercase"><th className="p-2">Type</th><th className="p-2">Amount</th><th className="p-2">Status</th><th className="p-2">Desc</th><th className="p-2">Date</th></tr></thead>}
                 <tbody>
                     {data.map((item: any) => (
-                         <tr key={item.id} className="border-b dark:border-gray-700">
-                            {type !== 'transactions' && <td className="p-2">{item.id}</td>}
+                         <tr key={item._id} className="border-b dark:border-gray-700">
+                            {type !== 'transactions' && <td className="p-2">{item._id}</td>}
                             {type === 'transactions' && <td className="p-2">{item.type}</td>}
                             <td className={`p-2 font-semibold ${item.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>${item.amount?.toFixed(2)}</td>
                             

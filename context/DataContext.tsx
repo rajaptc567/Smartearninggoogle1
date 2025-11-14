@@ -17,7 +17,7 @@ interface AppState {
 }
 
 const initialState: AppState = {
-    users: mockUsers,
+    users: [], // Will be loaded from API
     deposits: mockDeposits,
     withdrawals: mockWithdrawals,
     transfers: mockTransfers,
@@ -30,44 +30,45 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
     },
     notifications: mockNotifications,
-    currentUser: mockUsers[0] || null,
+    currentUser: mockUsers[0] || null, // Keep a mock user for member panel demo
 };
 
 type Action =
+    | { type: 'SET_USERS'; payload: User[] }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
-    | { type: 'TOGGLE_USER_STATUS'; payload: number }
+    | { type: 'TOGGLE_USER_STATUS'; payload: string }
     | { type: 'UPDATE_DEPOSIT'; payload: Deposit }
     | { type: 'ADD_DEPOSIT'; payload: Deposit }
     | { type: 'UPDATE_WITHDRAWAL'; payload: Withdrawal }
     | { type: 'ADD_WITHDRAWAL'; payload: Withdrawal }
     | { type: 'ADD_PAYMENT_METHOD'; payload: PaymentMethod }
     | { type: 'UPDATE_PAYMENT_METHOD'; payload: PaymentMethod }
-    | { type: 'DELETE_PAYMENT_METHOD'; payload: number }
+    | { type: 'DELETE_PAYMENT_METHOD'; payload: string }
     | { type: 'ADD_INVESTMENT_PLAN'; payload: InvestmentPlan }
     | { type: 'UPDATE_INVESTMENT_PLAN'; payload: InvestmentPlan }
-    | { type: 'DELETE_INVESTMENT_PLAN'; payload: number }
+    | { type: 'DELETE_INVESTMENT_PLAN'; payload: string }
     | { type: 'ADD_RULE'; payload: Rule }
-    | { type: 'DELETE_RULE'; payload: number }
+    | { type: 'DELETE_RULE'; payload: string }
     | { type: 'ADD_TRANSACTION'; payload: Transaction }
-    | { type: 'MANUAL_WALLET_ADJUSTMENT'; payload: { userId: number; amount: number; description: string }}
-    | { type: 'PURCHASE_PLAN'; payload: { userId: number; planId: number } }
+    | { type: 'MANUAL_WALLET_ADJUSTMENT'; payload: { userId: string; amount: number; description: string }}
+    | { type: 'PURCHASE_PLAN'; payload: { userId: string; planId: string } }
     | { type: 'UPDATE_SETTINGS', payload: Partial<Settings> }
-    | { type: 'ADD_TRANSFER'; payload: Omit<Transfer, 'id' | 'status' | 'date'> }
+    | { type: 'ADD_TRANSFER'; payload: Omit<Transfer, '_id' | 'status' | 'date'> }
     | { type: 'UPDATE_TRANSFER'; payload: Transfer }
-    | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, 'id'> }
-    | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: number }; // userId
+    | { type: 'ADD_NOTIFICATION'; payload: Omit<Notification, '_id'> }
+    | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: string }; // userId
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     
     const createNotification = (
       notifications: Notification[], 
-      userId: number, 
+      userId: string, 
       message: string
     ): Notification[] => {
         const newNotification: Notification = {
-            id: Date.now(),
+            _id: String(Date.now()),
             userId,
             message,
             date: new Date().toISOString().split('T')[0],
@@ -79,7 +80,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
         // NOTIFICATION ACTIONS
         case 'ADD_NOTIFICATION':
-            const newNotification = { ...action.payload, id: Date.now() };
+            const newNotification = { ...action.payload, _id: String(Date.now()) };
             return { ...state, notifications: [newNotification, ...state.notifications] };
         case 'MARK_NOTIFICATIONS_AS_READ':
             return {
@@ -90,6 +91,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             };
 
         // USER ACTIONS
+        case 'SET_USERS':
+            return { ...state, users: action.payload };
         case 'ADD_USER': {
             const newUser = action.payload;
             let newNotifications = state.notifications;
@@ -98,7 +101,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 if (sponsor) {
                     newNotifications = createNotification(
                         state.notifications, 
-                        sponsor.id,
+                        sponsor._id,
                         `Congratulations! You have a new direct referral: ${newUser.fullName} (@${newUser.username}).`
                     );
                 }
@@ -106,8 +109,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return { ...state, users: [...state.users, newUser], notifications: newNotifications };
         }
         case 'UPDATE_USER': {
-            const updatedUsers = state.users.map(u => u.id === action.payload.id ? action.payload : u);
-            const updatedCurrentUser = state.currentUser?.id === action.payload.id ? action.payload : state.currentUser;
+            const updatedUsers = state.users.map(u => u._id === action.payload._id ? action.payload : u);
+            const updatedCurrentUser = state.currentUser?._id === action.payload._id ? action.payload : state.currentUser;
             return {
                 ...state,
                 users: updatedUsers,
@@ -117,19 +120,19 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'TOGGLE_USER_STATUS': {
             return {
                 ...state,
-                users: state.users.map(u => u.id === action.payload ? { ...u, status: u.status === Status.Active ? Status.Blocked : Status.Active } : u)
+                users: state.users.map(u => u._id === action.payload ? { ...u, status: u.status === Status.Active ? Status.Blocked : Status.Active } : u)
             };
         }
 
         // DEPOSIT ACTIONS
         case 'ADD_DEPOSIT': {
             const newDeposit = action.payload;
-            const depositor = state.users.find(u => u.id === newDeposit.userId);
+            const depositor = state.users.find(u => u._id === newDeposit.userId);
             let newTransactions = [...state.transactions];
             let newNotifications = createNotification(
                 state.notifications,
                 newDeposit.userId,
-                `Your deposit request #${newDeposit.id} for $${newDeposit.amount.toFixed(2)} is pending.`
+                `Your deposit request #${newDeposit._id} for $${newDeposit.amount.toFixed(2)} is pending.`
             );
 
             if (!depositor || newDeposit.matchedWithdrawalId) {
@@ -160,20 +163,20 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                         : commissionConfig.value;
                     
                     const commissionTx: Transaction = {
-                        id: `TRN_COMM_${newDeposit.id}_L${level}`,
-                        userId: sponsor.id,
+                        _id: `TRN_COMM_${newDeposit._id}_L${level}`,
+                        userId: sponsor._id,
                         userName: sponsor.username,
                         type: 'Commission',
                         amount: commissionValue,
                         date: new Date().toISOString().split('T')[0],
-                        description: `From ${depositor.username} (Deposit #${newDeposit.id})`,
+                        description: `From ${depositor.username} (Deposit #${newDeposit._id})`,
                         level: level,
                         status: 'Pending'
                     };
                     newTransactions.unshift(commissionTx);
                     newNotifications = createNotification(
                         newNotifications,
-                        sponsor.id,
+                        sponsor._id,
                         `You have a new pending Level ${level} commission of $${commissionValue.toFixed(2)} from ${depositor.username}.`
                     );
                 }
@@ -186,13 +189,13 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         }
         case 'UPDATE_DEPOSIT': {
             const updatedDeposit = action.payload;
-            const originalDeposit = state.deposits.find(d => d.id === updatedDeposit.id);
+            const originalDeposit = state.deposits.find(d => d._id === updatedDeposit._id);
             if (!originalDeposit || originalDeposit.status === updatedDeposit.status) return state;
             
             let newNotifications = createNotification(
                 state.notifications,
                 updatedDeposit.userId,
-                `Your deposit #${updatedDeposit.id} for $${updatedDeposit.amount.toFixed(2)} has been ${updatedDeposit.status}.`
+                `Your deposit #${updatedDeposit._id} for $${updatedDeposit.amount.toFixed(2)} has been ${updatedDeposit.status}.`
             );
 
             let newUsers = [...state.users];
@@ -200,50 +203,50 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             let newWithdrawals = [...state.withdrawals];
 
             if (originalDeposit.status !== Status.Approved && updatedDeposit.status === Status.Approved) {
-                newUsers = newUsers.map(u => u.id === updatedDeposit.userId ? { ...u, walletBalance: u.walletBalance + updatedDeposit.amount } : u);
-                newTransactions.unshift({ id: `TRN${Date.now()}`, userId: updatedDeposit.userId, userName: updatedDeposit.userName, type: 'Deposit', amount: updatedDeposit.amount, date: new Date().toISOString().split('T')[0], description: `Approved Deposit #${updatedDeposit.id}`, status: 'Approved' });
+                newUsers = newUsers.map(u => u._id === updatedDeposit.userId ? { ...u, walletBalance: u.walletBalance + updatedDeposit.amount } : u);
+                newTransactions.unshift({ _id: `TRN${Date.now()}`, userId: updatedDeposit.userId, userName: updatedDeposit.userName, type: 'Deposit', amount: updatedDeposit.amount, date: new Date().toISOString().split('T')[0], description: `Approved Deposit #${updatedDeposit._id}`, status: 'Approved' });
             
                 if (updatedDeposit.matchedWithdrawalId) {
-                    const matchedWithdrawal = newWithdrawals.find(w => w.id === updatedDeposit.matchedWithdrawalId);
+                    const matchedWithdrawal = newWithdrawals.find(w => w._id === updatedDeposit.matchedWithdrawalId);
                     if (matchedWithdrawal) {
                         const remaining = (matchedWithdrawal.matchRemainingAmount || 0) - updatedDeposit.amount;
                         matchedWithdrawal.matchRemainingAmount = Math.max(0, remaining);
                         if (matchedWithdrawal.matchRemainingAmount === 0) {
                             matchedWithdrawal.status = Status.Paid;
-                            newTransactions.unshift({ id: `TRN_P2P_${matchedWithdrawal.id}`, userId: matchedWithdrawal.userId, userName: matchedWithdrawal.userName, type: 'Withdrawal', amount: -matchedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `P2P Withdrawal #${matchedWithdrawal.id} Paid`, status: 'Approved' });
-                             newNotifications = createNotification(newNotifications, matchedWithdrawal.userId, `Your P2P withdrawal #${matchedWithdrawal.id} has been fully paid.`);
+                            newTransactions.unshift({ _id: `TRN_P2P_${matchedWithdrawal._id}`, userId: matchedWithdrawal.userId, userName: matchedWithdrawal.userName, type: 'Withdrawal', amount: -matchedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `P2P Withdrawal #${matchedWithdrawal._id} Paid`, status: 'Approved' });
+                             newNotifications = createNotification(newNotifications, matchedWithdrawal.userId, `Your P2P withdrawal #${matchedWithdrawal._id} has been fully paid.`);
                         }
                     }
                 } else {
-                    const pendingCommTxs = newTransactions.filter(t => t.description.includes(updatedDeposit.id) && t.status === 'Pending');
+                    const pendingCommTxs = newTransactions.filter(t => t.description.includes(updatedDeposit._id) && t.status === 'Pending');
                     for (const commTx of pendingCommTxs) {
                         commTx.status = 'Approved';
-                        newUsers = newUsers.map(u => u.id === commTx.userId ? { ...u, walletBalance: u.walletBalance + commTx.amount } : u);
+                        newUsers = newUsers.map(u => u._id === commTx.userId ? { ...u, walletBalance: u.walletBalance + commTx.amount } : u);
                         newNotifications = createNotification(newNotifications, commTx.userId, `Your pending commission of $${commTx.amount.toFixed(2)} from ${updatedDeposit.userName} has been approved.`);
                     }
                 }
             } 
             else if (originalDeposit.status === Status.Approved && updatedDeposit.status !== Status.Approved) {
-                newUsers = state.users.map(u => u.id === updatedDeposit.userId ? { ...u, walletBalance: u.walletBalance - updatedDeposit.amount } : u);
+                newUsers = state.users.map(u => u._id === updatedDeposit.userId ? { ...u, walletBalance: u.walletBalance - updatedDeposit.amount } : u);
             }
             
             return {
                 ...state,
-                deposits: state.deposits.map(d => d.id === updatedDeposit.id ? updatedDeposit : d),
+                deposits: state.deposits.map(d => d._id === updatedDeposit._id ? updatedDeposit : d),
                 withdrawals: newWithdrawals,
                 users: newUsers,
                 transactions: newTransactions,
                 notifications: newNotifications,
-                currentUser: newUsers.find(u => u.id === state.currentUser?.id) || state.currentUser
+                currentUser: newUsers.find(u => u._id === state.currentUser?._id) || state.currentUser
             };
         }
 
         // WITHDRAWAL ACTIONS
         case 'ADD_WITHDRAWAL': {
              const newWithdrawal = action.payload;
-             const updatedUsers = state.users.map(u => u.id === newWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - newWithdrawal.amount } : u);
-             const newTransaction: Transaction = { id: `TRN${Date.now()}`, userId: newWithdrawal.userId, userName: newWithdrawal.userName, type: 'Withdrawal Request', amount: -newWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Pending Withdrawal #${newWithdrawal.id}`, status: 'Pending' };
-             const newNotifications = createNotification(state.notifications, newWithdrawal.userId, `Your withdrawal request #${newWithdrawal.id} for $${newWithdrawal.amount.toFixed(2)} is pending.`);
+             const updatedUsers = state.users.map(u => u._id === newWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - newWithdrawal.amount } : u);
+             const newTransaction: Transaction = { _id: `TRN${Date.now()}`, userId: newWithdrawal.userId, userName: newWithdrawal.userName, type: 'Withdrawal Request', amount: -newWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Pending Withdrawal #${newWithdrawal._id}`, status: 'Pending' };
+             const newNotifications = createNotification(state.notifications, newWithdrawal.userId, `Your withdrawal request #${newWithdrawal._id} for $${newWithdrawal.amount.toFixed(2)} is pending.`);
 
              return {
                  ...state,
@@ -251,15 +254,15 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                  users: updatedUsers,
                  transactions: [newTransaction, ...state.transactions],
                  notifications: newNotifications,
-                 currentUser: updatedUsers.find(u => u.id === state.currentUser?.id) || state.currentUser
+                 currentUser: updatedUsers.find(u => u._id === state.currentUser?._id) || state.currentUser
              }
         }
         case 'UPDATE_WITHDRAWAL': {
             const updatedWithdrawal = action.payload;
-            const originalWithdrawal = state.withdrawals.find(w => w.id === updatedWithdrawal.id);
+            const originalWithdrawal = state.withdrawals.find(w => w._id === updatedWithdrawal._id);
             if (!originalWithdrawal || originalWithdrawal.status === updatedWithdrawal.status) return state;
 
-            let newNotifications = createNotification(state.notifications, updatedWithdrawal.userId, `Your withdrawal request #${updatedWithdrawal.id} has been updated to ${updatedWithdrawal.status}.`);
+            let newNotifications = createNotification(state.notifications, updatedWithdrawal.userId, `Your withdrawal request #${updatedWithdrawal._id} has been updated to ${updatedWithdrawal.status}.`);
 
             let newUsers = [...state.users];
             let newTransactions = [...state.transactions];
@@ -270,20 +273,20 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             }
             
             if (originalWithdrawal.status !== Status.Rejected && updatedWithdrawal.status === Status.Rejected) {
-                newUsers = state.users.map(u => u.id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance + updatedWithdrawal.amount } : u);
-                newTransactions.unshift({ id: `TRN${Date.now()}`, userId: updatedWithdrawal.userId, userName: updatedWithdrawal.userName, type: 'Withdrawal Refund', amount: updatedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Refund for Rejected Withdrawal #${updatedWithdrawal.id}`, status: 'Approved' });
+                newUsers = state.users.map(u => u._id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance + updatedWithdrawal.amount } : u);
+                newTransactions.unshift({ _id: `TRN${Date.now()}`, userId: updatedWithdrawal.userId, userName: updatedWithdrawal.userName, type: 'Withdrawal Refund', amount: updatedWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Refund for Rejected Withdrawal #${updatedWithdrawal._id}`, status: 'Approved' });
             }
              if (originalWithdrawal.status === Status.Rejected && updatedWithdrawal.status !== Status.Rejected) {
-                newUsers = state.users.map(u => u.id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - updatedWithdrawal.amount } : u);
+                newUsers = state.users.map(u => u._id === updatedWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - updatedWithdrawal.amount } : u);
             }
 
             return {
                 ...state,
-                withdrawals: state.withdrawals.map(w => w.id === finalWithdrawal.id ? finalWithdrawal : w),
+                withdrawals: state.withdrawals.map(w => w._id === finalWithdrawal._id ? finalWithdrawal : w),
                 users: newUsers,
                 transactions: newTransactions,
                 notifications: newNotifications,
-                currentUser: newUsers.find(u => u.id === state.currentUser?.id) || state.currentUser
+                currentUser: newUsers.find(u => u._id === state.currentUser?._id) || state.currentUser
             };
         }
 
@@ -291,21 +294,21 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_PAYMENT_METHOD':
             return { ...state, paymentMethods: [action.payload, ...state.paymentMethods] };
         case 'UPDATE_PAYMENT_METHOD':
-            return { ...state, paymentMethods: state.paymentMethods.map(p => p.id === action.payload.id ? action.payload : p) };
+            return { ...state, paymentMethods: state.paymentMethods.map(p => p._id === action.payload._id ? action.payload : p) };
         case 'DELETE_PAYMENT_METHOD':
-            return { ...state, paymentMethods: state.paymentMethods.filter(p => p.id !== action.payload) };
+            return { ...state, paymentMethods: state.paymentMethods.filter(p => p._id !== action.payload) };
 
         // INVESTMENT PLAN ACTIONS
         case 'ADD_INVESTMENT_PLAN':
             return { ...state, investmentPlans: [action.payload, ...state.investmentPlans] };
         case 'UPDATE_INVESTMENT_PLAN':
-            return { ...state, investmentPlans: state.investmentPlans.map(p => p.id === action.payload.id ? action.payload : p) };
+            return { ...state, investmentPlans: state.investmentPlans.map(p => p._id === action.payload._id ? action.payload : p) };
         case 'DELETE_INVESTMENT_PLAN':
-            return { ...state, investmentPlans: state.investmentPlans.filter(p => p.id !== action.payload) };
+            return { ...state, investmentPlans: state.investmentPlans.filter(p => p._id !== action.payload) };
         case 'PURCHASE_PLAN': {
             const { userId, planId } = action.payload;
-            const user = state.users.find(u => u.id === userId);
-            const plan = state.investmentPlans.find(p => p.id === planId);
+            const user = state.users.find(u => u._id === userId);
+            const plan = state.investmentPlans.find(p => p._id === planId);
 
             if (!user || !plan || user.walletBalance < plan.price) {
                 alert('Purchase failed. Insufficient funds or plan not found.');
@@ -319,7 +322,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             };
 
             const newTransaction: Transaction = {
-                id: `TRN${Date.now()}`,
+                _id: `TRN${Date.now()}`,
                 userId: userId,
                 userName: user.username,
                 type: 'Plan Purchase',
@@ -329,8 +332,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 status: 'Approved'
             };
 
-            const updatedUsers = state.users.map(u => u.id === userId ? updatedUser : u);
-            const updatedCurrentUser = state.currentUser?.id === userId ? updatedUser : state.currentUser;
+            const updatedUsers = state.users.map(u => u._id === userId ? updatedUser : u);
+            const updatedCurrentUser = state.currentUser?._id === userId ? updatedUser : state.currentUser;
             
             const newNotifications = createNotification(state.notifications, userId, `You successfully purchased the ${plan.name} for $${plan.price}.`);
             
@@ -349,20 +352,20 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_RULE':
             return { ...state, rules: [action.payload, ...state.rules] };
         case 'DELETE_RULE':
-            return { ...state, rules: state.rules.filter(r => r.id !== action.payload) };
+            return { ...state, rules: state.rules.filter(r => r._id !== action.payload) };
         
         // WALLET ACTIONS
         case 'MANUAL_WALLET_ADJUSTMENT': {
             const { userId, amount, description } = action.payload;
-            const user = state.users.find(u => u.id === userId);
+            const user = state.users.find(u => u._id === userId);
             if (!user) return state;
 
             const newUsers = state.users.map(u => 
-                u.id === userId ? { ...u, walletBalance: u.walletBalance + amount } : u
+                u._id === userId ? { ...u, walletBalance: u.walletBalance + amount } : u
             );
 
             const newTransaction: Transaction = {
-                id: `TRN${Date.now()}`,
+                _id: `TRN${Date.now()}`,
                 userId: userId,
                 userName: user.username,
                 type: amount > 0 ? 'Manual Credit' : 'Manual Debit',
@@ -379,7 +382,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 users: newUsers,
                 transactions: [newTransaction, ...state.transactions],
                 notifications: newNotifications,
-                currentUser: newUsers.find(u => u.id === state.currentUser?.id) || state.currentUser,
+                currentUser: newUsers.find(u => u._id === state.currentUser?._id) || state.currentUser,
             };
         }
 
@@ -393,7 +396,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         // TRANSFER ACTIONS
         case 'ADD_TRANSFER': {
             const { senderId, recipientId, amount, senderName, recipientName } = action.payload;
-            const sender = state.users.find(u => u.id === senderId);
+            const sender = state.users.find(u => u._id === senderId);
             
             if (!sender || sender.walletBalance < amount) {
                 alert('Action failed: Sender not found or insufficient balance.');
@@ -402,20 +405,20 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             
             const newTransfer: Transfer = {
                 ...action.payload,
-                id: `TRF${Date.now()}`,
+                _id: `TRF${Date.now()}`,
                 status: Status.Pending,
                 date: new Date().toISOString().split('T')[0],
             };
 
-            const updatedUsers = state.users.map(u => u.id === senderId ? { ...u, walletBalance: u.walletBalance - amount } : u);
+            const updatedUsers = state.users.map(u => u._id === senderId ? { ...u, walletBalance: u.walletBalance - amount } : u);
             const newTransaction: Transaction = {
-                id: `TRN${Date.now()}`,
+                _id: `TRN${Date.now()}`,
                 userId: senderId,
                 userName: sender.username,
                 type: 'Transfer Request',
                 amount: -amount,
                 date: newTransfer.date,
-                description: `Transfer to ${recipientName} #${newTransfer.id}`,
+                description: `Transfer to ${recipientName} #${newTransfer._id}`,
                 status: 'Pending'
             };
             const newNotifications = createNotification(state.notifications, senderId, `Your transfer request of $${amount.toFixed(2)} to ${recipientName} is pending.`);
@@ -426,22 +429,22 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 users: updatedUsers,
                 transactions: [newTransaction, ...state.transactions],
                 notifications: newNotifications,
-                currentUser: updatedUsers.find(u => u.id === state.currentUser?.id) || state.currentUser,
+                currentUser: updatedUsers.find(u => u._id === state.currentUser?._id) || state.currentUser,
             };
         }
         case 'UPDATE_TRANSFER': {
             const updatedTransfer = action.payload;
-            const originalTransfer = state.transfers.find(t => t.id === updatedTransfer.id);
+            const originalTransfer = state.transfers.find(t => t._id === updatedTransfer._id);
             if (!originalTransfer || originalTransfer.status !== Status.Pending) return state;
 
             let newUsers = [...state.users];
             let newTransactions = [...state.transactions];
             let newNotifications = state.notifications;
-            const originalTx = newTransactions.find(tx => tx.description.includes(updatedTransfer.id));
+            const originalTx = newTransactions.find(tx => tx.description.includes(updatedTransfer._id));
 
             if (updatedTransfer.status === Status.Approved) {
-                newUsers = newUsers.map(u => u.id === updatedTransfer.recipientId ? { ...u, walletBalance: u.walletBalance + updatedTransfer.amount } : u);
-                newTransactions.unshift({ id: `TRN${Date.now()}`, userId: updatedTransfer.recipientId, userName: updatedTransfer.recipientName, type: 'Transfer Received', amount: updatedTransfer.amount, date: new Date().toISOString().split('T')[0], description: `From ${updatedTransfer.senderName} #${updatedTransfer.id}`, status: 'Approved' });
+                newUsers = newUsers.map(u => u._id === updatedTransfer.recipientId ? { ...u, walletBalance: u.walletBalance + updatedTransfer.amount } : u);
+                newTransactions.unshift({ _id: `TRN${Date.now()}`, userId: updatedTransfer.recipientId, userName: updatedTransfer.recipientName, type: 'Transfer Received', amount: updatedTransfer.amount, date: new Date().toISOString().split('T')[0], description: `From ${updatedTransfer.senderName} #${updatedTransfer._id}`, status: 'Approved' });
                 if (originalTx) {
                     originalTx.type = 'Transfer Sent';
                     originalTx.status = 'Approved';
@@ -450,7 +453,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 newNotifications = createNotification(newNotifications, updatedTransfer.recipientId, `You received a transfer of $${updatedTransfer.amount.toFixed(2)} from ${updatedTransfer.senderName}.`);
 
             } else if (updatedTransfer.status === Status.Rejected) {
-                newUsers = newUsers.map(u => u.id === updatedTransfer.senderId ? { ...u, walletBalance: u.walletBalance + updatedTransfer.amount } : u);
+                newUsers = newUsers.map(u => u._id === updatedTransfer.senderId ? { ...u, walletBalance: u.walletBalance + updatedTransfer.amount } : u);
                 if (originalTx) {
                     originalTx.type = 'Transfer Refund';
                     originalTx.amount = updatedTransfer.amount;
@@ -461,11 +464,11 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
             return {
                 ...state,
-                transfers: state.transfers.map(t => t.id === updatedTransfer.id ? updatedTransfer : t),
+                transfers: state.transfers.map(t => t._id === updatedTransfer._id ? updatedTransfer : t),
                 users: newUsers,
                 transactions: newTransactions,
                 notifications: newNotifications,
-                currentUser: newUsers.find(u => u.id === state.currentUser?.id) || state.currentUser,
+                currentUser: newUsers.find(u => u._id === state.currentUser?._id) || state.currentUser,
             };
         }
 

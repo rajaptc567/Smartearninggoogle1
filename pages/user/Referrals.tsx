@@ -37,14 +37,14 @@ const Referrals: React.FC = () => {
     const getCommissionFromReferral = (referralUsername: string): number => {
         if (!currentUser) return 0;
         return transactions
-            .filter(t => t.userId === currentUser.id && t.type === 'Commission' && t.description.includes(`From ${referralUsername}`))
+            .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.description.includes(`From ${referralUsername}`))
             .reduce((sum, t) => sum + t.amount, 0);
     };
 
     const renderTree = (nodes: GenealogyNode[]) => (
         <ul className="space-y-2">
             {nodes.map(node => (
-                <li key={node.user.id} className="pl-4 border-l-2 border-gray-200 dark:border-gray-700">
+                <li key={node.user._id} className="pl-4 border-l-2 border-gray-200 dark:border-gray-700">
                     <div className="flex items-center space-x-3 p-2 rounded-md bg-gray-50 dark:bg-gray-800/50">
                         <div className="flex-shrink-0">
                            <span className="text-xs font-bold inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
@@ -84,7 +84,7 @@ const Referrals: React.FC = () => {
                             </thead>
                             <tbody>
                                 {directReferrals.map(user => (
-                                    <tr key={user.id} className="border-b dark:border-gray-700">
+                                    <tr key={user._id} className="border-b dark:border-gray-700">
                                         <td className="px-4 py-2 font-medium">{user.fullName}</td>
                                         <td className="px-4 py-2">@{user.username}</td>
                                         <td className="px-4 py-2">{user.email}</td>

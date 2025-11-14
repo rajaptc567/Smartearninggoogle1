@@ -67,7 +67,7 @@ const Deposits: React.FC = () => {
             <Table headers={tableHeaders}>
                 {deposits.map((deposit: Deposit) => (
                     <tr 
-                      key={deposit.id} 
+                      key={deposit._id} 
                       className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
                       onClick={() => handleRowClick(deposit)}
                     >
@@ -99,7 +99,7 @@ const Deposits: React.FC = () => {
             {selectedDeposit && (
                  <Modal isOpen={isDetailModalOpen} onClose={handleCloseDetailModal}>
                     <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
-                        <h3 className="text-xl font-bold mb-4">Deposit Details - <span className="text-blue-600 dark:text-blue-400">{selectedDeposit.id}</span></h3>
+                        <h3 className="text-xl font-bold mb-4">Deposit Details - <span className="text-blue-600 dark:text-blue-400">{selectedDeposit._id}</span></h3>
                         
                         {selectedDeposit.matchedWithdrawalId && (
                             <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm">

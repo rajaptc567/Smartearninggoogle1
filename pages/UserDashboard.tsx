@@ -72,7 +72,7 @@ const UserDashboard: React.FC = () => {
 
     if (!currentUser) return <div>Loading user data...</div>;
 
-    const userTransactions = useMemo(() => transactions.filter(t => t.userId === currentUser.id), [transactions, currentUser.id]);
+    const userTransactions = useMemo(() => transactions.filter(t => t.userId === currentUser._id), [transactions, currentUser._id]);
 
     const stats = useMemo(() => {
         const now = new Date();
@@ -85,8 +85,8 @@ const UserDashboard: React.FC = () => {
         const indirectCommission = totalCommission - directCommission;
 
         return {
-            totalDeposits: deposits.filter(d => d.userId === currentUser.id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0),
-            totalWithdrawals: withdrawals.filter(w => w.userId === currentUser.id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0),
+            totalDeposits: deposits.filter(d => d.userId === currentUser._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0),
+            totalWithdrawals: withdrawals.filter(w => w.userId === currentUser._id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0),
             totalCommission,
             directCommission,
             indirectCommission,
@@ -94,7 +94,7 @@ const UserDashboard: React.FC = () => {
             monthlyEarnings: approvedCommissions.filter(t => t.date >= firstDayOfMonth).reduce((sum, t) => sum + t.amount, 0),
             activePlanValue: investmentPlans.find(p => p.name === currentUser.activePlan)?.price || 0,
         };
-    }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser.id, currentUser.activePlan]);
+    }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser._id, currentUser.activePlan]);
     
     const countAllReferrals = useCallback((username: string, allUsers: User[]): number => {
         const directReferrals = allUsers.filter(u => u.sponsor === username);
@@ -177,8 +177,8 @@ const UserDashboard: React.FC = () => {
                 <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Recent Transactions</h2>
                 <Table headers={['ID', 'Type', 'Amount', 'Status', 'Date', 'Description']}>
                     {recentTransactions.map((tx: Transaction) => (
-                         <tr key={tx.id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm">{tx.id}</td>
+                         <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
+                            <td className="px-4 py-3 text-sm">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)}</td>
                             <td className="px-4 py-3 text-xs"><Badge status={tx.status as Status || Status.Approved} /></td>

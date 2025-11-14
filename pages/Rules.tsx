@@ -20,7 +20,7 @@ const Rules: React.FC = () => {
             return;
         }
         const newRule = {
-            id: Date.now(),
+            _id: String(Date.now()),
             fromPlan,
             toPlan,
             requiredEarnings: parseFloat(requiredEarnings),
@@ -31,7 +31,7 @@ const Rules: React.FC = () => {
         setRequiredEarnings('');
     };
     
-    const handleDeleteRule = (ruleId: number) => {
+    const handleDeleteRule = (ruleId: string) => {
         if(window.confirm('Are you sure you want to delete this rule?')) {
             dispatch({ type: 'DELETE_RULE', payload: ruleId });
         }
@@ -48,14 +48,14 @@ const Rules: React.FC = () => {
                             <label htmlFor="fromPlan" className="block text-sm font-medium">From Plan</label>
                             <select id="fromPlan" value={fromPlan} onChange={e => setFromPlan(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="">Select Plan</option>
-                                {activePlans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                {activePlans.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label htmlFor="toPlan" className="block text-sm font-medium">To Plan</label>
                             <select id="toPlan" value={toPlan} onChange={e => setToPlan(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="">Select Plan</option>
-                                {activePlans.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                {activePlans.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
                             </select>
                         </div>
                         <div>
@@ -72,12 +72,12 @@ const Rules: React.FC = () => {
                      <div className="mt-4">
                         <Table headers={['From Plan', 'To Plan', 'Required Earnings', 'Actions']}>
                             {rules.map(rule => (
-                                <tr key={rule.id} className="text-gray-700 dark:text-gray-400">
+                                <tr key={rule._id} className="text-gray-700 dark:text-gray-400">
                                     <td className="px-4 py-3">{rule.fromPlan}</td>
                                     <td className="px-4 py-3">{rule.toPlan}</td>
                                     <td className="px-4 py-3">${rule.requiredEarnings.toFixed(2)}</td>
                                     <td className="px-4 py-3">
-                                        <Button size="sm" variant="danger" onClick={() => handleDeleteRule(rule.id)}>Delete</Button>
+                                        <Button size="sm" variant="danger" onClick={() => handleDeleteRule(rule._id)}>Delete</Button>
                                     </td>
                                 </tr>
                             ))}

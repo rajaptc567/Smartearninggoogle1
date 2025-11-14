@@ -26,7 +26,7 @@ const UserInvestmentPlans: React.FC = () => {
 
   const handleConfirmPurchase = () => {
     if (selectedPlan) {
-        dispatch({ type: 'PURCHASE_PLAN', payload: { userId: currentUser.id, planId: selectedPlan.id } });
+        dispatch({ type: 'PURCHASE_PLAN', payload: { userId: currentUser._id, planId: selectedPlan._id } });
     }
     handleCloseModal();
   };
@@ -48,7 +48,7 @@ const UserInvestmentPlans: React.FC = () => {
                 const isCurrentPlan = currentUser.activePlan === plan.name;
 
                 return (
-                     <div key={plan.id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col border-2 ${isCurrentPlan ? 'border-blue-500' : 'border-transparent'}`}>
+                     <div key={plan._id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col border-2 ${isCurrentPlan ? 'border-blue-500' : 'border-transparent'}`}>
                         {isCurrentPlan && <div className="absolute top-0 right-0 -mt-3 -mr-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full z-10">Current Plan</div>}
                         
                         <div className="flex justify-between items-start mb-4">

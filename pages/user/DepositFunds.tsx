@@ -21,7 +21,7 @@ const DepositFunds: React.FC = () => {
     );
 
     const selectedMethod: PaymentMethod | undefined = useMemo(() =>
-        depositMethods.find(method => method.id.toString() === selectedMethodId),
+        depositMethods.find(method => method._id.toString() === selectedMethodId),
         [selectedMethodId, depositMethods]
     );
 
@@ -64,8 +64,8 @@ const DepositFunds: React.FC = () => {
         }
         
         const newDeposit: Deposit = {
-            id: `DEP${Date.now()}`,
-            userId: currentUser.id,
+            _id: `DEP${Date.now()}`,
+            userId: currentUser._id,
             userName: currentUser.username,
             method: selectedMethod.name,
             amount: parseFloat(amount),
@@ -74,7 +74,7 @@ const DepositFunds: React.FC = () => {
             status: Status.Pending,
             date: new Date().toISOString().split('T')[0],
             userNotes: userNotes,
-            matchedWithdrawalId: matchedWithdrawal ? matchedWithdrawal.id : undefined,
+            matchedWithdrawalId: matchedWithdrawal ? matchedWithdrawal._id : undefined,
         };
 
         dispatch({ type: 'ADD_DEPOSIT', payload: newDeposit });
@@ -112,7 +112,7 @@ const DepositFunds: React.FC = () => {
                     >
                         <option value="">-- Choose a method --</option>
                         {depositMethods.map(method => (
-                            <option key={method.id} value={method.id}>{method.name}</option>
+                            <option key={method._id} value={method._id}>{method.name}</option>
                         ))}
                     </select>
                 </div>

@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { mockUsers, mockDeposits, mockWithdrawals } from '../data/mockData';
 import { Deposit, Status } from '../types';
@@ -36,7 +37,8 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Recent Deposit Requests</h2>
                 <Table headers={['User', 'Amount', 'Method', 'Status', 'Date']}>
                     {recentDeposits.map((deposit: Deposit) => (
-                        <tr key={deposit.id} className="text-gray-700 dark:text-gray-400">
+                        // FIX: Changed key from deposit.id to deposit._id to match the Deposit type.
+                        <tr key={deposit._id} className="text-gray-700 dark:text-gray-400">
                             <td className="px-4 py-3">{deposit.userName}</td>
                             <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
                             <td className="px-4 py-3">{deposit.method}</td>

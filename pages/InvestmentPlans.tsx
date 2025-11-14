@@ -26,13 +26,13 @@ const InvestmentPlans: React.FC = () => {
         if (editingPlan) {
             dispatch({ type: 'UPDATE_INVESTMENT_PLAN', payload: plan });
         } else {
-            const newPlan = { ...plan, id: Date.now() };
+            const newPlan = { ...plan, _id: String(Date.now()) };
             dispatch({ type: 'ADD_INVESTMENT_PLAN', payload: newPlan });
         }
         handleCloseModal();
     };
 
-    const handleDelete = (planId: number) => {
+    const handleDelete = (planId: string) => {
         if (window.confirm('Are you sure you want to delete this plan?')) {
             dispatch({ type: 'DELETE_INVESTMENT_PLAN', payload: planId });
         }
@@ -46,7 +46,7 @@ const InvestmentPlans: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {investmentPlans.map((plan: InvestmentPlan) => (
-                    <div key={plan.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col">
+                    <div key={plan._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
                            <Badge status={plan.status} />
@@ -68,7 +68,7 @@ const InvestmentPlans: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-4">{plan.description}</p>
                         <div className="mt-6 flex justify-end space-x-2">
                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(plan)}>Edit</Button>
-                           <Button size="sm" variant="danger" onClick={() => handleDelete(plan.id)}>Delete</Button>
+                           <Button size="sm" variant="danger" onClick={() => handleDelete(plan._id)}>Delete</Button>
                         </div>
                     </div>
                 ))}
@@ -299,9 +299,9 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                         <div>
                             <label className="flex items-center space-x-2"><input type="checkbox" name="autoUpgrade.enabled" checked={formData.autoUpgrade?.enabled} onChange={handleChange} /> <span>Enable Auto Upgrade</span></label>
                             {formData.autoUpgrade?.enabled && (
-                                <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: Number(e.target.value)}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                     <option value="">- Select Plan -</option>
-                                    {state.investmentPlans.filter(p => p.id !== plan?.id && p.status === Status.Active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    {state.investmentPlans.filter(p => p._id !== plan?._id && p.status === Status.Active).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                                 </select>
                             )}
                         </div>

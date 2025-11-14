@@ -4,7 +4,7 @@ import { useData } from '../../hooks/useData';
 
 interface NotificationBellProps {
   notifications: Notification[];
-  userId?: number;
+  userId?: string;
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({ notifications, userId }) => {
@@ -40,7 +40,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ notifications, user
           <div className="max-h-96 overflow-y-auto">
             {notifications.length > 0 ? (
               notifications.map(notif => (
-                <div key={notif.id} className={`p-4 border-b dark:border-gray-700 ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                <div key={notif._id} className={`p-4 border-b dark:border-gray-700 ${!notif.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                   <p className="text-sm text-gray-700 dark:text-gray-300">{notif.message}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notif.date}</p>
                 </div>

@@ -24,7 +24,7 @@ const TransferFunds: React.FC = () => {
         }
 
         const recipient = users.find(u =>
-            u.id.toString() === recipientIdentifier ||
+            u._id.toString() === recipientIdentifier ||
             u.username.toLowerCase() === recipientIdentifier.toLowerCase() ||
             u.email.toLowerCase() === recipientIdentifier.toLowerCase()
         );
@@ -33,7 +33,7 @@ const TransferFunds: React.FC = () => {
             alert('Validation Error: Recipient user not found. Please check the ID, username, or email.');
             return;
         }
-        if (recipient.id === currentUser.id) {
+        if (recipient._id === currentUser._id) {
             alert('Validation Error: You cannot transfer funds to yourself.');
             return;
         }
@@ -46,9 +46,9 @@ const TransferFunds: React.FC = () => {
         dispatch({ 
             type: 'ADD_TRANSFER', 
             payload: {
-                senderId: currentUser.id,
+                senderId: currentUser._id,
                 senderName: currentUser.username,
-                recipientId: recipient.id,
+                recipientId: recipient._id,
                 recipientName: recipient.username,
                 amount: numericAmount,
             }

@@ -24,7 +24,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
     }
   };
 
-  const userNotifications = notifications.filter(n => n.userId === currentUser?.id);
+  const userNotifications = notifications.filter(n => n.userId === currentUser?._id);
 
   return (
     <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -41,7 +41,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-white ml-2 lg:ml-0">{getTitle()}</h1>
       </div>
       <div className="flex items-center space-x-4">
-        <NotificationBell notifications={userNotifications} userId={currentUser?.id} />
+        <NotificationBell notifications={userNotifications} userId={currentUser?._id} />
         <div className="relative">
           <button className="flex items-center focus:outline-none">
             <span className="mr-2 hidden md:inline">{currentUser?.fullName || 'Member'}</span>
