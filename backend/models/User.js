@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const UserSchema = new mongoose.Schema({
+    _id: {
+        type: String,
+        default: () => new mongoose.Types.ObjectId().toHexString()
+    },
     username: {
         type: String,
         required: [true, 'Please add a username'],
@@ -53,6 +57,7 @@ const UserSchema = new mongoose.Schema({
         type: String, // Can be changed to mongoose.Schema.ObjectId with ref: 'User' for relational queries
     },
 }, {
+    _id: false,
     timestamps: { createdAt: 'registrationDate', updatedAt: true } // Use timestamps to auto-manage creation/update dates
 });
 
