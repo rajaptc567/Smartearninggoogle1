@@ -1,12 +1,8 @@
 import mongoose from 'mongoose';
 
 const WithdrawalSchema = new mongoose.Schema({
-    _id: {
-        type: String,
-        default: () => `WDR${Date.now()}`
-    },
     userId: {
-        type: String,
+        type: mongoose.Schema.ObjectId,
         ref: 'User',
         required: true,
     },
@@ -53,7 +49,6 @@ const WithdrawalSchema = new mongoose.Schema({
         type: Number,
     },
 }, {
-    _id: false,
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
