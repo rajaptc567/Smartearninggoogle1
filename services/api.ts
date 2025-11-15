@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal } from '../types';
 
 // The base URL of your backend API is determined at runtime.
 // This allows the same code to work for both local development and live deployment.
@@ -93,6 +93,35 @@ export const updateDeposit = async (id: string, updateData: Partial<Deposit>): P
     const result = await handleResponse(response);
     return result.data;
 };
+
+// --- Withdrawal API Functions ---
+
+export const getWithdrawals = async (): Promise<Withdrawal[]> => {
+    const response = await fetch(`${API_BASE_URL}/withdrawals`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Promise<{withdrawal: Withdrawal, user: User, transaction: Transaction}> => {
+    const response = await fetch(`${API_BASE_URL}/withdrawals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(withdrawalData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal>): Promise<{withdrawal: Withdrawal, user: User}> => {
+    const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 
 // --- Transaction API Functions ---
 

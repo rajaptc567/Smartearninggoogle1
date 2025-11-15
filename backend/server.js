@@ -8,6 +8,7 @@ import connectDB from './config/db.js';
 // Route files
 import userRoutes from './routes/userRoutes.js';
 import depositRoutes from './routes/depositRoutes.js';
+import withdrawalRoutes from './routes/withdrawalRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 
@@ -62,6 +63,7 @@ app.get('/', (req, res) => {
 // Mount routers
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/deposits', depositRoutes);
+app.use('/api/v1/withdrawals', withdrawalRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 

@@ -1,7 +1,7 @@
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification } from '../types';
-import { mockUsers, mockWithdrawals, mockPaymentMethods, mockInvestmentPlans, mockRules, mockTransfers } from '../data/mockData';
-import { getUsers, getDeposits, getTransactions, getNotifications, markNotificationsAsRead } from '../services/api';
+import { mockPaymentMethods, mockInvestmentPlans, mockRules, mockTransfers } from '../data/mockData';
+import { getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, markNotificationsAsRead } from '../services/api';
 
 interface AppState {
     users: User[];
@@ -20,7 +20,7 @@ interface AppState {
 const initialState: AppState = {
     users: [], // Will be loaded from API
     deposits: [], // Will be loaded from API
-    withdrawals: mockWithdrawals, // Still mock for now
+    withdrawals: [], // Will be loaded from API
     transfers: mockTransfers, // Still mock for now
     paymentMethods: mockPaymentMethods, // Still mock for now
     investmentPlans: mockInvestmentPlans, // Still mock for now
@@ -41,8 +41,9 @@ type Action =
     | { type: 'SET_DEPOSITS'; payload: Deposit[] }
     | { type: 'ADD_DEPOSIT'; payload: Deposit }
     | { type: 'UPDATE_DEPOSIT'; payload: { deposit: Deposit; user: User } }
-    | { type: 'ADD_WITHDRAWAL'; payload: Withdrawal }
-    | { type: 'UPDATE_WITHDRAWAL'; payload: Withdrawal }
+    | { type: 'SET_WITHDRAWALS'; payload: Withdrawal[] }
+    | { type: 'ADD_WITHDRAWAL'; payload: { withdrawal: Withdrawal; user: User; transaction: Transaction } }
+    | { type: 'UPDATE_WITHDRAWAL'; payload: { withdrawal: Withdrawal; user: User } }
     | { type: 'ADD_PAYMENT_METHOD'; payload: PaymentMethod }
     | { type: 'UPDATE_PAYMENT_METHOD'; payload: PaymentMethod }
     | { type: 'DELETE_PAYMENT_METHOD'; payload: string }
@@ -133,24 +134,30 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'SET_TRANSACTIONS':
             return { ...state, transactions: action.payload };
 
-        // WITHDRAWAL ACTIONS (Still mock)
+        // WITHDRAWAL ACTIONS
+        case 'SET_WITHDRAWALS':
+            return { ...state, withdrawals: action.payload };
         case 'ADD_WITHDRAWAL': {
-             const newWithdrawal = action.payload;
-             const updatedUsers = state.users.map(u => u._id === newWithdrawal.userId ? { ...u, walletBalance: u.walletBalance - newWithdrawal.amount } : u);
-             const newTransaction: Transaction = { _id: `TRN${Date.now()}`, userId: newWithdrawal.userId, userName: newWithdrawal.userName, type: 'Withdrawal Request', amount: -newWithdrawal.amount, date: new Date().toISOString().split('T')[0], description: `Pending Withdrawal #${newWithdrawal._id}`, status: 'Pending' };
-             
+             const { withdrawal, user, transaction } = action.payload;
+             const updatedUsers = state.users.map(u => u._id === user._id ? user : u);
              return {
                  ...state,
-                 withdrawals: [newWithdrawal, ...state.withdrawals],
+                 withdrawals: [withdrawal, ...state.withdrawals],
                  users: updatedUsers,
-                 transactions: [newTransaction, ...state.transactions],
-                 currentUser: updatedUsers.find(u => u._id === state.currentUser?._id) || state.currentUser
+                 transactions: [transaction, ...state.transactions],
+                 currentUser: state.currentUser?._id === user._id ? user : state.currentUser
              }
         }
         case 'UPDATE_WITHDRAWAL': {
+            const { withdrawal: updatedWithdrawal, user: updatedUser } = action.payload;
+            const updatedWithdrawals = state.withdrawals.map(w => w._id === updatedWithdrawal._id ? updatedWithdrawal : w);
+            const updatedUsers = state.users.map(u => u._id === updatedUser._id ? updatedUser : u);
+
             return {
                 ...state,
-                withdrawals: state.withdrawals.map(w => w._id === action.payload._id ? action.payload : w),
+                withdrawals: updatedWithdrawals,
+                users: updatedUsers,
+                currentUser: state.currentUser?._id === updatedUser._id ? updatedUser : state.currentUser
             };
         }
 
@@ -241,14 +248,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [users, deposits, transactions, notifications] = await Promise.all([
+                const [users, deposits, withdrawals, transactions, notifications] = await Promise.all([
                     getUsers(),
                     getDeposits(),
+                    getWithdrawals(),
                     getTransactions(),
                     getNotifications()
                 ]);
                 dispatch({ type: 'SET_USERS', payload: users });
                 dispatch({ type: 'SET_DEPOSITS', payload: deposits });
+                dispatch({ type: 'SET_WITHDRAWALS', payload: withdrawals });
                 dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
                 dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
             } catch (error) {

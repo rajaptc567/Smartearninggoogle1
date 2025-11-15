@@ -1,0 +1,151 @@
+import Withdrawal from '../models/Withdrawal.js';
+import User from '../models/User.js';
+import Transaction from '../models/Transaction.js';
+import Notification from '../models/Notification.js';
+
+// @desc    Get all withdrawals
+// @route   GET /api/v1/withdrawals
+export const getWithdrawals = async (req, res) => {
+    try {
+        const withdrawals = await Withdrawal.find().sort({ date: -1 });
+        res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Get single withdrawal
+// @route   GET /api/v1/withdrawals/:id
+export const getWithdrawal = async (req, res) => {
+    try {
+        const withdrawal = await Withdrawal.findById(req.params.id);
+        if (!withdrawal) {
+            return res.status(404).json({ success: false, error: 'Withdrawal not found' });
+        }
+        res.status(200).json({ success: true, data: withdrawal });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Create new withdrawal request
+// @route   POST /api/v1/withdrawals
+export const createWithdrawal = async (req, res) => {
+    try {
+        const user = await User.findById(req.body.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        if (user.walletBalance < req.body.amount) {
+            return res.status(400).json({ success: false, error: 'Insufficient balance' });
+        }
+
+        // Deduct amount from user's balance immediately
+        user.walletBalance -= req.body.amount;
+        
+        const withdrawal = await Withdrawal.create(req.body);
+        
+        const transaction = await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            type: 'Withdrawal Request',
+            amount: -withdrawal.amount,
+            status: 'Pending',
+            description: `Pending Withdrawal #${withdrawal._id}`
+        });
+
+        await Notification.create({
+            userId: user._id,
+            message: `Your withdrawal request for $${withdrawal.amount.toFixed(2)} has been submitted for review.`
+        });
+        
+        await user.save();
+        
+        res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+
+// @desc    Update withdrawal (Approve/Reject)
+// @route   PUT /api/v1/withdrawals/:id
+export const updateWithdrawal = async (req, res) => {
+    try {
+        const { status, adminNotes } = req.body;
+        
+        let withdrawal = await Withdrawal.findById(req.params.id);
+        if (!withdrawal) {
+            return res.status(404).json({ success: false, error: 'Withdrawal not found' });
+        }
+        
+        const user = await User.findById(withdrawal.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Associated user not found' });
+        }
+
+        const originalStatus = withdrawal.status;
+
+        // If status is not changing, just update notes and return.
+        if (originalStatus === status) {
+            withdrawal.adminNotes = adminNotes || withdrawal.adminNotes;
+            await withdrawal.save();
+            return res.status(200).json({ success: true, data: { withdrawal, user } });
+        }
+        
+        // --- Handle Status Change ---
+        
+        // If request was pending and is now being rejected, refund the user
+        if (originalStatus === 'Pending' && status === 'Rejected') {
+            user.walletBalance += withdrawal.amount;
+            
+            // Create a refund transaction
+            await Transaction.create({
+                userId: user._id,
+                userName: user.username,
+                type: 'Withdrawal Refund',
+                amount: withdrawal.amount,
+                status: 'Approved',
+                description: `Refund for rejected withdrawal #${withdrawal._id}`
+            });
+             await Notification.create({
+                userId: user._id,
+                message: `Your withdrawal for $${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
+            });
+        }
+        
+        if (status === 'Paid') {
+            await Notification.create({
+                userId: user._id,
+                message: `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
+            });
+        }
+        
+        // Update the withdrawal document
+        withdrawal.status = status;
+        withdrawal.adminNotes = adminNotes;
+        
+        await withdrawal.save();
+        await user.save();
+
+        res.status(200).json({ success: true, data: { withdrawal, user } });
+
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Delete withdrawal
+// @route   DELETE /api/v1/withdrawals/:id
+export const deleteWithdrawal = async (req, res) => {
+    try {
+        const withdrawal = await Withdrawal.findByIdAndDelete(req.params.id);
+        if (!withdrawal) {
+            return res.status(404).json({ success: false, error: 'Withdrawal not found' });
+        }
+        // Note: Add logic here to refund user if a pending withdrawal is deleted.
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};

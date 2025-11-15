@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentMethod, Status } from '../../types';
+import { PaymentMethod, Status, Withdrawal } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
+import { createWithdrawal } from '../../services/api';
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    // FIX: Destructure restrictWithdrawalAmount from the nested settings object.
     const { currentUser, paymentMethods, investmentPlans, settings: { restrictWithdrawalAmount } } = state;
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
@@ -13,6 +13,7 @@ const WithdrawFunds: React.FC = () => {
     const [accountTitle, setAccountTitle] = useState('');
     const [accountNumber, setAccountNumber] = useState('');
     const [userNotes, setUserNotes] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
     const withdrawalMethods = useMemo(() =>
@@ -22,7 +23,6 @@ const WithdrawFunds: React.FC = () => {
     
     const activePlanPrices = useMemo(() => 
         [...new Set(investmentPlans.filter(p => p.status === Status.Active).map(p => p.price))]
-        // FIX: Explicitly type the sort callback parameters to resolve a TypeScript type inference issue.
         .sort((a: number, b: number) => a - b), 
     [investmentPlans]);
 
@@ -46,7 +46,7 @@ const WithdrawFunds: React.FC = () => {
         }
     }, [amount, selectedMethod]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
 
@@ -60,25 +60,31 @@ const WithdrawFunds: React.FC = () => {
         if (numericAmount < selectedMethod.minAmount || numericAmount > selectedMethod.maxAmount) {
             return alert(`Amount must be between $${selectedMethod.minAmount} and $${selectedMethod.maxAmount}.`);
         }
+        
+        setIsSubmitting(true);
+        try {
+            const withdrawalData = {
+                userId: currentUser._id,
+                userName: currentUser.username,
+                method: selectedMethod.name,
+                amount: numericAmount,
+                fee: fee,
+                finalAmount: finalAmount,
+                accountTitle: accountTitle,
+                accountNumber: accountNumber,
+                userNotes: userNotes,
+            };
 
-        const newWithdrawal = {
-            _id: `WDR${Date.now()}`,
-            userId: currentUser._id,
-            userName: currentUser.username,
-            method: selectedMethod.name,
-            amount: numericAmount,
-            fee: fee,
-            finalAmount: finalAmount,
-            status: Status.Pending as Status.Pending,
-            date: new Date().toISOString().split('T')[0],
-            accountTitle: accountTitle,
-            accountNumber: accountNumber,
-            userNotes: userNotes,
-        };
-        
-        dispatch({ type: 'ADD_WITHDRAWAL', payload: newWithdrawal });
-        
-        setIsSubmitted(true);
+            const result = await createWithdrawal(withdrawalData);
+            dispatch({ type: 'ADD_WITHDRAWAL', payload: result });
+            setIsSubmitted(true);
+
+        } catch (error) {
+             console.error("Failed to submit withdrawal request:", error);
+             alert(`Error: ${error instanceof Error ? error.message : 'Could not submit request.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!currentUser) return <div>Loading...</div>;
@@ -159,7 +165,7 @@ const WithdrawFunds: React.FC = () => {
                 )}
                  {selectedMethod && (
                     <div className="pt-4 flex justify-end">
-                        <Button type="submit">Submit Withdrawal Request</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}</Button>
                     </div>
                  )}
             </form>

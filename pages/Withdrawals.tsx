@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import { Status, Withdrawal } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
+import { updateWithdrawal } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
@@ -14,6 +15,7 @@ const Withdrawals: React.FC = () => {
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [currentStatus, setCurrentStatus] = useState<Withdrawal['status']>(Status.Pending);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (selectedWithdrawal) {
@@ -32,15 +34,22 @@ const Withdrawals: React.FC = () => {
     setSelectedWithdrawal(null);
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (selectedWithdrawal) {
-      const updatedWithdrawal = {
-        ...selectedWithdrawal,
-        status: currentStatus,
-        adminNotes: adminNotes,
-      };
-      dispatch({ type: 'UPDATE_WITHDRAWAL', payload: updatedWithdrawal });
-      handleCloseModal();
+        setIsSaving(true);
+        try {
+            const result = await updateWithdrawal(selectedWithdrawal._id, {
+                status: currentStatus,
+                adminNotes: adminNotes,
+            });
+            dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result });
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to update withdrawal:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not update withdrawal.'}`);
+        } finally {
+            setIsSaving(false);
+        }
     }
   };
 
@@ -65,7 +74,7 @@ const Withdrawals: React.FC = () => {
             <td className="px-4 py-3 text-sm">
                 {w.status === Status.Matching ? `$${w.matchRemainingAmount?.toFixed(2)}` : 'N/A'}
             </td>
-            <td className="px-4 py-3 text-sm">{w.date}</td>
+            <td className="px-4 py-3 text-sm">{new Date(w.date).toLocaleDateString()}</td>
           </tr>
         ))}
       </Table>
@@ -79,7 +88,7 @@ const Withdrawals: React.FC = () => {
                   <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
                   <div><span className="font-semibold">Amount:</span> ${selectedWithdrawal.amount.toFixed(2)}</div>
                   <div><span className="font-semibold">Method:</span> {selectedWithdrawal.method}</div>
-                  <div><span className="font-semibold">Date:</span> {selectedWithdrawal.date}</div>
+                  <div><span className="font-semibold">Date:</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
               </div>
 
               <div className="mt-4 border-t pt-4 dark:border-gray-700">
@@ -128,7 +137,9 @@ const Withdrawals: React.FC = () => {
 
               <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
                   <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                  <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
+                  <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
               </div>
           </div>
         </Modal>
