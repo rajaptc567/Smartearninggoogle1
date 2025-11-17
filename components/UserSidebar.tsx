@@ -54,7 +54,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                 <nav className="mt-6 px-4 flex-grow">
                     {userNavLinks.map(({ to, label, icon, condition }) => {
                         // FIX: Check for feature flags within the `state.settings` object instead of the top-level state.
-                        if (condition && !state.settings?.[condition as keyof typeof state.settings]) {
+                        if (condition && !state.settings[condition as keyof typeof state.settings]) {
                           return null;
                         }
                         return (

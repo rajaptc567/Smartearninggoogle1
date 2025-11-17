@@ -1,4 +1,3 @@
-import path from 'path';
 import Deposit from '../models/Deposit.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -36,8 +35,8 @@ export const createDeposit = async (req, res) => {
         const depositData = { ...req.body };
         
         if (req.file) {
-            // Store the path to be accessible from the frontend, ensuring forward slashes for URL compatibility
-            depositData.receiptUrl = path.join('/uploads', req.file.filename).replace(/\\/g, '/');
+            // Store the path to be accessible from the frontend
+            depositData.receiptUrl = `/uploads/${req.file.filename}`;
         }
 
         const deposit = await Deposit.create(depositData);
@@ -73,8 +72,7 @@ export const updateDeposit = async (req, res) => {
             // Only notes are updated, no financial logic needed
             deposit.adminNotes = adminNotes;
             await deposit.save();
-            const user = await User.findById(deposit.userId);
-            return res.status(200).json({ success: true, data: { deposit, user } });
+            return res.status(200).json({ success: true, data: deposit });
         }
         
         deposit.status = status;
@@ -89,6 +87,7 @@ export const updateDeposit = async (req, res) => {
         if (originalStatus === 'Pending' && status === 'Approved') {
             // 1. Update user balance
             user.walletBalance += deposit.amount;
+            await user.save();
             
             // 2. Create an approved deposit transaction
             await Transaction.create({
@@ -111,6 +110,7 @@ export const updateDeposit = async (req, res) => {
         } else if (originalStatus === 'Approved' && status !== 'Approved') {
             // Reverting an approval
             user.walletBalance -= deposit.amount;
+            await user.save();
             // Note: Also need to handle reverting commissions and transactions, which adds complexity.
             // For now, we just revert the balance.
         }
@@ -123,7 +123,6 @@ export const updateDeposit = async (req, res) => {
         }
 
         await deposit.save();
-        await user.save();
         
         // Return the updated deposit AND the updated user to sync frontend state
         res.status(200).json({ 
