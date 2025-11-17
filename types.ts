@@ -153,3 +153,13 @@ export interface Notification {
   date: string;
   read: boolean;
 }
+
+// FIX: Added missing Log interface
+export interface Log {
+  _id: string;
+  timestamp: string;
+  action: string;
+  affectedUser: string;
+  details: string;
+  performedBy: string;
+}

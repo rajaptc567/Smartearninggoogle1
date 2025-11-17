@@ -4,6 +4,7 @@ import { InvestmentPlan, Status } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate } from 'react-router-dom';
+import { purchasePlan as apiPurchasePlan } from '../../services/api';
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
@@ -12,6 +13,7 @@ const UserInvestmentPlans: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<InvestmentPlan | null>(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   const activePlans = investmentPlans.filter(p => p.status === Status.Active);
 
@@ -24,11 +26,22 @@ const UserInvestmentPlans: React.FC = () => {
     setIsModalOpen(true);
   }
 
-  const handleConfirmPurchase = () => {
+  const handleConfirmPurchase = async () => {
     if (selectedPlan) {
-        dispatch({ type: 'PURCHASE_PLAN', payload: { userId: currentUser._id, planId: selectedPlan._id } });
+        setIsPurchasing(true);
+        try {
+            const result = await apiPurchasePlan(currentUser._id, selectedPlan._id);
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+            alert(`${selectedPlan.name} purchased successfully!`);
+        } catch (error) {
+            console.error('Failed to purchase plan:', error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not purchase plan.'}`);
+        } finally {
+            setIsPurchasing(false);
+            handleCloseModal();
+        }
     }
-    handleCloseModal();
   };
 
   const handleCloseModal = () => {
@@ -100,8 +113,10 @@ const UserInvestmentPlans: React.FC = () => {
                                 <span className="text-green-500 font-bold">${(currentUser.walletBalance - selectedPlan.price).toFixed(2)}</span>
                              </p>
                              <div className="mt-6 flex justify-center space-x-4">
-                                <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                                <Button variant="success" onClick={handleConfirmPurchase}>Confirm & Pay</Button>
+                                <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing}>Cancel</Button>
+                                <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing}>
+                                    {isPurchasing ? 'Processing...' : 'Confirm & Pay'}
+                                </Button>
                              </div>
                         </div>
                     ) : (

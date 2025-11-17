@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const UserSchema = new mongoose.Schema({
     username: {
@@ -24,7 +25,7 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please add a password'],
         minlength: 6,
-        select: false, // Don't return password by default when querying users
+        select: false, 
     },
     phone: {
         type: String,
@@ -46,14 +47,28 @@ const UserSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Active', 'Blocked', 'Pending', 'Approved', 'Rejected', 'Paid', 'Disabled', 'Matching'],
-        default: 'Pending',
+        enum: ['Active', 'Blocked', 'Pending'],
+        default: 'Active',
     },
     sponsor: {
-        type: String, // Can be changed to mongoose.Schema.ObjectId with ref: 'User' for relational queries
+        type: String,
     },
 }, {
-    timestamps: { createdAt: 'registrationDate', updatedAt: true } // Use timestamps to auto-manage creation/update dates
+    timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });
+
+// Encrypt password using bcrypt before saving
+UserSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) {
+        next();
+    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Method to match entered password to hashed password in database
+UserSchema.methods.matchPassword = async function(enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
+};
 
 export default mongoose.model('User', UserSchema);

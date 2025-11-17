@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { Settings as SettingsType } from '../types';
+import { updateSettings } from '../services/api';
 
 const Settings: React.FC = () => {
   const { state, dispatch } = useData();
   const { settings } = state;
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -18,10 +20,19 @@ const Settings: React.FC = () => {
     setLocalSettings(prev => ({ ...prev, [name]: checked }));
   };
   
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
-      dispatch({ type: 'UPDATE_SETTINGS', payload: localSettings });
-      alert('Settings saved successfully!');
+      setIsSaving(true);
+      try {
+          const updatedSettings = await updateSettings(localSettings);
+          dispatch({ type: 'UPDATE_SETTINGS', payload: updatedSettings });
+          alert('Settings saved successfully!');
+      } catch (error) {
+          console.error("Failed to save settings:", error);
+          alert(`Error: ${error instanceof Error ? error.message : 'Could not save settings.'}`);
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   return (
@@ -67,7 +78,7 @@ const Settings: React.FC = () => {
         </div>
        
         <div className="pt-4 border-t dark:border-gray-700">
-           <Button type="submit">Save Settings</Button>
+           <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Settings'}</Button>
         </div>
       </form>
     </div>

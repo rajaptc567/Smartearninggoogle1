@@ -76,7 +76,10 @@ const WithdrawFunds: React.FC = () => {
             };
 
             const result = await createWithdrawal(withdrawalData);
-            dispatch({ type: 'ADD_WITHDRAWAL', payload: result });
+            // FIX: The createWithdrawal API returns a complex object. Dispatch separate actions for withdrawal, user, and transaction.
+            dispatch({ type: 'ADD_WITHDRAWAL', payload: result.withdrawal });
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
             setIsSubmitted(true);
 
         } catch (error) {

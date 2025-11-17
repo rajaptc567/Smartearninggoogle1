@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { InvestmentPlan, Status, CommissionType, Commission } from '../types';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
+import { createInvestmentPlan, updateInvestmentPlan, deleteInvestmentPlan } from '../services/api';
 
 const InvestmentPlans: React.FC = () => {
     const { state, dispatch } = useData();
@@ -22,19 +23,31 @@ const InvestmentPlans: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleSave = (plan: InvestmentPlan) => {
-        if (editingPlan) {
-            dispatch({ type: 'UPDATE_INVESTMENT_PLAN', payload: plan });
-        } else {
-            const newPlan = { ...plan, _id: String(Date.now()) };
-            dispatch({ type: 'ADD_INVESTMENT_PLAN', payload: newPlan });
+    const handleSave = async (plan: InvestmentPlan) => {
+        try {
+            if (editingPlan) {
+                const updatedPlan = await updateInvestmentPlan(plan._id, plan);
+                dispatch({ type: 'UPDATE_INVESTMENT_PLAN', payload: updatedPlan });
+            } else {
+                const newPlan = await createInvestmentPlan(plan);
+                dispatch({ type: 'ADD_INVESTMENT_PLAN', payload: newPlan });
+            }
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to save plan:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not save plan.'}`);
         }
-        handleCloseModal();
     };
 
-    const handleDelete = (planId: string) => {
+    const handleDelete = async (planId: string) => {
         if (window.confirm('Are you sure you want to delete this plan?')) {
-            dispatch({ type: 'DELETE_INVESTMENT_PLAN', payload: planId });
+            try {
+                await deleteInvestmentPlan(planId);
+                dispatch({ type: 'DELETE_INVESTMENT_PLAN', payload: planId });
+            } catch (error) {
+                console.error("Failed to delete plan:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not delete plan.'}`);
+            }
         }
     };
 
@@ -112,6 +125,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const [formData, setFormData] = useState<Partial<InvestmentPlan>>(
         plan || defaultPlan
     );
+    const [isSaving, setIsSaving] = useState(false);
 
      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -157,9 +171,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         }));
     };
 
-    // FIX: Refactored to use .map() within the state updater callback.
-    // This resolves a TypeScript type inference error where the commission object's type was being incorrectly widened.
-    // It also prevents potential bugs from using stale state.
     const handleIndirectCommissionChange = (index: number, field: 'type' | 'value', value: string) => {
         setFormData(prev => {
             if (!prev) return prev;
@@ -178,18 +189,15 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         });
     };
 
-    // FIX: Refactored to use the state updater callback to avoid using stale state.
     const addIndirectLevel = () => {
         setFormData(prev => {
             if (!prev) return prev;
-            // FIX: Explicitly type new object to prevent TypeScript from widening the type to `string`, which causes type errors in other handlers.
             const newCommission: Commission = { type: 'percentage', value: 0 };
             const newCommissions = [...(prev.indirectCommissions || []), newCommission];
             return { ...prev, indirectCommissions: newCommissions };
         });
     };
 
-    // FIX: Refactored to use .filter() for immutability and the state updater callback to avoid stale state.
     const removeIndirectLevel = (index: number) => {
         setFormData(prev => {
             if (!prev) return prev;
@@ -208,9 +216,11 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, slots: currentSlots } }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData as InvestmentPlan);
+        setIsSaving(true);
+        await onSave(formData as InvestmentPlan);
+        setIsSaving(false);
     }
 
     const CommissionInput: React.FC<{
@@ -235,7 +245,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
             <form onSubmit={handleSubmit} className="p-4 space-y-6 max-h-[85vh] overflow-y-auto">
                 <h2 className="text-xl font-bold">{plan ? 'Edit Plan' : 'Create New Plan'}</h2>
                 
-                {/* Basic Info */}
                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
                     <legend className="px-2 font-semibold">Basic Information</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -252,7 +261,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                     </div>
                 </fieldset>
 
-                {/* Commissions */}
                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
                     <legend className="px-2 font-semibold">Commissions</legend>
                     <div>
@@ -282,7 +290,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                     </div>
                 </fieldset>
 
-                {/* Deductions */}
                  <fieldset className="p-4 border rounded-md dark:border-gray-600">
                     <legend className="px-2 font-semibold">Commission Deductions</legend>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -292,7 +299,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                     </div>
                 </fieldset>
 
-                {/* Advanced */}
                  <fieldset className="p-4 border rounded-md dark:border-gray-600">
                     <legend className="px-2 font-semibold">Advanced</legend>
                     <div className="space-y-4">
@@ -327,8 +333,8 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
 
 
                  <div className="mt-6 flex justify-end space-x-3">
-                    <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                    <Button type="submit">Save Plan</Button>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Plan'}</Button>
                 </div>
             </form>
         </Modal>

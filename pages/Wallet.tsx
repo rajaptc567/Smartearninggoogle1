@@ -4,6 +4,7 @@ import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import { Status, Transaction } from '../types';
 import Badge from '../components/ui/Badge';
+import { adjustUserWallet } from '../services/api';
 
 const Wallet: React.FC = () => {
     const { state, dispatch } = useData();
@@ -13,14 +14,15 @@ const Wallet: React.FC = () => {
     const [amount, setAmount] = useState('');
     const [actionType, setActionType] = useState<'credit' | 'debit'>('credit');
     const [reason, setReason] = useState('Admin manual adjustment');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Sort transactions by date, most recent first
     const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const tableHeaders = ['Transaction ID', 'User', 'Type', 'Amount', 'Status', 'Date', 'Description'];
 
-    const handleAdjustment = (e: React.FormEvent) => {
+    const handleAdjustment = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
         
         const targetUser = users.find(u => 
             u._id.toString() === identifier ||
@@ -31,30 +33,39 @@ const Wallet: React.FC = () => {
 
         if (!targetUser) {
             alert('User not found. Please check the identifier or select from the list.');
+            setIsSubmitting(false);
             return;
         }
 
         const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount) || numericAmount < 0) {
+        if (isNaN(numericAmount) || numericAmount <= 0) {
             alert('Please enter a valid, positive amount.');
+            setIsSubmitting(false);
             return;
         }
         
         const adjustmentAmount = actionType === 'credit' ? numericAmount : -numericAmount;
         
-        dispatch({
-            type: 'MANUAL_WALLET_ADJUSTMENT',
-            payload: {
-                userId: targetUser._id,
+        try {
+            const result = await adjustUserWallet(targetUser._id, {
                 amount: adjustmentAmount,
                 description: reason
-            }
-        });
+            });
 
-        alert(`Successfully adjusted ${targetUser.username}'s balance by $${adjustmentAmount.toFixed(2)}.`);
-        setIdentifier('');
-        setAmount('');
-        setReason('Admin manual adjustment');
+            // Update user and add new transaction to the state
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+
+            alert(`Successfully adjusted ${targetUser.username}'s balance by $${adjustmentAmount.toFixed(2)}.`);
+            setIdentifier('');
+            setAmount('');
+            setReason('Admin manual adjustment');
+        } catch (error) {
+            console.error('Failed to adjust wallet:', error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not adjust wallet.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -96,7 +107,9 @@ const Wallet: React.FC = () => {
                         <input type="number" step="0.01" min="0" id="amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 50.00" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
                     </div>
                      <div>
-                       <Button type="submit" className="w-full">Adjust Balance</Button>
+                       <Button type="submit" className="w-full" disabled={isSubmitting}>
+                           {isSubmitting ? 'Adjusting...' : 'Adjust Balance'}
+                        </Button>
                     </div>
                 </form>
             </div>
@@ -115,7 +128,7 @@ const Wallet: React.FC = () => {
                              <td className="px-4 py-3 text-xs">
                                 <Badge status={tx.status as Status || Status.Approved} />
                             </td>
-                            <td className="px-4 py-3 text-sm">{tx.date}</td>
+                            <td className="px-4 py-3 text-sm">{new Date(tx.date).toLocaleDateString()}</td>
                             <td className="px-4 py-3 text-sm">{tx.description}</td>
                         </tr>
                     ))}

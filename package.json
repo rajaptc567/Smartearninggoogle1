@@ -15,9 +15,10 @@
     "express": "^5.1.0",
     "dotenv": "^17.2.3",
     "cors": "^2.8.5",
-    "mongoose": "^8.19.3",
     "path": "^0.12.7",
     "url": "^0.11.4",
+    "mongoose": "^8.19.4",
+    "bcryptjs": "^3.0.3",
     "multer": "^2.0.2"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useData } from '../hooks/useData';
+import { updateTransfer } from '../services/api';
 
 const Transfers: React.FC = () => {
     const { state, dispatch } = useData();
@@ -16,6 +17,7 @@ const Transfers: React.FC = () => {
     const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
     const [adminNotes, setAdminNotes] = useState('');
     const [currentStatus, setCurrentStatus] = useState<Transfer['status']>(Status.Pending);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (selectedTransfer) {
@@ -24,15 +26,28 @@ const Transfers: React.FC = () => {
         }
     }, [selectedTransfer]);
 
-    const handleSaveChanges = () => {
+    const handleSaveChanges = async () => {
         if (selectedTransfer) {
-            const updatedTransfer = {
-                ...selectedTransfer,
-                status: currentStatus,
-                adminNotes: adminNotes,
-            };
-            dispatch({ type: 'UPDATE_TRANSFER', payload: updatedTransfer });
-            handleCloseDetailModal();
+            setIsSaving(true);
+            try {
+                const result = await updateTransfer(selectedTransfer._id, {
+                    status: currentStatus,
+                    adminNotes,
+                });
+
+                // The API returns the updated transfer and potentially affected users and new transactions.
+                dispatch({ type: 'UPDATE_TRANSFER', payload: result.transfer });
+                if (result.sender) dispatch({ type: 'UPDATE_USER', payload: result.sender });
+                if (result.recipient) dispatch({ type: 'UPDATE_USER', payload: result.recipient });
+                if (result.transaction) dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+
+                handleCloseDetailModal();
+            } catch (error) {
+                console.error("Failed to update transfer:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not update transfer.'}`);
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
     
@@ -61,7 +76,7 @@ const Transfers: React.FC = () => {
                         <td className="px-4 py-3">{transfer.recipientName}</td>
                         <td className="px-4 py-3">${transfer.amount.toFixed(2)}</td>
                         <td className="px-4 py-3"><Badge status={transfer.status} /></td>
-                        <td className="px-4 py-3 text-sm">{transfer.date}</td>
+                        <td className="px-4 py-3 text-sm">{new Date(transfer.date).toLocaleDateString()}</td>
                     </tr>
                 ))}
             </Table>
@@ -75,7 +90,7 @@ const Transfers: React.FC = () => {
                             <div><span className="font-semibold">From:</span> {selectedTransfer.senderName} (ID: {selectedTransfer.senderId})</div>
                             <div><span className="font-semibold">To:</span> {selectedTransfer.recipientName} (ID: {selectedTransfer.recipientId})</div>
                             <div><span className="font-semibold">Amount:</span> ${selectedTransfer.amount.toFixed(2)}</div>
-                            <div><span className="font-semibold">Date:</span> {selectedTransfer.date}</div>
+                            <div><span className="font-semibold">Date:</span> {new Date(selectedTransfer.date).toLocaleString()}</div>
                         </div>
 
                          <div className="mt-6">
@@ -107,8 +122,10 @@ const Transfers: React.FC = () => {
                         </div>
 
                         <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                            <Button variant="secondary" onClick={handleCloseDetailModal}>Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveChanges} disabled={selectedTransfer.status !== Status.Pending}>Save Changes</Button>
+                            <Button variant="secondary" onClick={handleCloseDetailModal} disabled={isSaving}>Cancel</Button>
+                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving || selectedTransfer.status !== Status.Pending}>
+                                {isSaving ? 'Saving...' : 'Save Changes'}
+                            </Button>
                         </div>
                     </div>
                 </Modal>

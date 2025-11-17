@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
+import { createTransfer } from '../../services/api';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -8,9 +9,10 @@ const TransferFunds: React.FC = () => {
     
     const [recipientIdentifier, setRecipientIdentifier] = useState('');
     const [amount, setAmount] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
         
@@ -43,21 +45,30 @@ const TransferFunds: React.FC = () => {
             return;
         }
         
-        dispatch({ 
-            type: 'ADD_TRANSFER', 
-            payload: {
+        setIsSubmitting(true);
+        try {
+            const result = await createTransfer({
                 senderId: currentUser._id,
                 senderName: currentUser.username,
                 recipientId: recipient._id,
                 recipientName: recipient.username,
                 amount: numericAmount,
-            }
-        });
+            });
 
-        setIsSubmitted(true);
-        // Reset form after submission
-        setRecipientIdentifier('');
-        setAmount('');
+            // The API returns the new transfer, the updated user, and the new transaction.
+            dispatch({ type: 'ADD_TRANSFER', payload: result.transfer });
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+
+            setIsSubmitted(true);
+            setRecipientIdentifier('');
+            setAmount('');
+        } catch (error) {
+            console.error("Failed to submit transfer:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not submit transfer request.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!currentUser) return <div>Loading...</div>;
@@ -113,7 +124,7 @@ const TransferFunds: React.FC = () => {
                     />
                 </div>
                 <div className="pt-4 flex justify-end">
-                    <Button type="submit">Submit Transfer Request</Button>
+                    <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
                 </div>
             </form>
         </div>

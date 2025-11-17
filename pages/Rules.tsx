@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
+import { createRule, deleteRule } from '../services/api';
 
 const Rules: React.FC = () => {
     const { state, dispatch } = useData();
@@ -10,30 +11,44 @@ const Rules: React.FC = () => {
     const [fromPlan, setFromPlan] = useState('');
     const [toPlan, setToPlan] = useState('');
     const [requiredEarnings, setRequiredEarnings] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const activePlans = investmentPlans.filter(p => p.status === 'Active');
 
-    const handleAddRule = (e: React.FormEvent) => {
+    const handleAddRule = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!fromPlan || !toPlan || !requiredEarnings) {
             alert('Please fill all fields');
             return;
         }
-        const newRule = {
-            _id: String(Date.now()),
-            fromPlan,
-            toPlan,
-            requiredEarnings: parseFloat(requiredEarnings),
-        };
-        dispatch({ type: 'ADD_RULE', payload: newRule });
-        setFromPlan('');
-        setToPlan('');
-        setRequiredEarnings('');
+        setIsSubmitting(true);
+        try {
+            const newRule = await createRule({
+                fromPlan,
+                toPlan,
+                requiredEarnings: parseFloat(requiredEarnings),
+            });
+            dispatch({ type: 'ADD_RULE', payload: newRule });
+            setFromPlan('');
+            setToPlan('');
+            setRequiredEarnings('');
+        } catch (error) {
+            console.error("Failed to add rule:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not add rule.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
     
-    const handleDeleteRule = (ruleId: string) => {
+    const handleDeleteRule = async (ruleId: string) => {
         if(window.confirm('Are you sure you want to delete this rule?')) {
-            dispatch({ type: 'DELETE_RULE', payload: ruleId });
+            try {
+                await deleteRule(ruleId);
+                dispatch({ type: 'DELETE_RULE', payload: ruleId });
+            } catch (error) {
+                console.error("Failed to delete rule:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not delete rule.'}`);
+            }
         }
     }
 
@@ -63,7 +78,7 @@ const Rules: React.FC = () => {
                             <input type="number" id="requiredEarnings" value={requiredEarnings} onChange={e => setRequiredEarnings(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
                          <div className="">
-                           <Button type="submit">Add Rule</Button>
+                           <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add Rule'}</Button>
                          </div>
                     </form>
                 </div>

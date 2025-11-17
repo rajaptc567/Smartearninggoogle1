@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { PaymentMethod } from '../types';
 import Modal from '../components/ui/Modal';
+import { createPaymentMethod, updatePaymentMethod, deletePaymentMethod } from '../services/api';
 
 const PaymentMethods: React.FC = () => {
     const { state, dispatch } = useData();
@@ -22,20 +23,32 @@ const PaymentMethods: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleSave = (method: PaymentMethod) => {
-        if (editingMethod) {
-            dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: method });
-        } else {
-            const newMethod = { ...method, _id: String(Date.now()) };
-            dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
+    const handleSave = async (method: PaymentMethod) => {
+        try {
+            if (editingMethod) {
+                const updatedMethod = await updatePaymentMethod(method._id, method);
+                dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
+            } else {
+                const newMethod = await createPaymentMethod(method);
+                dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
+            }
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to save payment method:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not save payment method.'}`);
         }
-        handleCloseModal();
     };
     
-    const handleDelete = (methodId: string) => {
+    const handleDelete = async (methodId: string) => {
         if (window.confirm('Are you sure you want to delete this method? This action cannot be undone.')) {
-            dispatch({ type: 'DELETE_PAYMENT_METHOD', payload: methodId });
-            alert('Payment method deleted successfully.');
+            try {
+                await deletePaymentMethod(methodId);
+                dispatch({ type: 'DELETE_PAYMENT_METHOD', payload: methodId });
+                alert('Payment method deleted successfully.');
+            } catch (error) {
+                console.error("Failed to delete payment method:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not delete payment method.'}`);
+            }
         }
     };
 
@@ -89,6 +102,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
         method || { name: '', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -96,36 +110,37 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         setFormData(prev => ({ ...prev, [name]: numValue }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData as PaymentMethod);
+        setIsSaving(true);
+        await onSave(formData as PaymentMethod);
+        setIsSaving(false);
     };
     
     return (
         <Modal isOpen={true} onClose={onClose}>
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
                  <h2 className="text-xl font-bold">{method ? 'Edit Payment Method' : 'Add New Method'}</h2>
-                 {/* Form fields here */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                         <option value="Deposit">Deposit</option>
                         <option value="Withdrawal">Withdrawal</option>
                     </select>
-                    <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="Account Title" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                    <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                    <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                     <input type="number" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee %" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                    <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="Account Title" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                     <input type="number" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee %" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                      <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                         <option value="Enabled">Enabled</option>
                         <option value="Disabled">Disabled</option>
                     </select>
-                    <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                    <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                  </div>
                  <div className="mt-6 flex justify-end space-x-3">
-                    <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                    <Button type="submit">Save Method</Button>
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Method'}</Button>
                 </div>
             </form>
         </Modal>

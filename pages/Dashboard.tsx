@@ -1,16 +1,17 @@
-
-
 import React from 'react';
-import { mockUsers, mockDeposits, mockWithdrawals } from '../data/mockData';
 import { Deposit, Status } from '../types';
 import Badge from '../components/ui/Badge';
 import Table from '../components/ui/Table';
+import { useData } from '../hooks/useData';
 
 const Dashboard: React.FC = () => {
-    const totalDeposits = mockDeposits.reduce((sum, d) => d.status === Status.Approved ? sum + d.amount : sum, 0);
-    const totalWithdrawals = mockWithdrawals.reduce((sum, w) => w.status === Status.Paid ? sum + w.finalAmount : sum, 0);
+    const { state } = useData();
+    const { users, deposits, withdrawals } = state;
 
-    const recentDeposits = mockDeposits.slice(0, 5);
+    const totalDeposits = deposits.reduce((sum, d) => d.status === Status.Approved ? sum + d.amount : sum, 0);
+    const totalWithdrawals = withdrawals.reduce((sum, w) => w.status === Status.Paid ? sum + w.finalAmount : sum, 0);
+
+    const recentDeposits = deposits.slice(0, 5);
 
     const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex items-center justify-between">
@@ -27,26 +28,29 @@ const Dashboard: React.FC = () => {
     return (
         <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard title="Total Users" value={mockUsers.length} icon={<UsersIcon />} />
+                <StatCard title="Total Users" value={users.length} icon={<UsersIcon />} />
                 <StatCard title="Total Deposits" value={`$${totalDeposits.toFixed(2)}`} icon={<DepositIcon />} />
                 <StatCard title="Total Withdrawals" value={`$${totalWithdrawals.toFixed(2)}`} icon={<WithdrawalIcon />} />
-                <StatCard title="Commissions Paid" value="$5,780.50" icon={<CommissionIcon />} />
+                <StatCard title="Commissions Paid" value="$0.00" icon={<CommissionIcon />} />
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Recent Deposit Requests</h2>
-                <Table headers={['User', 'Amount', 'Method', 'Status', 'Date']}>
-                    {recentDeposits.map((deposit: Deposit) => (
-                        // FIX: Changed key from deposit.id to deposit._id to match the Deposit type.
-                        <tr key={deposit._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3">{deposit.userName}</td>
-                            <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
-                            <td className="px-4 py-3">{deposit.method}</td>
-                            <td className="px-4 py-3"><Badge status={deposit.status} /></td>
-                            <td className="px-4 py-3 text-sm">{deposit.date}</td>
-                        </tr>
-                    ))}
-                </Table>
+                {recentDeposits.length > 0 ? (
+                    <Table headers={['User', 'Amount', 'Method', 'Status', 'Date']}>
+                        {recentDeposits.map((deposit: Deposit) => (
+                            <tr key={deposit._id} className="text-gray-700 dark:text-gray-400">
+                                <td className="px-4 py-3">{deposit.userName}</td>
+                                <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
+                                <td className="px-4 py-3">{deposit.method}</td>
+                                <td className="px-4 py-3"><Badge status={deposit.status} /></td>
+                                <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
+                            </tr>
+                        ))}
+                    </Table>
+                ) : (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-4">No recent deposits found.</p>
+                )}
             </div>
         </div>
     );
