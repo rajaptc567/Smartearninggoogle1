@@ -22,7 +22,6 @@ const PaymentMethodSchema = new mongoose.Schema({
     },
     instructions: {
         type: String,
-        required: true,
     },
     minAmount: {
         type: Number,

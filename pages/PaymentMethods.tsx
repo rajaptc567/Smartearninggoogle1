@@ -131,12 +131,12 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                     <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                     <input type="number" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee %" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                     <input type="number" step="0.01" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee % (Optional)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                      <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                         <option value="Enabled">Enabled</option>
                         <option value="Disabled">Disabled</option>
                     </select>
-                    <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions (Optional)" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                  </div>
                  <div className="mt-6 flex justify-end space-x-3">
                     <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>

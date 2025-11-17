@@ -35,7 +35,7 @@ export const createTransfer = async (req, res) => {
             userName: sender.username,
             type: 'Transfer Request',
             amount: -amount,
-            description: `Transfer request to ${recipient.username}`,
+            description: `Transfer request #${transfer._id} to ${recipient.username}`,
             status: 'Pending'
         });
         
@@ -68,10 +68,20 @@ export const updateTransfer = async (req, res) => {
         }
 
         let transaction;
+        const originalTransaction = await Transaction.findOne({
+            userId: sender._id,
+            type: 'Transfer Request',
+            description: `Transfer request #${transfer._id} to ${recipient.username}`,
+        });
 
         if (status === 'Approved') {
             recipient.walletBalance += transfer.amount;
             await recipient.save();
+
+            if (originalTransaction) {
+                originalTransaction.status = 'Approved';
+                await originalTransaction.save();
+            }
 
             transaction = await Transaction.create({
                 userId: recipient._id,
@@ -88,6 +98,11 @@ export const updateTransfer = async (req, res) => {
         } else if (status === 'Rejected') {
             sender.walletBalance += transfer.amount;
             await sender.save();
+
+            if (originalTransaction) {
+                originalTransaction.status = 'Rejected';
+                await originalTransaction.save();
+            }
 
             await Notification.create({ userId: sender._id, message: `Your transfer to ${recipient.username} was rejected and funds returned.` });
         }

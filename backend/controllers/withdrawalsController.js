@@ -95,6 +95,13 @@ export const updateWithdrawal = async (req, res) => {
         
         // --- Handle Status Change ---
         
+        // Find the original transaction to update its status
+        const originalTransaction = await Transaction.findOne({
+            userId: user._id,
+            type: 'Withdrawal Request',
+            description: `Pending Withdrawal #${withdrawal._id}`
+        });
+
         // If request was pending and is now being rejected, refund the user
         if (originalStatus === 'Pending' && status === 'Rejected') {
             user.walletBalance += withdrawal.amount;
@@ -108,17 +115,27 @@ export const updateWithdrawal = async (req, res) => {
                 status: 'Approved',
                 description: `Refund for rejected withdrawal #${withdrawal._id}`
             });
+
+            if (originalTransaction) {
+                originalTransaction.status = 'Rejected';
+                await originalTransaction.save();
+            }
+
              await Notification.create({
                 userId: user._id,
                 message: `Your withdrawal for $${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
             });
         }
         
-        if (status === 'Paid') {
-            await Notification.create({
-                userId: user._id,
-                message: `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
-            });
+        if (status === 'Paid' || status === 'Approved') {
+            if (originalTransaction) {
+                originalTransaction.status = 'Approved';
+                await originalTransaction.save();
+            }
+            const message = status === 'Paid' 
+                ? `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
+                : `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been approved.`;
+            await Notification.create({ userId: user._id, message });
         }
         
         // Update the withdrawal document
