@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
 import createLog from '../utils/logger.js';
+import crypto from 'crypto';
 
 // @desc    Register a new user
 // @route   POST /api/v1/users
@@ -170,5 +171,68 @@ export const purchasePlan = async (req, res) => {
         res.status(200).json({ success: true, data: { user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Admin initiates password reset for a user
+// @route   POST /api/v1/users/:id/admin-reset-password
+// @access  Private/Admin
+export const adminInitiatePasswordReset = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        const resetToken = crypto.randomBytes(20).toString('hex');
+
+        user.passwordResetToken = crypto
+            .createHash('sha256')
+            .update(resetToken)
+            .digest('hex');
+
+        // Set token to expire in 10 minutes
+        user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+        
+        await user.save();
+        
+        await createLog('Password Reset Initiated', user.username, `Admin generated a password reset link.`, 'admin');
+
+        res.status(200).json({ success: true, data: { resetToken } });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Reset password using a token
+// @route   PUT /api/v1/users/reset-password/:token
+// @access  Public
+export const resetPasswordWithToken = async (req, res) => {
+    try {
+        const resetToken = req.params.token;
+        const hashedToken = crypto
+            .createHash('sha256')
+            .update(resetToken)
+            .digest('hex');
+
+        const user = await User.findOne({
+            passwordResetToken: hashedToken,
+            passwordResetExpires: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired token.' });
+        }
+
+        // Set new password
+        user.password = req.body.password;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, data: 'Password reset successful.' });
+
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 };

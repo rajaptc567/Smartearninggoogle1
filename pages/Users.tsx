@@ -5,7 +5,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
@@ -200,6 +200,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ user, mode, onClose, onSa
 const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEdit: () => void;}> = ({ user, onClose, onSwitchToEdit }) => {
     const { state } = useData();
     const { users, deposits, withdrawals, transactions } = state;
+
+    const [resetLink, setResetLink] = useState('');
+    const [isGeneratingLink, setIsGeneratingLink] = useState(false);
     
     const userDeposits = useMemo(() => deposits.filter(d => d.userId === user._id), [deposits, user._id]);
     const userWithdrawals = useMemo(() => withdrawals.filter(w => w.userId === user._id), [withdrawals, user._id]);
@@ -214,6 +217,20 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
         }));
     };
     const genealogyTree = useMemo(() => buildGenealogy(user._id, users), [user._id, users]);
+
+    const handleGenerateResetLink = async () => {
+        setIsGeneratingLink(true);
+        try {
+            const { resetToken } = await adminInitiatePasswordReset(user._id);
+            const link = `${window.location.origin}${window.location.pathname}#/reset-password?token=${resetToken}`;
+            setResetLink(link);
+        } catch (error) {
+            console.error(error);
+            alert(`Failed to generate reset link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsGeneratingLink(false);
+        }
+    };
 
     const renderTree = (nodes: { user: User, children: any[] }[]) => (
         <ul className="pl-4 border-l border-gray-200 dark:border-gray-700">
@@ -262,8 +279,25 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
             <div className="p-4 w-[90vw] max-w-4xl">
                  <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold">User Details: {user.fullName}</h2>
-                    <Button onClick={onSwitchToEdit}>Edit User</Button>
+                    <div className="flex items-center space-x-2">
+                        <Button onClick={onSwitchToEdit}>Edit User</Button>
+                        <Button variant="danger" onClick={handleGenerateResetLink} disabled={isGeneratingLink}>
+                           {isGeneratingLink ? 'Generating...' : 'Reset Password'}
+                        </Button>
+                    </div>
                 </div>
+
+                {resetLink && (
+                    <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm">
+                        <p className="font-semibold">Password Reset Link Generated</p>
+                        <p className="text-xs mb-2">Share this secure, single-use link with the user. It will expire in 10 minutes.</p>
+                        <div className="flex items-center space-x-2">
+                           <input type="text" readOnly value={resetLink} className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-0"/>
+                           <Button size="sm" onClick={() => navigator.clipboard.writeText(resetLink)}>Copy</Button>
+                        </div>
+                    </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-1 space-y-4">
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">

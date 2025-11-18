@@ -100,6 +100,23 @@ export const purchasePlan = async (userId: string, planId: string): Promise<{ us
     return result.data;
 };
 
+export const adminInitiatePasswordReset = async (userId: string): Promise<{ resetToken: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/admin-reset-password`, {
+        method: 'POST',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const resetPasswordWithToken = async (token: string, password: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/users/reset-password/${token}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+    });
+    await handleResponse(response);
+};
+
 // --- Deposit API Functions ---
 
 export const getDeposits = async (): Promise<Deposit[]> => {

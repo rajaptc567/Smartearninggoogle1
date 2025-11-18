@@ -53,6 +53,8 @@ const UserSchema = new mongoose.Schema({
     sponsor: {
         type: String,
     },
+    passwordResetToken: String,
+    passwordResetExpires: Date,
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -19,6 +20,8 @@ import HomePage from './pages/HomePage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminLogin from './pages/AdminLogin';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // User facing components
 import UserLayout from './components/UserLayout';
@@ -41,6 +44,8 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/secure-admin-login" element={<AdminLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Admin Panel Routes */}
         <Route path="/admin" element={<Layout />}>
