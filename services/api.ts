@@ -166,7 +166,7 @@ export const createDeposit = async (formData: FormData): Promise<Deposit> => {
     return result.data;
 };
 
-export const updateDeposit = async (id: string, updateData: Partial<Deposit>): Promise<{deposit: Deposit, user: User}> => {
+export const updateDeposit = async (id: string, updateData: Partial<Deposit>): Promise<{deposit: Deposit, user: User, transaction: Transaction | null}> => {
     const response = await fetch(`${API_BASE_URL}/deposits/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -194,7 +194,7 @@ export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Pro
     return result.data;
 };
 
-export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal>): Promise<{withdrawal: Withdrawal, user: User}> => {
+export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal>): Promise<{withdrawal: Withdrawal, user: User, newTransaction: Transaction | null, updatedTransaction: Transaction | null}> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -363,7 +363,7 @@ export const createTransfer = async (transferData: Partial<Transfer>): Promise<{
     return result.data;
 };
 
-export const updateTransfer = async (id: string, updateData: Partial<Transfer>): Promise<{ transfer: Transfer; sender?: User; recipient?: User; transaction?: Transaction }> => {
+export const updateTransfer = async (id: string, updateData: Partial<Transfer>): Promise<{ transfer: Transfer; users: User[]; newTransaction: Transaction | null; updatedTransaction: Transaction | null; }> => {
     const response = await fetch(`${API_BASE_URL}/transfers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -35,11 +35,16 @@ const Transfers: React.FC = () => {
                     adminNotes,
                 });
 
-                // The API returns the updated transfer and potentially affected users and new transactions.
                 dispatch({ type: 'UPDATE_TRANSFER', payload: result.transfer });
-                if (result.sender) dispatch({ type: 'UPDATE_USER', payload: result.sender });
-                if (result.recipient) dispatch({ type: 'UPDATE_USER', payload: result.recipient });
-                if (result.transaction) dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+                result.users.forEach(user => {
+                    dispatch({ type: 'UPDATE_USER', payload: user });
+                });
+                if (result.newTransaction) {
+                    dispatch({ type: 'ADD_TRANSACTION', payload: result.newTransaction });
+                }
+                if (result.updatedTransaction) {
+                    dispatch({ type: 'UPDATE_TRANSACTION', payload: result.updatedTransaction });
+                }
 
                 handleCloseDetailModal();
             } catch (error) {

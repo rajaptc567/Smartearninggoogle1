@@ -64,6 +64,7 @@ type Action =
     | { type: 'DELETE_RULE'; payload: string }
     | { type: 'SET_TRANSACTIONS'; payload: Transaction[] }
     | { type: 'ADD_TRANSACTION'; payload: Transaction }
+    | { type: 'UPDATE_TRANSACTION'; payload: Transaction }
     | { type: 'SET_SETTINGS', payload: Settings }
     | { type: 'UPDATE_SETTINGS', payload: Settings }
     | { type: 'SET_TRANSFERS'; payload: Transfer[] }
@@ -145,6 +146,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         // TRANSACTIONS
         case 'SET_TRANSACTIONS': return { ...state, transactions: action.payload };
         case 'ADD_TRANSACTION': return { ...state, transactions: [action.payload, ...state.transactions] };
+        case 'UPDATE_TRANSACTION': return { ...state, transactions: state.transactions.map(t => t._id === action.payload._id ? action.payload : t) };
 
         // SETTINGS
         case 'SET_SETTINGS': return { ...state, settings: action.payload };

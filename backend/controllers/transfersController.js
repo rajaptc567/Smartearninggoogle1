@@ -1,4 +1,3 @@
-
 import Transfer from '../models/Transfer.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -67,7 +66,10 @@ export const updateTransfer = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sender or recipient user not found.' });
         }
 
-        let transaction;
+        let newTransaction = null;
+        let updatedTransaction = null;
+        const affectedUsers = [];
+
         const originalTransaction = await Transaction.findOne({
             userId: sender._id,
             type: 'Transfer Request',
@@ -77,13 +79,15 @@ export const updateTransfer = async (req, res) => {
         if (status === 'Approved') {
             recipient.walletBalance += transfer.amount;
             await recipient.save();
+            affectedUsers.push(recipient);
 
             if (originalTransaction) {
                 originalTransaction.status = 'Approved';
                 await originalTransaction.save();
+                updatedTransaction = originalTransaction;
             }
 
-            transaction = await Transaction.create({
+            newTransaction = await Transaction.create({
                 userId: recipient._id,
                 userName: recipient.username,
                 type: 'Transfer Received',
@@ -98,10 +102,12 @@ export const updateTransfer = async (req, res) => {
         } else if (status === 'Rejected') {
             sender.walletBalance += transfer.amount;
             await sender.save();
+            affectedUsers.push(sender);
 
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
                 await originalTransaction.save();
+                updatedTransaction = originalTransaction;
             }
 
             await Notification.create({ userId: sender._id, message: `Your transfer to ${recipient.username} was rejected and funds returned.` });
@@ -111,7 +117,7 @@ export const updateTransfer = async (req, res) => {
         transfer.adminNotes = adminNotes;
         await transfer.save();
         
-        res.status(200).json({ success: true, data: { transfer, sender, recipient, transaction }});
+        res.status(200).json({ success: true, data: { transfer, users: affectedUsers, newTransaction, updatedTransaction }});
 
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

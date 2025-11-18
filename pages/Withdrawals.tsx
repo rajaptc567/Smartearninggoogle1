@@ -42,9 +42,17 @@ const Withdrawals: React.FC = () => {
                 status: currentStatus,
                 adminNotes: adminNotes,
             });
-            // FIX: The API returns a complex object. Dispatch separate actions for withdrawal and user updates.
+
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
+            
+            if (result.newTransaction) {
+                dispatch({ type: 'ADD_TRANSACTION', payload: result.newTransaction });
+            }
+            if (result.updatedTransaction) {
+                dispatch({ type: 'UPDATE_TRANSACTION', payload: result.updatedTransaction });
+            }
+
             handleCloseModal();
         } catch (error) {
             console.error("Failed to update withdrawal:", error);

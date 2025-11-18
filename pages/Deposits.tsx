@@ -40,12 +40,12 @@ const Deposits: React.FC = () => {
                     status: currentStatus,
                     adminNotes: adminNotes,
                 });
-                // The API now returns the updated deposit and user
-                // FIX: The API returns a complex object. Dispatch separate actions to update deposit and user state.
+                // The API now returns the updated deposit, user, and potentially a new transaction
                 dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
                 dispatch({ type: 'UPDATE_USER', payload: result.user });
-                // We should also refetch transactions and notifications to see changes
-                // For simplicity, we can let the user refresh or build a refetch mechanism
+                if (result.transaction) {
+                    dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+                }
                 handleCloseDetailModal();
             } catch (error) {
                 console.error("Failed to update deposit:", error);

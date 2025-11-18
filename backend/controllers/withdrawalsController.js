@@ -85,16 +85,9 @@ export const updateWithdrawal = async (req, res) => {
         }
 
         const originalStatus = withdrawal.status;
+        let newTransaction = null;
+        let updatedTransaction = null;
 
-        // If status is not changing, just update notes and return.
-        if (originalStatus === status) {
-            withdrawal.adminNotes = adminNotes || withdrawal.adminNotes;
-            await withdrawal.save();
-            return res.status(200).json({ success: true, data: { withdrawal, user } });
-        }
-        
-        // --- Handle Status Change ---
-        
         // Find the original transaction to update its status
         const originalTransaction = await Transaction.findOne({
             userId: user._id,
@@ -107,7 +100,7 @@ export const updateWithdrawal = async (req, res) => {
             user.walletBalance += withdrawal.amount;
             
             // Create a refund transaction
-            await Transaction.create({
+            newTransaction = await Transaction.create({
                 userId: user._id,
                 userName: user.username,
                 type: 'Withdrawal Refund',
@@ -119,6 +112,7 @@ export const updateWithdrawal = async (req, res) => {
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
                 await originalTransaction.save();
+                updatedTransaction = originalTransaction;
             }
 
              await Notification.create({
@@ -131,6 +125,7 @@ export const updateWithdrawal = async (req, res) => {
             if (originalTransaction) {
                 originalTransaction.status = 'Approved';
                 await originalTransaction.save();
+                updatedTransaction = originalTransaction;
             }
             const message = status === 'Paid' 
                 ? `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
@@ -145,7 +140,7 @@ export const updateWithdrawal = async (req, res) => {
         await withdrawal.save();
         await user.save();
 
-        res.status(200).json({ success: true, data: { withdrawal, user } });
+        res.status(200).json({ success: true, data: { withdrawal, user, newTransaction, updatedTransaction } });
 
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
