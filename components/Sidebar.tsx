@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useData } from '../hooks/useData';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -12,6 +13,7 @@ const UsersIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColo
 const DepositIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
 const WithdrawalIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
 const TransferIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>;
+const PasswordResetIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>;
 const PaymentIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
 const PlanIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
 const WalletIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
@@ -22,24 +24,26 @@ const LogsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 const UserViewIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
 
-const navLinks = [
-  { to: '/admin', label: 'Dashboard', icon: <HomeIcon /> },
-  { to: '/admin/users', label: 'Users', icon: <UsersIcon /> },
-  { to: '/admin/deposits', label: 'Deposits', icon: <DepositIcon /> },
-  { to: '/admin/withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> },
-  { to: '/admin/transfers', label: 'Transfers', icon: <TransferIcon /> },
-  { to: '/admin/payment-methods', label: 'Payment Methods', icon: <PaymentIcon /> },
-  { to: '/admin/investment-plans', label: 'Investment Plans', icon: <PlanIcon /> },
-  { to: '/admin/wallet', label: 'Wallet', icon: <WalletIcon /> },
-  { to: '/admin/rules', label: 'Rules', icon: <RulesIcon /> },
-  { to: '/admin/reports', label: 'Reports', icon: <ReportIcon /> },
-  { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
-  { to: '/admin/logs', label: 'Logs', icon: <LogsIcon /> },
-  { to: '/member', label: 'View User Panel', icon: <UserViewIcon /> },
-];
-
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
-    const location = useLocation();
+    const { state } = useData();
+    const pendingResetsCount = state.passwordResetRequests.filter(r => r.status === 'Pending').length;
+
+    const navLinks = [
+      { to: '/admin', label: 'Dashboard', icon: <HomeIcon /> },
+      { to: '/admin/users', label: 'Users', icon: <UsersIcon /> },
+      { to: '/admin/password-resets', label: 'Password Resets', icon: <PasswordResetIcon />, badge: pendingResetsCount },
+      { to: '/admin/deposits', label: 'Deposits', icon: <DepositIcon /> },
+      { to: '/admin/withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> },
+      { to: '/admin/transfers', label: 'Transfers', icon: <TransferIcon /> },
+      { to: '/admin/payment-methods', label: 'Payment Methods', icon: <PaymentIcon /> },
+      { to: '/admin/investment-plans', label: 'Investment Plans', icon: <PlanIcon /> },
+      { to: '/admin/wallet', label: 'Wallet', icon: <WalletIcon /> },
+      { to: '/admin/rules', label: 'Rules', icon: <RulesIcon /> },
+      { to: '/admin/reports', label: 'Reports', icon: <ReportIcon /> },
+      { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
+      { to: '/admin/logs', label: 'Logs', icon: <LogsIcon /> },
+      { to: '/member', label: 'View User Panel', icon: <UserViewIcon /> },
+    ];
 
     const baseLinkClass = "flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200";
     const inactiveLinkClass = "text-gray-400 hover:bg-gray-700 hover:text-white";
@@ -55,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                     <h1 className="text-2xl font-bold text-white">SmartEarning</h1>
                 </div>
                 <nav className="mt-6 px-4 flex-grow">
-                    {navLinks.map(({ to, label, icon }) => (
+                    {navLinks.map(({ to, label, icon, badge }) => (
                         <NavLink
                             key={label}
                             to={to}
@@ -65,6 +69,11 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                         >
                             {icon}
                             <span className="mx-4 font-medium">{label}</span>
+                             {badge && badge > 0 && (
+                                <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                    {badge}
+                                </span>
+                            )}
                         </NavLink>
                     ))}
                 </nav>

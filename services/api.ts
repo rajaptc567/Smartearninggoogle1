@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest } from '../types';
 
 // The base URL of your backend API is determined at runtime.
 // This allows the same code to work for both local development and live deployment.
@@ -100,6 +100,15 @@ export const purchasePlan = async (userId: string, planId: string): Promise<{ us
     return result.data;
 };
 
+export const userRequestPasswordReset = async (email: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/users/request-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    });
+    await handleResponse(response);
+};
+
 export const adminInitiatePasswordReset = async (userId: string): Promise<{ resetToken: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/admin-reset-password`, {
         method: 'POST',
@@ -116,6 +125,22 @@ export const resetPasswordWithToken = async (token: string, password: string): P
     });
     await handleResponse(response);
 };
+
+// --- Password Reset Request API Functions ---
+export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
+    const response = await fetch(`${API_BASE_URL}/password-reset-requests`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/password-reset-requests/${id}`, {
+        method: 'DELETE',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 
 // --- Deposit API Functions ---
 

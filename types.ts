@@ -163,3 +163,12 @@ export interface Log {
   details: string;
   performedBy: string;
 }
+
+export interface PasswordResetRequest {
+  _id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  status: 'Pending' | 'Handled';
+  requestDate: string;
+}

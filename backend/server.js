@@ -18,6 +18,7 @@ import transferRoutes from './routes/transferRoutes.js';
 import ruleRoutes from './routes/ruleRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
+import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 
 // Load env vars
 dotenv.config();
@@ -64,6 +65,7 @@ app.use('/api/v1/transfers', transferRoutes);
 app.use('/api/v1/rules', ruleRoutes);
 app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
+app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 
 // Custom Error Handler
 const errorHandler = (err, req, res, next) => {

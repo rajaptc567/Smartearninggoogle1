@@ -1,8 +1,8 @@
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
-import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log } from '../types';
+import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
-    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs 
+    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests 
 } from '../services/api';
 
 interface AppState {
@@ -17,6 +17,7 @@ interface AppState {
     settings: Settings;
     notifications: Notification[];
     logs: Log[];
+    passwordResetRequests: PasswordResetRequest[];
     currentUser: User | null;
 }
 
@@ -35,6 +36,7 @@ const initialState: AppState = {
     },
     notifications: [],
     logs: [],
+    passwordResetRequests: [],
     currentUser: null,
 };
 
@@ -72,6 +74,8 @@ type Action =
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'ADD_NOTIFICATION'; payload: Notification }
     | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: Notification[] }
+    | { type: 'SET_PASSWORD_RESET_REQUESTS'; payload: PasswordResetRequest[] }
+    | { type: 'DELETE_PASSWORD_RESET_REQUEST'; payload: string }
     | { type: 'SET_CURRENT_USER'; payload: User | null };
 
 
@@ -155,6 +159,12 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_NOTIFICATION': return { ...state, notifications: [action.payload, ...state.notifications] };
         case 'MARK_NOTIFICATIONS_AS_READ': return { ...state, notifications: action.payload };
 
+        // PASSWORD RESETS
+        case 'SET_PASSWORD_RESET_REQUESTS':
+            return { ...state, passwordResetRequests: action.payload };
+        case 'DELETE_PASSWORD_RESET_REQUEST':
+            return { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => req._id !== action.payload) };
+
         default:
             return state;
     }
@@ -186,14 +196,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 const [
                     users, deposits, withdrawals, transactions, notifications, 
-                    paymentMethods, investmentPlans, rules, settings, transfers, logs
+                    paymentMethods, investmentPlans, rules, settings, transfers, logs,
+                    passwordResetRequests
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
-                    getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs()
+                    getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(),
+                    getPasswordResetRequests()
                 ]);
                 dispatch({ type: 'SET_ALL_DATA', payload: {
                     users, deposits, withdrawals, transactions, notifications,
-                    paymentMethods, investmentPlans, rules, settings, transfers, logs
+                    paymentMethods, investmentPlans, rules, settings, transfers, logs,
+                    passwordResetRequests
                 }});
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);

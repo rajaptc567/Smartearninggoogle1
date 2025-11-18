@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
+import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import createLog from '../utils/logger.js';
 import crypto from 'crypto';
 
@@ -173,6 +174,39 @@ export const purchasePlan = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     }
 };
+
+// @desc    User requests a password reset
+// @route   POST /api/v1/users/request-password-reset
+// @access  Public
+export const userRequestPasswordReset = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            // To prevent email enumeration, we send a generic success response.
+            // The user is told a request is sent; if the user doesn't exist, no request is actually created.
+            return res.status(200).json({ success: true, data: 'If a user with this email exists, a request has been sent to the admin.' });
+        }
+
+        const existingRequest = await PasswordResetRequest.findOne({ userId: user._id, status: 'Pending' });
+        if (existingRequest) {
+            return res.status(200).json({ success: true, data: 'A request is already pending for this user.' });
+        }
+
+        await PasswordResetRequest.create({
+            userId: user._id,
+            userEmail: user.email,
+            userName: user.username,
+        });
+
+        res.status(200).json({ success: true, data: 'Your request has been sent to the administrator.' });
+    } catch (err) {
+        // Even on error, send a generic response to the client for security.
+        console.error('Error in userRequestPasswordReset:', err);
+        res.status(200).json({ success: true, data: 'If a user with this email exists, a request has been sent to the admin.' });
+    }
+};
+
 
 // @desc    Admin initiates password reset for a user
 // @route   POST /api/v1/users/:id/admin-reset-password

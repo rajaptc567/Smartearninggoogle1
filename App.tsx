@@ -14,6 +14,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Transfers from './pages/Transfers';
+import PasswordResets from './pages/PasswordResets';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -54,6 +55,7 @@ const App: React.FC = () => {
           <Route path="deposits" element={<Deposits />} />
           <Route path="withdrawals" element={<Withdrawals />} />
           <Route path="transfers" element={<Transfers />} />
+          <Route path="password-resets" element={<PasswordResets />} />
           <Route path="payment-methods" element={<PaymentMethods />} />
           <Route path="investment-plans" element={<InvestmentPlans />} />
           <Route path="wallet" element={<Wallet />} />

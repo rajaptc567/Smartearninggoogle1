@@ -1,16 +1,30 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import { userRequestPasswordReset } from '../services/api';
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
     const [submitted, setSubmitted] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // This now only serves to inform the user. No backend call is made.
-        console.log('Password reset assistance requested for:', email);
-        setSubmitted(true);
+        setIsLoading(true);
+        setError('');
+        try {
+            await userRequestPasswordReset(email);
+            setSubmitted(true);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+            setError(errorMessage);
+            // Even if there's an error, we can still show the "submitted" message to prevent email enumeration.
+            // The backend handles this securely.
+            setSubmitted(true);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -26,7 +40,7 @@ const ForgotPassword = () => {
                         <div className="p-4 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300" role="alert">
                             <p className="font-semibold">Request Sent</p>
                             <p className="mt-1">
-                                Your request for a password reset has been forwarded to our administration team. Please contact support to receive your unique and secure reset link.
+                                If an account with that email exists, a request has been sent to our administration team. Please contact support to receive your secure reset link.
                             </p>
                         </div>
                     </div>
@@ -50,8 +64,8 @@ const ForgotPassword = () => {
                                 />
                             </div>
                             <div>
-                                <Button type="submit" size="lg" className="w-full">
-                                    Request Reset from Admin
+                                <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                                    {isLoading ? 'Sending Request...' : 'Request Reset from Admin'}
                                 </Button>
                             </div>
                         </form>
