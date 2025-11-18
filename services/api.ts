@@ -117,6 +117,13 @@ export const adminInitiatePasswordReset = async (userId: string): Promise<{ rese
     return result.data;
 };
 
+export const verifyResetToken = async (token: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/users/verify-reset-token/${token}`, {
+        method: 'POST',
+    });
+    await handleResponse(response);
+};
+
 export const resetPasswordWithToken = async (token: string, password: string): Promise<void> => {
     const response = await fetch(`${API_BASE_URL}/users/reset-password/${token}`, {
         method: 'PUT',

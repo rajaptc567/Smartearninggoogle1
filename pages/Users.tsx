@@ -290,7 +290,7 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                 {resetLink && (
                     <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm">
                         <p className="font-semibold">Password Reset Link Generated</p>
-                        <p className="text-xs mb-2">Share this secure, single-use link with the user. It will expire in 10 minutes.</p>
+                        <p className="text-xs mb-2">Share this secure, single-use link with the user. This link is valid for 48 hours. Once opened, the user will have 10 minutes to complete the password reset.</p>
                         <div className="flex items-center space-x-2">
                            <input type="text" readOnly value={resetLink} className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-0"/>
                            <Button size="sm" onClick={() => navigator.clipboard.writeText(resetLink)}>Copy</Button>

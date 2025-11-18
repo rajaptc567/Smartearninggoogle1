@@ -11,6 +11,7 @@ import {
     adminInitiatePasswordReset,
     resetPasswordWithToken,
     userRequestPasswordReset,
+    verifyAndStartResetTimer,
 } from '../controllers/usersController.js';
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const router = express.Router();
 router.route('/').get(getUsers).post(createUser);
 router.post('/login', loginUser);
 router.post('/request-password-reset', userRequestPasswordReset);
+router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
 
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);

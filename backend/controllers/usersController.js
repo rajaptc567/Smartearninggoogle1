@@ -3,7 +3,7 @@ import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import createLog from '../utils/logger.js';
-import crypto from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 // @desc    Register a new user
 // @route   POST /api/v1/users
@@ -218,15 +218,14 @@ export const adminInitiatePasswordReset = async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        const resetToken = crypto.randomBytes(20).toString('hex');
+        const resetToken = randomBytes(20).toString('hex');
 
-        user.passwordResetToken = crypto
-            .createHash('sha256')
+        user.passwordResetToken = createHash('sha256')
             .update(resetToken)
             .digest('hex');
 
-        // Set token to expire in 10 minutes
-        user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+        // Set token to expire in 48 hours
+        user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         
         await user.save();
         
@@ -238,14 +237,42 @@ export const adminInitiatePasswordReset = async (req, res) => {
     }
 };
 
+// @desc    Verify token and start 10-minute timer
+// @route   POST /api/v1/users/verify-reset-token/:token
+// @access  Public
+export const verifyAndStartResetTimer = async (req, res) => {
+    try {
+        const resetToken = req.params.token;
+        const hashedToken = createHash('sha256')
+            .update(resetToken)
+            .digest('hex');
+
+        const user = await User.findOne({
+            passwordResetToken: hashedToken,
+            passwordResetExpires: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired token.' });
+        }
+
+        // Token is valid, now start the 10-minute timer for the actual reset
+        user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+        await user.save();
+
+        res.status(200).json({ success: true, data: 'Token verified. You have 10 minutes to reset your password.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
 // @desc    Reset password using a token
 // @route   PUT /api/v1/users/reset-password/:token
 // @access  Public
 export const resetPasswordWithToken = async (req, res) => {
     try {
         const resetToken = req.params.token;
-        const hashedToken = crypto
-            .createHash('sha256')
+        const hashedToken = createHash('sha256')
             .update(resetToken)
             .digest('hex');
 

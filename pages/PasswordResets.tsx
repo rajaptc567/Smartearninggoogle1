@@ -92,7 +92,7 @@ const PasswordResets: React.FC = () => {
                         
                         {resetLink && (
                             <div className="space-y-3">
-                                <p className="text-xs text-yellow-600 dark:text-yellow-400">Please copy this link and send it to the user via a secure channel. This link will expire in 10 minutes.</p>
+                                <p className="text-xs text-yellow-600 dark:text-yellow-400">Please copy this link and send it to the user via a secure channel. This link is valid for 48 hours. Once opened, the user will have 10 minutes to complete the password reset.</p>
                                 <div className="flex items-center space-x-2">
                                     <input type="text" readOnly value={resetLink} className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-0"/>
                                     <Button size="sm" onClick={() => navigator.clipboard.writeText(resetLink)}>Copy</Button>
