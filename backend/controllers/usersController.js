@@ -115,8 +115,40 @@ export const updateUser = async (req, res) => {
 // @route   DELETE /api/v1/users/:id
 export const deleteUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndDelete(req.params.id);
+        // Cascade Delete: Find the user first to get IDs needed for cleanup
+        const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: `User not found` });
+
+        // Import models dynamically or ensure they are imported at top.
+        // Assuming models are imported at top: Deposit, Withdrawal, Transaction, Notification, Transfer, PasswordResetRequest
+        const { default: Deposit } = await import('../models/Deposit.js');
+        const { default: Withdrawal } = await import('../models/Withdrawal.js');
+        const { default: Transaction } = await import('../models/Transaction.js');
+        const { default: Notification } = await import('../models/Notification.js');
+        const { default: Transfer } = await import('../models/Transfer.js');
+        const { default: PasswordResetRequest } = await import('../models/PasswordResetRequest.js');
+
+        // 1. Delete Deposits
+        await Deposit.deleteMany({ userId: user._id });
+
+        // 2. Delete Withdrawals
+        await Withdrawal.deleteMany({ userId: user._id });
+
+        // 3. Delete Transactions
+        await Transaction.deleteMany({ userId: user._id });
+
+        // 4. Delete Notifications
+        await Notification.deleteMany({ userId: user._id });
+        
+        // 5. Delete Password Reset Requests
+        await PasswordResetRequest.deleteMany({ userId: user._id });
+
+        // 6. Delete Transfers (Sent and Received)
+        await Transfer.deleteMany({ $or: [{ senderId: user._id }, { recipientId: user._id }] });
+
+        // 7. Finally, delete the user
+        await User.findByIdAndDelete(req.params.id);
+
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -172,6 +204,7 @@ export const purchasePlan = async (req, res) => {
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         
+        // 1. Deduct Balance and Activate Plan
         user.walletBalance -= plan.price;
         user.activePlan = plan.name;
         await user.save();
@@ -185,13 +218,109 @@ export const purchasePlan = async (req, res) => {
             status: 'Approved'
         });
 
-        // Create Notification
         await Notification.create({
             userId: user._id,
             message: `You successfully purchased the ${plan.name} plan for $${plan.price.toFixed(2)}.`
         });
 
-        // TODO: Add commission logic for sponsors
+        // --- COMMISSION DISTRIBUTION LOGIC ---
+
+        const calculateAmount = (commissionConfig, planPrice) => {
+            if (!commissionConfig) return 0;
+            if (commissionConfig.type === 'percentage') {
+                return (planPrice * commissionConfig.value) / 100;
+            }
+            return commissionConfig.value; // Fixed amount
+        };
+
+        if (user.sponsor) {
+            // A. Direct Commission (Level 1)
+            const sponsor = await User.findOne({ username: user.sponsor });
+            
+            if (sponsor && sponsor.status === 'Active') {
+                let commissionAmount = 0;
+
+                // Logic for Tiered vs Standard Direct Commission
+                if (plan.directReferralLimit > 0) {
+                    // Tiered Logic: Determine which "number" referral this user is
+                    const directReferrals = await User.find({ sponsor: sponsor.username }).sort({ registrationDate: 1 });
+                    const referralIndex = directReferrals.findIndex(u => u._id.toString() === user._id.toString());
+                    
+                    // If the user is within the defined limit, get that specific rate
+                    if (referralIndex !== -1 && referralIndex < plan.directCommissions.length) {
+                        commissionAmount = calculateAmount(plan.directCommissions[referralIndex], plan.price);
+                    }
+                } else {
+                    // Unlimited Logic: Use the first (standard) rate
+                    if (plan.directCommissions && plan.directCommissions.length > 0) {
+                        commissionAmount = calculateAmount(plan.directCommissions[0], plan.price);
+                    }
+                }
+
+                if (commissionAmount > 0) {
+                    sponsor.walletBalance += commissionAmount;
+                    await sponsor.save();
+
+                    await Transaction.create({
+                        userId: sponsor._id,
+                        userName: sponsor.username,
+                        type: 'Commission',
+                        amount: commissionAmount,
+                        level: 1,
+                        description: `Direct Commission from ${user.username} (${plan.name})`,
+                        status: 'Approved'
+                    });
+
+                    await Notification.create({
+                        userId: sponsor._id,
+                        message: `You earned a direct commission of $${commissionAmount.toFixed(2)} from ${user.username}.`
+                    });
+                }
+
+                // B. Indirect Commissions (Level 2+)
+                // Only proceed if there are indirect commissions defined
+                if (plan.indirectCommissions && plan.indirectCommissions.length > 0) {
+                    let currentUplineUsername = sponsor.sponsor;
+                    
+                    // Loop through defined levels (starting at index 0 for Level 2)
+                    for (let i = 0; i < plan.indirectCommissions.length; i++) {
+                        if (!currentUplineUsername) break; // No more upline
+
+                        const uplineUser = await User.findOne({ username: currentUplineUsername });
+                        if (!uplineUser) break; // User not found
+
+                        if (uplineUser.status === 'Active') {
+                            const levelCommissionAmount = calculateAmount(plan.indirectCommissions[i], plan.price);
+
+                            if (levelCommissionAmount > 0) {
+                                uplineUser.walletBalance += levelCommissionAmount;
+                                await uplineUser.save();
+
+                                await Transaction.create({
+                                    userId: uplineUser._id,
+                                    userName: uplineUser.username,
+                                    type: 'Commission',
+                                    amount: levelCommissionAmount,
+                                    level: i + 2, // i=0 is Level 2
+                                    description: `Level ${i + 2} Commission from ${user.username}`,
+                                    status: 'Approved'
+                                });
+
+                                await Notification.create({
+                                    userId: uplineUser._id,
+                                    message: `You earned a Level ${i + 2} commission of $${levelCommissionAmount.toFixed(2)} from ${user.username}.`
+                                });
+                            }
+                        }
+
+                        // Move up the tree
+                        currentUplineUsername = uplineUser.sponsor;
+                    }
+                }
+            }
+        }
+
+        // --- END COMMISSION LOGIC ---
         
         res.status(200).json({ success: true, data: { user, transaction } });
     } catch (err) {
