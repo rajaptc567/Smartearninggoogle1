@@ -1,7 +1,9 @@
+
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
+import Notification from '../models/Notification.js';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 
@@ -22,6 +24,12 @@ export const createUser = async (req, res, next) => {
 
         const user = await User.create(req.body);
         
+        // Create Welcome Notification
+        await Notification.create({
+            userId: user._id,
+            message: `Welcome to SmartEarning, ${user.fullName}! Your account has been successfully created.`
+        });
+
         const userResponse = user.toObject();
         delete userResponse.password;
 
@@ -135,6 +143,16 @@ export const adjustWallet = async (req, res) => {
             status: 'Approved'
         });
         
+        // Create Notification for the user
+        const notifMessage = amount > 0 
+            ? `Admin credited $${amount.toFixed(2)} to your wallet. Reason: ${description || 'Manual Adjustment'}`
+            : `Admin debited $${Math.abs(amount).toFixed(2)} from your wallet. Reason: ${description || 'Manual Adjustment'}`;
+
+        await Notification.create({
+            userId: user._id,
+            message: notifMessage
+        });
+        
         await createLog('Wallet Adjusted', user.username, `Adjusted balance by ${amount}. Reason: ${description}`, 'admin');
 
         res.status(200).json({ success: true, data: { user, transaction }});
@@ -165,6 +183,12 @@ export const purchasePlan = async (req, res) => {
             amount: -plan.price,
             description: `Purchased ${plan.name} plan`,
             status: 'Approved'
+        });
+
+        // Create Notification
+        await Notification.create({
+            userId: user._id,
+            message: `You successfully purchased the ${plan.name} plan for $${plan.price.toFixed(2)}.`
         });
 
         // TODO: Add commission logic for sponsors
