@@ -68,6 +68,12 @@ export const updateDeposit = async (req, res) => {
         }
 
         const originalStatus = deposit.status;
+        if (originalStatus === status) {
+            // Only notes are updated, no financial logic needed
+            deposit.adminNotes = adminNotes;
+            await deposit.save();
+            return res.status(200).json({ success: true, data: deposit });
+        }
         
         deposit.status = status;
         deposit.adminNotes = adminNotes;
@@ -77,15 +83,14 @@ export const updateDeposit = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Associated user not found' });
         }
 
-        let newTransaction = null;
-
         // --- Main Approval/Rejection Logic ---
         if (originalStatus === 'Pending' && status === 'Approved') {
             // 1. Update user balance
             user.walletBalance += deposit.amount;
+            await user.save();
             
             // 2. Create an approved deposit transaction
-            newTransaction = await Transaction.create({
+            await Transaction.create({
                 userId: user._id,
                 userName: user.username,
                 type: 'Deposit',
@@ -105,11 +110,12 @@ export const updateDeposit = async (req, res) => {
         } else if (originalStatus === 'Approved' && status !== 'Approved') {
             // Reverting an approval
             user.walletBalance -= deposit.amount;
+            await user.save();
             // Note: Also need to handle reverting commissions and transactions, which adds complexity.
             // For now, we just revert the balance.
         }
         
-        if (status === 'Rejected' && originalStatus !== 'Rejected') {
+        if (status === 'Rejected') {
              await Notification.create({
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been rejected. Reason: ${adminNotes || 'Contact support'}`
@@ -117,15 +123,13 @@ export const updateDeposit = async (req, res) => {
         }
 
         await deposit.save();
-        await user.save();
         
-        // Return all affected data to sync frontend state
+        // Return the updated deposit AND the updated user to sync frontend state
         res.status(200).json({ 
             success: true, 
             data: { 
                 deposit, 
-                user,
-                transaction: newTransaction
+                user 
             }
         });
 

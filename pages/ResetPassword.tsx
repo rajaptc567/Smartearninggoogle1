@@ -15,22 +15,23 @@ const ResetPassword = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // 1. Parse token from URL hash, deferred to avoid race conditions with router
+    // 1. Parse token from URL on initial mount
     useEffect(() => {
-        const timerId = setTimeout(() => {
-            const hash = window.location.hash;
-            const match = hash.match(/[\?&]token=([^&]*)/);
-            const parsedToken = match ? match[1] : null;
-
+        const hash = window.location.hash;
+        const queryIndex = hash.indexOf('?');
+        if (queryIndex !== -1) {
+            const queryString = hash.substring(queryIndex + 1);
+            const params = new URLSearchParams(queryString);
+            const parsedToken = params.get('token');
             if (parsedToken) {
                 setToken(parsedToken);
             } else {
                 setStatus('invalid');
             }
-        }, 0); // Defer execution until after initial render flow
-
-        return () => clearTimeout(timerId); // Cleanup
-    }, []); // Run only once on mount
+        } else {
+            setStatus('invalid');
+        }
+    }, []);
 
     // 2. Verify token with backend once token is parsed
     useEffect(() => {
