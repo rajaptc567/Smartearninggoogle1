@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
 import { InvestmentPlan, Status } from '../../types';
@@ -49,6 +50,28 @@ const UserInvestmentPlans: React.FC = () => {
     setSelectedPlan(null);
   }
 
+  const renderDirectCommission = (plan: InvestmentPlan) => {
+      const comms = plan.directCommissions;
+      if (!comms || comms.length === 0) return 'N/A';
+
+      // Find highest commission
+      let maxVal = 0;
+      let maxType = 'percentage';
+
+      comms.forEach(c => {
+          if (c.value > maxVal) {
+              maxVal = c.value;
+              maxType = c.type;
+          }
+      });
+
+      if (comms.length > 1) {
+           return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
+      }
+      
+      return comms[0].type === 'percentage' ? `${comms[0].value}%` : `$${comms[0].value}`;
+  };
+
   return (
     <div className="space-y-6">
        <div>
@@ -76,7 +99,7 @@ const UserInvestmentPlans: React.FC = () => {
                             <li><CheckIcon /> <span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</li>
                             <li><CheckIcon />
                                 <span className="font-semibold">Direct Commission: </span> 
-                                {plan.directCommission.type === 'percentage' ? `${plan.directCommission.value}%` : `$${plan.directCommission.value}`}
+                                {renderDirectCommission(plan)}
                             </li>
                              <li><CheckIcon />
                                 <span className="font-semibold">Indirect Levels: </span> 

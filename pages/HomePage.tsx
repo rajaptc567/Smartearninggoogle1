@@ -1,7 +1,9 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
+import { InvestmentPlan } from '../types';
 
 const CheckIcon = () => <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
 
@@ -10,6 +12,28 @@ const HomePage: React.FC = () => {
     const { state } = useData();
 
     const featuredPlans = state.investmentPlans.filter(p => p.status === 'Active').slice(0, 3);
+
+    const renderDirectCommission = (plan: InvestmentPlan) => {
+      const comms = plan.directCommissions;
+      if (!comms || comms.length === 0) return 'N/A';
+
+      // Find highest commission
+      let maxVal = 0;
+      let maxType = 'percentage';
+
+      comms.forEach(c => {
+          if (c.value > maxVal) {
+              maxVal = c.value;
+              maxType = c.type;
+          }
+      });
+
+      if (comms.length > 1) {
+           return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
+      }
+      
+      return comms[0].type === 'percentage' ? `${comms[0].value}%` : `$${comms[0].value}`;
+    };
     
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen">
@@ -55,7 +79,7 @@ const HomePage: React.FC = () => {
                                         <ul className="space-y-2 text-sm mb-6">
                                             <li className="flex items-center"><CheckIcon /> Duration: {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
                                             <li className="flex items-center"><CheckIcon /> Min. Withdraw: ${plan.minWithdraw}</li>
-                                            <li className="flex items-center"><CheckIcon /> Direct Commission: {plan.directCommission.type === 'percentage' ? `${plan.directCommission.value}%` : `$${plan.directCommission.value}`}</li>
+                                            <li className="flex items-center"><CheckIcon /> Direct Commission: {renderDirectCommission(plan)}</li>
                                         </ul>
                                         <Button className="w-full mt-auto" onClick={() => navigate('/register')}>Choose Plan</Button>
                                     </div>

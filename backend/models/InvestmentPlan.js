@@ -46,7 +46,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: Number,
         default: 0, // 0 for unlimited
     },
-    directCommission: CommissionSchema,
+    directCommissions: [CommissionSchema], // Updated to array
     indirectCommissions: [CommissionSchema],
     commissionDeductions: {
         afterMaxPayout: CommissionSchema,

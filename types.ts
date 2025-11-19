@@ -1,3 +1,4 @@
+
 export enum Status {
   Active = 'Active',
   Blocked = 'Blocked',
@@ -100,7 +101,7 @@ export interface InvestmentPlan {
     status: Status.Active | Status.Disabled;
     
     directReferralLimit: number; // 0 for unlimited
-    directCommission: Commission;
+    directCommissions: Commission[]; // Array for tiered commissions
     indirectCommissions: Commission[]; // Array for multi-level
 
     commissionDeductions: {
