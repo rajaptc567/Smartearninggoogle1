@@ -40,7 +40,7 @@ const ForgotPassword = () => {
                         <div className="p-4 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300" role="alert">
                             <p className="font-semibold">Request Sent</p>
                             <p className="mt-1">
-                                If an account with that email exists, a request has been sent to our administration team. Please contact support to receive your secure reset link.
+                                If an account with that email exists, a request has been sent to our administration team. Please check your email or WhatsApp to reset your password.
                             </p>
                         </div>
                     </div>
