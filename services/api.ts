@@ -1,3 +1,4 @@
+
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest } from '../types';
 
 // The base URL of your backend API is determined at runtime.
@@ -62,6 +63,14 @@ export const updateUser = async (id: string, userData: Partial<User>): Promise<U
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteUser = async (id: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+        method: 'DELETE',
     });
     const result = await handleResponse(response);
     return result.data;

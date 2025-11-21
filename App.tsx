@@ -34,6 +34,7 @@ import Transactions from './pages/user/Transactions';
 import Referrals from './pages/user/Referrals';
 import Profile from './pages/user/Profile';
 import TransferFunds from './pages/user/TransferFunds';
+import ActivePlans from './pages/user/ActivePlans';
 
 
 const App: React.FC = () => {
@@ -72,6 +73,7 @@ const App: React.FC = () => {
           <Route path="withdraw" element={<WithdrawFunds />} />
           <Route path="transfer" element={<TransferFunds />} />
           <Route path="plans" element={<UserInvestmentPlans />} />
+          <Route path="active-plans" element={<ActivePlans />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="referrals" element={<Referrals />} />
           <Route path="profile" element={<Profile />} />

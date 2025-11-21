@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Status, Deposit, Withdrawal, Transaction } from '../types';
 import Table from '../components/ui/Table';
@@ -5,7 +6,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
@@ -37,7 +38,7 @@ const Users: React.FC = () => {
                 dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             } else {
                  // In a real app, password would be handled securely
-                const newUserPayload = { ...user, password: 'password123', walletBalance: 0, activePlan: 'None', status: Status.Active };
+                const newUserPayload = { ...user, password: 'password123', walletBalance: 0, activePlan: 'None', activePlans: [], status: Status.Active };
                 const newUser = await apiCreateUser(newUserPayload);
                 dispatch({ type: 'ADD_USER', payload: newUser });
             }
@@ -59,6 +60,19 @@ const Users: React.FC = () => {
             alert("Error: Could not update user status.");
         }
     }
+    
+    const handleDeleteUser = async (user: User) => {
+        if (window.confirm(`Are you sure you want to delete user ${user.username}? THIS ACTION CANNOT BE UNDONE and will delete all associated data (deposits, withdrawals, etc.).`)) {
+             try {
+                await deleteUser(user._id);
+                dispatch({ type: 'DELETE_USER', payload: user._id });
+                alert('User deleted successfully.');
+            } catch (error) {
+                console.error("Failed to delete user:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not delete user.'}`);
+            }
+        }
+    };
 
     const filteredUsers = useMemo(() => state.users.filter(user => {
         if (!searchTerm) return true;
@@ -72,7 +86,7 @@ const Users: React.FC = () => {
         );
     }), [state.users, searchTerm]);
 
-    const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plan', 'Status', 'Actions'];
+    const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
@@ -106,7 +120,11 @@ const Users: React.FC = () => {
                                 <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
                             </td>
                             <td className="px-4 py-3 text-sm">${user.walletBalance.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-sm">{user.activePlan}</td>
+                            <td className="px-4 py-3 text-sm">
+                                {user.activePlans && user.activePlans.length > 0 
+                                    ? user.activePlans.map(p => p.planName).join(', ') 
+                                    : 'None'}
+                            </td>
                             <td className="px-4 py-3 text-xs">
                                <Badge status={user.status} />
                             </td>
@@ -116,6 +134,7 @@ const Users: React.FC = () => {
                                     <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user)}>
                                         {user.status === Status.Blocked ? 'Unblock' : 'Block'}
                                     </Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleDeleteUser(user)}>Delete</Button>
                                 </div>
                             </td>
                         </tr>
@@ -311,7 +330,7 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                          <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                             <h3 className="font-semibold mb-2">Wallet & Plan</h3>
                             <p className="text-sm"><strong>Balance:</strong> <span className="font-bold text-green-600">${user.walletBalance.toFixed(2)}</span></p>
-                            <p className="text-sm"><strong>Current Plan:</strong> {user.activePlan}</p>
+                            <p className="text-sm"><strong>Active Plans:</strong> {user.activePlans && user.activePlans.length > 0 ? user.activePlans.map(p => p.planName).join(', ') : 'None'}</p>
                             <p className="text-sm"><strong>Status:</strong> <Badge status={user.status} /></p>
                         </div>
                     </div>

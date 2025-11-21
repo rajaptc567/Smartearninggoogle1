@@ -81,11 +81,12 @@ const UserInvestmentPlans: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {activePlans.map((plan) => {
-                const isCurrentPlan = currentUser.activePlan === plan.name;
+                // Check if user already has this plan in their activePlans array
+                const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
 
                 return (
-                     <div key={plan._id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col border-2 ${isCurrentPlan ? 'border-blue-500' : 'border-transparent'}`}>
-                        {isCurrentPlan && <div className="absolute top-0 right-0 -mt-3 -mr-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full z-10">Current Plan</div>}
+                     <div key={plan._id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col border-2 ${isOwned ? 'border-blue-500' : 'border-transparent'}`}>
+                        {isOwned && <div className="absolute top-0 right-0 -mt-3 -mr-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full z-10">Purchased</div>}
                         
                         <div className="flex justify-between items-start mb-4">
                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
@@ -112,9 +113,9 @@ const UserInvestmentPlans: React.FC = () => {
                                 size="lg" 
                                 className="w-full" 
                                 onClick={() => handlePurchaseClick(plan)}
-                                disabled={isCurrentPlan}
+                                disabled={isOwned}
                             >
-                                {isCurrentPlan ? 'Active Plan' : (plan.price > currentUser.walletBalance ? 'Upgrade (Deposit Required)' : 'Purchase Plan')}
+                                {isOwned ? 'Already Owned' : (plan.price > currentUser.walletBalance ? 'Purchase (Deposit Required)' : 'Purchase Plan')}
                            </Button>
                         </div>
                     </div>

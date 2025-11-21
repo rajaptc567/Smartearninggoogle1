@@ -22,6 +22,9 @@ export const createUser = async (req, res, next) => {
             req.body.sponsor = sponsorExists.username;
         }
 
+        // Initialize activePlans as empty array
+        req.body.activePlans = [];
+
         const user = await User.create(req.body);
         
         // Create Welcome Notification
@@ -202,11 +205,31 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(planId);
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
+        
+        // Check if user already owns this specific plan
+        const alreadyOwnsPlan = user.activePlans && user.activePlans.some(p => p.planId.toString() === plan._id.toString());
+        if (alreadyOwnsPlan) {
+            return res.status(400).json({ success: false, error: `You have already purchased the ${plan.name} plan. You cannot purchase the same plan twice.` });
+        }
+
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         
-        // 1. Deduct Balance and Activate Plan
+        // 1. Deduct Balance
         user.walletBalance -= plan.price;
+        
+        // 2. Add to Active Plans
+        // Update the legacy 'activePlan' string to the latest plan name for quick display
         user.activePlan = plan.name;
+        
+        // Add to the array of active plans
+        if (!user.activePlans) user.activePlans = [];
+        user.activePlans.push({
+            planId: plan._id,
+            planName: plan.name,
+            price: plan.price,
+            purchaseDate: new Date()
+        });
+
         await user.save();
         
         const transaction = await Transaction.create({
@@ -227,9 +250,10 @@ export const purchasePlan = async (req, res) => {
 
         const calculateAmount = (commissionConfig, planPrice) => {
             if (!commissionConfig) return 0;
+            // Ensure value is treated as a number if it comes as a string
             const value = parseFloat(commissionConfig.value);
             if (isNaN(value)) return 0;
-            
+
             if (commissionConfig.type === 'percentage') {
                 return (planPrice * value) / 100;
             }
@@ -238,6 +262,7 @@ export const purchasePlan = async (req, res) => {
 
         if (user.sponsor) {
             // A. Direct Commission (Level 1)
+            // FIX: Case insensitive sponsor lookup
             const sponsor = await User.findOne({ username: { $regex: new RegExp(`^${user.sponsor}$`, 'i') } });
             
             if (sponsor && sponsor.status === 'Active') {
@@ -245,16 +270,13 @@ export const purchasePlan = async (req, res) => {
 
                 // Logic for Tiered vs Standard Direct Commission
                 if (plan.directReferralLimit > 0) {
-                    // Tiered Logic: Determine which "number" referral this user is for the sponsor
-                    // Case insensitive lookup for direct referrals
-                    const directReferrals = await User.find({ 
-                        sponsor: { $regex: new RegExp(`^${sponsor.username}$`, 'i') } 
-                    }).sort({ registrationDate: 1 });
-                    
+                    // Tiered Logic: Determine which "number" referral this user is
+                    // FIX: Case insensitive lookup to ensure we find ALL referrals regardless of casing
+                    const directReferrals = await User.find({ sponsor: { $regex: new RegExp(`^${sponsor.username}$`, 'i') } }).sort({ registrationDate: 1 });
                     const referralIndex = directReferrals.findIndex(u => u._id.toString() === user._id.toString());
                     
                     // If the user is within the defined limit, get that specific rate
-                    if (referralIndex !== -1 && referralIndex < plan.directCommissions.length) {
+                    if (referralIndex !== -1 && plan.directCommissions && referralIndex < plan.directCommissions.length) {
                         commissionAmount = calculateAmount(plan.directCommissions[referralIndex], plan.price);
                     }
                 } else {
@@ -285,6 +307,7 @@ export const purchasePlan = async (req, res) => {
                 }
 
                 // B. Indirect Commissions (Level 2+)
+                // Only proceed if there are indirect commissions defined
                 if (plan.indirectCommissions && plan.indirectCommissions.length > 0) {
                     let currentUplineUsername = sponsor.sponsor;
                     
@@ -292,7 +315,7 @@ export const purchasePlan = async (req, res) => {
                     for (let i = 0; i < plan.indirectCommissions.length; i++) {
                         if (!currentUplineUsername) break; // No more upline
 
-                        // Find upline user (case insensitive)
+                        // FIX: Case insensitive lookup for upline user
                         const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
                         if (!uplineUser) break; // User not found
 
@@ -413,7 +436,7 @@ export const verifyAndStartResetTimer = async (req, res) => {
         });
 
         if (!user) {
-            return res.status(400).json({ success: false, error: 'Invalid or expired token.' });
+            return res.status(404).json({ success: false, error: 'Invalid or expired token.' });
         }
 
         // Token is valid, now start the 10-minute timer for the actual reset

@@ -10,6 +10,13 @@ export enum Status {
   Matching = 'Matching',
 }
 
+export interface ActivePlan {
+    planId: string;
+    planName: string;
+    price: number;
+    purchaseDate: string;
+}
+
 export interface User {
   _id: string;
   username: string;
@@ -19,7 +26,8 @@ export interface User {
   whatsapp?: string;
   country?: string;
   walletBalance: number;
-  activePlan: string;
+  activePlan: string; // Primary/Latest plan string for legacy display
+  activePlans?: ActivePlan[]; // Array of all purchased plans
   registrationDate: string;
   status: Status;
   sponsor?: string;

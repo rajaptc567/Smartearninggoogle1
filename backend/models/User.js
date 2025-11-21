@@ -44,8 +44,14 @@ const UserSchema = new mongoose.Schema({
     },
     activePlan: {
         type: String,
-        default: 'None',
+        default: 'None', // Kept for backward compatibility/quick display of latest plan
     },
+    activePlans: [{
+        planId: { type: mongoose.Schema.ObjectId, ref: 'InvestmentPlan' },
+        planName: String,
+        price: Number,
+        purchaseDate: { type: Date, default: Date.now }
+    }],
     status: {
         type: String,
         enum: ['Active', 'Blocked', 'Pending'],

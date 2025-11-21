@@ -60,7 +60,11 @@ const Referrals: React.FC = () => {
                             <p className="text-xs text-gray-500">{node.user.email}</p>
                         </div>
                         <div className="text-right">
-                           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{node.user.activePlan}</p>
+                           <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                               {node.user.activePlans && node.user.activePlans.length > 0 
+                                    ? node.user.activePlans.map(p => p.planName).join(', ') 
+                                    : 'None'}
+                           </p>
                            <p className="text-sm font-semibold text-green-600 dark:text-green-400">${getCommissionFromReferral(node.user.username).toFixed(2)}</p>
                            <Badge status={node.user.status} />
                         </div>
@@ -83,7 +87,7 @@ const Referrals: React.FC = () => {
                                     <th className="px-4 py-2">Full Name</th>
                                     <th className="px-4 py-2">Username</th>
                                     <th className="px-4 py-2">Email</th>
-                                    <th className="px-4 py-2">Active Plan</th>
+                                    <th className="px-4 py-2">Active Plans</th>
                                     <th className="px-4 py-2">Commission Earned</th>
                                     <th className="px-4 py-2">Status</th>
                                 </tr>
@@ -94,7 +98,11 @@ const Referrals: React.FC = () => {
                                         <td className="px-4 py-2 font-medium">{user.fullName}</td>
                                         <td className="px-4 py-2">@{user.username}</td>
                                         <td className="px-4 py-2">{user.email}</td>
-                                        <td className="px-4 py-2 font-medium text-blue-600 dark:text-blue-400">{user.activePlan}</td>
+                                        <td className="px-4 py-2 font-medium text-blue-600 dark:text-blue-400">
+                                            {user.activePlans && user.activePlans.length > 0 
+                                                ? user.activePlans.map(p => p.planName).join(', ') 
+                                                : 'None'}
+                                        </td>
                                         <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">${getCommissionFromReferral(user.username).toFixed(2)}</td>
                                         <td className="px-4 py-2"><Badge status={user.status} /></td>
                                     </tr>
