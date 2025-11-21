@@ -227,23 +227,30 @@ export const purchasePlan = async (req, res) => {
 
         const calculateAmount = (commissionConfig, planPrice) => {
             if (!commissionConfig) return 0;
+            const value = parseFloat(commissionConfig.value);
+            if (isNaN(value)) return 0;
+            
             if (commissionConfig.type === 'percentage') {
-                return (planPrice * commissionConfig.value) / 100;
+                return (planPrice * value) / 100;
             }
-            return commissionConfig.value; // Fixed amount
+            return value; // Fixed amount
         };
 
         if (user.sponsor) {
             // A. Direct Commission (Level 1)
-            const sponsor = await User.findOne({ username: user.sponsor });
+            const sponsor = await User.findOne({ username: { $regex: new RegExp(`^${user.sponsor}$`, 'i') } });
             
             if (sponsor && sponsor.status === 'Active') {
                 let commissionAmount = 0;
 
                 // Logic for Tiered vs Standard Direct Commission
                 if (plan.directReferralLimit > 0) {
-                    // Tiered Logic: Determine which "number" referral this user is
-                    const directReferrals = await User.find({ sponsor: sponsor.username }).sort({ registrationDate: 1 });
+                    // Tiered Logic: Determine which "number" referral this user is for the sponsor
+                    // Case insensitive lookup for direct referrals
+                    const directReferrals = await User.find({ 
+                        sponsor: { $regex: new RegExp(`^${sponsor.username}$`, 'i') } 
+                    }).sort({ registrationDate: 1 });
+                    
                     const referralIndex = directReferrals.findIndex(u => u._id.toString() === user._id.toString());
                     
                     // If the user is within the defined limit, get that specific rate
@@ -267,7 +274,7 @@ export const purchasePlan = async (req, res) => {
                         type: 'Commission',
                         amount: commissionAmount,
                         level: 1,
-                        description: `Direct Commission from ${user.username} (${plan.name})`,
+                        description: `Direct Commission From ${user.username} (${plan.name})`,
                         status: 'Approved'
                     });
 
@@ -278,7 +285,6 @@ export const purchasePlan = async (req, res) => {
                 }
 
                 // B. Indirect Commissions (Level 2+)
-                // Only proceed if there are indirect commissions defined
                 if (plan.indirectCommissions && plan.indirectCommissions.length > 0) {
                     let currentUplineUsername = sponsor.sponsor;
                     
@@ -286,7 +292,8 @@ export const purchasePlan = async (req, res) => {
                     for (let i = 0; i < plan.indirectCommissions.length; i++) {
                         if (!currentUplineUsername) break; // No more upline
 
-                        const uplineUser = await User.findOne({ username: currentUplineUsername });
+                        // Find upline user (case insensitive)
+                        const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
                         if (!uplineUser) break; // User not found
 
                         if (uplineUser.status === 'Active') {
@@ -302,7 +309,7 @@ export const purchasePlan = async (req, res) => {
                                     type: 'Commission',
                                     amount: levelCommissionAmount,
                                     level: i + 2, // i=0 is Level 2
-                                    description: `Level ${i + 2} Commission from ${user.username}`,
+                                    description: `Level ${i + 2} Commission From ${user.username} (${plan.name})`,
                                     status: 'Approved'
                                 });
 
