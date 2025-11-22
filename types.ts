@@ -8,6 +8,7 @@ export enum Status {
   Paid = 'Paid',
   Disabled = 'Disabled',
   Matching = 'Matching',
+  Paused = 'Paused',
 }
 
 export interface ActivePlan {

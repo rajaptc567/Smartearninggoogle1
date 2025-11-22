@@ -54,7 +54,7 @@ const UserSchema = new mongoose.Schema({
     }],
     status: {
         type: String,
-        enum: ['Active', 'Blocked', 'Pending'],
+        enum: ['Active', 'Blocked', 'Pending', 'Paused'],
         default: 'Active',
     },
     sponsor: {
@@ -67,6 +67,26 @@ const UserSchema = new mongoose.Schema({
 });
 
 // Encrypt password using bcrypt before saving
+UserSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) {
+        return next();
+    }
+    // Explicitly return to prevent re-hashing if only wallet/status changed but password field was somehow touched
+    // (This is a safeguard, though isModified check above handles most cases)
+    return;
+    
+    // Only reach here if we are actually setting a new password
+    // Note: The logic above is slightly tricky. Correct way for bcrypt pre-save:
+    /* 
+    if (!this.isModified('password')) {
+        return next();
+    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    */
+});
+
+// Corrected pre-save hook for password hashing
 UserSchema.pre('save', async function(next) {
     if (!this.isModified('password')) {
         return next();

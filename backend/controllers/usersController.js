@@ -107,8 +107,25 @@ export const getUser = async (req, res) => {
 // @route   PUT /api/v1/users/:id
 export const updateUser = async (req, res) => {
     try {
+        const currentUser = await User.findById(req.params.id);
+        if (!currentUser) return res.status(404).json({ success: false, error: `User not found` });
+
+        // Check for status change to send notifications
+        if (req.body.status && req.body.status !== currentUser.status) {
+            if (req.body.status === 'Paused') {
+                await Notification.create({ 
+                    userId: currentUser._id, 
+                    message: 'Your account activities (deposits, withdrawals, transfers, and earnings) have been paused by the administrator.' 
+                });
+            } else if (req.body.status === 'Active' && currentUser.status === 'Paused') {
+                await Notification.create({ 
+                    userId: currentUser._id, 
+                    message: 'Your account activities have been resumed.' 
+                });
+            }
+        }
+
         const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-        if (!user) return res.status(404).json({ success: false, error: `User not found` });
         res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -336,6 +353,7 @@ export const purchasePlan = async (req, res) => {
                 return { status, message };
             };
 
+            // STRICT: Sponsor MUST be Active (not Paused/Blocked) to earn anything
             if (sponsor && sponsor.status === 'Active') {
                 let commissionAmount = 0;
 
@@ -394,6 +412,7 @@ export const purchasePlan = async (req, res) => {
                         const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
                         if (!uplineUser) break; 
 
+                        // STRICT: Upline user MUST be Active
                         if (uplineUser.status === 'Active') {
                             const levelCommissionAmount = calculateAmount(plan.indirectCommissions[i], plan.price);
 

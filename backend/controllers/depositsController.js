@@ -37,6 +37,13 @@ export const createDeposit = async (req, res) => {
     try {
         const depositData = { ...req.body };
         
+        const user = await User.findById(depositData.userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        
+        if (user.status === 'Paused' || user.status === 'Blocked') {
+            return res.status(403).json({ success: false, error: `Account is ${user.status}. Deposits are not allowed.` });
+        }
+
         // Check P2P Matching logic BEFORE creating deposit
         if (depositData.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(depositData.matchedWithdrawalId);

@@ -39,6 +39,10 @@ export const createWithdrawal = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
+
+        if (user.status === 'Paused' || user.status === 'Blocked') {
+            return res.status(403).json({ success: false, error: `Account is ${user.status}. Withdrawals are not allowed.` });
+        }
         
         // --- FREQUENCY LIMIT CHECK ---
         const settings = await Setting.getSettings();

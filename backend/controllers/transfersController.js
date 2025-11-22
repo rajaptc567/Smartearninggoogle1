@@ -22,6 +22,11 @@ export const createTransfer = async (req, res) => {
         if (!sender || !recipient) {
             return res.status(404).json({ success: false, error: 'Sender or recipient not found.' });
         }
+
+        if (sender.status === 'Paused' || sender.status === 'Blocked') {
+            return res.status(403).json({ success: false, error: `Account is ${sender.status}. Transfers are not allowed.` });
+        }
+
         if (sender.walletBalance < amount) {
             return res.status(400).json({ success: false, error: 'Insufficient funds.' });
         }

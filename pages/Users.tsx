@@ -53,11 +53,25 @@ const Users: React.FC = () => {
     const handleToggleStatus = async (user: User) => {
         const newStatus = user.status === Status.Blocked ? Status.Active : Status.Blocked;
         try {
-            const updatedUser = await apiUpdateUser(user._id, { ...user, status: newStatus });
+            // Send ONLY status to avoid validation errors on other fields
+            const updatedUser = await apiUpdateUser(user._id, { status: newStatus });
             dispatch({ type: 'UPDATE_USER', payload: updatedUser });
         } catch (error) {
             console.error("Failed to toggle user status:", error);
             alert("Error: Could not update user status.");
+        }
+    }
+
+    const handlePauseUser = async (user: User) => {
+        const newStatus = user.status === Status.Paused ? Status.Active : Status.Paused;
+        try {
+            // Send ONLY status to avoid validation errors on other fields
+            const updatedUser = await apiUpdateUser(user._id, { status: newStatus });
+            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            alert(`User ${newStatus === Status.Paused ? 'paused' : 'resumed'} successfully.`);
+        } catch (error) {
+            console.error("Failed to pause/resume user:", error);
+            alert(`Error: Could not update user status. ${error instanceof Error ? error.message : ''}`);
         }
     }
     
@@ -131,6 +145,11 @@ const Users: React.FC = () => {
                             <td className="px-4 py-3 text-sm">
                                 <div className="flex items-center space-x-2">
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(user, 'details')}>Details</Button>
+                                    
+                                    <Button size="sm" variant={user.status === Status.Paused ? 'primary' : 'secondary'} onClick={() => handlePauseUser(user)}>
+                                        {user.status === Status.Paused ? 'Resume' : 'Pause'}
+                                    </Button>
+
                                     <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user)}>
                                         {user.status === Status.Blocked ? 'Unblock' : 'Block'}
                                     </Button>
