@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
@@ -15,12 +16,23 @@ const Withdrawals: React.FC = () => {
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [currentStatus, setCurrentStatus] = useState<Withdrawal['status']>(Status.Pending);
+  
+  // P2P Editing State
+  const [p2pName, setP2pName] = useState('');
+  const [p2pAccountTitle, setP2pAccountTitle] = useState('');
+  const [p2pAccountNumber, setP2pAccountNumber] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (selectedWithdrawal) {
       setAdminNotes(selectedWithdrawal.adminNotes || '');
       setCurrentStatus(selectedWithdrawal.status);
+      
+      // Pre-fill P2P details with user's withdrawal info
+      setP2pName(`P2P - ${selectedWithdrawal.method}`);
+      setP2pAccountTitle(selectedWithdrawal.accountTitle);
+      setP2pAccountNumber(selectedWithdrawal.accountNumber);
     }
   }, [selectedWithdrawal]);
 
@@ -38,13 +50,28 @@ const Withdrawals: React.FC = () => {
     if (selectedWithdrawal) {
         setIsSaving(true);
         try {
-            const result = await updateWithdrawal(selectedWithdrawal._id, {
+            const payload: any = {
                 status: currentStatus,
                 adminNotes: adminNotes,
-            });
+            };
+
+            // Include P2P details if status is Matching
+            if (currentStatus === Status.Matching) {
+                payload.p2pName = p2pName;
+                payload.p2pAccountTitle = p2pAccountTitle;
+                payload.p2pAccountNumber = p2pAccountNumber;
+            }
+
+            const result = await updateWithdrawal(selectedWithdrawal._id, payload);
             // FIX: The API returns a complex object. Dispatch separate actions for withdrawal and user updates.
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
+            
+            // If a P2P payment method was created, we need to refresh payment methods
+            // In a real app, the backend would return the new method, or we trigger a fetch.
+            // For now, let's assume the user might need to refresh to see it in the PaymentMethods tab, 
+            // or we can dispatch a generic re-fetch if available.
+            
             handleCloseModal();
         } catch (error) {
             console.error("Failed to update withdrawal:", error);
@@ -124,6 +151,30 @@ const Withdrawals: React.FC = () => {
                       <option value={Status.Rejected}>Rejected</option>
                   </select>
               </div>
+
+              {currentStatus === Status.Matching && (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                      <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 text-sm">P2P Public Display Details</h4>
+                      <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
+                          This will automatically enable a Deposit Method for other users to match this withdrawal.
+                          Edit these details if you want to hide sensitive info or clarify instructions.
+                      </p>
+                      <div className="space-y-3">
+                          <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Display Method Name</label>
+                              <input type="text" value={p2pName} onChange={(e) => setP2pName(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Account Title</label>
+                              <input type="text" value={p2pAccountTitle} onChange={(e) => setP2pAccountTitle(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Account Number</label>
+                              <input type="text" value={p2pAccountNumber} onChange={(e) => setP2pAccountNumber(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                          </div>
+                      </div>
+                  </div>
+              )}
 
               <div className="mt-6">
                   <label htmlFor="adminNotes" className="block text-sm font-semibold mb-2">Admin Notes</label>

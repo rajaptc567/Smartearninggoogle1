@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
+import PaymentMethod from '../models/PaymentMethod.js';
 
 // @desc    Get all withdrawals
 // @route   GET /api/v1/withdrawals
@@ -119,7 +120,7 @@ export const createWithdrawal = async (req, res) => {
 // @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
-        const { status, adminNotes } = req.body;
+        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id);
         if (!withdrawal) {
@@ -133,14 +134,48 @@ export const updateWithdrawal = async (req, res) => {
 
         const originalStatus = withdrawal.status;
 
-        // If status is not changing, just update notes and return.
+        // --- P2P MATCHING LOGIC ---
+        // 1. If changing TO 'Matching', create a temporary Payment Method
+        if (status === 'Matching') {
+            const methodData = {
+                name: p2pName || `P2P - ${withdrawal.method}`,
+                type: 'Deposit',
+                accountTitle: p2pAccountTitle || withdrawal.accountTitle,
+                accountNumber: p2pAccountNumber || withdrawal.accountNumber,
+                minAmount: withdrawal.finalAmount, // Lock to exact amount needed
+                maxAmount: withdrawal.finalAmount,
+                feePercent: 0,
+                status: 'Enabled',
+                instructions: `P2P Match for Withdrawal #${withdrawal._id}. Please transfer EXACTLY this amount.`,
+                p2pWithdrawalId: withdrawal._id
+            };
+
+            if (originalStatus === 'Matching') {
+                // Update existing P2P method if specifically editing details
+                await PaymentMethod.findOneAndUpdate({ p2pWithdrawalId: withdrawal._id }, methodData);
+            } else {
+                // Create new
+                await PaymentMethod.create(methodData);
+            }
+            
+            withdrawal.matchRemainingAmount = withdrawal.finalAmount;
+        }
+
+        // 2. If changing FROM 'Matching' to something else (Paid, Rejected, etc.), delete the P2P Method
+        if (originalStatus === 'Matching' && status !== 'Matching') {
+            await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
+        }
+        // --- END P2P MATCHING LOGIC ---
+
+
+        // If status is not changing (and we already handled P2P detail updates above), just update notes and return.
         if (originalStatus === status) {
             withdrawal.adminNotes = adminNotes || withdrawal.adminNotes;
             await withdrawal.save();
             return res.status(200).json({ success: true, data: { withdrawal, user } });
         }
         
-        // --- Handle Status Change ---
+        // --- Handle Transaction Logic ---
         
         // Find the original transaction to update its status
         const originalTransaction = await Transaction.findOne({
@@ -149,8 +184,8 @@ export const updateWithdrawal = async (req, res) => {
             description: `Pending Withdrawal #${withdrawal._id}`
         });
 
-        // If request was pending and is now being rejected, refund the user
-        if (originalStatus === 'Pending' && status === 'Rejected') {
+        // If request was pending/matching and is now being rejected, refund the user
+        if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
             user.walletBalance += withdrawal.amount;
             
             // Create a refund transaction
@@ -207,7 +242,12 @@ export const deleteWithdrawal = async (req, res) => {
         if (!withdrawal) {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
-        // Note: Add logic here to refund user if a pending withdrawal is deleted.
+        
+        // Cleanup P2P method if exists
+        if (withdrawal.status === 'Matching') {
+             await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
+        }
+
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

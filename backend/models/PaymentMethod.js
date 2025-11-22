@@ -43,6 +43,10 @@ const PaymentMethodSchema = new mongoose.Schema({
     logoUrl: {
         type: String,
     },
+    p2pWithdrawalId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Withdrawal', // Link to the withdrawal if this is a P2P method
+    }
 }, {
     timestamps: true
 });

@@ -89,6 +89,7 @@ export interface PaymentMethod {
     feePercent: number;
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
+    p2pWithdrawalId?: string; // Optional ID linking to a withdrawal
 }
 
 // New types for InvestmentPlan
