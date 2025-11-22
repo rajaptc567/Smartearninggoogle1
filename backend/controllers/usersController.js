@@ -256,16 +256,15 @@ export const purchasePlan = async (req, res) => {
             status: 'Pending',
         };
 
-        // If 'Require Active Plan' is enabled, simply having *any* plan (which we just bought) releases all general pending commissions
-        // UNLESS 'Require Plan Match' is stricter.
+        // STRICT PLAN MATCHING RULE
+        // If enabled, buying Plan X ONLY releases commissions held for Plan X.
         if (settings.requirePlanMatchForCommission) {
-            // Strictest rule: Only release commissions tied to THIS plan
             releasedCommissionsQuery.relatedPlanId = plan._id;
         } else if (settings.requireActivePlanForCommission) {
-            // General rule: Release all pending commissions because user is now "Active"
-            // We don't restrict by relatedPlanId here.
+            // General active rule: Release ALL pending commissions because user is now "Active" with at least one plan
+            // No relatedPlanId filter applied
         } else {
-            // If neither setting is on, we default to releasing specific plan commissions just in case they were held previously
+            // Fallback: default behavior releases related plan commissions to be safe
             releasedCommissionsQuery.relatedPlanId = plan._id;
         }
 
@@ -278,14 +277,14 @@ export const purchasePlan = async (req, res) => {
                 await comm.save();
                 totalReleased += comm.amount;
             }
-            // Re-fetch user to ensure atomic balance update (or just add to memory object if using transactions)
-            // For simplicity here, we modify the in-memory user object and save again
+            
+            // Re-add released amount to wallet
             user.walletBalance += totalReleased;
             await user.save(); 
             
             await Notification.create({
                 userId: user._id,
-                message: `Congratulations! Your earnings of $${totalReleased.toFixed(2)} have been released.`
+                message: `Congratulations! Purchasing ${plan.name} has unlocked $${totalReleased.toFixed(2)} in previously held commissions.`
             });
         }
 
@@ -311,19 +310,20 @@ export const purchasePlan = async (req, res) => {
                 let status = 'Approved';
                 let message = '';
 
-                const hasAnyPlan = uplineUser.activePlans && uplineUser.activePlans.length > 0;
-                const hasSamePlan = uplineUser.activePlans && uplineUser.activePlans.some(p => p.planId.toString() === purchasePlanId.toString());
-
-                // 1. Check Strict Match Rule
+                const activePlans = uplineUser.activePlans || [];
+                const hasAnyPlan = activePlans.length > 0;
+                
+                // Check Strict Match Rule: Sponsor must have the SAME plan
                 if (settings.requirePlanMatchForCommission) {
+                    const hasSamePlan = activePlans.some(p => p.planId.toString() === purchasePlanId.toString());
                     if (!hasSamePlan) {
                         return { 
                             status: 'Pending', 
-                            message: `Commission Held! Upgrade to the ${plan.name} plan to receive your commission from ${user.username}.`
+                            message: `Commission Held! Purchase the ${plan.name} plan to start earning commissions from your referrals.`
                         };
                     }
                 }
-                // 2. Check General Active Rule (Only if Strict Match didn't already fail/apply)
+                // Check General Active Rule: Sponsor must have ANY plan
                 else if (settings.requireActivePlanForCommission) {
                     if (!hasAnyPlan) {
                         return { 

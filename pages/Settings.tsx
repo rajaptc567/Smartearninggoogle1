@@ -107,8 +107,8 @@ const Settings: React.FC = () => {
                 onChange={handleCheckboxChange}
               />
               <label htmlFor="requirePlanMatchForCommission" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-                  <strong>Strict Plan Matching:</strong> Sponsor must own the <u>same specific plan</u> the referral is purchasing.
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Overrides "Any Active Plan". If referral upgrades, sponsor needs that upgrade too.</p>
+                  <strong>Strict Plan Matching:</strong> Sponsor must own the <u>exact same plan</u> the referral is purchasing.
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Overrides "Any Active Plan". Commissions are isolated per plan. Purchasing Plan X only releases commissions for Plan X.</p>
               </label>
             </div>
         </div>
