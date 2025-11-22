@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentMethod, Status, Withdrawal } from '../../types';
 import Button from '../../components/ui/Button';
@@ -6,7 +7,7 @@ import { createWithdrawal } from '../../services/api';
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { currentUser, paymentMethods, investmentPlans, settings: { restrictWithdrawalAmount } } = state;
+    const { currentUser, paymentMethods, withdrawals, settings: { restrictWithdrawalAmount, withdrawalFrequency } } = state;
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
@@ -15,21 +16,64 @@ const WithdrawFunds: React.FC = () => {
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
 
     const withdrawalMethods = useMemo(() =>
         paymentMethods.filter(method => method.type === 'Withdrawal' && method.status === 'Enabled'),
         [paymentMethods]
     );
     
-    const activePlanPrices = useMemo(() => 
-        [...new Set(investmentPlans.filter(p => p.status === Status.Active).map(p => p.price))]
-        .sort((a: number, b: number) => a - b), 
-    [investmentPlans]);
+    // FILTER: Use the CURRENT USER'S active plans if restriction is enabled
+    const userActivePlanPrices = useMemo(() => {
+        if (!currentUser?.activePlans) return [];
+        return [...new Set(currentUser.activePlans.map(p => p.price))]
+            .sort((a: number, b: number) => a - b);
+    }, [currentUser]);
 
     const selectedMethod: PaymentMethod | undefined = useMemo(() =>
         withdrawalMethods.find(method => method._id.toString() === selectedMethodId),
         [selectedMethodId, withdrawalMethods]
     );
+
+    // CHECK FREQUENCY: Calculate if user is allowed to withdraw right now
+    useEffect(() => {
+        if (currentUser && withdrawalFrequency?.enabled) {
+            // Filter withdrawals for this user, find the latest one
+            const myLastWithdrawal = withdrawals
+                .filter(w => w.userId === currentUser._id)
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+            if (myLastWithdrawal) {
+                const lastDate = new Date(myLastWithdrawal.date).getTime();
+                const now = Date.now();
+                let durationMs = 0;
+                const { value, unit } = withdrawalFrequency;
+
+                switch (unit) {
+                    case 'hours': durationMs = value * 60 * 60 * 1000; break;
+                    case 'days': durationMs = value * 24 * 60 * 60 * 1000; break;
+                    case 'weeks': durationMs = value * 7 * 24 * 60 * 60 * 1000; break;
+                    case 'months': durationMs = value * 30 * 24 * 60 * 60 * 1000; break;
+                }
+
+                const nextAllowedTime = lastDate + durationMs;
+                
+                if (now < nextAllowedTime) {
+                    const remainingMs = nextAllowedTime - now;
+                    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    setCooldownMessage(`Withdrawals are limited to one every ${value} ${unit}. You can request again in ${days}d ${hours}h ${minutes}m.`);
+                } else {
+                    setCooldownMessage(null);
+                }
+            }
+        } else {
+            setCooldownMessage(null);
+        }
+    }, [currentUser, withdrawals, withdrawalFrequency]);
+
 
     const [fee, setFee] = useState(0);
     const [finalAmount, setFinalAmount] = useState(0);
@@ -59,6 +103,9 @@ const WithdrawFunds: React.FC = () => {
         }
         if (numericAmount < selectedMethod.minAmount || numericAmount > selectedMethod.maxAmount) {
             return alert(`Amount must be between $${selectedMethod.minAmount} and $${selectedMethod.maxAmount}.`);
+        }
+        if (cooldownMessage) {
+            return alert("You are currently restricted from withdrawing. Please wait for the cooldown period to end.");
         }
         
         setIsSubmitting(true);
@@ -114,7 +161,17 @@ const WithdrawFunds: React.FC = () => {
 
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Request Withdrawal</h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {cooldownMessage && (
+                <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
+                    <p className="font-bold flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Withdrawal Cooldown Active
+                    </p>
+                    <p className="mt-1">{cooldownMessage}</p>
+                </div>
+            )}
+
+            <form onSubmit={handleSubmit} className={`space-y-4 ${cooldownMessage ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div>
                     <label htmlFor="withdrawMethod" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Withdrawal Method</label>
                     <select id="withdrawMethod" value={selectedMethodId} onChange={(e) => setSelectedMethodId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
@@ -130,10 +187,13 @@ const WithdrawFunds: React.FC = () => {
                          <div>
                             <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Withdraw</label>
                             {restrictWithdrawalAmount ? (
-                                <select id="amount" value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
-                                    <option value="">-- Select amount --</option>
-                                    {activePlanPrices.map(price => <option key={price} value={price}>${price.toFixed(2)}</option>)}
-                                </select>
+                                <>
+                                    <select id="amount" value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
+                                        <option value="">-- Select plan amount --</option>
+                                        {userActivePlanPrices.map(price => <option key={price} value={price}>${price.toFixed(2)}</option>)}
+                                    </select>
+                                    {userActivePlanPrices.length === 0 && <p className="text-xs text-red-500 mt-1">You do not have any active plans to withdraw from.</p>}
+                                </>
                             ) : (
                                 <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${selectedMethod.minAmount}, Max ${selectedMethod.maxAmount}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
                             )}
@@ -168,7 +228,7 @@ const WithdrawFunds: React.FC = () => {
                 )}
                  {selectedMethod && (
                     <div className="pt-4 flex justify-end">
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}</Button>
+                        <Button type="submit" disabled={isSubmitting || !!cooldownMessage}>{isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}</Button>
                     </div>
                  )}
             </form>

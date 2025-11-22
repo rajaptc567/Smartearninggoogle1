@@ -17,6 +17,15 @@ const SettingSchema = new mongoose.Schema({
     requireActivePlanForCommission: {
         type: Boolean,
         default: false,
+    },
+    withdrawalFrequency: {
+        enabled: { type: Boolean, default: false },
+        value: { type: Number, default: 1 },
+        unit: { 
+            type: String, 
+            enum: ['hours', 'days', 'weeks', 'months'],
+            default: 'days'
+        }
     }
 }, {
     // Use a capped collection of size 1 to ensure only one settings document exists
@@ -32,6 +41,11 @@ SettingSchema.statics.getSettings = async function() {
             restrictWithdrawalAmount: false,
             requirePlanMatchForCommission: false,
             requireActivePlanForCommission: false,
+            withdrawalFrequency: {
+                enabled: false,
+                value: 1,
+                unit: 'days'
+            }
         });
     }
     return settings;

@@ -18,8 +18,28 @@ const Settings: React.FC = () => {
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
-    setLocalSettings(prev => ({ ...prev, [name]: checked }));
+    if (name.startsWith('withdrawalFrequency.')) {
+        const field = name.split('.')[1];
+        setLocalSettings(prev => ({
+            ...prev,
+            withdrawalFrequency: { ...prev.withdrawalFrequency, [field]: checked }
+        }));
+    } else {
+        setLocalSettings(prev => ({ ...prev, [name]: checked }));
+    }
   };
+
+  const handleFrequencyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      const field = name.split('.')[1];
+      setLocalSettings(prev => ({
+          ...prev,
+          withdrawalFrequency: { 
+              ...prev.withdrawalFrequency, 
+              [field]: field === 'value' ? parseFloat(value) : value 
+          }
+      }));
+  }
   
   const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -37,7 +57,7 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md max-w-2xl mx-auto">
+    <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md max-w-3xl mx-auto">
       <h2 className="text-xl font-semibold mb-6 text-gray-800 dark:text-white">General Settings</h2>
       <form onSubmit={handleSave} className="space-y-6">
         <div className="space-y-4 border-b dark:border-gray-700 pb-6">
@@ -74,8 +94,55 @@ const Settings: React.FC = () => {
                 checked={localSettings.restrictWithdrawalAmount}
                 onChange={handleCheckboxChange}
               />
-              <label htmlFor="restrictWithdrawalAmount" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">Restrict withdrawal amounts to active plan prices (for P2P)</label>
+              <label htmlFor="restrictWithdrawalAmount" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">Restrict withdrawal amounts to <strong>User's Active Plan</strong> prices</label>
             </div>
+        </div>
+
+        <div className="space-y-4 border-b dark:border-gray-700 pb-6">
+            <h3 className="text-lg font-medium">Withdrawal Frequency Limit</h3>
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md text-sm text-yellow-800 dark:text-yellow-200 mb-2">
+                Set how often users can request withdrawals. Users will see a countdown if they try to withdraw too soon.
+            </div>
+            <div className="flex items-center mb-2">
+                <input 
+                    id="withdrawalFrequency.enabled"
+                    name="withdrawalFrequency.enabled"
+                    type="checkbox" 
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={localSettings.withdrawalFrequency?.enabled}
+                    onChange={handleCheckboxChange}
+                />
+                <label htmlFor="withdrawalFrequency.enabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-300 font-medium">Enable Frequency Restriction</label>
+            </div>
+            
+            {localSettings.withdrawalFrequency?.enabled && (
+                <div className="flex items-end gap-4 ml-6">
+                    <div>
+                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Allow 1 withdrawal every:</label>
+                        <input 
+                            type="number" 
+                            min="1"
+                            name="withdrawalFrequency.value"
+                            value={localSettings.withdrawalFrequency.value}
+                            onChange={handleFrequencyChange}
+                            className="w-24 rounded-md dark:bg-gray-700 dark:border-gray-600"
+                        />
+                    </div>
+                    <div>
+                        <select 
+                            name="withdrawalFrequency.unit"
+                            value={localSettings.withdrawalFrequency.unit}
+                            onChange={handleFrequencyChange}
+                            className="rounded-md dark:bg-gray-700 dark:border-gray-600"
+                        >
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                            <option value="weeks">Weeks</option>
+                            <option value="months">Months</option>
+                        </select>
+                    </div>
+                </div>
+            )}
         </div>
 
         <div className="space-y-4">

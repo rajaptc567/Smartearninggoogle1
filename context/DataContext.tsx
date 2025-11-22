@@ -1,3 +1,4 @@
+
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest } from '../types';
 import { 
@@ -35,6 +36,11 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,
+        withdrawalFrequency: {
+            enabled: false,
+            value: 1,
+            unit: 'days'
+        }
     },
     notifications: [],
     logs: [],

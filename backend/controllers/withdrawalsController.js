@@ -1,7 +1,9 @@
+
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
+import Setting from '../models/Setting.js';
 
 // @desc    Get all withdrawals
 // @route   GET /api/v1/withdrawals
@@ -36,6 +38,51 @@ export const createWithdrawal = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
+        
+        // --- FREQUENCY LIMIT CHECK ---
+        const settings = await Setting.getSettings();
+        if (settings.withdrawalFrequency && settings.withdrawalFrequency.enabled) {
+            const { value, unit } = settings.withdrawalFrequency;
+            
+            // Find the latest withdrawal for this user
+            const lastWithdrawal = await Withdrawal.findOne({ userId: user._id }).sort({ date: -1 });
+            
+            if (lastWithdrawal) {
+                const lastDate = new Date(lastWithdrawal.date).getTime();
+                const now = Date.now();
+                let durationMs = 0;
+
+                switch (unit) {
+                    case 'hours': durationMs = value * 60 * 60 * 1000; break;
+                    case 'days': durationMs = value * 24 * 60 * 60 * 1000; break;
+                    case 'weeks': durationMs = value * 7 * 24 * 60 * 60 * 1000; break;
+                    case 'months': durationMs = value * 30 * 24 * 60 * 60 * 1000; break; // Approx
+                }
+
+                const nextAllowedTime = lastDate + durationMs;
+                
+                if (now < nextAllowedTime) {
+                    const remainingMs = nextAllowedTime - now;
+                    
+                    // Format remaining time
+                    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    let timeString = '';
+                    if (days > 0) timeString += `${days} days, `;
+                    if (hours > 0) timeString += `${hours} hours, `;
+                    timeString += `${minutes} minutes`;
+
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: `Withdrawal frequency limit reached. You can make your next withdrawal in: ${timeString}.`
+                    });
+                }
+            }
+        }
+        // --- END FREQUENCY CHECK ---
+
         if (user.walletBalance < req.body.amount) {
             return res.status(400).json({ success: false, error: 'Insufficient balance' });
         }

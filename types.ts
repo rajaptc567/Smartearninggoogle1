@@ -152,9 +152,14 @@ export interface Rule {
 
 export interface Settings {
     isUserTransferEnabled: boolean;
-    restrictWithdrawalAmount: boolean;
-    requirePlanMatchForCommission: boolean; // New: User must have same plan to get commission
-    requireActivePlanForCommission: boolean; // New: User must have ANY active plan to get commission
+    restrictWithdrawalAmount: boolean; // Restrict to own active plan prices
+    requirePlanMatchForCommission: boolean; 
+    requireActivePlanForCommission: boolean;
+    withdrawalFrequency: {
+        enabled: boolean;
+        value: number;
+        unit: 'hours' | 'days' | 'weeks' | 'months';
+    };
 }
 
 export interface Notification {
