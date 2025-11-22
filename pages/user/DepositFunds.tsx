@@ -12,6 +12,7 @@ const DepositFunds: React.FC = () => {
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [transactionId, setTransactionId] = useState('');
+    const [senderAccountTitle, setSenderAccountTitle] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,8 +55,8 @@ const DepositFunds: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedMethod || !amount || !transactionId || !receipt || !currentUser) {
-            alert('Please fill all fields and upload a receipt.');
+        if (!selectedMethod || !amount || !transactionId || !senderAccountTitle || !receipt || !currentUser) {
+            alert('Please fill all required fields and upload a receipt.');
             return;
         }
         
@@ -66,6 +67,7 @@ const DepositFunds: React.FC = () => {
         formData.append('method', selectedMethod.name);
         formData.append('amount', amount);
         formData.append('transactionId', transactionId);
+        formData.append('senderAccountTitle', senderAccountTitle);
         formData.append('receipt', receipt);
         if(userNotes) formData.append('userNotes', userNotes);
         
@@ -201,6 +203,19 @@ const DepositFunds: React.FC = () => {
                         <div className="space-y-5">
                             <h3 className="text-lg font-bold text-gray-800 dark:text-white">Confirm Deposit</h3>
                             
+                            <div>
+                                <label htmlFor="senderAccountTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Account Title</label>
+                                <input 
+                                    type="text" 
+                                    id="senderAccountTitle" 
+                                    value={senderAccountTitle} 
+                                    onChange={(e) => setSenderAccountTitle(e.target.value)} 
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                                    placeholder="Name on your bank account / wallet"
+                                    required 
+                                />
+                            </div>
+
                             <div>
                                 <label htmlFor="transactionId" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Transaction ID / Reference</label>
                                 <input 

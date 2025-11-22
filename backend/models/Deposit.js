@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const DepositSchema = new mongoose.Schema({
@@ -21,6 +22,10 @@ const DepositSchema = new mongoose.Schema({
     transactionId: {
         type: String,
         required: true,
+    },
+    senderAccountTitle: {
+        type: String,
+        // Not strictly required for backward compatibility, but effectively required by frontend
     },
     receiptUrl: {
         type: String,

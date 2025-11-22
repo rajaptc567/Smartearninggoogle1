@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Deposit, Status } from '../types';
 import Table from '../components/ui/Table';
@@ -130,6 +131,7 @@ const Deposits: React.FC = () => {
                             <div><span className="font-semibold">Method:</span> {selectedDeposit.method}</div>
                             <div><span className="font-semibold">Date:</span> {new Date(selectedDeposit.date).toLocaleString()}</div>
                             <div className="md:col-span-2"><span className="font-semibold">Transaction ID:</span> <span className="font-mono">{selectedDeposit.transactionId}</span></div>
+                            <div className="md:col-span-2"><span className="font-semibold">Sender Account:</span> {selectedDeposit.senderAccountTitle || 'N/A'}</div>
                         </div>
 
                          {selectedDeposit.userNotes && (

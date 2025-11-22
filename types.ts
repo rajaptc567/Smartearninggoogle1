@@ -40,6 +40,7 @@ export interface Deposit {
   method: string;
   amount: number;
   transactionId: string;
+  senderAccountTitle?: string; // Name on the sender's account
   receiptUrl?: string;
   status: Status.Pending | Status.Approved | Status.Rejected;
   date: string;
