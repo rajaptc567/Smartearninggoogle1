@@ -47,6 +47,7 @@ type Action =
     | { type: 'SET_USERS'; payload: User[] }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
+    | { type: 'DELETE_USER'; payload: string }
     | { type: 'SET_DEPOSITS'; payload: Deposit[] }
     | { type: 'ADD_DEPOSIT'; payload: Deposit }
     | { type: 'UPDATE_DEPOSIT'; payload: Deposit }
@@ -111,6 +112,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             }
             return { ...state, users: updatedUsers, currentUser: updatedCurrentUser };
         }
+        case 'DELETE_USER': return { ...state, users: state.users.filter(u => u._id !== action.payload) };
 
         // DEPOSITS
         case 'SET_DEPOSITS': return { ...state, deposits: action.payload };
