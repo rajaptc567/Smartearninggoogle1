@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const WithdrawalSchema = new mongoose.Schema({
@@ -48,6 +49,10 @@ const WithdrawalSchema = new mongoose.Schema({
     matchRemainingAmount: {
         type: Number,
     },
+    matchedDepositIds: [{
+        type: mongoose.Schema.ObjectId,
+        ref: 'Deposit'
+    }]
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

@@ -11,6 +11,7 @@ const DepositFunds: React.FC = () => {
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
+    const [isCustomAmount, setIsCustomAmount] = useState(false);
     const [transactionId, setTransactionId] = useState('');
     const [senderAccountTitle, setSenderAccountTitle] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
@@ -109,25 +110,61 @@ const DepositFunds: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-8">
                 {/* STEP 1: SELECT AMOUNT */}
                 <div>
-                    <label htmlFor="amount" className="block text-lg font-medium text-gray-800 dark:text-white mb-2">1. Select Amount</label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 sm:text-sm">$</span>
-                        </div>
-                        <select
-                            id="amount"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="block w-full pl-7 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
+                    <div className="flex justify-between items-end mb-2">
+                        <label htmlFor="amount" className="block text-lg font-medium text-gray-800 dark:text-white">1. Select Amount</label>
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                setIsCustomAmount(!isCustomAmount);
+                                setAmount('');
+                                setSelectedMethodId('');
+                            }}
+                            className="text-xs text-blue-600 hover:underline"
                         >
-                            <option value="">-- Select Amount --</option>
-                            {planPrices.map(price => (
-                                <option key={price} value={price}>{price.toFixed(2)}</option>
-                            ))}
-                        </select>
+                            {isCustomAmount ? 'Select from Plan Prices' : 'Enter Custom Amount'}
+                        </button>
                     </div>
-                    {planPrices.length === 0 && (
+                    
+                    <div className="relative">
+                        {isCustomAmount ? (
+                            <>
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <span className="text-gray-500 sm:text-sm">$</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    id="amount"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="Enter exact amount..."
+                                    className="block w-full pl-7 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    required
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <span className="text-gray-500 sm:text-sm">$</span>
+                                </div>
+                                <select
+                                    id="amount"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    className="block w-full pl-7 pr-10 py-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    required
+                                >
+                                    <option value="">-- Select Amount --</option>
+                                    {planPrices.map(price => (
+                                        <option key={price} value={price}>{price.toFixed(2)}</option>
+                                    ))}
+                                </select>
+                            </>
+                        )}
+                    </div>
+                    {isCustomAmount && (
+                        <p className="text-xs text-gray-500 mt-1">Use custom amount for matching specific peer-to-peer requests or partial deposits.</p>
+                    )}
+                    {!isCustomAmount && planPrices.length === 0 && (
                         <p className="text-xs text-red-500 mt-1">No active investment plans found.</p>
                     )}
                 </div>

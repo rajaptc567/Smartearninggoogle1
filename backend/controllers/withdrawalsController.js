@@ -137,28 +137,31 @@ export const updateWithdrawal = async (req, res) => {
         // --- P2P MATCHING LOGIC ---
         // 1. If changing TO 'Matching', create a temporary Payment Method
         if (status === 'Matching') {
+            // Initialize remaining amount if not set or if resetting logic
+            const remainingAmount = withdrawal.matchRemainingAmount || withdrawal.finalAmount;
+
             const methodData = {
                 name: p2pName || `P2P - ${withdrawal.method}`,
                 type: 'Deposit',
                 accountTitle: p2pAccountTitle || withdrawal.accountTitle,
                 accountNumber: p2pAccountNumber || withdrawal.accountNumber,
-                minAmount: withdrawal.finalAmount, // Lock to exact amount needed
-                maxAmount: withdrawal.finalAmount,
+                minAmount: 1, // Allow partial deposits
+                maxAmount: remainingAmount, // Cap at exact remaining amount
                 feePercent: 0,
                 status: 'Enabled',
-                instructions: p2pInstructions || '', // Use provided instructions or empty. Removed auto-generated ID text.
+                instructions: p2pInstructions || '', 
                 p2pWithdrawalId: withdrawal._id
             };
 
             if (originalStatus === 'Matching') {
-                // Update existing P2P method if specifically editing details
+                // Update existing P2P method
                 await PaymentMethod.findOneAndUpdate({ p2pWithdrawalId: withdrawal._id }, methodData);
             } else {
                 // Create new
                 await PaymentMethod.create(methodData);
+                // Initial set of remaining amount
+                withdrawal.matchRemainingAmount = withdrawal.finalAmount;
             }
-            
-            withdrawal.matchRemainingAmount = withdrawal.finalAmount;
         }
 
         // 2. If changing FROM 'Matching' to something else (Paid, Rejected, etc.), delete the P2P Method
