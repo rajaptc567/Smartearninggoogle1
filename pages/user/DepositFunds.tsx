@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Deposit, PaymentMethod, Status, Withdrawal } from '../../types';
 import Button from '../../components/ui/Button';
@@ -29,34 +30,33 @@ const DepositFunds: React.FC = () => {
 
     useEffect(() => {
       const numericAmount = parseFloat(amount);
-      if (selectedMethod && !isNaN(numericAmount) && numericAmount > 0) {
-        // Find the oldest matching withdrawal
-        const match = withdrawals
-          .filter(w => 
-            w.status === Status.Matching && 
-            w.method === selectedMethod.name && 
-            (w.matchRemainingAmount || 0) >= numericAmount
-          )
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+      if (selectedMethod) {
+        let match = null;
         
-        setMatchedWithdrawal(match || null);
+        // 1. Prefer explicit link via p2pWithdrawalId
+        if (selectedMethod.p2pWithdrawalId) {
+            match = withdrawals.find(w => w._id === selectedMethod.p2pWithdrawalId) || null;
+        } 
+        // 2. Fallback to dynamic matching if no explicit ID (legacy support)
+        else if (!isNaN(numericAmount) && numericAmount > 0) {
+            match = withdrawals
+              .filter(w => 
+                w.status === Status.Matching && 
+                w.method === selectedMethod.name && 
+                (w.matchRemainingAmount || 0) >= numericAmount
+              )
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] || null;
+        }
+        
+        setMatchedWithdrawal(match);
       } else {
         setMatchedWithdrawal(null);
       }
     }, [amount, selectedMethod, withdrawals]);
 
-    const paymentDetails = useMemo(() => {
-        if (matchedWithdrawal && selectedMethod) {
-            return {
-                ...selectedMethod,
-                name: selectedMethod.name,
-                accountTitle: matchedWithdrawal.accountTitle,
-                accountNumber: matchedWithdrawal.accountNumber,
-                instructions: `This is a P2P payment. Send funds directly to the user account shown. Your deposit will be approved once the user confirms receipt.`,
-            };
-        }
-        return selectedMethod;
-    }, [selectedMethod, matchedWithdrawal]);
+    // Only show what is configured in the Payment Method (which reflects Admin Edits for P2P)
+    // Do not override with "Instructions..." text generated here.
+    const paymentDetails = selectedMethod;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -133,7 +133,7 @@ const DepositFunds: React.FC = () => {
                                 <p><span className="font-medium text-gray-700 dark:text-gray-200">Account Number:</span> {paymentDetails?.accountNumber}</p>
                                 <div className="pt-2">
                                     <p className="font-medium text-gray-700 dark:text-gray-200">Instructions:</p>
-                                    <p className="text-xs italic">{paymentDetails?.instructions}</p>
+                                    <p className="text-xs italic whitespace-pre-wrap">{paymentDetails?.instructions || 'No specific instructions.'}</p>
                                 </div>
                             </div>
                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">Limits: ${selectedMethod.minAmount} - ${selectedMethod.maxAmount}</p>

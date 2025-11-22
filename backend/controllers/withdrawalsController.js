@@ -120,7 +120,7 @@ export const createWithdrawal = async (req, res) => {
 // @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
-        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber } = req.body;
+        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id);
         if (!withdrawal) {
@@ -146,7 +146,7 @@ export const updateWithdrawal = async (req, res) => {
                 maxAmount: withdrawal.finalAmount,
                 feePercent: 0,
                 status: 'Enabled',
-                instructions: `P2P Match for Withdrawal #${withdrawal._id}. Please transfer EXACTLY this amount.`,
+                instructions: p2pInstructions || '', // Use provided instructions or empty. Removed auto-generated ID text.
                 p2pWithdrawalId: withdrawal._id
             };
 

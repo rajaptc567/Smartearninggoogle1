@@ -10,7 +10,7 @@ import { updateWithdrawal } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
-  const { withdrawals } = state;
+  const { withdrawals, paymentMethods } = state;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
@@ -21,6 +21,7 @@ const Withdrawals: React.FC = () => {
   const [p2pName, setP2pName] = useState('');
   const [p2pAccountTitle, setP2pAccountTitle] = useState('');
   const [p2pAccountNumber, setP2pAccountNumber] = useState('');
+  const [p2pInstructions, setP2pInstructions] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -29,12 +30,24 @@ const Withdrawals: React.FC = () => {
       setAdminNotes(selectedWithdrawal.adminNotes || '');
       setCurrentStatus(selectedWithdrawal.status);
       
-      // Pre-fill P2P details with user's withdrawal info
-      setP2pName(`P2P - ${selectedWithdrawal.method}`);
-      setP2pAccountTitle(selectedWithdrawal.accountTitle);
-      setP2pAccountNumber(selectedWithdrawal.accountNumber);
+      // Pre-fill P2P details
+      // Check if there is already a P2P payment method associated with this withdrawal
+      const existingMethod = paymentMethods.find(pm => pm.p2pWithdrawalId === selectedWithdrawal._id);
+
+      if (existingMethod) {
+          setP2pName(existingMethod.name);
+          setP2pAccountTitle(existingMethod.accountTitle);
+          setP2pAccountNumber(existingMethod.accountNumber);
+          setP2pInstructions(existingMethod.instructions || '');
+      } else {
+          // Default pre-fill with user's withdrawal info
+          setP2pName(`P2P - ${selectedWithdrawal.method}`);
+          setP2pAccountTitle(selectedWithdrawal.accountTitle);
+          setP2pAccountNumber(selectedWithdrawal.accountNumber);
+          setP2pInstructions('');
+      }
     }
-  }, [selectedWithdrawal]);
+  }, [selectedWithdrawal, paymentMethods]);
 
   const handleRowClick = (w: Withdrawal) => {
     setSelectedWithdrawal(w);
@@ -60,6 +73,7 @@ const Withdrawals: React.FC = () => {
                 payload.p2pName = p2pName;
                 payload.p2pAccountTitle = p2pAccountTitle;
                 payload.p2pAccountNumber = p2pAccountNumber;
+                payload.p2pInstructions = p2pInstructions;
             }
 
             const result = await updateWithdrawal(selectedWithdrawal._id, payload);
@@ -67,10 +81,9 @@ const Withdrawals: React.FC = () => {
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             
-            // If a P2P payment method was created, we need to refresh payment methods
-            // In a real app, the backend would return the new method, or we trigger a fetch.
-            // For now, let's assume the user might need to refresh to see it in the PaymentMethods tab, 
-            // or we can dispatch a generic re-fetch if available.
+            // If a P2P payment method was created/updated, we might need to refresh payment methods list in context
+            // Since updateWithdrawal response doesn't typically return the method, we can rely on a manual refresh or page reload
+            // Or ideally, the backend should return it. For now, this updates the withdrawal status.
             
             handleCloseModal();
         } catch (error) {
@@ -157,7 +170,7 @@ const Withdrawals: React.FC = () => {
                       <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 text-sm">P2P Public Display Details</h4>
                       <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
                           This will automatically enable a Deposit Method for other users to match this withdrawal.
-                          Edit these details if you want to hide sensitive info or clarify instructions.
+                          Edit these details if you want to hide sensitive info or provide specific instructions.
                       </p>
                       <div className="space-y-3">
                           <div>
@@ -171,6 +184,10 @@ const Withdrawals: React.FC = () => {
                           <div>
                               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Account Number</label>
                               <input type="text" value={p2pAccountNumber} onChange={(e) => setP2pAccountNumber(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Instructions</label>
+                              <textarea value={p2pInstructions} onChange={(e) => setP2pInstructions(e.target.value)} rows={2} placeholder="e.g., Please send screenshot after payment" className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600" />
                           </div>
                       </div>
                   </div>
