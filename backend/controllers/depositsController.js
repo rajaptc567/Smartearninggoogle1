@@ -40,8 +40,9 @@ export const createDeposit = async (req, res) => {
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
-        if (user.status === 'Paused' || user.status === 'Blocked') {
-            return res.status(403).json({ success: false, error: `Account is ${user.status}. Deposits are not allowed.` });
+        // Check specific activity restriction or blocked status
+        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.deposit)) {
+            return res.status(403).json({ success: false, error: `Deposits are currently disabled for your account.` });
         }
 
         // Check P2P Matching logic BEFORE creating deposit
@@ -172,11 +173,6 @@ export const updateDeposit = async (req, res) => {
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been approved.`
             });
-
-            // If this was a P2P deposit, we might check if the associated withdrawal can be marked 'Paid'
-            // But typically 'Paid' marks the money leaving the system/admin confirming payout. 
-            // Since P2P means User A paid Admin (or held funds), and Admin pays User B (Withdrawal), 
-            // we leave the withdrawal status manual or handle it separately.
             
         } else if (originalStatus === 'Approved' && status !== 'Approved') {
             // Reverting an approval
@@ -201,7 +197,6 @@ export const updateDeposit = async (req, res) => {
                     await withdrawal.save();
                     
                     // Restore Payment Method if it was deleted (because it was full)
-                    // Or update maxAmount if it exists
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
                     if (p2pMethod) {
                         p2pMethod.maxAmount = withdrawal.matchRemainingAmount;

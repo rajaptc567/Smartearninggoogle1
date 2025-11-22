@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Status, Deposit, Withdrawal, Transaction } from '../types';
+import { User, Status, UserRestrictions } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -10,12 +10,13 @@ import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiate
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users, deposits, withdrawals, transactions } = state;
+    const { users } = state;
     
     // The user data is now loaded from the global context, so local loading state is simpler.
     const isLoading = users.length === 0;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isRestrictionsModalOpen, setIsRestrictionsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
     const [searchTerm, setSearchTerm] = useState('');
@@ -26,9 +27,15 @@ const Users: React.FC = () => {
         setIsModalOpen(true);
     };
 
+    const handleOpenRestrictions = (user: User) => {
+        setEditingUser(user);
+        setIsRestrictionsModalOpen(true);
+    }
+
     const handleCloseModal = () => {
         setEditingUser(null);
         setIsModalOpen(false);
+        setIsRestrictionsModalOpen(false);
     };
 
     const handleSaveUser = async (user: User) => {
@@ -50,6 +57,20 @@ const Users: React.FC = () => {
         }
     };
 
+    const handleSaveRestrictions = async (restrictions: UserRestrictions) => {
+        if (!editingUser) return;
+        try {
+            const updatedUser = await apiUpdateUser(editingUser._id, { restrictions });
+            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            alert('User restrictions updated successfully.');
+        } catch (error) {
+            console.error("Failed to save restrictions:", error);
+            alert("Error: Could not update restrictions.");
+        } finally {
+            handleCloseModal();
+        }
+    }
+
     const handleToggleStatus = async (user: User) => {
         const newStatus = user.status === Status.Blocked ? Status.Active : Status.Blocked;
         try {
@@ -59,19 +80,6 @@ const Users: React.FC = () => {
         } catch (error) {
             console.error("Failed to toggle user status:", error);
             alert("Error: Could not update user status.");
-        }
-    }
-
-    const handlePauseUser = async (user: User) => {
-        const newStatus = user.status === Status.Paused ? Status.Active : Status.Paused;
-        try {
-            // Send ONLY status to avoid validation errors on other fields
-            const updatedUser = await apiUpdateUser(user._id, { status: newStatus });
-            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-            alert(`User ${newStatus === Status.Paused ? 'paused' : 'resumed'} successfully.`);
-        } catch (error) {
-            console.error("Failed to pause/resume user:", error);
-            alert(`Error: Could not update user status. ${error instanceof Error ? error.message : ''}`);
         }
     }
     
@@ -146,8 +154,8 @@ const Users: React.FC = () => {
                                 <div className="flex items-center space-x-2">
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(user, 'details')}>Details</Button>
                                     
-                                    <Button size="sm" variant={user.status === Status.Paused ? 'primary' : 'secondary'} onClick={() => handlePauseUser(user)}>
-                                        {user.status === Status.Paused ? 'Resume' : 'Pause'}
+                                    <Button size="sm" variant="secondary" onClick={() => handleOpenRestrictions(user)}>
+                                        Restrictions
                                     </Button>
 
                                     <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user)}>
@@ -167,6 +175,13 @@ const Users: React.FC = () => {
                     onClose={handleCloseModal}
                     onSave={handleSaveUser}
                     onSwitchToEdit={() => setModalMode('edit')}
+                />
+            )}
+            {isRestrictionsModalOpen && editingUser && (
+                <UserRestrictionsModal
+                    user={editingUser}
+                    onClose={handleCloseModal}
+                    onSave={handleSaveRestrictions}
                 />
             )}
         </div>
@@ -362,6 +377,54 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                  <div className="mt-6 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
                     <h3 className="font-semibold mb-2">Genealogy Tree</h3>
                     {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-sm text-gray-500">This user has no referrals.</p>}
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+// Restrictions Modal
+const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave: (restrictions: UserRestrictions) => void; }> = ({ user, onClose, onSave }) => {
+    const [restrictions, setRestrictions] = useState<UserRestrictions>(user.restrictions || {
+        deposit: false,
+        withdrawal: false,
+        transfer: false,
+        earning: false,
+    });
+
+    const handleToggle = (key: keyof UserRestrictions) => {
+        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
+    }
+
+    const Toggle = ({ label, checked, onClick }: { label: string, checked: boolean, onClick: () => void }) => (
+        <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
+            <span className="font-medium text-gray-800 dark:text-gray-200">{label}</span>
+            <button 
+                type="button"
+                onClick={onClick}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${checked ? 'bg-red-600' : 'bg-gray-200'}`}
+            >
+                <span className={`${checked ? 'translate-x-6' : 'translate-x-1'} inline-block h-4 w-4 transform rounded-full bg-white transition-transform`} />
+            </button>
+        </div>
+    );
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-6 w-[90vw] max-w-md">
+                <h3 className="text-xl font-bold mb-2">Manage Restrictions</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    Control specific activities for <strong>{user.username}</strong>. Enabling a restriction will block the user from performing that action.
+                </p>
+                <div className="space-y-3">
+                    <Toggle label="Block Deposits" checked={restrictions.deposit} onClick={() => handleToggle('deposit')} />
+                    <Toggle label="Block Withdrawals" checked={restrictions.withdrawal} onClick={() => handleToggle('withdrawal')} />
+                    <Toggle label="Block Transfers" checked={restrictions.transfer} onClick={() => handleToggle('transfer')} />
+                    <Toggle label="Pause Earnings (Commissions)" checked={restrictions.earning} onClick={() => handleToggle('earning')} />
+                </div>
+                <div className="mt-8 flex justify-end space-x-3">
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button variant="primary" onClick={() => onSave(restrictions)}>Save Restrictions</Button>
                 </div>
             </div>
         </Modal>

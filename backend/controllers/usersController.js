@@ -25,6 +25,13 @@ export const createUser = async (req, res, next) => {
 
         // Initialize activePlans as empty array
         req.body.activePlans = [];
+        // Initialize restrictions
+        req.body.restrictions = {
+            deposit: false,
+            withdrawal: false,
+            transfer: false,
+            earning: false
+        };
 
         const user = await User.create(req.body);
         
@@ -64,6 +71,9 @@ export const loginUser = async (req, res, next) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+        if (user.status === 'Blocked') {
+            return res.status(403).json({ success: false, error: 'Your account has been blocked. Please contact support.' });
         }
         const isMatch = await user.matchPassword(password);
         if (!isMatch) {
@@ -110,22 +120,92 @@ export const updateUser = async (req, res) => {
         const currentUser = await User.findById(req.params.id);
         if (!currentUser) return res.status(404).json({ success: false, error: `User not found` });
 
-        // Check for status change to send notifications
+        // Handle Status Change Notifications
         if (req.body.status && req.body.status !== currentUser.status) {
-            if (req.body.status === 'Paused') {
+            if (req.body.status === 'Blocked') {
+                // No notif needed usually as they can't login, but good for record
+            } else if (req.body.status === 'Active' && currentUser.status === 'Blocked') {
+                 await Notification.create({ userId: currentUser._id, message: 'Your account has been unblocked.' });
+            }
+        }
+
+        // Handle Granular Restrictions Notifications & Logic
+        if (req.body.restrictions) {
+            const oldR = currentUser.restrictions || {};
+            const newR = req.body.restrictions;
+            
+            if (newR.deposit !== oldR.deposit) {
                 await Notification.create({ 
                     userId: currentUser._id, 
-                    message: 'Your account activities (deposits, withdrawals, transfers, and earnings) have been paused by the administrator.' 
+                    message: `Your ability to Deposit funds has been ${newR.deposit ? 'Disabled' : 'Enabled'} by admin.` 
                 });
-            } else if (req.body.status === 'Active' && currentUser.status === 'Paused') {
+            }
+            if (newR.withdrawal !== oldR.withdrawal) {
                 await Notification.create({ 
                     userId: currentUser._id, 
-                    message: 'Your account activities have been resumed.' 
+                    message: `Your ability to Withdraw funds has been ${newR.withdrawal ? 'Disabled' : 'Enabled'} by admin.` 
+                });
+            }
+            if (newR.transfer !== oldR.transfer) {
+                await Notification.create({ 
+                    userId: currentUser._id, 
+                    message: `Your ability to Transfer funds has been ${newR.transfer ? 'Disabled' : 'Enabled'} by admin.` 
+                });
+            }
+            if (newR.earning !== oldR.earning) {
+                await Notification.create({ 
+                    userId: currentUser._id, 
+                    message: `Your ability to Earn Commissions has been ${newR.earning ? 'Paused' : 'Resumed'} by admin.` 
                 });
             }
         }
 
-        const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        // Perform the main update
+        let user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+
+        // RELEASE LOGIC: If earning restriction was removed, release pending commissions
+        if (req.body.restrictions && req.body.restrictions.earning === false && currentUser.restrictions?.earning === true) {
+            
+            const settings = await Setting.getSettings();
+            const pendingCommissions = await Transaction.find({
+                userId: user._id,
+                type: 'Commission',
+                status: 'Pending'
+            });
+
+            let releasedAmount = 0;
+
+            for (const comm of pendingCommissions) {
+                let canRelease = true;
+
+                // Re-validate against strict plan rules. 
+                // If strict plan matching is on, user MUST have the plan. Unpausing account doesn't bypass this rule.
+                if (settings.requirePlanMatchForCommission && comm.relatedPlanId) {
+                    const hasPlan = user.activePlans && user.activePlans.some(p => p.planId.toString() === comm.relatedPlanId.toString());
+                    if (!hasPlan) canRelease = false;
+                } else if (settings.requireActivePlanForCommission) {
+                    const hasAnyPlan = user.activePlans && user.activePlans.length > 0;
+                    if (!hasAnyPlan) canRelease = false;
+                }
+
+                if (canRelease) {
+                    comm.status = 'Approved';
+                    await comm.save();
+                    releasedAmount += comm.amount;
+                }
+            }
+
+            if (releasedAmount > 0) {
+                user.walletBalance += releasedAmount;
+                await user.save();
+                
+                await Notification.create({
+                    userId: user._id,
+                    message: `Restrictions removed! $${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
+                });
+            }
+        }
+
         res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -274,12 +354,8 @@ export const purchasePlan = async (req, res) => {
         };
 
         // STRICT PLAN MATCHING RULE
-        // If enabled, buying Plan X ONLY releases commissions held for Plan X.
         if (settings.requirePlanMatchForCommission) {
             releasedCommissionsQuery.relatedPlanId = plan._id;
-        } else if (settings.requireActivePlanForCommission) {
-            // General active rule: Release ALL pending commissions because user is now "Active" with at least one plan
-            // No relatedPlanId filter applied
         } else {
             // Fallback: default behavior releases related plan commissions to be safe
             releasedCommissionsQuery.relatedPlanId = plan._id;
@@ -330,7 +406,15 @@ export const purchasePlan = async (req, res) => {
                 const activePlans = uplineUser.activePlans || [];
                 const hasAnyPlan = activePlans.length > 0;
                 
-                // Check Strict Match Rule: Sponsor must have the SAME plan
+                // Check Restriction First
+                if (uplineUser.restrictions && uplineUser.restrictions.earning) {
+                     return { 
+                        status: 'Pending', 
+                        message: `Commission Held! Your earnings are currently paused by the administrator.`
+                    };
+                }
+
+                // Check Strict Match Rule
                 if (settings.requirePlanMatchForCommission) {
                     const hasSamePlan = activePlans.some(p => p.planId.toString() === purchasePlanId.toString());
                     if (!hasSamePlan) {
@@ -340,7 +424,7 @@ export const purchasePlan = async (req, res) => {
                         };
                     }
                 }
-                // Check General Active Rule: Sponsor must have ANY plan
+                // Check General Active Rule
                 else if (settings.requireActivePlanForCommission) {
                     if (!hasAnyPlan) {
                         return { 
@@ -353,8 +437,8 @@ export const purchasePlan = async (req, res) => {
                 return { status, message };
             };
 
-            // STRICT: Sponsor MUST be Active (not Paused/Blocked) to earn anything
-            if (sponsor && sponsor.status === 'Active') {
+            // STRICT: Sponsor MUST be Active (not Blocked)
+            if (sponsor && sponsor.status !== 'Blocked') {
                 let commissionAmount = 0;
 
                 // Logic for Tiered vs Standard Direct Commission
@@ -413,7 +497,7 @@ export const purchasePlan = async (req, res) => {
                         if (!uplineUser) break; 
 
                         // STRICT: Upline user MUST be Active
-                        if (uplineUser.status === 'Active') {
+                        if (uplineUser.status !== 'Blocked') {
                             const levelCommissionAmount = calculateAmount(plan.indirectCommissions[i], plan.price);
 
                             if (levelCommissionAmount > 0) {
@@ -469,7 +553,6 @@ export const userRequestPasswordReset = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) {
             // To prevent email enumeration, we send a generic success response.
-            // The user is told a request is sent; if the user doesn't exist, no request is actually created.
             return res.status(200).json({ success: true, data: 'If a user with this email exists, a request has been sent to the admin.' });
         }
 
@@ -486,7 +569,6 @@ export const userRequestPasswordReset = async (req, res) => {
 
         res.status(200).json({ success: true, data: 'Your request has been sent to the administrator.' });
     } catch (err) {
-        // Even on error, send a generic response to the client for security.
         console.error('Error in userRequestPasswordReset:', err);
         res.status(200).json({ success: true, data: 'If a user with this email exists, a request has been sent to the admin.' });
     }

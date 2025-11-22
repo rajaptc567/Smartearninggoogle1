@@ -40,8 +40,9 @@ export const createWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        if (user.status === 'Paused' || user.status === 'Blocked') {
-            return res.status(403).json({ success: false, error: `Account is ${user.status}. Withdrawals are not allowed.` });
+        // Check specific activity restriction or blocked status
+        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.withdrawal)) {
+            return res.status(403).json({ success: false, error: `Withdrawals are currently disabled for your account.` });
         }
         
         // --- FREQUENCY LIMIT CHECK ---

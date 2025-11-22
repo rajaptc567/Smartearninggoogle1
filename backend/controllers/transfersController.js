@@ -23,8 +23,9 @@ export const createTransfer = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sender or recipient not found.' });
         }
 
-        if (sender.status === 'Paused' || sender.status === 'Blocked') {
-            return res.status(403).json({ success: false, error: `Account is ${sender.status}. Transfers are not allowed.` });
+        // Check specific activity restriction or blocked status
+        if (sender.status === 'Blocked' || (sender.restrictions && sender.restrictions.transfer)) {
+            return res.status(403).json({ success: false, error: `Transfers are currently disabled for your account.` });
         }
 
         if (sender.walletBalance < amount) {

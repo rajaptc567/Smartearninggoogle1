@@ -18,6 +18,13 @@ export interface ActivePlan {
     purchaseDate: string;
 }
 
+export interface UserRestrictions {
+    deposit: boolean;
+    withdrawal: boolean;
+    transfer: boolean;
+    earning: boolean; // Blocks commissions
+}
+
 export interface User {
   _id: string;
   username: string;
@@ -32,6 +39,7 @@ export interface User {
   registrationDate: string;
   status: Status;
   sponsor?: string;
+  restrictions?: UserRestrictions;
 }
 
 export interface Deposit {
