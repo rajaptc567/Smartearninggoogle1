@@ -10,7 +10,14 @@ import PaymentMethod from '../models/PaymentMethod.js';
 // @route   GET /api/v1/withdrawals
 export const getWithdrawals = async (req, res) => {
     try {
-        const withdrawals = await Withdrawal.find().sort({ date: -1 });
+        // Populate matched deposits to show details in admin panel
+        const withdrawals = await Withdrawal.find()
+            .sort({ date: -1 })
+            .populate({
+                path: 'matchedDepositIds',
+                select: 'amount date status receiptUrl userName transactionId method'
+            });
+            
         res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -21,7 +28,7 @@ export const getWithdrawals = async (req, res) => {
 // @route   GET /api/v1/withdrawals/:id
 export const getWithdrawal = async (req, res) => {
     try {
-        const withdrawal = await Withdrawal.findById(req.params.id);
+        const withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
         if (!withdrawal) {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
@@ -127,7 +134,7 @@ export const updateWithdrawal = async (req, res) => {
     try {
         const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions } = req.body;
         
-        let withdrawal = await Withdrawal.findById(req.params.id);
+        let withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
         if (!withdrawal) {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
@@ -143,7 +150,7 @@ export const updateWithdrawal = async (req, res) => {
         // 1. If changing TO 'Matching', create a temporary Payment Method
         if (status === 'Matching') {
             // Initialize remaining amount if not set or if resetting logic
-            const remainingAmount = withdrawal.matchRemainingAmount || withdrawal.finalAmount;
+            const remainingAmount = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
 
             const methodData = {
                 name: p2pName || `P2P - ${withdrawal.method}`,
@@ -164,8 +171,10 @@ export const updateWithdrawal = async (req, res) => {
             } else {
                 // Create new
                 await PaymentMethod.create(methodData);
-                // Initial set of remaining amount
-                withdrawal.matchRemainingAmount = withdrawal.finalAmount;
+                // Initial set of remaining amount if undefined
+                if (withdrawal.matchRemainingAmount === undefined) {
+                    withdrawal.matchRemainingAmount = withdrawal.finalAmount;
+                }
             }
         }
 

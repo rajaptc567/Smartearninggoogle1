@@ -73,6 +73,7 @@ export interface Withdrawal {
     adminNotes?: string;
     userNotes?: string;
     matchRemainingAmount?: number;
+    matchedDepositIds?: Deposit[]; // Populated full objects
 }
 
 export interface Transfer {

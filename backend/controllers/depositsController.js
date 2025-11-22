@@ -53,7 +53,7 @@ export const createDeposit = async (req, res) => {
             }
             
             const depositAmount = parseFloat(depositData.amount);
-            const remaining = withdrawal.matchRemainingAmount || withdrawal.finalAmount;
+            const remaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
 
             // Ensure deposit does not exceed remaining needed
             if (depositAmount > remaining) {
@@ -85,7 +85,8 @@ export const createDeposit = async (req, res) => {
             const depositAmount = deposit.amount;
             
             // 1. Deduct amount from remaining
-            withdrawal.matchRemainingAmount = (withdrawal.matchRemainingAmount || withdrawal.finalAmount) - depositAmount;
+            const currentRemaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
+            withdrawal.matchRemainingAmount = currentRemaining - depositAmount;
             
             // 2. Add to list of matched deposits
             if (!withdrawal.matchedDepositIds) withdrawal.matchedDepositIds = [];
@@ -100,19 +101,19 @@ export const createDeposit = async (req, res) => {
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
                 
-                // Notify Withdrawal User about Partial
+                // Notify Withdrawal User about Partial (Sanitized message)
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Good news! A partial P2P match of $${depositAmount.toFixed(2)} has been received for your withdrawal. Remaining to match: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
+                    message: `Withdrawal Update: A payment of $${depositAmount.toFixed(2)} has been processed for your request. Remaining amount pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
                 });
             } else {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
                 
-                // Notify Withdrawal User about Completion
+                // Notify Withdrawal User about Completion (Sanitized message)
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Great news! Your withdrawal request has been fully matched via P2P. Payout processing soon.`
+                    message: `Withdrawal Update: Your request has been fully funded. Final processing in progress.`
                 });
             }
         }

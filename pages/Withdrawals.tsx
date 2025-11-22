@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import { Status, Withdrawal } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateWithdrawal } from '../services/api';
+import { updateWithdrawal, getUploadsBaseUrl } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
@@ -24,6 +24,7 @@ const Withdrawals: React.FC = () => {
   const [p2pInstructions, setP2pInstructions] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
+  const UPLOADS_URL = getUploadsBaseUrl();
 
   useEffect(() => {
     if (selectedWithdrawal) {
@@ -81,10 +82,6 @@ const Withdrawals: React.FC = () => {
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             
-            // If a P2P payment method was created/updated, we might need to refresh payment methods list in context
-            // Since updateWithdrawal response doesn't typically return the method, we can rely on a manual refresh or page reload
-            // Or ideally, the backend should return it. For now, this updates the withdrawal status.
-            
             handleCloseModal();
         } catch (error) {
             console.error("Failed to update withdrawal:", error);
@@ -114,7 +111,7 @@ const Withdrawals: React.FC = () => {
             <td className="px-4 py-3">{w.method}</td>
             <td className="px-4 py-3"><Badge status={w.status} /></td>
             <td className="px-4 py-3 text-sm">
-                {w.status === Status.Matching ? `$${w.matchRemainingAmount?.toFixed(2)}` : 'N/A'}
+                {w.status === Status.Matching || w.matchRemainingAmount !== undefined ? `$${(w.matchRemainingAmount !== undefined ? w.matchRemainingAmount : w.finalAmount).toFixed(2)}` : 'N/A'}
             </td>
             <td className="px-4 py-3 text-sm">{new Date(w.date).toLocaleDateString()}</td>
           </tr>
@@ -146,6 +143,46 @@ const Withdrawals: React.FC = () => {
                     <h4 className="font-semibold mb-2">User Notes:</h4>
                     <p className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border dark:border-gray-600">{selectedWithdrawal.userNotes}</p>
                 </div>
+              )}
+
+              {/* Matched Deposits Section */}
+              {selectedWithdrawal.matchedDepositIds && selectedWithdrawal.matchedDepositIds.length > 0 && (
+                  <div className="mt-6 pt-4 border-t dark:border-gray-700">
+                      <h4 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">Matched Payments Log (P2P)</h4>
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                              <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase">
+                                  <tr>
+                                      <th className="px-3 py-2">Depositor</th>
+                                      <th className="px-3 py-2">Amount</th>
+                                      <th className="px-3 py-2">Date</th>
+                                      <th className="px-3 py-2">Receipt</th>
+                                      <th className="px-3 py-2">Status</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {selectedWithdrawal.matchedDepositIds.map((deposit: any) => (
+                                      <tr key={deposit._id} className="border-b dark:border-gray-700">
+                                          <td className="px-3 py-2">{deposit.userName}</td>
+                                          <td className="px-3 py-2 font-bold text-green-600">${deposit.amount.toFixed(2)}</td>
+                                          <td className="px-3 py-2">{new Date(deposit.date).toLocaleDateString()}</td>
+                                          <td className="px-3 py-2">
+                                              {deposit.receiptUrl ? (
+                                                  <a href={`${UPLOADS_URL}${deposit.receiptUrl}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">View</a>
+                                              ) : 'N/A'}
+                                          </td>
+                                          <td className="px-3 py-2"><Badge status={deposit.status} /></td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                      <div className="mt-2 text-right text-sm font-semibold">
+                          Total Matched: <span className="text-green-600">${selectedWithdrawal.matchedDepositIds.reduce((sum: number, d: any) => sum + d.amount, 0).toFixed(2)}</span>
+                          <span className="mx-2">/</span>
+                          Pending: <span className="text-red-600">${(selectedWithdrawal.matchRemainingAmount ?? selectedWithdrawal.finalAmount).toFixed(2)}</span>
+                      </div>
+                  </div>
               )}
 
 
