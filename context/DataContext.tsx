@@ -33,6 +33,8 @@ const initialState: AppState = {
     settings: {
         isUserTransferEnabled: true,
         restrictWithdrawalAmount: false,
+        requirePlanMatchForCommission: false,
+        requireActivePlanForCommission: false,
     },
     notifications: [],
     logs: [],

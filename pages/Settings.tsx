@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -51,7 +52,7 @@ const Settings: React.FC = () => {
             </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 border-b dark:border-gray-700 pb-6">
              <h3 className="text-lg font-medium">Feature Toggles</h3>
             <div className="flex items-center">
               <input 
@@ -74,6 +75,41 @@ const Settings: React.FC = () => {
                 onChange={handleCheckboxChange}
               />
               <label htmlFor="restrictWithdrawalAmount" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">Restrict withdrawal amounts to active plan prices (for P2P)</label>
+            </div>
+        </div>
+
+        <div className="space-y-4">
+             <h3 className="text-lg font-medium">Commission Rules</h3>
+             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm text-blue-800 dark:text-blue-200 mb-2">
+                These settings control when a sponsor receives their referral commission. If a condition is not met, the commission will be held as <strong>Pending</strong> until the sponsor qualifies.
+             </div>
+            <div className="flex items-start">
+              <input 
+                id="requireActivePlanForCommission"
+                name="requireActivePlanForCommission"
+                type="checkbox" 
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                checked={localSettings.requireActivePlanForCommission}
+                onChange={handleCheckboxChange}
+              />
+              <label htmlFor="requireActivePlanForCommission" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  <strong>Require Any Active Plan:</strong> Sponsors must have at least one active plan to earn commission.
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">If disabled, even free users can earn commissions.</p>
+              </label>
+            </div>
+            <div className="flex items-start">
+              <input 
+                id="requirePlanMatchForCommission"
+                name="requirePlanMatchForCommission"
+                type="checkbox" 
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                checked={localSettings.requirePlanMatchForCommission}
+                onChange={handleCheckboxChange}
+              />
+              <label htmlFor="requirePlanMatchForCommission" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+                  <strong>Strict Plan Matching:</strong> Sponsor must own the <u>same specific plan</u> the referral is purchasing.
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Overrides "Any Active Plan". If referral upgrades, sponsor needs that upgrade too.</p>
+              </label>
             </div>
         </div>
        

@@ -10,7 +10,14 @@ const SettingSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
-    // Add other settings here in the future
+    requirePlanMatchForCommission: {
+        type: Boolean,
+        default: false,
+    },
+    requireActivePlanForCommission: {
+        type: Boolean,
+        default: false,
+    }
 }, {
     // Use a capped collection of size 1 to ensure only one settings document exists
     capped: { size: 1024, max: 1 }
@@ -23,6 +30,8 @@ SettingSchema.statics.getSettings = async function() {
         settings = await this.create({
             isUserTransferEnabled: true,
             restrictWithdrawalAmount: false,
+            requirePlanMatchForCommission: false,
+            requireActivePlanForCommission: false,
         });
     }
     return settings;

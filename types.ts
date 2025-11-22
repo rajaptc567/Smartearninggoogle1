@@ -140,6 +140,7 @@ export interface Transaction {
     description: string;
     level?: number;
     status?: 'Pending' | 'Approved' | 'Rejected';
+    relatedPlanId?: string;
 }
 
 export interface Rule {
@@ -152,7 +153,8 @@ export interface Rule {
 export interface Settings {
     isUserTransferEnabled: boolean;
     restrictWithdrawalAmount: boolean;
-    // Add other settings here in the future
+    requirePlanMatchForCommission: boolean; // New: User must have same plan to get commission
+    requireActivePlanForCommission: boolean; // New: User must have ANY active plan to get commission
 }
 
 export interface Notification {
@@ -163,7 +165,6 @@ export interface Notification {
   read: boolean;
 }
 
-// FIX: Added missing Log interface
 export interface Log {
   _id: string;
   timestamp: string;
