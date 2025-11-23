@@ -57,9 +57,15 @@ const Deposits: React.FC = () => {
         }
     };
 
+    // Helper to determine correct image source (Base64 vs File Path)
+    const getReceiptSrc = (url: string) => {
+        if (url.startsWith('data:')) return url;
+        return `${UPLOADS_URL}${url}`;
+    }
+
     const handleViewReceipt = (e: React.MouseEvent, receiptUrl: string) => {
         e.stopPropagation(); 
-        setSelectedReceipt(`${UPLOADS_URL}${receiptUrl}`);
+        setSelectedReceipt(getReceiptSrc(receiptUrl));
         setIsImageModalOpen(true);
     };
     
@@ -96,7 +102,7 @@ const Deposits: React.FC = () => {
                         <td className="px-4 py-3">
                             {deposit.receiptUrl ? (
                                 <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <img src={`${UPLOADS_URL}${deposit.receiptUrl}`} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
+                                    <img src={getReceiptSrc(deposit.receiptUrl)} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
                                 </button>
                             ) : (
                                 'N/A'
@@ -110,7 +116,9 @@ const Deposits: React.FC = () => {
 
             <Modal isOpen={isImageModalOpen} onClose={handleCloseImageModal}>
                 {selectedReceipt && (
-                    <img src={selectedReceipt} alt="Full-size receipt" className="rounded-md" />
+                    <div className="flex justify-center items-center p-2">
+                        <img src={selectedReceipt} alt="Full-size receipt" className="rounded-md max-w-full max-h-[80vh] object-contain shadow-lg" />
+                    </div>
                 )}
             </Modal>
 
@@ -172,7 +180,7 @@ const Deposits: React.FC = () => {
                         {selectedDeposit.receiptUrl && (
                             <div className="mt-6">
                                 <h4 className="font-semibold mb-2">Receipt</h4>
-                                <img src={`${UPLOADS_URL}${selectedDeposit.receiptUrl}`} alt="Deposit receipt" className="rounded-lg w-full max-w-lg mx-auto shadow-md" />
+                                <img src={getReceiptSrc(selectedDeposit.receiptUrl)} alt="Deposit receipt" className="rounded-lg w-full max-w-lg mx-auto shadow-md object-contain max-h-96" />
                             </div>
                         )}
 

@@ -67,8 +67,11 @@ export const createDeposit = async (req, res) => {
         }
 
         if (req.file) {
-            // Store the path to be accessible from the frontend
-            depositData.receiptUrl = `/uploads/${req.file.filename}`;
+            // Convert buffer to Base64 string
+            const b64 = Buffer.from(req.file.buffer).toString('base64');
+            const mimeType = req.file.mimetype;
+            // Store as Data URI in database
+            depositData.receiptUrl = `data:${mimeType};base64,${b64}`;
         }
 
         const deposit = await Deposit.create(depositData);
@@ -104,7 +107,7 @@ export const createDeposit = async (req, res) => {
                 // Notify Withdrawal User about Partial Match Pending Verification
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Withdrawal Update: A partial payment of $${depositAmount.toFixed(2)} has been submitted. It is currently pending admin verification. Remaining pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
+                    message: `Withdrawal Update: A payment of $${depositAmount.toFixed(2)} has been processed. It is currently pending admin verification. Remaining pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
                 });
             } else {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
@@ -113,7 +116,7 @@ export const createDeposit = async (req, res) => {
                 // Notify Withdrawal User about Completion Pending Verification
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Withdrawal Update: Your request has been fully funded by a matching deposit. Final admin verification is in progress.`
+                    message: `Withdrawal Update: Your request has been fully funded. Final processing in progress.`
                 });
             }
         }

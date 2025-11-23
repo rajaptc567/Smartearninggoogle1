@@ -92,6 +92,12 @@ const Withdrawals: React.FC = () => {
     }
   };
 
+  // Helper to determine correct image source (Base64 vs File Path)
+  const getReceiptSrc = (url: string) => {
+        if (url.startsWith('data:')) return url;
+        return `${UPLOADS_URL}${url}`;
+  }
+
 
   const tableHeaders = ['User', 'Amount', 'Final Amount', 'Method', 'Status', 'Match Rem.', 'Date'];
 
@@ -168,7 +174,7 @@ const Withdrawals: React.FC = () => {
                                           <td className="px-3 py-2">{new Date(deposit.date).toLocaleDateString()}</td>
                                           <td className="px-3 py-2">
                                               {deposit.receiptUrl ? (
-                                                  <a href={`${UPLOADS_URL}${deposit.receiptUrl}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">View</a>
+                                                  <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">View</a>
                                               ) : 'N/A'}
                                           </td>
                                           <td className="px-3 py-2"><Badge status={deposit.status} /></td>
