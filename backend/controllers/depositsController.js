@@ -84,7 +84,7 @@ export const createDeposit = async (req, res) => {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             const depositAmount = deposit.amount;
             
-            // 1. Deduct amount from remaining
+            // 1. Deduct amount from remaining IMMEDIATELY (even if pending)
             const currentRemaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
             withdrawal.matchRemainingAmount = currentRemaining - depositAmount;
             
@@ -101,19 +101,19 @@ export const createDeposit = async (req, res) => {
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
                 
-                // Notify Withdrawal User about Partial (Sanitized message)
+                // Notify Withdrawal User about Partial Match Pending Verification
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Withdrawal Update: A payment of $${depositAmount.toFixed(2)} has been processed for your request. Remaining amount pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
+                    message: `Withdrawal Update: A partial payment of $${depositAmount.toFixed(2)} has been submitted. It is currently pending admin verification. Remaining pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
                 });
             } else {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
                 
-                // Notify Withdrawal User about Completion (Sanitized message)
+                // Notify Withdrawal User about Completion Pending Verification
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Withdrawal Update: Your request has been fully funded. Final processing in progress.`
+                    message: `Withdrawal Update: Your request has been fully funded by a matching deposit. Final admin verification is in progress.`
                 });
             }
         }
@@ -174,6 +174,17 @@ export const updateDeposit = async (req, res) => {
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been approved.`
             });
+
+            // 4. Notify Withdrawal User that payment is confirmed (P2P)
+            if (deposit.matchedWithdrawalId) {
+                const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
+                if(withdrawal) {
+                    await Notification.create({
+                        userId: withdrawal.userId,
+                        message: `Withdrawal Update: The matched payment of $${deposit.amount.toFixed(2)} has been verified and approved.`
+                    });
+                }
+            }
             
         } else if (originalStatus === 'Approved' && status !== 'Approved') {
             // Reverting an approval
@@ -193,17 +204,27 @@ export const updateDeposit = async (req, res) => {
                 if (withdrawal) {
                     // Add amount back to remaining
                     withdrawal.matchRemainingAmount = (withdrawal.matchRemainingAmount || 0) + deposit.amount;
+                    
                     // Remove from matched list
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
                     await withdrawal.save();
                     
-                    // Restore Payment Method if it was deleted (because it was full)
+                    // NOTIFY Withdrawal User about Rejection/Restoration
+                    await Notification.create({
+                        userId: withdrawal.userId,
+                        message: `Withdrawal Update: A previously matched payment of $${deposit.amount.toFixed(2)} was rejected. This amount has been re-added to your pending match queue.`
+                    });
+
+                    // Restore Payment Method
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
+                    
                     if (p2pMethod) {
+                        // Method exists, just update maxAmount
                         p2pMethod.maxAmount = withdrawal.matchRemainingAmount;
+                        p2pMethod.status = 'Enabled'; // Ensure it's enabled
                         await p2pMethod.save();
                     } else {
-                        // Re-create method if it was deleted
+                        // Method was deleted (because it was full), so we must RECREATE it
                         await PaymentMethod.create({
                             name: `P2P - ${withdrawal.method}`,
                             type: 'Deposit',
@@ -213,7 +234,7 @@ export const updateDeposit = async (req, res) => {
                             maxAmount: withdrawal.matchRemainingAmount,
                             feePercent: 0,
                             status: 'Enabled',
-                            instructions: '', // Ideally fetch old instructions or leave blank
+                            instructions: '', // Fallback to empty, admin can edit if needed
                             p2pWithdrawalId: withdrawal._id
                         });
                     }
