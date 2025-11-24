@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../hooks/useData';
 import { Dispute, Status } from '../../types';
 import Table from '../../components/ui/Table';
@@ -13,10 +13,6 @@ const UserDisputes: React.FC = () => {
     const { disputes, currentUser, deposits, withdrawals, transfers } = state;
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-    const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
-    
-    // Create Form State
     const [type, setType] = useState<'Deposit' | 'Withdrawal' | 'Transfer'>('Deposit');
     const [referenceId, setReferenceId] = useState('');
     const [description, setDescription] = useState('');
@@ -24,18 +20,9 @@ const UserDisputes: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [useManualId, setUseManualId] = useState(false);
 
-    const chatEndRef = useRef<HTMLDivElement>(null);
-
     if (!currentUser) return <div>Loading...</div>;
 
     const userDisputes = disputes.filter(d => d.userId === currentUser._id);
-
-    // Auto-scroll chat
-    useEffect(() => {
-        if (isViewModalOpen && chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [isViewModalOpen, selectedDispute]);
 
     // Filter relevant transactions for the dropdown
     const availableTransactions = useMemo(() => {
@@ -100,11 +87,6 @@ const UserDisputes: React.FC = () => {
         }
     };
 
-    const handleView = (dispute: Dispute) => {
-        setSelectedDispute(dispute);
-        setIsViewModalOpen(true);
-    }
-
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -114,21 +96,14 @@ const UserDisputes: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
                 {userDisputes.length > 0 ? (
-                    <Table headers={['Date', 'Type', 'Ref ID', 'Status', 'Last Update', 'Action']}>
+                    <Table headers={['Date', 'Type', 'Ref ID', 'Status', 'Admin Response']}>
                         {userDisputes.map(dispute => (
                             <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{dispute.type}</td>
                                 <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
                                 <td className="px-4 py-3"><Badge status={dispute.status as Status} /></td>
-                                <td className="px-4 py-3 text-sm text-gray-500">
-                                    {dispute.messages && dispute.messages.length > 0 
-                                        ? new Date(dispute.messages[dispute.messages.length-1].date).toLocaleDateString() 
-                                        : '-'}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <Button size="sm" variant="secondary" onClick={() => handleView(dispute)}>View</Button>
-                                </td>
+                                <td className="px-4 py-3 text-sm max-w-xs truncate" title={dispute.adminResponse}>{dispute.adminResponse || '-'}</td>
                             </tr>
                         ))}
                     </Table>
@@ -137,58 +112,6 @@ const UserDisputes: React.FC = () => {
                 )}
             </div>
 
-            {/* VIEW DISPUTE MODAL */}
-            {isViewModalOpen && selectedDispute && (
-                <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)}>
-                    <div className="p-4 w-[95vw] max-w-2xl h-[70vh] flex flex-col">
-                        <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <div>
-                                <h3 className="text-lg font-bold">Dispute Details</h3>
-                                <p className="text-xs text-gray-500">Ref: {selectedDispute.referenceId}</p>
-                            </div>
-                            <Badge status={selectedDispute.status as Status} />
-                        </div>
-
-                        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                            <p className="text-sm font-semibold">Your Claim:</p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 italic">"{selectedDispute.description}"</p>
-                        </div>
-
-                        <h4 className="text-sm font-bold mb-2">History</h4>
-                        <div className="flex-grow bg-gray-100 dark:bg-gray-900 rounded-lg p-4 overflow-y-auto space-y-3 border dark:border-gray-700">
-                            {selectedDispute.messages && selectedDispute.messages.length > 0 ? (
-                                selectedDispute.messages.map((msg, idx) => (
-                                    <div key={idx} className={`flex flex-col ${msg.sender === 'User' ? 'items-end' : msg.sender === 'System' ? 'items-center' : 'items-start'}`}>
-                                        {msg.sender === 'System' ? (
-                                            <span className="text-xs text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded-full my-1">{msg.message}</span>
-                                        ) : (
-                                            <div className={`max-w-[80%] p-3 rounded-lg text-sm ${
-                                                msg.sender === 'User' 
-                                                    ? 'bg-blue-600 text-white rounded-br-none' 
-                                                    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none shadow-sm'
-                                            }`}>
-                                                <p>{msg.message}</p>
-                                                <p className={`text-[10px] mt-1 text-right ${msg.sender === 'User' ? 'text-blue-200' : 'text-gray-400'}`}>
-                                                    {new Date(msg.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {msg.sender}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-400 text-sm">No updates yet.</div>
-                            )}
-                            <div ref={chatEndRef} />
-                        </div>
-
-                        <div className="mt-4 flex justify-end">
-                            <Button variant="secondary" onClick={() => setIsViewModalOpen(false)}>Close</Button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            {/* CREATE MODAL */}
             {isModalOpen && (
                 <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                     <div className="p-4 w-[90vw] max-w-lg">

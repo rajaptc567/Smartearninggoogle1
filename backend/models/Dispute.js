@@ -1,12 +1,6 @@
 
 import mongoose from 'mongoose';
 
-const DisputeMessageSchema = new mongoose.Schema({
-    sender: { type: String, enum: ['User', 'Admin', 'System'], required: true },
-    message: { type: String, required: true },
-    date: { type: Date, default: Date.now }
-}, { _id: false });
-
 const DisputeSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.ObjectId,
@@ -35,10 +29,12 @@ const DisputeSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Open', 'Processing', 'Resolved', 'Closed'],
+        enum: ['Open', 'Resolved', 'Closed'],
         default: 'Open',
     },
-    messages: [DisputeMessageSchema]
+    adminResponse: {
+        type: String,
+    },
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });
