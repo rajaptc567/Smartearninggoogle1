@@ -1,9 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
-import { User } from '../../types';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -14,19 +12,10 @@ const TransferFunds: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
-    // Helper to recursively find all referrals (direct and indirect)
-    const getAllReferrals = (username: string, allUsers: User[]): User[] => {
-        const directReferrals = allUsers.filter(u => u.sponsor === username);
-        let allRefs = [...directReferrals];
-        directReferrals.forEach(ref => {
-            allRefs = [...allRefs, ...getAllReferrals(ref.username, allUsers)];
-        });
-        return allRefs;
-    };
-
-    const myReferrals = useMemo(() => {
+    // Get all users except current user for the dropdown list
+    const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
-        return getAllReferrals(currentUser.username, users);
+        return users.filter(u => u._id !== currentUser._id);
     }, [currentUser, users]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +31,7 @@ const TransferFunds: React.FC = () => {
             return;
         }
 
+        // Find user by ID, Username, or Email
         const recipient = users.find(u =>
             u._id.toString() === recipientIdentifier ||
             u.username.toLowerCase() === recipientIdentifier.toLowerCase() ||
@@ -116,36 +106,27 @@ const TransferFunds: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                  <div>
-                    <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient (ID, Username, or Email)</label>
-                    <div className="mt-1 flex flex-col gap-2">
+                    <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient (Username, Email, or ID)</label>
+                    <div className="mt-1">
                         <input
                             type="text"
                             id="recipient"
+                            list="recipient-list"
                             value={recipientIdentifier}
                             onChange={(e) => setRecipientIdentifier(e.target.value)}
                             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="Enter username manually..."
+                            placeholder="Type to search username or enter ID..."
                             required
                         />
-                        
-                        {myReferrals.length > 0 && (
-                            <select
-                                onChange={(e) => {
-                                    if(e.target.value) setRecipientIdentifier(e.target.value);
-                                }}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                value="" // Always reset to default option so input box shows the value
-                            >
-                                <option value="">-- Or Select from your Network --</option>
-                                {myReferrals.map(ref => (
-                                    <option key={ref._id} value={ref.username}>
-                                        {ref.fullName} (@{ref.username})
-                                    </option>
-                                ))}
-                            </select>
-                        )}
+                        <datalist id="recipient-list">
+                            {availableRecipients.map(user => (
+                                <option key={user._id} value={user.username}>
+                                    {user.fullName} ({user.email})
+                                </option>
+                            ))}
+                        </datalist>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">You can type any user's detail or select from your team below.</p>
+                    <p className="text-xs text-gray-500 mt-1">You can manually type a user's detail or select from the list of registered members.</p>
                 </div>
                 <div>
                     <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
