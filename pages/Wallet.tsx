@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
@@ -74,21 +75,27 @@ const Wallet: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Manual Wallet Adjustment</h2>
                 <form onSubmit={handleAdjustment} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                     <div className="md:col-span-2">
-                        <label htmlFor="user-identifier" className="block text-sm font-medium text-gray-700 dark:text-gray-300">User (ID, Username, Email, Phone)</label>
-                        <input 
-                          type="text" 
-                          id="user-identifier" 
-                          list="users-datalist"
-                          value={identifier} 
-                          onChange={e => setIdentifier(e.target.value)} 
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
-                          required 
-                        />
-                        <datalist id="users-datalist">
-                          {users.map(user => (
-                            <option key={user._id} value={user.username} label={`${user.fullName} (${user.email})`}/>
-                          ))}
-                        </datalist>
+                        <label htmlFor="user-identifier" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select User</label>
+                        <div className="mt-1">
+                            <input 
+                              type="text" 
+                              id="user-identifier" 
+                              list="users-datalist"
+                              value={identifier} 
+                              onChange={e => setIdentifier(e.target.value)} 
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                              placeholder="Search by username, email..."
+                              required 
+                            />
+                            <datalist id="users-datalist">
+                              {users.map(user => (
+                                <option key={user._id} value={user.username}>
+                                    {user.fullName} ({user.email}) - Balance: ${user.walletBalance.toFixed(2)}
+                                </option>
+                              ))}
+                            </datalist>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Search by username, email, phone, or ID.</p>
                     </div>
                     <div>
                         <label htmlFor="actionType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Action</label>

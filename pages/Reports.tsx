@@ -35,7 +35,9 @@ const Reports: React.FC = () => {
     const [showReport, setShowReport] = useState(false);
 
     // Dossier State
-    const [dossierUserId, setDossierUserId] = useState('');
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [userSearchTerm, setUserSearchTerm] = useState('');
+    const [showDossierPreview, setShowDossierPreview] = useState(false);
     
     const handleGenerateReport = (e: React.FormEvent) => {
         e.preventDefault();
@@ -110,53 +112,93 @@ const Reports: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    const downloadDossier = () => {
-        if (!dossierUserId) return;
-        const user = users.find(u => u.username === dossierUserId || u._id === dossierUserId);
-        if (!user) return alert('User not found');
+    // --- DOSSIER FUNCTIONS ---
 
-        // 1. Prepare Data
-        const userTx = transactions.filter(t => t.userId === user._id);
-        
-        // 2. Construct CSV
-        const rows = [];
-        
-        // SECTION 1: PROFILE
-        rows.push(['--- USER PROFILE ---']);
-        rows.push(['User ID', user._id]);
-        rows.push(['Full Name', user.fullName]);
-        rows.push(['Username', user.username]);
-        rows.push(['Email', user.email]);
-        rows.push(['Phone', user.phone]);
-        rows.push(['Sponsor', user.sponsor || 'N/A']);
-        rows.push(['Status', user.status]);
-        rows.push(['Wallet Balance', `$${user.walletBalance.toFixed(2)}`]);
-        rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
-        rows.push([]); // Spacer
+    const filteredUsersForDossier = useMemo(() => {
+        if (!userSearchTerm) return users;
+        const term = userSearchTerm.toLowerCase();
+        return users.filter(u => 
+            u.username.toLowerCase().includes(term) || 
+            u.fullName.toLowerCase().includes(term) || 
+            u.email.toLowerCase().includes(term)
+        );
+    }, [users, userSearchTerm]);
 
-        // SECTION 2: PLANS
-        rows.push(['--- ACTIVE PLANS ---']);
-        if (user.activePlans && user.activePlans.length > 0) {
-            rows.push(['Plan Name', 'Price', 'Purchase Date']);
-            user.activePlans.forEach(p => {
-                rows.push([p.planName, `$${p.price}`, new Date(p.purchaseDate).toLocaleDateString()]);
+    const handleUserSelect = (userId: string) => {
+        setSelectedUserIds(prev => {
+            if (prev.includes(userId)) {
+                return prev.filter(id => id !== userId);
+            } else {
+                return [...prev, userId];
+            }
+        });
+        setShowDossierPreview(false);
+    };
+
+    const handleSelectAll = () => {
+        // Select only visible users from filter
+        const allIds = filteredUsersForDossier.map(u => u._id);
+        // Merge avoiding duplicates
+        const newSet = new Set([...selectedUserIds, ...allIds]);
+        setSelectedUserIds(Array.from(newSet));
+        setShowDossierPreview(false);
+    };
+
+    const handleDeselectAll = () => {
+        setSelectedUserIds([]);
+        setShowDossierPreview(false);
+    };
+
+    const downloadBulkDossier = () => {
+        if (selectedUserIds.length === 0) return alert('Please select at least one user.');
+
+        const rows: string[][] = [];
+
+        selectedUserIds.forEach((userId, index) => {
+            const user = users.find(u => u._id === userId);
+            if (!user) return;
+
+            const userTx = transactions.filter(t => t.userId === user._id);
+
+            // SEPARATOR
+            if (index > 0) rows.push([], [], []); // Spacers between users
+            rows.push([`=== USER DOSSIER: ${user.username} (${user.email}) ===`]);
+            
+            // SECTION 1: PROFILE
+            rows.push(['--- PROFILE ---']);
+            rows.push(['User ID', user._id]);
+            rows.push(['Full Name', user.fullName]);
+            rows.push(['Phone', user.phone]);
+            rows.push(['Sponsor', user.sponsor || 'N/A']);
+            rows.push(['Status', user.status]);
+            rows.push(['Wallet Balance', `$${user.walletBalance.toFixed(2)}`]);
+            rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
+            rows.push([]); 
+
+            // SECTION 2: PLANS
+            rows.push(['--- ACTIVE PLANS ---']);
+            if (user.activePlans && user.activePlans.length > 0) {
+                rows.push(['Plan Name', 'Price', 'Purchase Date']);
+                user.activePlans.forEach(p => {
+                    rows.push([p.planName, `$${p.price}`, new Date(p.purchaseDate).toLocaleDateString()]);
+                });
+            } else {
+                rows.push(['No active plans']);
+            }
+            rows.push([]); 
+
+            // SECTION 3: ACTIVITY LOG
+            rows.push(['--- ACTIVITY LOG ---']);
+            rows.push(['Date', 'Type', 'Amount', 'Status', 'Description/Details']);
+            userTx.forEach(tx => {
+                rows.push([
+                    new Date(tx.date).toLocaleString(),
+                    tx.type,
+                    `$${tx.amount.toFixed(2)}`,
+                    tx.status || 'N/A',
+                    tx.description
+                ]);
             });
-        } else {
-            rows.push(['No active plans']);
-        }
-        rows.push([]); // Spacer
-
-        // SECTION 3: ACTIVITY LOG
-        rows.push(['--- ACTIVITY LOG ---']);
-        rows.push(['Date', 'Type', 'Amount', 'Status', 'Description/Details']);
-        userTx.forEach(tx => {
-            rows.push([
-                new Date(tx.date).toLocaleString(),
-                tx.type,
-                `$${tx.amount.toFixed(2)}`,
-                tx.status || 'N/A',
-                tx.description
-            ]);
         });
 
         const csvContent = rows.map(e => e.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -164,11 +206,15 @@ const Reports: React.FC = () => {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
+        const filename = selectedUserIds.length === 1 
+            ? `Dossier_${users.find(u => u._id === selectedUserIds[0])?.username}_${new Date().toISOString().split('T')[0]}.csv`
+            : `Bulk_Dossiers_${selectedUserIds.length}_Users_${new Date().toISOString().split('T')[0]}.csv`;
+            
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    }
+    };
 
     const reportHeaders = useMemo(() => reportConfigs[reportType].map(c => c.label), [reportType]);
     const hasStatusField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
@@ -187,7 +233,7 @@ const Reports: React.FC = () => {
                     className={`py-2 px-4 font-medium focus:outline-none ${activeTab === 'dossier' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                     onClick={() => setActiveTab('dossier')}
                 >
-                    Single User Dossier
+                    User Dossiers (Bulk/Single)
                 </button>
             </div>
 
@@ -276,32 +322,108 @@ const Reports: React.FC = () => {
 
             {activeTab === 'dossier' && (
                 <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Single User Dossier</h2>
+                    <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Export User Dossiers</h2>
                     <p className="text-sm text-gray-500 mb-6">
-                        Generate a comprehensive file containing a specific user's entire history: Profile, Plans, Deposits, Withdrawals, Transfers, and all Transactions.
+                        Select one or more users to generate a comprehensive file containing their full history: Profile, Plans, Deposits, Withdrawals, Transfers, and all Transactions.
                     </p>
                     
-                    <div className="max-w-xl space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Select User (Search by Username, Name, Email)</label>
+                    <div className="space-y-4">
+                        {/* Selection Controls */}
+                        <div className="flex flex-col sm:flex-row justify-between gap-4">
                             <input 
-                                list="users-dossier-list" 
                                 type="text" 
-                                value={dossierUserId}
-                                onChange={(e) => setDossierUserId(e.target.value)}
-                                placeholder="Start typing to search..."
-                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                value={userSearchTerm}
+                                onChange={(e) => setUserSearchTerm(e.target.value)}
+                                placeholder="Filter users by name, email, username..."
+                                className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600"
                             />
-                            <datalist id="users-dossier-list">
-                                {users.map(u => (
-                                    <option key={u._id} value={u.username}>{u.fullName} ({u.email})</option>
-                                ))}
-                            </datalist>
+                            <div className="flex space-x-2">
+                                <Button size="sm" variant="secondary" onClick={handleSelectAll}>Select All Filtered</Button>
+                                <Button size="sm" variant="secondary" onClick={handleDeselectAll}>Deselect All</Button>
+                            </div>
                         </div>
-                        
-                        {dossierUserId && (
-                            <div className="pt-2">
-                                <Button onClick={downloadDossier}>Download Master Dossier</Button>
+
+                        {/* User List */}
+                        <div className="border dark:border-gray-700 rounded-md max-h-64 overflow-y-auto">
+                            {filteredUsersForDossier.length > 0 ? (
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                                        <tr>
+                                            <th className="px-4 py-2 w-10">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={filteredUsersForDossier.length > 0 && filteredUsersForDossier.every(u => selectedUserIds.includes(u._id))}
+                                                    onChange={(e) => e.target.checked ? handleSelectAll() : handleDeselectAll()}
+                                                    className="rounded dark:bg-gray-700 dark:border-gray-600"
+                                                />
+                                            </th>
+                                            <th className="px-4 py-2">User Details</th>
+                                            <th className="px-4 py-2">Balance</th>
+                                            <th className="px-4 py-2">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y dark:divide-gray-700">
+                                        {filteredUsersForDossier.map(u => (
+                                            <tr 
+                                                key={u._id} 
+                                                className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${selectedUserIds.includes(u._id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                                                onClick={() => handleUserSelect(u._id)}
+                                            >
+                                                <td className="px-4 py-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedUserIds.includes(u._id)}
+                                                        onChange={() => {}} // Handled by row click
+                                                        className="rounded dark:bg-gray-700 dark:border-gray-600 pointer-events-none"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <div className="font-medium text-gray-900 dark:text-white">{u.fullName}</div>
+                                                    <div className="text-xs text-gray-500">@{u.username} | {u.email}</div>
+                                                </td>
+                                                <td className="px-4 py-2 font-mono text-green-600">${u.walletBalance.toFixed(2)}</td>
+                                                <td className="px-4 py-2"><Badge status={u.status} /></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="p-8 text-center text-gray-500">No users found matching "{userSearchTerm}"</div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                <strong>{selectedUserIds.length}</strong> users selected
+                            </span>
+                            <div className="space-x-3">
+                                <Button variant="secondary" onClick={() => setShowDossierPreview(!showDossierPreview)} disabled={selectedUserIds.length === 0}>
+                                    {showDossierPreview ? 'Hide Preview' : 'Preview Selected Data'}
+                                </Button>
+                                <Button onClick={downloadBulkDossier} disabled={selectedUserIds.length === 0}>
+                                    Export Selected Dossiers ({selectedUserIds.length})
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Preview Section */}
+                        {showDossierPreview && selectedUserIds.length > 0 && (
+                            <div className="mt-6 border-t dark:border-gray-700 pt-6 animate-fade-in">
+                                <h3 className="text-lg font-bold mb-3">Data Preview</h3>
+                                <Table headers={['Full Name', 'Username', 'Email', 'Active Plans', 'Total Transactions']}>
+                                    {users.filter(u => selectedUserIds.includes(u._id)).map(u => {
+                                        const userTxCount = transactions.filter(t => t.userId === u._id).length;
+                                        return (
+                                            <tr key={u._id} className="text-gray-700 dark:text-gray-400">
+                                                <td className="px-4 py-2">{u.fullName}</td>
+                                                <td className="px-4 py-2">@{u.username}</td>
+                                                <td className="px-4 py-2">{u.email}</td>
+                                                <td className="px-4 py-2">{u.activePlans?.length || 0}</td>
+                                                <td className="px-4 py-2">{userTxCount}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                </Table>
                             </div>
                         )}
                     </div>
