@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { Dispute, Status } from '../../types';
 import Table from '../../components/ui/Table';
@@ -12,13 +12,24 @@ const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
     const { disputes, currentUser, deposits, withdrawals, transfers } = state;
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    // Creation State
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [type, setType] = useState<'Deposit' | 'Withdrawal' | 'Transfer'>('Deposit');
     const [referenceId, setReferenceId] = useState('');
     const [description, setDescription] = useState('');
     const [proof, setProof] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [useManualId, setUseManualId] = useState(false);
+
+    // View State
+    const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [selectedDispute]);
 
     if (!currentUser) return <div>Loading...</div>;
 
@@ -72,7 +83,7 @@ const UserDisputes: React.FC = () => {
         try {
             const newDispute = await createDispute(formData);
             dispatch({ type: 'ADD_DISPUTE', payload: newDispute });
-            setIsModalOpen(false);
+            setIsCreateModalOpen(false);
             // Reset form
             setReferenceId('');
             setDescription('');
@@ -91,19 +102,21 @@ const UserDisputes: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white">My Disputes</h2>
-                <Button onClick={() => setIsModalOpen(true)}>Raise Dispute</Button>
+                <Button onClick={() => setIsCreateModalOpen(true)}>Raise Dispute</Button>
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
                 {userDisputes.length > 0 ? (
-                    <Table headers={['Date', 'Type', 'Ref ID', 'Status', 'Admin Response']}>
+                    <Table headers={['Date', 'Type', 'Ref ID', 'Status', 'Details']}>
                         {userDisputes.map(dispute => (
                             <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{dispute.type}</td>
                                 <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
                                 <td className="px-4 py-3"><Badge status={dispute.status as Status} /></td>
-                                <td className="px-4 py-3 text-sm max-w-xs truncate" title={dispute.adminResponse}>{dispute.adminResponse || '-'}</td>
+                                <td className="px-4 py-3">
+                                    <Button size="sm" variant="secondary" onClick={() => setSelectedDispute(dispute)}>View Chat</Button>
+                                </td>
                             </tr>
                         ))}
                     </Table>
@@ -112,8 +125,9 @@ const UserDisputes: React.FC = () => {
                 )}
             </div>
 
-            {isModalOpen && (
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            {/* CREATE MODAL */}
+            {isCreateModalOpen && (
+                <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)}>
                     <div className="p-4 w-[90vw] max-w-lg">
                         <h3 className="text-xl font-bold mb-4">Raise a Dispute</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -168,9 +182,6 @@ const UserDisputes: React.FC = () => {
                                         )}
                                     </select>
                                 )}
-                                {!useManualId && availableTransactions.length === 0 && (
-                                    <p className="text-xs text-yellow-600 mt-1">Can't find your transaction? Switch to "Enter ID Manually".</p>
-                                )}
                             </div>
 
                             <div>
@@ -193,10 +204,74 @@ const UserDisputes: React.FC = () => {
                                 />
                             </div>
                             <div className="flex justify-end space-x-3 pt-4">
-                                <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                                <Button type="button" variant="secondary" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
                                 <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Dispute'}</Button>
                             </div>
                         </form>
+                    </div>
+                </Modal>
+            )}
+
+            {/* VIEW/CHAT MODAL */}
+            {selectedDispute && (
+                <Modal isOpen={true} onClose={() => setSelectedDispute(null)}>
+                    <div className="p-4 w-[90vw] max-w-3xl h-[80vh] flex flex-col">
+                        <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-2">
+                            <div>
+                                <h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3>
+                                <Badge status={selectedDispute.status as Status} />
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={() => setSelectedDispute(null)}>Close</Button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg space-y-4">
+                            {/* Initial User Request */}
+                            <div className="flex justify-start">
+                                <div className="max-w-[85%] p-3 rounded-lg rounded-bl-none bg-white dark:bg-gray-700 shadow-sm text-gray-800 dark:text-gray-200">
+                                    <p className="text-sm font-bold mb-1 text-blue-600 dark:text-blue-400">Original Description</p>
+                                    <p className="text-sm whitespace-pre-wrap">{selectedDispute.description}</p>
+                                    <p className="text-[10px] mt-2 text-gray-400 text-right">{new Date(selectedDispute.date).toLocaleString()}</p>
+                                </div>
+                            </div>
+
+                            {selectedDispute.proofUrl && (
+                                <div className="flex justify-start">
+                                    <div className="max-w-[50%]">
+                                        <p className="text-xs text-gray-500 mb-1">Attached Proof</p>
+                                        <img src={selectedDispute.proofUrl} alt="Proof" className="rounded border shadow-sm" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Message History */}
+                            {selectedDispute.messages && selectedDispute.messages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.sender === 'User' ? 'justify-start' : msg.sender === 'System' ? 'justify-center' : 'justify-end'}`}>
+                                    {msg.sender === 'System' ? (
+                                        <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-500 px-2 py-1 rounded-full">
+                                            {msg.message} - {new Date(msg.date).toLocaleTimeString()}
+                                        </span>
+                                    ) : (
+                                        <div className={`max-w-[85%] p-3 rounded-lg shadow-sm text-sm ${
+                                            msg.sender === 'Admin' 
+                                                ? 'bg-blue-600 text-white rounded-br-none' 
+                                                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
+                                        }`}>
+                                            <p>{msg.message}</p>
+                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                {msg.sender} • {new Date(msg.date).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                        </div>
+                        
+                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
+                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500">
+                                Waiting for Admin response...
+                            </div>
+                        )}
                     </div>
                 </Modal>
             )}

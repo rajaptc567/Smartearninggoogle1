@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Status } from '../../types';
 
@@ -17,6 +18,7 @@ const statusColors: { [key in Status | 'Enabled' | 'Disabled']: string } = {
   [Status.Matching]: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300',
   [Status.Paused]: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   [Status.Open]: 'bg-blue-50 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300',
+  [Status.Processing]: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
   [Status.Resolved]: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   [Status.Closed]: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   'Enabled': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',

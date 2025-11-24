@@ -29,12 +29,27 @@ const DisputeSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Open', 'Resolved', 'Closed'],
+        enum: ['Open', 'Processing', 'Resolved', 'Closed'],
         default: 'Open',
     },
     adminResponse: {
         type: String,
     },
+    messages: [{
+        sender: {
+            type: String,
+            enum: ['User', 'Admin', 'System'],
+            required: true
+        },
+        message: {
+            type: String,
+            required: true
+        },
+        date: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

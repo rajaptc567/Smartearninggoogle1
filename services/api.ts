@@ -424,7 +424,7 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const updateDispute = async (id: string, data: { status: string; adminResponse: string }): Promise<Dispute> => {
+export const updateDispute = async (id: string, data: { status?: string; newMessage?: string }): Promise<Dispute> => {
     const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

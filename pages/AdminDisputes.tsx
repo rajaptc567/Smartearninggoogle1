@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../hooks/useData';
 import { Dispute, Status } from '../types';
 import Table from '../components/ui/Table';
@@ -14,12 +14,13 @@ const AdminDisputes: React.FC = () => {
 
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [adminResponse, setAdminResponse] = useState('');
+    const [replyMessage, setReplyMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
     const handleView = (dispute: Dispute) => {
         setSelectedDispute(dispute);
-        setAdminResponse(dispute.adminResponse || '');
+        setReplyMessage('');
         setIsModalOpen(true);
     };
 
@@ -27,6 +28,13 @@ const AdminDisputes: React.FC = () => {
         setIsModalOpen(false);
         setSelectedDispute(null);
     };
+
+    // Scroll to bottom of chat
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [selectedDispute, selectedDispute?.messages]);
 
     // Find the actual transaction object related to this dispute
     const linkedTransaction = useMemo(() => {
@@ -38,15 +46,34 @@ const AdminDisputes: React.FC = () => {
         return null;
     }, [selectedDispute, deposits, withdrawals, transfers]);
 
-    const handleResolve = async (status: 'Resolved' | 'Closed') => {
+    const handleSendMessage = async () => {
+        if (!selectedDispute || !replyMessage.trim()) return;
+        setIsSubmitting(true);
+        try {
+            const updatedDispute = await updateDispute(selectedDispute._id, { 
+                newMessage: replyMessage 
+            });
+            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+            setSelectedDispute(updatedDispute); // Update local state to show new msg
+            setReplyMessage('');
+        } catch (error) {
+            console.error("Failed to send message", error);
+            alert("Failed to send message");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleStatusChange = async (status: 'Processing' | 'Resolved' | 'Closed' | 'Open') => {
         if (!selectedDispute) return;
         setIsSubmitting(true);
         try {
-            const updatedDispute = await updateDispute(selectedDispute._id, { status, adminResponse });
+            const updatedDispute = await updateDispute(selectedDispute._id, { status });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
-            handleClose();
+            setSelectedDispute(updatedDispute);
+            // Don't close modal, let admin see the status change
         } catch (error) {
-            console.error("Failed to update dispute", error);
+            console.error("Failed to update dispute status", error);
             alert("Failed to update dispute status");
         } finally {
             setIsSubmitting(false);
@@ -69,7 +96,7 @@ const AdminDisputes: React.FC = () => {
             // Also resolve the dispute automatically
             const updatedDispute = await updateDispute(selectedDispute._id, { 
                 status: Status.Resolved, 
-                adminResponse: 'Deposit has been approved based on provided proof.' 
+                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.' 
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
@@ -108,87 +135,125 @@ const AdminDisputes: React.FC = () => {
 
             {isModalOpen && selectedDispute && (
                 <Modal isOpen={isModalOpen} onClose={handleClose}>
-                    <div className="p-4 w-[90vw] max-w-3xl">
-                        <h3 className="text-xl font-bold mb-4">Dispute Details</h3>
+                    <div className="p-2 w-[95vw] max-w-5xl h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-2">
+                            <div>
+                                <h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3>
+                                <span className="text-sm text-gray-500">{selectedDispute.userName} | {selectedDispute.type}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Badge status={selectedDispute.status as Status} />
+                                <Button variant="secondary" size="sm" onClick={handleClose}>Close</Button>
+                            </div>
+                        </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                            <div className="space-y-2 text-sm">
-                                <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b pb-1 mb-2">Dispute Info</h4>
-                                <div><strong>User:</strong> {selectedDispute.userName}</div>
-                                <div><strong>Type:</strong> {selectedDispute.type}</div>
-                                <div><strong>Reference ID:</strong> <span className="font-mono text-xs">{selectedDispute.referenceId}</span></div>
-                                <div><strong>Status:</strong> <Badge status={selectedDispute.status as Status} /></div>
-                                <div className="mt-2">
-                                    <strong>User Description:</strong>
-                                    <p className="p-2 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600 mt-1 text-gray-600 dark:text-gray-300">
+                        <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
+                            {/* LEFT COLUMN: DETAILS & CONTEXT */}
+                            <div className="md:w-1/3 overflow-y-auto space-y-4 pr-2 border-r dark:border-gray-700">
+                                 {/* Original Complaint */}
+                                 <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                                    <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Issue Description</h4>
+                                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                                         {selectedDispute.description}
                                     </p>
                                 </div>
-                            </div>
 
-                            <div className="space-y-2 text-sm">
-                                <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b pb-1 mb-2">Linked Transaction</h4>
-                                {linkedTransaction ? (
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div><strong>Amount:</strong> ${linkedTransaction.amount.toFixed(2)}</div>
-                                            <div><strong>Date:</strong> {new Date(linkedTransaction.date).toLocaleDateString()}</div>
-                                            <div><strong>Current Status:</strong> <Badge status={linkedTransaction.status as Status} /></div>
-                                            {selectedDispute.type === 'Deposit' && (
-                                                <div><strong>Method:</strong> {(linkedTransaction as any).method}</div>
-                                            )}
-                                            {selectedDispute.type === 'Withdrawal' && (
-                                                <div><strong>Method:</strong> {(linkedTransaction as any).method}</div>
+                                {/* Transaction Details */}
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
+                                    <h4 className="font-semibold text-xs uppercase text-blue-600 dark:text-blue-300 mb-2">Linked Transaction</h4>
+                                    {linkedTransaction ? (
+                                        <div className="text-sm space-y-1">
+                                            <div className="flex justify-between"><span>ID:</span> <span className="font-mono text-xs">{linkedTransaction._id}</span></div>
+                                            <div className="flex justify-between"><span>Amount:</span> <span className="font-bold">${linkedTransaction.amount.toFixed(2)}</span></div>
+                                            <div className="flex justify-between"><span>Date:</span> <span>{new Date(linkedTransaction.date).toLocaleDateString()}</span></div>
+                                            <div className="flex justify-between"><span>Status:</span> <Badge status={linkedTransaction.status as Status} /></div>
+                                            
+                                            {selectedDispute.status !== 'Resolved' && selectedDispute.type === 'Deposit' && linkedTransaction.status !== 'Approved' && (
+                                                <div className="pt-2 mt-2 border-t border-blue-200 dark:border-blue-700 text-center">
+                                                    <Button size="sm" variant="success" onClick={handleForceApproveDeposit} disabled={isSubmitting} className="w-full">
+                                                        Force Approve Deposit
+                                                    </Button>
+                                                </div>
                                             )}
                                         </div>
-                                        
-                                        {/* QUICK ACTIONS */}
-                                        {selectedDispute.status === 'Open' && selectedDispute.type === 'Deposit' && linkedTransaction.status !== 'Approved' && (
-                                            <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700 text-center">
-                                                <Button size="sm" variant="success" onClick={handleForceApproveDeposit} disabled={isSubmitting}>
-                                                    Force Approve Deposit
-                                                </Button>
-                                                <p className="text-xs text-gray-500 mt-1">Approves funds & resolves dispute.</p>
-                                            </div>
-                                        )}
+                                    ) : (
+                                        <p className="text-red-500 italic text-xs">Original transaction not found.</p>
+                                    )}
+                                </div>
+
+                                {/* Proof */}
+                                {selectedDispute.proofUrl && (
+                                    <div className="mb-4">
+                                        <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Submitted Proof</h4>
+                                        <a href={selectedDispute.proofUrl} target="_blank" rel="noreferrer">
+                                            <img src={selectedDispute.proofUrl} alt="Proof" className="w-full object-contain rounded border shadow-sm bg-gray-100 hover:opacity-90 transition-opacity" />
+                                        </a>
                                     </div>
-                                ) : (
-                                    <p className="text-red-500 italic">Original transaction not found. It may have been deleted.</p>
                                 )}
                             </div>
+
+                            {/* RIGHT COLUMN: CHAT & ACTIONS */}
+                            <div className="md:w-2/3 flex flex-col">
+                                {/* Messages Area */}
+                                <div className="flex-grow bg-gray-100 dark:bg-gray-900 rounded-lg p-4 overflow-y-auto space-y-4 mb-4 border dark:border-gray-700">
+                                    {selectedDispute.messages && selectedDispute.messages.length > 0 ? (
+                                        selectedDispute.messages.map((msg, idx) => (
+                                            <div key={idx} className={`flex ${msg.sender === 'Admin' ? 'justify-end' : msg.sender === 'System' ? 'justify-center' : 'justify-start'}`}>
+                                                {msg.sender === 'System' ? (
+                                                    <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
+                                                        {msg.message} - {new Date(msg.date).toLocaleTimeString()}
+                                                    </span>
+                                                ) : (
+                                                    <div className={`max-w-[80%] p-3 rounded-lg shadow-sm ${
+                                                        msg.sender === 'Admin' 
+                                                            ? 'bg-blue-600 text-white rounded-br-none' 
+                                                            : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
+                                                    }`}>
+                                                        <p className="text-sm">{msg.message}</p>
+                                                        <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                            {msg.sender} • {new Date(msg.date).toLocaleString()}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <p className="text-center text-gray-400 text-sm italic">No conversation history yet.</p>
+                                    )}
+                                    <div ref={chatEndRef} />
+                                </div>
+
+                                {/* Input Area */}
+                                <div className="flex gap-2 mb-4">
+                                    <input 
+                                        type="text" 
+                                        className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                                        placeholder="Type a reply..." 
+                                        value={replyMessage}
+                                        onChange={(e) => setReplyMessage(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                        disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
+                                    />
+                                    <Button onClick={handleSendMessage} disabled={isSubmitting || !replyMessage.trim()}>Send</Button>
+                                </div>
+
+                                {/* Status Actions */}
+                                <div className="flex flex-wrap gap-2 justify-end pt-2 border-t dark:border-gray-700">
+                                    {selectedDispute.status === 'Open' && (
+                                        <Button size="sm" variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200" onClick={() => handleStatusChange('Processing')}>Mark Processing</Button>
+                                    )}
+                                    {(selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed') && (
+                                        <Button size="sm" variant="secondary" onClick={() => handleStatusChange('Open')}>Reopen Ticket</Button>
+                                    )}
+                                    {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
+                                        <>
+                                            <Button size="sm" variant="danger" onClick={() => handleStatusChange('Closed')}>Close Ticket</Button>
+                                            <Button size="sm" variant="success" onClick={() => handleStatusChange('Resolved')}>Resolve Ticket</Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-
-                        {selectedDispute.proofUrl && (
-                            <div className="mb-6">
-                                <h4 className="font-semibold mb-2">New Proof Provided:</h4>
-                                <img src={selectedDispute.proofUrl} alt="Proof" className="max-w-full max-h-64 object-contain rounded border shadow-sm bg-gray-100" />
-                            </div>
-                        )}
-
-                        <div className="mb-4">
-                            <label className="block font-semibold mb-1">Admin Response:</label>
-                            <textarea 
-                                className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500" 
-                                rows={3}
-                                value={adminResponse}
-                                onChange={(e) => setAdminResponse(e.target.value)}
-                                placeholder="Enter your reply to the user..."
-                                disabled={selectedDispute.status !== 'Open'}
-                            />
-                        </div>
-
-                        {selectedDispute.status === 'Open' && (
-                            <div className="flex justify-end space-x-3 border-t pt-4 dark:border-gray-700">
-                                <Button variant="secondary" onClick={handleClose}>Cancel</Button>
-                                <Button variant="danger" onClick={() => handleResolve('Closed')} disabled={isSubmitting}>Reject/Close</Button>
-                                <Button variant="primary" onClick={() => handleResolve('Resolved')} disabled={isSubmitting}>Resolve & Reply</Button>
-                            </div>
-                        )}
-                        {selectedDispute.status !== 'Open' && (
-                             <div className="flex justify-end border-t pt-4 dark:border-gray-700">
-                                <Button variant="secondary" onClick={handleClose}>Close</Button>
-                            </div>
-                        )}
                     </div>
                 </Modal>
             )}

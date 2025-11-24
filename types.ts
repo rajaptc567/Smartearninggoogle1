@@ -10,6 +10,7 @@ export enum Status {
   Matching = 'Matching',
   Paused = 'Paused',
   Open = 'Open',
+  Processing = 'Processing',
   Resolved = 'Resolved',
   Closed = 'Closed',
 }
@@ -232,6 +233,12 @@ export interface PasswordResetRequest {
   requestDate: string;
 }
 
+export interface DisputeMessage {
+    sender: 'User' | 'Admin' | 'System';
+    message: string;
+    date: string;
+}
+
 export interface Dispute {
     _id: string;
     userId: string;
@@ -240,7 +247,8 @@ export interface Dispute {
     referenceId: string; // The ID of the rejected/failed item
     description: string;
     proofUrl?: string; // New proof if re-submitting
-    status: Status.Open | Status.Resolved | Status.Closed;
-    adminResponse?: string;
+    status: Status.Open | Status.Processing | Status.Resolved | Status.Closed;
+    adminResponse?: string; // Kept for legacy/summary, actual chat is in messages
+    messages?: DisputeMessage[];
     date: string;
 }
