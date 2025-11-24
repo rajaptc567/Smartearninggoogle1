@@ -3,8 +3,10 @@ import React, { useState, useMemo } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
-import { Status, User } from '../types';
+import { Status, User, Transaction, Deposit } from '../types';
 import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import { getUploadsBaseUrl } from '../services/api';
 
 type ReportType = 'deposits' | 'withdrawals' | 'users' | 'commissions' | 'transfers' | 'all_transactions';
 
@@ -20,6 +22,7 @@ const reportConfigs: { [key in ReportType]: { label: string; key: keyof any }[] 
 const Reports: React.FC = () => {
     const { state } = useData();
     const { users, transactions, deposits, withdrawals, transfers } = state;
+    const UPLOADS_URL = getUploadsBaseUrl();
     
     const [activeTab, setActiveTab] = useState<'general' | 'dossier'>('general');
 
@@ -149,6 +152,71 @@ const Reports: React.FC = () => {
         setShowDossierPreview(false);
     };
 
+    // Helper to link a transaction to a deposit proof
+    const getReceiptInfo = (tx: Transaction) => {
+        if (tx.type !== 'Deposit') return 'N/A';
+        
+        // Attempt to find matching deposit. 
+        // Transaction description usually contains "Deposit #<id>"
+        const match = tx.description.match(/#(\w+)/);
+        const depositId = match ? match[1] : null;
+        
+        let deposit: Deposit | undefined;
+        if (depositId) {
+            deposit = deposits.find(d => d._id === depositId);
+        } 
+        
+        // Fallback: Try strict matching on other fields if ID extraction fails (rare)
+        if (!deposit) {
+             deposit = deposits.find(d => d.transactionId === tx.description || (d.userId === tx.userId && d.amount === tx.amount && new Date(d.date).getTime() === new Date(tx.date).getTime()));
+        }
+
+        if (deposit && deposit.receiptUrl) {
+            if (deposit.receiptUrl.startsWith('data:')) return '[Base64 Image Data - View in Admin Panel]';
+            return `${UPLOADS_URL}${deposit.receiptUrl}`;
+        }
+        
+        return 'N/A';
+    };
+
+    // Helper to calculate deep analytics
+    const calculateUserAnalytics = (user: User) => {
+        // 1. Financials from Transactions/Records
+        const approvedDeposits = deposits.filter(d => d.userId === user._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0);
+        const paidWithdrawals = withdrawals.filter(w => w.userId === user._id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0);
+        const sentTransfers = transfers.filter(t => t.senderId === user._id && t.status === Status.Approved).reduce((sum, t) => sum + t.amount, 0);
+
+        const commissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission' && t.status === 'Approved');
+        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
+        const directCommission = commissions.filter(t => t.level === 1).reduce((sum, t) => sum + t.amount, 0);
+        const indirectCommission = totalCommission - directCommission;
+
+        // 2. Network Stats
+        const directRefs = users.filter(u => u.sponsor === user.username);
+        const totalDirectRef = directRefs.length;
+
+        // Helper to count downline recursively
+        const countDownline = (username: string): number => {
+            const directs = users.filter(u => u.sponsor === username);
+            return directs.length + directs.reduce((acc, curr) => acc + countDownline(curr.username), 0);
+        };
+
+        // Total network size including directs
+        const totalNetwork = countDownline(user.username);
+        const totalIndirectRef = totalNetwork - totalDirectRef;
+
+        return {
+            totalDeposit: approvedDeposits,
+            totalWithdrawal: paidWithdrawals,
+            totalTransfer: sentTransfers,
+            totalCommission,
+            directCommission,
+            indirectCommission,
+            totalDirectRef,
+            totalIndirectRef
+        };
+    };
+
     const downloadBulkDossier = () => {
         if (selectedUserIds.length === 0) return alert('Please select at least one user.');
 
@@ -158,13 +226,27 @@ const Reports: React.FC = () => {
             const user = users.find(u => u._id === userId);
             if (!user) return;
 
-            const userTx = transactions.filter(t => t.userId === user._id);
+            const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const stats = calculateUserAnalytics(user);
 
             // SEPARATOR
             if (index > 0) rows.push([], [], []); // Spacers between users
             rows.push([`=== USER DOSSIER: ${user.username} (${user.email}) ===`]);
             
-            // SECTION 1: PROFILE
+            // SECTION 1: ANALYTICS SUMMARY
+            rows.push(['--- ANALYTICS SUMMARY ---']);
+            rows.push(['Metric', 'Value']);
+            rows.push(['Total Approved Deposits', `$${stats.totalDeposit.toFixed(2)}`]);
+            rows.push(['Total Paid Withdrawals', `$${stats.totalWithdrawal.toFixed(2)}`]);
+            rows.push(['Total Transfers Sent', `$${stats.totalTransfer.toFixed(2)}`]);
+            rows.push(['Total Commission Earned', `$${stats.totalCommission.toFixed(2)}`]);
+            rows.push(['  - Direct Commission', `$${stats.directCommission.toFixed(2)}`]);
+            rows.push(['  - Indirect Commission', `$${stats.indirectCommission.toFixed(2)}`]);
+            rows.push(['Total Direct Referrals', `${stats.totalDirectRef}`]);
+            rows.push(['Total Indirect Referrals', `${stats.totalIndirectRef}`]);
+            rows.push([]);
+
+            // SECTION 2: PROFILE
             rows.push(['--- PROFILE ---']);
             rows.push(['User ID', user._id]);
             rows.push(['Full Name', user.fullName]);
@@ -175,7 +257,7 @@ const Reports: React.FC = () => {
             rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
             rows.push([]); 
 
-            // SECTION 2: PLANS
+            // SECTION 3: PLANS
             rows.push(['--- ACTIVE PLANS ---']);
             if (user.activePlans && user.activePlans.length > 0) {
                 rows.push(['Plan Name', 'Price', 'Purchase Date']);
@@ -187,16 +269,18 @@ const Reports: React.FC = () => {
             }
             rows.push([]); 
 
-            // SECTION 3: ACTIVITY LOG
+            // SECTION 4: ACTIVITY LOG
             rows.push(['--- ACTIVITY LOG ---']);
-            rows.push(['Date', 'Type', 'Amount', 'Status', 'Description/Details']);
+            rows.push(['Date', 'Type', 'Amount', 'Status', 'Description/Details', 'Receipt / Proof']);
             userTx.forEach(tx => {
+                const proof = getReceiptInfo(tx);
                 rows.push([
                     new Date(tx.date).toLocaleString(),
                     tx.type,
                     `$${tx.amount.toFixed(2)}`,
                     tx.status || 'N/A',
-                    tx.description
+                    tx.description,
+                    proof
                 ]);
             });
         });
@@ -220,6 +304,14 @@ const Reports: React.FC = () => {
     const hasStatusField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
     const hasAmountField = ['deposits', 'withdrawals', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
     
+    // Helper for Preview display of receipts
+    const renderReceiptPreview = (tx: Transaction) => {
+        const proof = getReceiptInfo(tx);
+        if (proof === 'N/A') return <span className="text-gray-400">-</span>;
+        if (proof === '[Base64 Image Data - View in Admin Panel]') return <span className="text-xs text-blue-500 italic">Image Stored (View in Deposits)</span>;
+        return <a href={proof} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">View Proof</a>;
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex space-x-4 border-b dark:border-gray-700">
@@ -397,8 +489,8 @@ const Reports: React.FC = () => {
                                 <strong>{selectedUserIds.length}</strong> users selected
                             </span>
                             <div className="space-x-3">
-                                <Button variant="secondary" onClick={() => setShowDossierPreview(!showDossierPreview)} disabled={selectedUserIds.length === 0}>
-                                    {showDossierPreview ? 'Hide Preview' : 'Preview Selected Data'}
+                                <Button variant="secondary" onClick={() => setShowDossierPreview(true)} disabled={selectedUserIds.length === 0}>
+                                    Preview Selected Data
                                 </Button>
                                 <Button onClick={downloadBulkDossier} disabled={selectedUserIds.length === 0}>
                                     Export Selected Dossiers ({selectedUserIds.length})
@@ -406,25 +498,115 @@ const Reports: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Preview Section */}
+                        {/* Modal Preview Section */}
                         {showDossierPreview && selectedUserIds.length > 0 && (
-                            <div className="mt-6 border-t dark:border-gray-700 pt-6 animate-fade-in">
-                                <h3 className="text-lg font-bold mb-3">Data Preview</h3>
-                                <Table headers={['Full Name', 'Username', 'Email', 'Active Plans', 'Total Transactions']}>
-                                    {users.filter(u => selectedUserIds.includes(u._id)).map(u => {
-                                        const userTxCount = transactions.filter(t => t.userId === u._id).length;
-                                        return (
-                                            <tr key={u._id} className="text-gray-700 dark:text-gray-400">
-                                                <td className="px-4 py-2">{u.fullName}</td>
-                                                <td className="px-4 py-2">@{u.username}</td>
-                                                <td className="px-4 py-2">{u.email}</td>
-                                                <td className="px-4 py-2">{u.activePlans?.length || 0}</td>
-                                                <td className="px-4 py-2">{userTxCount}</td>
-                                            </tr>
-                                        )
-                                    })}
-                                </Table>
-                            </div>
+                            <Modal isOpen={showDossierPreview} onClose={() => setShowDossierPreview(false)}>
+                                <div className="p-4 w-[95vw] max-w-7xl h-[85vh] overflow-y-auto">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-2xl font-bold">Dossier Preview ({selectedUserIds.length} Users)</h2>
+                                        <div className="space-x-2">
+                                            <Button onClick={downloadBulkDossier}>Export CSV</Button>
+                                            <Button variant="secondary" onClick={() => setShowDossierPreview(false)}>Close</Button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-8">
+                                        {selectedUserIds.map(userId => {
+                                            const user = users.find(u => u._id === userId);
+                                            if (!user) return null;
+                                            const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                            const stats = calculateUserAnalytics(user);
+
+                                            return (
+                                                <div key={user._id} className="border dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800 shadow-sm">
+                                                    <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center">
+                                                        {user.fullName} (@{user.username})
+                                                        <span className="ml-2 text-xs text-gray-500 font-normal">{user._id}</span>
+                                                    </h3>
+                                                    
+                                                    {/* ANALYTICS PREVIEW GRID */}
+                                                    <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-white dark:bg-gray-900 p-4 rounded-md border border-gray-200 dark:border-gray-700">
+                                                        <div className="text-center">
+                                                            <p className="text-xs text-gray-500 uppercase">Total Commission</p>
+                                                            <p className="text-lg font-bold text-green-600">${stats.totalCommission.toFixed(2)}</p>
+                                                            <p className="text-[10px] text-gray-400">Dir: ${stats.directCommission.toFixed(2)} | Ind: ${stats.indirectCommission.toFixed(2)}</p>
+                                                        </div>
+                                                        <div className="text-center border-l dark:border-gray-700">
+                                                            <p className="text-xs text-gray-500 uppercase">Total Deposits</p>
+                                                            <p className="text-lg font-bold text-blue-600">${stats.totalDeposit.toFixed(2)}</p>
+                                                        </div>
+                                                        <div className="text-center border-l dark:border-gray-700">
+                                                            <p className="text-xs text-gray-500 uppercase">Total Withdrawals</p>
+                                                            <p className="text-lg font-bold text-red-600">${stats.totalWithdrawal.toFixed(2)}</p>
+                                                        </div>
+                                                        <div className="text-center border-l dark:border-gray-700">
+                                                            <p className="text-xs text-gray-500 uppercase">Total Referrals</p>
+                                                            <p className="text-lg font-bold text-purple-600">{stats.totalDirectRef + stats.totalIndirectRef}</p>
+                                                            <p className="text-[10px] text-gray-400">Dir: {stats.totalDirectRef} | Ind: {stats.totalIndirectRef}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
+                                                        <div><strong>Email:</strong> {user.email}</div>
+                                                        <div><strong>Phone:</strong> {user.phone}</div>
+                                                        <div><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</div>
+                                                        <div><strong>Balance:</strong> <span className="text-green-600 font-bold">${user.walletBalance.toFixed(2)}</span></div>
+                                                        <div><strong>Status:</strong> <Badge status={user.status} /></div>
+                                                        <div><strong>Registered:</strong> {new Date(user.registrationDate).toLocaleDateString()}</div>
+                                                    </div>
+
+                                                    <div className="mb-4">
+                                                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-gray-600 pb-1 mb-2">Active Plans</h4>
+                                                        {user.activePlans && user.activePlans.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {user.activePlans.map((p, i) => (
+                                                                    <span key={i} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
+                                                                        {p.planName} (${p.price}) - {new Date(p.purchaseDate).toLocaleDateString()}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : <p className="text-xs text-gray-500">No active plans</p>}
+                                                    </div>
+
+                                                    <div>
+                                                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-gray-600 pb-1 mb-2">Activity Log</h4>
+                                                        <div className="overflow-x-auto max-h-60">
+                                                            <table className="w-full text-xs text-left">
+                                                                <thead className="bg-gray-200 dark:bg-gray-700 sticky top-0">
+                                                                    <tr>
+                                                                        <th className="p-2">Date</th>
+                                                                        <th className="p-2">Type</th>
+                                                                        <th className="p-2">Amount</th>
+                                                                        <th className="p-2">Status</th>
+                                                                        <th className="p-2">Description</th>
+                                                                        <th className="p-2">Proof</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y dark:divide-gray-600">
+                                                                    {userTx.length > 0 ? userTx.map(tx => (
+                                                                        <tr key={tx._id}>
+                                                                            <td className="p-2 whitespace-nowrap">{new Date(tx.date).toLocaleString()}</td>
+                                                                            <td className="p-2">{tx.type}</td>
+                                                                            <td className={`p-2 font-mono ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                                ${tx.amount.toFixed(2)}
+                                                                            </td>
+                                                                            <td className="p-2"><Badge status={tx.status as Status} /></td>
+                                                                            <td className="p-2">{tx.description}</td>
+                                                                            <td className="p-2">{renderReceiptPreview(tx)}</td>
+                                                                        </tr>
+                                                                    )) : (
+                                                                        <tr><td colSpan={6} className="p-2 text-center text-gray-500">No transactions found.</td></tr>
+                                                                    )}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </Modal>
                         )}
                     </div>
                 </div>

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useData';
@@ -42,7 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/reports', label: 'Reports', icon: <ReportIcon /> },
       { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
       { to: '/admin/logs', label: 'Logs', icon: <LogsIcon /> },
-      { to: '/member', label: 'View User Panel', icon: <UserViewIcon /> },
+      { to: '/member', label: 'View User Panel as Admin', icon: <UserViewIcon /> },
     ];
 
     const baseLinkClass = "flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200";
