@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Transfer, Status } from '../types';
 import Table from '../components/ui/Table';
@@ -11,13 +12,17 @@ const Transfers: React.FC = () => {
     const { state, dispatch } = useData();
     const { transfers } = state;
 
-    const tableHeaders = ['Sender', 'Recipient', 'Amount', 'Status', 'Date'];
+    const tableHeaders = ['ID', 'Sender', 'Recipient', 'Amount', 'Status', 'Date'];
     
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
     const [adminNotes, setAdminNotes] = useState('');
     const [currentStatus, setCurrentStatus] = useState<Transfer['status']>(Status.Pending);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Search & Filter State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
 
     useEffect(() => {
         if (selectedTransfer) {
@@ -25,6 +30,19 @@ const Transfers: React.FC = () => {
             setCurrentStatus(selectedTransfer.status);
         }
     }, [selectedTransfer]);
+
+    // Filter Logic
+    const filteredTransfers = transfers.filter(t => {
+        const matchesSearch = 
+            t._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.senderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.recipientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.amount.toString().includes(searchTerm);
+        
+        const matchesStatus = statusFilter ? t.status === statusFilter : true;
+
+        return matchesSearch && matchesStatus;
+    });
 
     const handleSaveChanges = async () => {
         if (selectedTransfer) {
@@ -64,14 +82,36 @@ const Transfers: React.FC = () => {
     
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">User to User Transfers</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">User to User Transfers</h2>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    >
+                        <option value="">All Status</option>
+                        <option value={Status.Pending}>Pending</option>
+                        <option value={Status.Approved}>Approved</option>
+                        <option value={Status.Rejected}>Rejected</option>
+                    </select>
+                    <input 
+                        type="text" 
+                        placeholder="Search by ID, Sender, Recipient..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    />
+                </div>
+            </div>
             <Table headers={tableHeaders}>
-                {transfers.map((transfer: Transfer) => (
+                {filteredTransfers.map((transfer: Transfer) => (
                     <tr 
                       key={transfer._id} 
                       className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
                       onClick={() => handleRowClick(transfer)}
                     >
+                        <td className="px-4 py-3 text-xs font-mono">{transfer._id.substring(0, 8)}...</td>
                         <td className="px-4 py-3">{transfer.senderName}</td>
                         <td className="px-4 py-3">{transfer.recipientName}</td>
                         <td className="px-4 py-3">${transfer.amount.toFixed(2)}</td>

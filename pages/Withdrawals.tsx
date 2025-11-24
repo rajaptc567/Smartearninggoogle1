@@ -24,6 +24,11 @@ const Withdrawals: React.FC = () => {
   const [p2pInstructions, setP2pInstructions] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
   const UPLOADS_URL = getUploadsBaseUrl();
 
   useEffect(() => {
@@ -49,6 +54,18 @@ const Withdrawals: React.FC = () => {
       }
     }
   }, [selectedWithdrawal, paymentMethods]);
+
+  // Filter Logic
+  const filteredWithdrawals = withdrawals.filter(w => {
+      const matchesSearch = 
+        w._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        w.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        w.amount.toString().includes(searchTerm);
+      
+      const matchesStatus = statusFilter ? w.status === statusFilter : true;
+
+      return matchesSearch && matchesStatus;
+  });
 
   const handleRowClick = (w: Withdrawal) => {
     setSelectedWithdrawal(w);
@@ -99,18 +116,42 @@ const Withdrawals: React.FC = () => {
   }
 
 
-  const tableHeaders = ['User', 'Amount', 'Final Amount', 'Method', 'Status', 'Match Rem.', 'Date'];
+  const tableHeaders = ['ID', 'User', 'Amount', 'Final Amount', 'Method', 'Status', 'Match Rem.', 'Date'];
 
   return (
     <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Withdrawal Requests</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Withdrawal Requests</h2>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+              >
+                  <option value="">All Status</option>
+                  <option value={Status.Pending}>Pending</option>
+                  <option value={Status.Matching}>Matching (P2P)</option>
+                  <option value={Status.Approved}>Approved</option>
+                  <option value={Status.Paid}>Paid</option>
+                  <option value={Status.Rejected}>Rejected</option>
+              </select>
+              <input 
+                  type="text" 
+                  placeholder="Search by ID, User..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+              />
+          </div>
+      </div>
       <Table headers={tableHeaders}>
-        {withdrawals.map((w: Withdrawal) => (
+        {filteredWithdrawals.map((w: Withdrawal) => (
           <tr 
             key={w._id} 
             className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
             onClick={() => handleRowClick(w)}
           >
+            <td className="px-4 py-3 text-xs font-mono">{w._id.substring(0, 8)}...</td>
             <td className="px-4 py-3">{w.userName}</td>
             <td className="px-4 py-3">${w.amount.toFixed(2)}</td>
             <td className="px-4 py-3 font-semibold">${w.finalAmount.toFixed(2)}</td>

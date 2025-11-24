@@ -18,6 +18,10 @@ const AdminDisputes: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
+    // Search & Filter State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+
     const handleView = (dispute: Dispute) => {
         setSelectedDispute(dispute);
         setReplyMessage('');
@@ -35,6 +39,18 @@ const AdminDisputes: React.FC = () => {
             chatEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [selectedDispute, selectedDispute?.messages]);
+
+    // Filter Logic
+    const filteredDisputes = useMemo(() => disputes.filter(d => {
+        const matchesSearch = 
+            d._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            d.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            d.referenceId.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesStatus = statusFilter ? d.status === statusFilter : true;
+
+        return matchesSearch && matchesStatus;
+    }), [disputes, searchTerm, statusFilter]);
 
     // Find the actual transaction object related to this dispute
     const linkedTransaction = useMemo(() => {
@@ -112,10 +128,32 @@ const AdminDisputes: React.FC = () => {
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Manage Disputes</h2>
-            {disputes.length > 0 ? (
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Manage Disputes</h2>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    >
+                        <option value="">All Status</option>
+                        <option value={Status.Open}>Open</option>
+                        <option value={Status.Processing}>Processing</option>
+                        <option value={Status.Resolved}>Resolved</option>
+                        <option value={Status.Closed}>Closed</option>
+                    </select>
+                    <input 
+                        type="text" 
+                        placeholder="Search ID, User, Ref..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    />
+                </div>
+            </div>
+            {filteredDisputes.length > 0 ? (
                 <Table headers={['ID', 'User', 'Type', 'Ref ID', 'Date', 'Status', 'Action']}>
-                    {disputes.map(dispute => (
+                    {filteredDisputes.map(dispute => (
                         <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
                             <td className="px-4 py-3 text-xs font-mono">{dispute._id}</td>
                             <td className="px-4 py-3">{dispute.userName}</td>

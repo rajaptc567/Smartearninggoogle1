@@ -13,7 +13,7 @@ const Deposits: React.FC = () => {
     const { state, dispatch } = useData();
     const { deposits } = state;
 
-    const tableHeaders = ['User', 'Amount', 'Method', 'Transaction ID', 'Receipt', 'Status', 'Date'];
+    const tableHeaders = ['ID', 'User', 'Amount', 'Method', 'Transaction ID', 'Receipt', 'Status', 'Date'];
     
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
@@ -23,6 +23,10 @@ const Deposits: React.FC = () => {
     const [adminNotes, setAdminNotes] = useState('');
     const [currentStatus, setCurrentStatus] = useState<Deposit['status']>(Status.Pending);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Search & Filter State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
 
     const UPLOADS_URL = getUploadsBaseUrl();
 
@@ -32,6 +36,19 @@ const Deposits: React.FC = () => {
             setCurrentStatus(selectedDeposit.status);
         }
     }, [selectedDeposit]);
+
+    // Filter Logic
+    const filteredDeposits = deposits.filter(deposit => {
+        const matchesSearch = 
+            deposit._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            deposit.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            deposit.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            deposit.amount.toString().includes(searchTerm);
+        
+        const matchesStatus = statusFilter ? deposit.status === statusFilter : true;
+
+        return matchesSearch && matchesStatus;
+    });
 
     const handleSaveChanges = async () => {
         if (selectedDeposit) {
@@ -87,14 +104,36 @@ const Deposits: React.FC = () => {
     
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Deposit Requests</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Deposit Requests</h2>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    >
+                        <option value="">All Status</option>
+                        <option value={Status.Pending}>Pending</option>
+                        <option value={Status.Approved}>Approved</option>
+                        <option value={Status.Rejected}>Rejected</option>
+                    </select>
+                    <input 
+                        type="text" 
+                        placeholder="Search by ID, User, TxID..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    />
+                </div>
+            </div>
             <Table headers={tableHeaders}>
-                {deposits.map((deposit: Deposit) => (
+                {filteredDeposits.map((deposit: Deposit) => (
                     <tr 
                       key={deposit._id} 
                       className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
                       onClick={() => handleRowClick(deposit)}
                     >
+                        <td className="px-4 py-3 text-xs font-mono">{deposit._id.substring(0, 8)}...</td>
                         <td className="px-4 py-3">{deposit.userName}</td>
                         <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
                         <td className="px-4 py-3">{deposit.method}</td>
