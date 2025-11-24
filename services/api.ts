@@ -230,8 +230,26 @@ export const getNotifications = async (): Promise<Notification[]> => {
     return result.data;
 };
 
+export const sendAdminNotification = async (data: { userId: string, subject: string, message: string, isPopup: boolean }): Promise<Notification> => {
+    const response = await fetch(`${API_BASE_URL}/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+}
+
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {
+        method: 'PUT',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const markNotificationPopupAsShown = async (id: string): Promise<Notification[]> => {
+    const response = await fetch(`${API_BASE_URL}/notifications/popup-shown/${id}`, {
         method: 'PUT',
     });
     const result = await handleResponse(response);

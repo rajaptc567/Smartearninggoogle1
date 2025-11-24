@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const NotificationSchema = new mongoose.Schema({
@@ -6,9 +7,20 @@ const NotificationSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
+    subject: {
+        type: String,
+    },
     message: {
         type: String,
         required: true,
+    },
+    isPopup: {
+        type: Boolean,
+        default: false,
+    },
+    popupShown: {
+        type: Boolean,
+        default: false,
     },
     read: {
         type: Boolean,

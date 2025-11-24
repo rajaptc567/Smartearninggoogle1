@@ -177,7 +177,10 @@ export interface Settings {
 export interface Notification {
   _id: string;
   userId: string; // User who receives the notification
+  subject?: string; // Optional subject
   message: string;
+  isPopup?: boolean; // Should this show as a modal?
+  popupShown?: boolean; // Has the modal been shown/closed?
   date: string;
   read: boolean;
 }

@@ -1,22 +1,23 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, sendAdminNotification } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
     const { users } = state;
     
-    // The user data is now loaded from the global context, so local loading state is simpler.
     const isLoading = users.length === 0;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isRestrictionsModalOpen, setIsRestrictionsModalOpen] = useState(false);
+    const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+    
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
     const [searchTerm, setSearchTerm] = useState('');
@@ -32,10 +33,16 @@ const Users: React.FC = () => {
         setIsRestrictionsModalOpen(true);
     }
 
+    const handleOpenMessage = (user: User | null = null) => {
+        setEditingUser(user);
+        setIsMessageModalOpen(true);
+    }
+
     const handleCloseModal = () => {
         setEditingUser(null);
         setIsModalOpen(false);
         setIsRestrictionsModalOpen(false);
+        setIsMessageModalOpen(false);
     };
 
     const handleSaveUser = async (user: User) => {
@@ -44,7 +51,6 @@ const Users: React.FC = () => {
                 const updatedUser = await apiUpdateUser(user._id, user);
                 dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             } else {
-                 // In a real app, password would be handled securely
                 const newUserPayload = { ...user, password: 'password123', walletBalance: 0, activePlan: 'None', activePlans: [], status: Status.Active };
                 const newUser = await apiCreateUser(newUserPayload);
                 dispatch({ type: 'ADD_USER', payload: newUser });
@@ -74,7 +80,6 @@ const Users: React.FC = () => {
     const handleToggleStatus = async (user: User) => {
         const newStatus = user.status === Status.Blocked ? Status.Active : Status.Blocked;
         try {
-            // Send ONLY status to avoid validation errors on other fields
             const updatedUser = await apiUpdateUser(user._id, { status: newStatus });
             dispatch({ type: 'UPDATE_USER', payload: updatedUser });
         } catch (error) {
@@ -122,6 +127,7 @@ const Users: React.FC = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
+                    <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Message</Button>
                     <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
                 </div>
             </div>
@@ -151,9 +157,9 @@ const Users: React.FC = () => {
                                <Badge status={user.status} />
                             </td>
                             <td className="px-4 py-3 text-sm">
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-2 flex-wrap gap-y-2">
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(user, 'details')}>Details</Button>
-                                    
+                                    <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(user)}>Message</Button>
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenRestrictions(user)}>
                                         Restrictions
                                     </Button>
@@ -184,10 +190,142 @@ const Users: React.FC = () => {
                     onSave={handleSaveRestrictions}
                 />
             )}
+            {isMessageModalOpen && (
+                <MessageUserModal
+                    user={editingUser}
+                    allUsers={users}
+                    onClose={handleCloseModal}
+                />
+            )}
         </div>
     );
 };
 
+
+// MessageUserModal Component
+const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; onClose: () => void }> = ({ user, allUsers, onClose }) => {
+    const { dispatch } = useData();
+    
+    // State for User Selection (if no user pre-selected)
+    const [selectedUserId, setSelectedUserId] = useState<string>(user?._id || '');
+    const [userSearch, setUserSearch] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // State for Message
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isPopup, setIsPopup] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredUsers = allUsers.filter(u => 
+        u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase())
+    );
+
+    const handleSelectUser = (u: User) => {
+        setSelectedUserId(u._id);
+        setUserSearch(`${u.fullName} (@${u.username})`);
+        setIsDropdownOpen(false);
+    }
+
+    const handleSend = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!selectedUserId) return alert("Please select a user.");
+        if(!message) return alert("Please enter a message.");
+
+        setIsSending(true);
+        try {
+            const notification = await sendAdminNotification({
+                userId: selectedUserId,
+                subject,
+                message,
+                isPopup
+            });
+            dispatch({ type: 'ADD_NOTIFICATION', payload: notification });
+            alert("Message sent successfully!");
+            onClose();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to send message.");
+        } finally {
+            setIsSending(false);
+        }
+    }
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-6 w-[90vw] max-w-md">
+                <h3 className="text-xl font-bold mb-4">Send Message to User</h3>
+                <form onSubmit={handleSend} className="space-y-4">
+                    
+                    {/* User Selection */}
+                    <div className="relative" ref={dropdownRef}>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
+                        {user ? (
+                            <input type="text" value={`${user.fullName} (@${user.username})`} disabled className="mt-1 w-full rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
+                        ) : (
+                            <>
+                                <input 
+                                    type="text" 
+                                    value={userSearch} 
+                                    onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); setSelectedUserId(''); }}
+                                    onFocus={() => setIsDropdownOpen(true)}
+                                    placeholder="Search user..."
+                                    className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                />
+                                {isDropdownOpen && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto sm:text-sm">
+                                        {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                                            <div key={u._id} onClick={() => handleSelectUser(u)} className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50 dark:hover:bg-gray-600">
+                                                <span className="font-medium block">{u.fullName}</span>
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">@{u.username} | {u.email}</span>
+                                            </div>
+                                        )) : <div className="py-2 px-4 text-gray-500">No users found</div>}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subject (Optional)</label>
+                        <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. Important Update" />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message</label>
+                        <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Type your message here..." required />
+                    </div>
+
+                    <div className="flex items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
+                        <input type="checkbox" id="isPopup" checked={isPopup} onChange={(e) => setIsPopup(e.target.checked)} className="h-4 w-4 text-blue-600 rounded" />
+                        <label htmlFor="isPopup" className="ml-2 block text-sm text-gray-900 dark:text-gray-300 font-medium">
+                            Show as Popup on Login
+                            <p className="text-xs text-gray-500 font-normal">If checked, this message will appear as a modal when the user visits their dashboard.</p>
+                        </label>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-2">
+                        <Button type="button" variant="secondary" onClick={onClose} disabled={isSending}>Cancel</Button>
+                        <Button type="submit" disabled={isSending || !selectedUserId}>{isSending ? 'Sending...' : 'Send Message'}</Button>
+                    </div>
+                </form>
+            </div>
+        </Modal>
+    )
+}
 
 // UserFormModal Component
 interface UserFormModalProps {
