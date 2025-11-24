@@ -119,7 +119,7 @@ export const updateTransfer = async (req, res) => {
         const originalTransaction = await Transaction.findOne({
             userId: sender._id,
             type: 'Transfer Request',
-            description: { $regex: `Transfer Request #${transfer._id}` },
+            description: { $regex: `Transfer .* #${transfer._id}` },
         });
 
         if (status === 'Approved') {
@@ -131,6 +131,7 @@ export const updateTransfer = async (req, res) => {
 
             if (originalTransaction) {
                 originalTransaction.status = 'Approved';
+                originalTransaction.description = `Transfer Sent #${transfer._id} to ${recipient.username}`;
                 await originalTransaction.save();
             }
 
@@ -166,6 +167,7 @@ export const updateTransfer = async (req, res) => {
 
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
+                originalTransaction.description = `Transfer Rejected #${transfer._id}`;
                 await originalTransaction.save();
             }
             

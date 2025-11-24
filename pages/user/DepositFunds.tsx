@@ -87,8 +87,10 @@ const DepositFunds: React.FC = () => {
         }
 
         try {
-            const newDeposit = await createDeposit(formData);
-            dispatch({ type: 'ADD_DEPOSIT', payload: newDeposit });
+            const { deposit, transaction } = await createDeposit(formData);
+            dispatch({ type: 'ADD_DEPOSIT', payload: deposit });
+            // Add the transaction so it appears in the log immediately
+            dispatch({ type: 'ADD_TRANSACTION', payload: transaction });
             setIsSubmitted(true);
         } catch (error) {
             console.error("Failed to create deposit:", error);

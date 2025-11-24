@@ -194,11 +194,12 @@ export const updateWithdrawal = async (req, res) => {
         
         // --- Handle Transaction Logic ---
         
-        // Find the original transaction to update its status
+        // Find the original transaction to update its status and description
+        // Use Regex to match "Pending Withdrawal #ID" or similar even if text slightly varied
         const originalTransaction = await Transaction.findOne({
             userId: user._id,
             type: 'Withdrawal Request',
-            description: `Pending Withdrawal #${withdrawal._id}`
+            description: { $regex: `Withdrawal #${withdrawal._id}` }
         });
 
         // If request was pending/matching and is now being rejected, refund the user
@@ -217,6 +218,7 @@ export const updateWithdrawal = async (req, res) => {
 
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
+                originalTransaction.description = `Rejected Withdrawal #${withdrawal._id}`;
                 await originalTransaction.save();
             }
 
@@ -228,7 +230,8 @@ export const updateWithdrawal = async (req, res) => {
         
         if (status === 'Paid' || status === 'Approved') {
             if (originalTransaction) {
-                originalTransaction.status = 'Approved';
+                originalTransaction.status = status === 'Paid' ? 'Approved' : status;
+                originalTransaction.description = `${status} Withdrawal #${withdrawal._id}`;
                 await originalTransaction.save();
             }
             const message = status === 'Paid' 

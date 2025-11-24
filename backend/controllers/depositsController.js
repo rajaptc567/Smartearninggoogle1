@@ -76,6 +76,16 @@ export const createDeposit = async (req, res) => {
 
         const deposit = await Deposit.create(depositData);
         
+        // NEW: Create a Transaction record immediately (Pending)
+        const transaction = await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            type: 'Deposit',
+            amount: deposit.amount,
+            status: 'Pending',
+            description: `Pending Deposit #${deposit._id}`
+        });
+        
         // Create a notification for the user
         await Notification.create({
             userId: deposit.userId,
@@ -122,7 +132,7 @@ export const createDeposit = async (req, res) => {
         }
         // --- END P2P HANDLE ---
         
-        res.status(201).json({ success: true, data: deposit });
+        res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -145,7 +155,7 @@ export const updateDeposit = async (req, res) => {
             // Only notes are updated, no financial logic needed
             deposit.adminNotes = adminNotes;
             await deposit.save();
-            return res.status(200).json({ success: true, data: deposit });
+            return res.status(200).json({ success: true, data: { deposit } });
         }
         
         deposit.status = status;
@@ -156,8 +166,13 @@ export const updateDeposit = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Associated user not found' });
         }
 
+        // --- Find existing transaction to update status ---
+        // Matches "Pending Deposit #123" or "Approved Deposit #123" etc.
+        const transaction = await Transaction.findOne({ 
+            description: { $regex: `Deposit #${deposit._id}` } 
+        });
+
         // --- Main Approval/Rejection Logic ---
-        // Allow changes even if previously approved (admin override)
         
         // 1. BECOMING APPROVED (From Pending or Rejected)
         if (originalStatus !== 'Approved' && status === 'Approved') {
@@ -165,9 +180,12 @@ export const updateDeposit = async (req, res) => {
             user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
             
-            // Ensure a transaction record exists
-            const existingTx = await Transaction.findOne({ description: `Approved Deposit #${deposit._id}` });
-            if (!existingTx) {
+            if (transaction) {
+                transaction.status = 'Approved';
+                transaction.description = `Approved Deposit #${deposit._id}`;
+                await transaction.save();
+            } else {
+                // Fallback if transaction was deleted or missing
                 await Transaction.create({
                     userId: user._id,
                     userName: user.username,
@@ -176,9 +194,6 @@ export const updateDeposit = async (req, res) => {
                     status: 'Approved',
                     description: `Approved Deposit #${deposit._id}`
                 });
-            } else {
-                existingTx.status = 'Approved';
-                await existingTx.save();
             }
 
             await Notification.create({
@@ -205,11 +220,19 @@ export const updateDeposit = async (req, res) => {
             user.walletBalance = Number((user.walletBalance - deposit.amount).toFixed(2));
             await user.save();
             
-            // Mark transaction as Rejected/Pending
-            const existingTx = await Transaction.findOne({ description: `Approved Deposit #${deposit._id}` });
-            if (existingTx) {
-                existingTx.status = status === 'Pending' ? 'Pending' : 'Rejected';
-                await existingTx.save();
+            // Update transaction status
+            if (transaction) {
+                transaction.status = status === 'Pending' ? 'Pending' : 'Rejected';
+                transaction.description = `${status} Deposit #${deposit._id}`;
+                await transaction.save();
+            }
+        } 
+        // 3. SIMPLE REJECTION (Pending -> Rejected) or PENDING (Rejected -> Pending)
+        else {
+             if (transaction) {
+                transaction.status = status;
+                transaction.description = `${status} Deposit #${deposit._id}`;
+                await transaction.save();
             }
         }
         
@@ -287,6 +310,10 @@ export const deleteDeposit = async (req, res) => {
         if (!deposit) {
             return res.status(404).json({ success: false, error: 'Deposit not found' });
         }
+        
+        // Also delete associated transaction
+        await Transaction.deleteOne({ description: { $regex: `Deposit #${deposit._id}` } });
+
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

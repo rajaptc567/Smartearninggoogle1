@@ -24,6 +24,11 @@ export const createDispute = async (req, res) => {
             const mimeType = req.file.mimetype;
             disputeData.proofUrl = `data:${mimeType};base64,${b64}`;
         }
+        
+        // Initialize messages array with the description if desired, 
+        // but keeping description separate for title/header often works better.
+        // We will initialize an empty messages array.
+        disputeData.messages = [];
 
         const dispute = await Dispute.create(disputeData);
 
@@ -39,26 +44,50 @@ export const createDispute = async (req, res) => {
     }
 };
 
-// @desc    Update dispute status (Admin)
+// @desc    Update dispute status or add message (Admin)
 // @route   PUT /api/v1/disputes/:id
 export const updateDispute = async (req, res) => {
     try {
-        const { status, adminResponse } = req.body;
-        const dispute = await Dispute.findByIdAndUpdate(
-            req.params.id,
-            { status, adminResponse },
-            { new: true }
-        );
+        const { status, newMessage } = req.body;
+        const dispute = await Dispute.findById(req.params.id);
 
         if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
 
-        // Notify user of resolution
-        await Notification.create({
-            userId: dispute.userId,
-            subject: `Dispute Updated: #${dispute._id}`,
-            message: `Your dispute has been marked as ${status}. Admin Response: ${adminResponse || 'No comments.'}`,
-            isPopup: true // Make it visible
-        });
+        let statusChanged = false;
+        if (status && status !== dispute.status) {
+            // Log status change as a system message
+            dispute.messages.push({
+                sender: 'System',
+                message: `Status changed from ${dispute.status} to ${status}`,
+                date: new Date()
+            });
+            dispute.status = status;
+            statusChanged = true;
+        }
+
+        if (newMessage) {
+            dispute.messages.push({
+                sender: 'Admin',
+                message: newMessage,
+                date: new Date()
+            });
+        }
+
+        await dispute.save();
+
+        // Notify user if status changed or admin replied
+        if (statusChanged || newMessage) {
+            const msg = newMessage 
+                ? `Update on Dispute #${dispute._id}: Admin sent a message.` 
+                : `Dispute #${dispute._id} status updated to ${status}.`;
+                
+            await Notification.create({
+                userId: dispute.userId,
+                subject: `Dispute Update: #${dispute._id}`,
+                message: msg,
+                isPopup: statusChanged // Show popup on status change
+            });
+        }
 
         res.status(200).json({ success: true, data: dispute });
     } catch (err) {
