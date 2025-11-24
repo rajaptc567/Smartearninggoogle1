@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
-import { Status, Transaction } from '../types';
+import { Status, Transaction, User } from '../types';
 import Badge from '../components/ui/Badge';
 import { adjustUserWallet } from '../services/api';
 
@@ -17,9 +17,39 @@ const Wallet: React.FC = () => {
     const [reason, setReason] = useState('Admin manual adjustment');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Dropdown state
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
     const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const tableHeaders = ['Transaction ID', 'User', 'Type', 'Amount', 'Status', 'Date', 'Description'];
+
+    // Handle click outside to close dropdown
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredUsers = users.filter(user => {
+        const term = identifier.toLowerCase();
+        return (
+            user.username.toLowerCase().includes(term) ||
+            user.fullName.toLowerCase().includes(term) ||
+            user.email.toLowerCase().includes(term) ||
+            user.phone.includes(term)
+        );
+    });
+
+    const handleSelectUser = (user: User) => {
+        setIdentifier(user.username);
+        setIsDropdownOpen(false);
+    };
 
     const handleAdjustment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,7 +63,7 @@ const Wallet: React.FC = () => {
         );
 
         if (!targetUser) {
-            alert('User not found. Please check the identifier or select from the list.');
+            alert('User not found. Please select a user from the list.');
             setIsSubmitting(false);
             return;
         }
@@ -73,29 +103,55 @@ const Wallet: React.FC = () => {
         <div className="space-y-6">
             <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Manual Wallet Adjustment</h2>
-                <form onSubmit={handleAdjustment} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                    <div className="md:col-span-2">
+                <form onSubmit={handleAdjustment} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
+                    <div className="md:col-span-2 relative" ref={dropdownRef}>
                         <label htmlFor="user-identifier" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select User</label>
-                        <div className="mt-1">
+                        <div className="mt-1 relative">
                             <input 
                               type="text" 
                               id="user-identifier" 
-                              list="users-datalist"
                               value={identifier} 
-                              onChange={e => setIdentifier(e.target.value)} 
+                              onChange={e => {
+                                  setIdentifier(e.target.value);
+                                  setIsDropdownOpen(true);
+                              }}
+                              onFocus={() => setIsDropdownOpen(true)}
                               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
-                              placeholder="Search by username, email..."
+                              placeholder="Search name, username, email..."
+                              autoComplete="off"
                               required 
                             />
-                            <datalist id="users-datalist">
-                              {users.map(user => (
-                                <option key={user._id} value={user.username}>
-                                    {user.fullName} ({user.email}) - Balance: ${user.walletBalance.toFixed(2)}
-                                </option>
-                              ))}
-                            </datalist>
+                            {isDropdownOpen && (
+                                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                    {filteredUsers.length > 0 ? (
+                                        filteredUsers.map(user => (
+                                            <div
+                                                key={user._id}
+                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50 dark:hover:bg-gray-600 border-b dark:border-gray-600 last:border-0"
+                                                onClick={() => handleSelectUser(user)}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-gray-900 dark:text-white">
+                                                        {user.fullName} <span className="text-gray-500 dark:text-gray-400 font-normal">(@{user.username})</span>
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+                                                        <span>{user.email}</span>
+                                                        <span className={`font-bold ${user.walletBalance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                            ${user.walletBalance.toFixed(2)}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="cursor-default select-none relative py-2 pl-3 pr-9 text-gray-500">
+                                            No users found.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Search by username, email, phone, or ID.</p>
+                        <p className="text-xs text-gray-500 mt-1">Type to search or click to see all users.</p>
                     </div>
                     <div>
                         <label htmlFor="actionType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Action</label>
@@ -113,7 +169,7 @@ const Wallet: React.FC = () => {
                         <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
                         <input type="number" step="0.01" min="0" id="amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 50.00" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
                     </div>
-                     <div>
+                     <div className="pt-6">
                        <Button type="submit" className="w-full" disabled={isSubmitting}>
                            {isSubmitting ? 'Adjusting...' : 'Adjust Balance'}
                         </Button>
@@ -126,7 +182,7 @@ const Wallet: React.FC = () => {
                 <Table headers={tableHeaders}>
                     {sortedTransactions.map((tx: Transaction) => (
                         <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm">{tx._id}</td>
+                            <td className="px-4 py-3 text-sm font-mono text-xs">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.userName}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>

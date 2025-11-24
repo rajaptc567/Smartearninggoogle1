@@ -4,6 +4,8 @@ import { PaymentMethod, Status, Withdrawal } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createWithdrawal } from '../../services/api';
+import Table from '../../components/ui/Table';
+import Badge from '../../components/ui/Badge';
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -34,6 +36,14 @@ const WithdrawFunds: React.FC = () => {
         withdrawalMethods.find(method => method._id.toString() === selectedMethodId),
         [selectedMethodId, withdrawalMethods]
     );
+
+    // User Withdrawal History
+    const userWithdrawals = useMemo(() => {
+        if (!currentUser) return [];
+        return withdrawals
+            .filter(w => w.userId === currentUser._id)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [withdrawals, currentUser]);
 
     // CHECK FREQUENCY: Calculate if user is allowed to withdraw right now
     useEffect(() => {
@@ -153,85 +163,108 @@ const WithdrawFunds: React.FC = () => {
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-            <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Available Wallet Balance</p>
-                <p className="text-4xl font-bold text-green-600 dark:text-green-400">${currentUser.walletBalance.toFixed(2)}</p>
-            </div>
-
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Request Withdrawal</h2>
-
-            {cooldownMessage && (
-                <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
-                    <p className="font-bold flex items-center">
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Withdrawal Cooldown Active
-                    </p>
-                    <p className="mt-1">{cooldownMessage}</p>
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className={`space-y-4 ${cooldownMessage ? 'opacity-50 pointer-events-none' : ''}`}>
-                <div>
-                    <label htmlFor="withdrawMethod" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Withdrawal Method</label>
-                    <select id="withdrawMethod" value={selectedMethodId} onChange={(e) => setSelectedMethodId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                        <option value="">-- Choose a method --</option>
-                        {withdrawalMethods.map(method => (
-                            <option key={method._id} value={method._id}>{method.name}</option>
-                        ))}
-                    </select>
+        <div className="space-y-8 max-w-2xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Available Wallet Balance</p>
+                    <p className="text-4xl font-bold text-green-600 dark:text-green-400">${currentUser.walletBalance.toFixed(2)}</p>
                 </div>
 
-                {selectedMethod && (
-                    <div className="space-y-4 transition-all duration-500 ease-in-out">
-                         <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Withdraw</label>
-                            {restrictWithdrawalAmount ? (
-                                <>
-                                    <select id="amount" value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
-                                        <option value="">-- Select plan amount --</option>
-                                        {userActivePlanPrices.map(price => <option key={price} value={price}>${price.toFixed(2)}</option>)}
-                                    </select>
-                                    {userActivePlanPrices.length === 0 && <p className="text-xs text-red-500 mt-1">You do not have any active plans to withdraw from.</p>}
-                                </>
-                            ) : (
-                                <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${selectedMethod.minAmount}, Max ${selectedMethod.maxAmount}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
-                            )}
-                        </div>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-300">Service Fee ({selectedMethod.feePercent}%):</span>
-                                <span className="font-medium text-red-600 dark:text-red-400">-${fee.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between mt-1 font-bold">
-                                <span className="text-gray-800 dark:text-white">You Will Receive:</span>
-                                <span className="text-green-600 dark:text-green-400">${finalAmount.toFixed(2)}</span>
-                            </div>
-                        </div>
+                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Request Withdrawal</h2>
 
-                        <div>
-                            <label htmlFor="accountTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Account Title</label>
-                            <input type="text" id="accountTitle" value={accountTitle} onChange={(e) => setAccountTitle(e.target.value)} placeholder="e.g., John Doe" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
-                        </div>
-
-                        <div>
-                            <label htmlFor="accountNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Account Number / Wallet Address</label>
-                            <input type="text" id="accountNumber" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
-                        </div>
-
-                         <div>
-                            <label htmlFor="userNotes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes / Instructions (Optional)</label>
-                            <textarea id="userNotes" value={userNotes} onChange={(e) => setUserNotes(e.target.value)} rows={2} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" placeholder="Add any special instructions for the admin..."></textarea>
-                        </div>
+                {cooldownMessage && (
+                    <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
+                        <p className="font-bold flex items-center">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Withdrawal Cooldown Active
+                        </p>
+                        <p className="mt-1">{cooldownMessage}</p>
                     </div>
                 )}
-                 {selectedMethod && (
-                    <div className="pt-4 flex justify-end">
-                        <Button type="submit" disabled={isSubmitting || !!cooldownMessage}>{isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}</Button>
+
+                <form onSubmit={handleSubmit} className={`space-y-4 ${cooldownMessage ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div>
+                        <label htmlFor="withdrawMethod" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Withdrawal Method</label>
+                        <select id="withdrawMethod" value={selectedMethodId} onChange={(e) => setSelectedMethodId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                            <option value="">-- Choose a method --</option>
+                            {withdrawalMethods.map(method => (
+                                <option key={method._id} value={method._id}>{method.name}</option>
+                            ))}
+                        </select>
                     </div>
-                 )}
-            </form>
+
+                    {selectedMethod && (
+                        <div className="space-y-4 transition-all duration-500 ease-in-out">
+                             <div>
+                                <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Withdraw</label>
+                                {restrictWithdrawalAmount ? (
+                                    <>
+                                        <select id="amount" value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
+                                            <option value="">-- Select plan amount --</option>
+                                            {userActivePlanPrices.map(price => <option key={price} value={price}>${price.toFixed(2)}</option>)}
+                                        </select>
+                                        {userActivePlanPrices.length === 0 && <p className="text-xs text-red-500 mt-1">You do not have any active plans to withdraw from.</p>}
+                                    </>
+                                ) : (
+                                    <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${selectedMethod.minAmount}, Max ${selectedMethod.maxAmount}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
+                                )}
+                            </div>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-300">Service Fee ({selectedMethod.feePercent}%):</span>
+                                    <span className="font-medium text-red-600 dark:text-red-400">-${fee.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between mt-1 font-bold">
+                                    <span className="text-gray-800 dark:text-white">You Will Receive:</span>
+                                    <span className="text-green-600 dark:text-green-400">${finalAmount.toFixed(2)}</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="accountTitle" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Account Title</label>
+                                <input type="text" id="accountTitle" value={accountTitle} onChange={(e) => setAccountTitle(e.target.value)} placeholder="e.g., John Doe" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
+                            </div>
+
+                            <div>
+                                <label htmlFor="accountNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your Account Number / Wallet Address</label>
+                                <input type="text" id="accountNumber" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
+                            </div>
+
+                             <div>
+                                <label htmlFor="userNotes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes / Instructions (Optional)</label>
+                                <textarea id="userNotes" value={userNotes} onChange={(e) => setUserNotes(e.target.value)} rows={2} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" placeholder="Add any special instructions for the admin..."></textarea>
+                            </div>
+                        </div>
+                    )}
+                     {selectedMethod && (
+                        <div className="pt-4 flex justify-end">
+                            <Button type="submit" disabled={isSubmitting || !!cooldownMessage}>{isSubmitting ? 'Submitting...' : 'Submit Withdrawal Request'}</Button>
+                        </div>
+                     )}
+                </form>
+            </div>
+
+            {/* WITHDRAWAL HISTORY SECTION */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">My Withdrawal History</h3>
+                {userWithdrawals.length > 0 ? (
+                    <Table headers={['Date', 'Method', 'Amount', 'Fee', 'Net Received', 'Status']}>
+                        {userWithdrawals.map(withdrawal => (
+                            <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400">
+                                <td className="px-4 py-3 text-sm">{new Date(withdrawal.date).toLocaleDateString()}</td>
+                                <td className="px-4 py-3 text-sm">{withdrawal.method}</td>
+                                <td className="px-4 py-3 font-semibold">${withdrawal.amount.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-sm text-red-500">-${withdrawal.fee.toFixed(2)}</td>
+                                <td className="px-4 py-3 font-bold text-green-600">${withdrawal.finalAmount.toFixed(2)}</td>
+                                <td className="px-4 py-3"><Badge status={withdrawal.status} /></td>
+                            </tr>
+                        ))}
+                    </Table>
+                ) : (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No withdrawal history found.</p>
+                )}
+            </div>
         </div>
     );
 };
