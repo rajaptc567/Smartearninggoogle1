@@ -196,7 +196,8 @@ export const updateUser = async (req, res) => {
             }
 
             if (releasedAmount > 0) {
-                user.walletBalance += releasedAmount;
+                // Precision Fix
+                user.walletBalance = Number((user.walletBalance + releasedAmount).toFixed(2));
                 await user.save();
                 
                 await Notification.create({
@@ -264,7 +265,8 @@ export const adjustWallet = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-        user.walletBalance += amount;
+        // Precision Fix
+        user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         await user.save();
 
         const transaction = await Transaction.create({
@@ -313,8 +315,8 @@ export const purchasePlan = async (req, res) => {
 
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         
-        // 1. Deduct Balance
-        user.walletBalance -= plan.price;
+        // 1. Deduct Balance - Precision Fix
+        user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         
         // 2. Add to Active Plans
         // Update the legacy 'activePlan' string to the latest plan name for quick display
@@ -371,8 +373,8 @@ export const purchasePlan = async (req, res) => {
                 totalReleased += comm.amount;
             }
             
-            // Re-add released amount to wallet
-            user.walletBalance += totalReleased;
+            // Re-add released amount to wallet - Precision Fix
+            user.walletBalance = Number((user.walletBalance + totalReleased).toFixed(2));
             await user.save(); 
             
             await Notification.create({
@@ -460,7 +462,8 @@ export const purchasePlan = async (req, res) => {
                     const eligibility = checkEligibility(sponsor, plan._id);
                     
                     if (eligibility.status === 'Approved') {
-                        sponsor.walletBalance += commissionAmount;
+                        // Precision Fix
+                        sponsor.walletBalance = Number((sponsor.walletBalance + commissionAmount).toFixed(2));
                         await sponsor.save();
                         await Notification.create({
                             userId: sponsor._id,
@@ -505,7 +508,8 @@ export const purchasePlan = async (req, res) => {
                                 const indirectEligibility = checkEligibility(uplineUser, plan._id);
 
                                 if (indirectEligibility.status === 'Approved') {
-                                    uplineUser.walletBalance += levelCommissionAmount;
+                                    // Precision Fix
+                                    uplineUser.walletBalance = Number((uplineUser.walletBalance + levelCommissionAmount).toFixed(2));
                                     await uplineUser.save();
                                     await Notification.create({
                                         userId: uplineUser._id,

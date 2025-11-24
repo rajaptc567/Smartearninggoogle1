@@ -156,13 +156,12 @@ const Deposits: React.FC = () => {
                                 value={currentStatus} 
                                 onChange={(e) => setCurrentStatus(e.target.value as Deposit['status'])}
                                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                disabled={selectedDeposit.status !== Status.Pending}
                             >
                                 <option value={Status.Pending}>Pending</option>
                                 <option value={Status.Approved}>Approved</option>
                                 <option value={Status.Rejected}>Rejected</option>
                             </select>
-                            {selectedDeposit.status !== Status.Pending && <p className="text-xs text-yellow-500 mt-1">This deposit has already been processed and its status cannot be changed.</p>}
+                            <p className="text-xs text-gray-500 mt-1">Changing status from <strong>Approved</strong> to Pending/Rejected will deduct the funds from the user.</p>
                         </div>
 
                          <div className="mt-6">
@@ -186,7 +185,7 @@ const Deposits: React.FC = () => {
 
                         <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
                             <Button variant="secondary" onClick={handleCloseDetailModal}>Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving || selectedDeposit.status !== Status.Pending}>
+                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
                                 {isSaving ? 'Saving...' : 'Save Changes'}
                             </Button>
                         </div>

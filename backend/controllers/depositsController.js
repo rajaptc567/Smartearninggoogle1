@@ -87,9 +87,9 @@ export const createDeposit = async (req, res) => {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             const depositAmount = deposit.amount;
             
-            // 1. Deduct amount from remaining IMMEDIATELY (even if pending)
+            // 1. Deduct amount from remaining IMMEDIATELY (even if pending) - Precision Fix
             const currentRemaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
-            withdrawal.matchRemainingAmount = currentRemaining - depositAmount;
+            withdrawal.matchRemainingAmount = Number((currentRemaining - depositAmount).toFixed(2));
             
             // 2. Add to list of matched deposits
             if (!withdrawal.matchedDepositIds) withdrawal.matchedDepositIds = [];
@@ -157,28 +157,36 @@ export const updateDeposit = async (req, res) => {
         }
 
         // --- Main Approval/Rejection Logic ---
-        if (originalStatus === 'Pending' && status === 'Approved') {
-            // 1. Update user balance
-            user.walletBalance += deposit.amount;
+        // Allow changes even if previously approved (admin override)
+        
+        // 1. BECOMING APPROVED (From Pending or Rejected)
+        if (originalStatus !== 'Approved' && status === 'Approved') {
+            // Precision Fix
+            user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
             
-            // 2. Create an approved deposit transaction
-            await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                type: 'Deposit',
-                amount: deposit.amount,
-                status: 'Approved',
-                description: `Approved Deposit #${deposit._id}`
-            });
+            // Ensure a transaction record exists
+            const existingTx = await Transaction.findOne({ description: `Approved Deposit #${deposit._id}` });
+            if (!existingTx) {
+                await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    type: 'Deposit',
+                    amount: deposit.amount,
+                    status: 'Approved',
+                    description: `Approved Deposit #${deposit._id}`
+                });
+            } else {
+                existingTx.status = 'Approved';
+                await existingTx.save();
+            }
 
-            // 3. Create success notification
             await Notification.create({
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been approved.`
             });
 
-            // 4. Notify Withdrawal User that payment is confirmed (P2P)
+            // Notify Withdrawal User that payment is confirmed (P2P)
             if (deposit.matchedWithdrawalId) {
                 const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
                 if(withdrawal) {
@@ -189,10 +197,20 @@ export const updateDeposit = async (req, res) => {
                 }
             }
             
-        } else if (originalStatus === 'Approved' && status !== 'Approved') {
-            // Reverting an approval
-            user.walletBalance -= deposit.amount;
+        } 
+        // 2. REVOKING APPROVAL (Going from Approved TO Rejected or Pending)
+        else if (originalStatus === 'Approved' && status !== 'Approved') {
+            // Reverting an approval - Deduct funds
+            // Precision Fix
+            user.walletBalance = Number((user.walletBalance - deposit.amount).toFixed(2));
             await user.save();
+            
+            // Mark transaction as Rejected/Pending
+            const existingTx = await Transaction.findOne({ description: `Approved Deposit #${deposit._id}` });
+            if (existingTx) {
+                existingTx.status = status === 'Pending' ? 'Pending' : 'Rejected';
+                await existingTx.save();
+            }
         }
         
         if (status === 'Rejected') {
@@ -205,8 +223,8 @@ export const updateDeposit = async (req, res) => {
             if (deposit.matchedWithdrawalId) {
                 const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
                 if (withdrawal) {
-                    // Add amount back to remaining
-                    withdrawal.matchRemainingAmount = (withdrawal.matchRemainingAmount || 0) + deposit.amount;
+                    // Add amount back to remaining - Precision Fix
+                    withdrawal.matchRemainingAmount = Number(((withdrawal.matchRemainingAmount || 0) + deposit.amount).toFixed(2));
                     
                     // Remove from matched list
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
