@@ -1,5 +1,5 @@
 
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute } from '../types';
 
 // The base URL of your backend API is determined at runtime.
 // This allows the same code to work for both local development and live deployment.
@@ -404,6 +404,32 @@ export const updateTransfer = async (id: string, updateData: Partial<Transfer>):
 // FIX: Added missing log API functions
 export const getLogs = async (): Promise<Log[]> => {
     const response = await fetch(`${API_BASE_URL}/logs`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+// --- Dispute API Functions ---
+export const getDisputes = async (): Promise<Dispute[]> => {
+    const response = await fetch(`${API_BASE_URL}/disputes`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createDispute = async (formData: FormData): Promise<Dispute> => {
+    const response = await fetch(`${API_BASE_URL}/disputes`, {
+        method: 'POST',
+        body: formData,
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateDispute = async (id: string, data: { status: string; adminResponse: string }): Promise<Dispute> => {
+    const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
     const result = await handleResponse(response);
     return result.data;
 };

@@ -122,10 +122,27 @@ export const updateUser = async (req, res) => {
 
         // Handle Status Change Notifications
         if (req.body.status && req.body.status !== currentUser.status) {
-            if (req.body.status === 'Blocked') {
-                // No notif needed usually as they can't login, but good for record
-            } else if (req.body.status === 'Active' && currentUser.status === 'Blocked') {
-                 await Notification.create({ userId: currentUser._id, message: 'Your account has been unblocked.' });
+            const newStatus = req.body.status;
+            const oldStatus = currentUser.status;
+            
+            let message = '';
+            
+            if (newStatus === 'Blocked') {
+                message = 'Your account has been blocked by the administrator. Please contact support.';
+            } else if (newStatus === 'Paused') {
+                message = 'Your account has been paused by the administrator. Financial activities are restricted.';
+            } else if (newStatus === 'Active') {
+                if (oldStatus === 'Blocked') {
+                    message = 'Your account has been unblocked. You can now access all features.';
+                } else if (oldStatus === 'Paused') {
+                    message = 'Your account has been resumed. Restrictions have been lifted.';
+                } else {
+                    message = 'Your account is now active.';
+                }
+            }
+            
+            if (message) {
+                await Notification.create({ userId: currentUser._id, message });
             }
         }
 

@@ -24,10 +24,12 @@ const SettingsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentC
 const LogsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>;
 const UserViewIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>;
 const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
+const DisputeIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>;
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     const { state } = useData();
     const pendingResetsCount = state.passwordResetRequests.filter(r => r.status === 'Pending').length;
+    const pendingDisputesCount = state.disputes.filter(d => d.status === 'Open').length;
 
     const navLinks = [
       { to: '/admin', label: 'Dashboard', icon: <HomeIcon /> },
@@ -36,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/deposits', label: 'Deposits', icon: <DepositIcon /> },
       { to: '/admin/withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> },
       { to: '/admin/transfers', label: 'Transfers', icon: <TransferIcon /> },
+      { to: '/admin/disputes', label: 'Disputes', icon: <DisputeIcon />, badge: pendingDisputesCount },
       { to: '/admin/payment-methods', label: 'Payment Methods', icon: <PaymentIcon /> },
       { to: '/admin/investment-plans', label: 'Investment Plans', icon: <PlanIcon /> },
       { to: '/admin/wallet', label: 'Wallet', icon: <WalletIcon /> },
@@ -70,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                         >
                             {icon}
                             <span className="mx-4 font-medium">{label}</span>
-                             {badge && badge > 0 && (
+                             {badge !== undefined && badge > 0 && (
                                 <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
                                     {badge}
                                 </span>

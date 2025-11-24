@@ -1,3 +1,4 @@
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -19,6 +20,7 @@ import ruleRoutes from './routes/ruleRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
+import disputeRoutes from './routes/disputeRoutes.js'; // Added
 
 // Load env vars
 dotenv.config();
@@ -66,6 +68,7 @@ app.use('/api/v1/rules', ruleRoutes);
 app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
+app.use('/api/v1/disputes', disputeRoutes); // Added
 
 // Custom Error Handler
 const errorHandler = (err, req, res, next) => {

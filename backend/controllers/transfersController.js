@@ -144,8 +144,12 @@ export const updateTransfer = async (req, res) => {
                 status: 'Approved'
             });
 
-            await Notification.create({ userId: sender._id, message: `Your transfer to ${recipient.username} was approved.` });
-            await Notification.create({ userId: recipient._id, message: `You received $${transfer.amount} from ${sender.username}.` });
+            await Notification.create({ 
+                userId: sender._id, 
+                message: `Your transfer of $${transfer.amount.toFixed(2)} to ${recipient.username} was approved. (Fee deducted: $${(transfer.fee || 0).toFixed(2)})` 
+            });
+            
+            await Notification.create({ userId: recipient._id, message: `You received $${transfer.amount.toFixed(2)} from ${sender.username}.` });
             
             // Return recipient tx for frontend state update if needed
             // (For now we just return basic objects)

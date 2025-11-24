@@ -1,9 +1,9 @@
 
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
-import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest } from '../types';
+import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
-    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests 
+    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes 
 } from '../services/api';
 
 interface AppState {
@@ -19,6 +19,7 @@ interface AppState {
     notifications: Notification[];
     logs: Log[];
     passwordResetRequests: PasswordResetRequest[];
+    disputes: Dispute[];
     currentUser: User | null;
 }
 
@@ -49,6 +50,7 @@ const initialState: AppState = {
     notifications: [],
     logs: [],
     passwordResetRequests: [],
+    disputes: [],
     currentUser: null,
 };
 
@@ -89,6 +91,9 @@ type Action =
     | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: Notification[] }
     | { type: 'SET_PASSWORD_RESET_REQUESTS'; payload: PasswordResetRequest[] }
     | { type: 'DELETE_PASSWORD_RESET_REQUEST'; payload: string }
+    | { type: 'SET_DISPUTES'; payload: Dispute[] }
+    | { type: 'ADD_DISPUTE'; payload: Dispute }
+    | { type: 'UPDATE_DISPUTE'; payload: Dispute }
     | { type: 'SET_CURRENT_USER'; payload: User | null };
 
 
@@ -179,6 +184,11 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'DELETE_PASSWORD_RESET_REQUEST':
             return { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => req._id !== action.payload) };
 
+        // DISPUTES
+        case 'SET_DISPUTES': return { ...state, disputes: action.payload };
+        case 'ADD_DISPUTE': return { ...state, disputes: [action.payload, ...state.disputes] };
+        case 'UPDATE_DISPUTE': return { ...state, disputes: state.disputes.map(d => d._id === action.payload._id ? action.payload : d) };
+
         default:
             return state;
     }
@@ -211,16 +221,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const [
                     users, deposits, withdrawals, transactions, notifications, 
                     paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                    passwordResetRequests
+                    passwordResetRequests, disputes
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
                     getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(),
-                    getPasswordResetRequests()
+                    getPasswordResetRequests(), getDisputes()
                 ]);
                 dispatch({ type: 'SET_ALL_DATA', payload: {
                     users, deposits, withdrawals, transactions, notifications,
                     paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                    passwordResetRequests
+                    passwordResetRequests, disputes
                 }});
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);

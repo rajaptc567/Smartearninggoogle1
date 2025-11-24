@@ -9,6 +9,9 @@ export enum Status {
   Disabled = 'Disabled',
   Matching = 'Matching',
   Paused = 'Paused',
+  Open = 'Open',
+  Resolved = 'Resolved',
+  Closed = 'Closed',
 }
 
 export interface ActivePlan {
@@ -227,4 +230,17 @@ export interface PasswordResetRequest {
   userName: string;
   status: 'Pending' | 'Handled';
   requestDate: string;
+}
+
+export interface Dispute {
+    _id: string;
+    userId: string;
+    userName: string;
+    type: 'Deposit' | 'Withdrawal' | 'Transfer';
+    referenceId: string; // The ID of the rejected/failed item
+    description: string;
+    proofUrl?: string; // New proof if re-submitting
+    status: Status.Open | Status.Resolved | Status.Closed;
+    adminResponse?: string;
+    date: string;
 }
