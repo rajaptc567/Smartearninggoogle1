@@ -33,6 +33,10 @@ const initialState: AppState = {
     rules: [],
     settings: {
         isUserTransferEnabled: true,
+        transferConfig: {
+            enabled: true,
+            tiers: []
+        },
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,

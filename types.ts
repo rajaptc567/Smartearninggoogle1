@@ -83,6 +83,8 @@ export interface Transfer {
   recipientId: string;
   recipientName: string;
   amount: number;
+  fee?: number;
+  totalDeducted?: number;
   status: Status.Pending | Status.Approved | Status.Rejected;
   date: string;
   adminNotes?: string;
@@ -139,6 +141,15 @@ export interface InvestmentPlan {
         enabled: boolean;
         slots: number[]; // e.g., [5, 6] for holding 5th and 6th referral commissions
     };
+    
+    // Legacy field kept for type compatibility if needed, but main logic uses global settings
+    transferConfig?: {
+        enabled: boolean;
+        feeType: CommissionType;
+        feeValue: number;
+        minAmount: number;
+        maxAmount: number;
+    };
 }
 
 
@@ -162,8 +173,23 @@ export interface Rule {
     requiredEarnings: number;
 }
 
+export interface TransferFeeTier {
+    minAmount: number;
+    maxAmount: number;
+    feeType: 'percentage' | 'fixed';
+    feeValue: number;
+    enabled?: boolean; // New flag to enable/disable specific tiers
+}
+
 export interface Settings {
-    isUserTransferEnabled: boolean;
+    // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
+    isUserTransferEnabled: boolean; 
+    
+    transferConfig: {
+        enabled: boolean;
+        tiers: TransferFeeTier[];
+    };
+
     restrictWithdrawalAmount: boolean; // Restrict to own active plan prices
     requirePlanMatchForCommission: boolean; 
     requireActivePlanForCommission: boolean;
@@ -181,8 +207,8 @@ export interface Notification {
   message: string;
   isPopup?: boolean; // Should this show as a modal?
   popupShown?: boolean; // Has the modal been shown/closed?
-  date: string;
   read: boolean;
+  date: string;
 }
 
 export interface Log {

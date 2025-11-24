@@ -1,16 +1,21 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { currentUser, users } = state;
+    const { currentUser, users, settings } = state;
     
     const [recipientIdentifier, setRecipientIdentifier] = useState('');
     const [amount, setAmount] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+
+    const [fee, setFee] = useState(0);
+    const [totalDeduction, setTotalDeduction] = useState(0);
+    const [feeError, setFeeError] = useState<string | null>(null);
 
     // Get all users except current user for the dropdown list
     const availableRecipients = useMemo(() => {
@@ -18,37 +23,67 @@ const TransferFunds: React.FC = () => {
         return users.filter(u => u._id !== currentUser._id);
     }, [currentUser, users]);
 
+    // Calculate Fee Logic
+    useEffect(() => {
+        const val = parseFloat(amount);
+        
+        // Handle Global Config
+        const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] };
+
+        if (!config.enabled) {
+            setFeeError("Transfers are currently disabled by the administrator.");
+            setFee(0);
+            setTotalDeduction(0);
+            return;
+        }
+
+        if (isNaN(val) || val <= 0) {
+            setFee(0);
+            setTotalDeduction(0);
+            setFeeError(null);
+            return;
+        }
+
+        // Find Tier
+        const tier = config.tiers?.find(t => val >= t.minAmount && val <= t.maxAmount);
+
+        if (!tier) {
+            setFeeError("Amount is outside the allowed transfer limits.");
+            setFee(0);
+            setTotalDeduction(0);
+        } else {
+            let calculatedFee = 0;
+            if (tier.feeType === 'percentage') {
+                calculatedFee = (val * tier.feeValue) / 100;
+            } else {
+                calculatedFee = tier.feeValue;
+            }
+            setFee(calculatedFee);
+            setTotalDeduction(val + calculatedFee);
+            setFeeError(null);
+        }
+
+    }, [amount, settings]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const numericAmount = parseFloat(amount);
         
-        if (!currentUser) {
-            alert('Error: Current user not found. Please log in again.');
-            return;
-        }
-        if (!recipientIdentifier || isNaN(numericAmount) || numericAmount <= 0) {
-            alert('Validation Error: Please enter a valid recipient and a positive amount.');
-            return;
-        }
+        if (!currentUser) return alert('Error: Current user not found.');
+        if (feeError) return alert(feeError);
+        if (!recipientIdentifier || isNaN(numericAmount) || numericAmount <= 0) return alert('Please enter a valid recipient and amount.');
 
-        // Find user by ID, Username, or Email
         const recipient = users.find(u =>
             u._id.toString() === recipientIdentifier ||
             u.username.toLowerCase() === recipientIdentifier.toLowerCase() ||
             u.email.toLowerCase() === recipientIdentifier.toLowerCase()
         );
 
-        if (!recipient) {
-            alert('Validation Error: Recipient user not found. Please check the ID, username, or email.');
-            return;
-        }
-        if (recipient._id === currentUser._id) {
-            alert('Validation Error: You cannot transfer funds to yourself.');
-            return;
-        }
+        if (!recipient) return alert('Validation Error: Recipient user not found.');
+        if (recipient._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
 
-        if (numericAmount > currentUser.walletBalance) {
-            alert(`Validation Error: Transfer amount ($${numericAmount.toFixed(2)}) cannot exceed your wallet balance ($${currentUser.walletBalance.toFixed(2)}).`);
+        if (totalDeduction > currentUser.walletBalance) {
+            alert(`Validation Error: Total deduction ($${totalDeduction.toFixed(2)}) exceeds your wallet balance.`);
             return;
         }
         
@@ -62,7 +97,6 @@ const TransferFunds: React.FC = () => {
                 amount: numericAmount,
             });
 
-            // The API returns the new transfer, the updated user, and the new transaction.
             dispatch({ type: 'ADD_TRANSFER', payload: result.transfer });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
@@ -102,7 +136,7 @@ const TransferFunds: React.FC = () => {
                 <p className="text-4xl font-bold text-green-600 dark:text-green-400">${currentUser.walletBalance.toFixed(2)}</p>
             </div>
 
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Transfer Funds to Another User</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Transfer Funds</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                  <div>
@@ -115,7 +149,7 @@ const TransferFunds: React.FC = () => {
                             value={recipientIdentifier}
                             onChange={(e) => setRecipientIdentifier(e.target.value)}
                             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="Type to search username or enter ID..."
+                            placeholder="Type to search username..."
                             required
                         />
                         <datalist id="recipient-list">
@@ -126,7 +160,6 @@ const TransferFunds: React.FC = () => {
                             ))}
                         </datalist>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">You can manually type a user's detail or select from the list of registered members.</p>
                 </div>
                 <div>
                     <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
@@ -142,8 +175,33 @@ const TransferFunds: React.FC = () => {
                         required
                     />
                 </div>
+
+                {/* Calculation Details */}
+                {amount && (
+                    <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
+                        {feeError ? (
+                            <p className="text-sm text-red-600 dark:text-red-400">{feeError}</p>
+                        ) : (
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span>
+                                    <span className="font-medium">${parseFloat(amount).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">Processing Fee:</span>
+                                    <span className="font-medium text-red-500">+${fee.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold">
+                                    <span className="text-gray-800 dark:text-gray-200">Total Deducted:</span>
+                                    <span className="text-green-600 dark:text-green-400">${totalDeduction.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="pt-4 flex justify-end">
-                    <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
+                    <Button type="submit" disabled={isSubmitting || !!feeError}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
                 </div>
             </form>
         </div>
