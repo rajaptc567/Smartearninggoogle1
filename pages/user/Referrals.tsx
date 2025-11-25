@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, Transaction, ActivePlan } from '../../types';
@@ -10,6 +9,7 @@ interface GenealogyNode {
     user: User;
     children: GenealogyNode[];
     level: number;
+    collapsed?: boolean; // New state for UI toggle
 }
 
 const Referrals: React.FC = () => {
@@ -29,6 +29,8 @@ const Referrals: React.FC = () => {
     }, [currentUser]);
 
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+    // State to track which user IDs are collapsed in the tree view
+    const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
     // Set default plan on load
     useEffect(() => {
@@ -36,6 +38,16 @@ const Referrals: React.FC = () => {
             setSelectedPlanId(uniqueActivePlans[0].planId);
         }
     }, [uniqueActivePlans, selectedPlanId]);
+
+    const toggleNode = (userId: string) => {
+        const newSet = new Set(collapsedNodes);
+        if (newSet.has(userId)) {
+            newSet.delete(userId);
+        } else {
+            newSet.add(userId);
+        }
+        setCollapsedNodes(newSet);
+    }
 
     // Filter transactions strictly by Plan ID
     const getCommissionFromReferralForPlan = (referralId: string, planId: string): number => {
@@ -51,6 +63,12 @@ const Referrals: React.FC = () => {
             .reduce((sum, t) => sum + t.amount, 0);
     };
 
+    // Helper to get total investment of a user in this plan
+    const getReferralInvestment = (user: User, planId: string) => {
+        const plan = user.activePlans?.find(p => p.planId === planId);
+        return plan ? plan.price : 0;
+    }
+
     // Build Tree Strictly for the Selected Plan
     const buildPlanSpecificTree = useMemo(() => {
         if (!selectedPlanId || !currentUser) return [];
@@ -62,7 +80,6 @@ const Referrals: React.FC = () => {
             if (!directReferrals.length) return [];
 
             // 2. Filter: Only include referrals who HAVE the selected plan
-            // This enforces "Separate Referral Trees" - connections only exist within the context of a plan
             const planSpecificReferrals = directReferrals.filter(child => 
                 child.activePlans && child.activePlans.some(p => p.planId === selectedPlanId)
             );
@@ -77,154 +94,236 @@ const Referrals: React.FC = () => {
         return build(currentUser.username, users, 1);
     }, [currentUser, users, selectedPlanId]);
 
-    const flatList = useMemo(() => {
-        return buildPlanSpecificTree.map(node => node.user);
-    }, [buildPlanSpecificTree]);
-
     // Calculate total stats for this tree
     const treeStats = useMemo(() => {
-        if(!currentUser || !selectedPlanId) return { members: 0, earnings: 0 };
+        if(!currentUser || !selectedPlanId) return { members: 0, earnings: 0, volume: 0 };
         
+        let volume = 0;
         const countNodes = (nodes: GenealogyNode[]): number => {
-            return nodes.length + nodes.reduce((sum, node) => sum + countNodes(node.children), 0);
+            return nodes.length + nodes.reduce((sum, node) => {
+                volume += getReferralInvestment(node.user, selectedPlanId);
+                return sum + countNodes(node.children);
+            }, 0);
         };
         
+        // Initialize volume calculation by running traversal
         const totalMembers = countNodes(buildPlanSpecificTree);
         
         const totalEarnings = transactions
             .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.relatedPlanId === selectedPlanId)
             .reduce((sum, t) => sum + t.amount, 0);
 
-        return { members: totalMembers, earnings: totalEarnings };
+        return { members: totalMembers, earnings: totalEarnings, volume };
     }, [buildPlanSpecificTree, transactions, currentUser, selectedPlanId]);
 
 
-    const renderTree = (nodes: GenealogyNode[]) => (
-        <ul className="space-y-2">
-            {nodes.map(node => (
-                <li key={node.user._id} className="pl-4 border-l-2 border-blue-200 dark:border-blue-900">
-                    <div className="flex items-center space-x-3 p-3 rounded-md bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 shadow-sm">
-                        <div className="flex-shrink-0">
-                           <span className="text-xs font-bold inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                            L{node.level}
-                           </span>
+    const renderTreeNode = (node: GenealogyNode) => {
+        const isCollapsed = collapsedNodes.has(node.user._id);
+        const hasChildren = node.children.length > 0;
+        const commission = getCommissionFromReferralForPlan(node.user._id, selectedPlanId);
+        const investment = getReferralInvestment(node.user, selectedPlanId);
+        const joinDate = node.user.activePlans?.find(p => p.planId === selectedPlanId)?.purchaseDate;
+
+        return (
+            <li key={node.user._id} className="relative pl-6 py-2">
+                {/* Connector Lines */}
+                <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-700 -ml-3"></div>
+                <div className="absolute left-0 top-8 w-4 h-px bg-gray-300 dark:bg-gray-700 -ml-3"></div>
+
+                <div className="relative flex flex-col md:flex-row md:items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 group">
+                    
+                    {/* Left: Level & Avatar */}
+                    <div className="flex items-center flex-grow space-x-4">
+                        <div className="relative">
+                            <div 
+                                className={`flex-shrink-0 h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold border-4 
+                                ${node.level === 1 ? 'bg-blue-100 text-blue-700 border-white shadow-sm' : 'bg-purple-100 text-purple-700 border-white shadow-sm'}`}
+                            >
+                                L{node.level}
+                            </div>
+                            {hasChildren && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); toggleNode(node.user._id); }}
+                                    className="absolute -bottom-1 -right-1 h-5 w-5 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-blue-500 hover:text-white transition-colors shadow-sm z-10"
+                                >
+                                    <span className="text-xs font-bold leading-none">{isCollapsed ? '+' : '-'}</span>
+                                </button>
+                            )}
                         </div>
-                        <div className="flex-grow">
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{node.user.fullName} <span className="text-xs font-normal text-gray-500">@{node.user.username}</span></p>
-                            <p className="text-xs text-gray-500">Joined Plan: {new Date(node.user.activePlans?.find(p => p.planId === selectedPlanId)?.purchaseDate || Date.now()).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-right">
-                           <p className="text-xs font-medium text-gray-500 mb-1">Commission</p>
-                           <p className="text-sm font-bold text-green-600 dark:text-green-400">
-                               ${getCommissionFromReferralForPlan(node.user._id, selectedPlanId).toFixed(2)}
-                           </p>
+                        
+                        <div>
+                            <div className="flex items-center space-x-2">
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white">{node.user.fullName}</h4>
+                                <Badge status={node.user.status} />
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                @{node.user.username} • Joined {new Date(joinDate || Date.now()).toLocaleDateString()}
+                            </p>
                         </div>
                     </div>
-                    {node.children.length > 0 && <div className="mt-2">{renderTree(node.children)}</div>}
-                </li>
-            ))}
-        </ul>
-    );
+
+                    {/* Right: Financials */}
+                    <div className="mt-4 md:mt-0 flex items-center justify-between md:justify-end space-x-6 pl-16 md:pl-0 border-t md:border-t-0 border-gray-100 dark:border-gray-700 pt-3 md:pt-0">
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plan Value</p>
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">${investment.toFixed(0)}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p>
+                            <p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                +${commission.toFixed(2)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Recursive Children */}
+                {hasChildren && !isCollapsed && (
+                    <ul className="mt-2 ml-2 border-l-2 border-gray-200/50 dark:border-gray-700/50 pl-2 space-y-2 animate-fade-in-down">
+                        {node.children.map(child => renderTreeNode(child))}
+                    </ul>
+                )}
+            </li>
+        );
+    };
 
     if (!currentUser) {
-        return <div>Loading...</div>;
+        return <div className="p-10 text-center text-gray-500">Loading network...</div>;
     }
 
     if (uniqueActivePlans.length === 0) {
         return (
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md text-center">
-                <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 1.803M15 21a9 9 0 00-9-8.627M15 21a9 9 0 003.75-1.465M12 12a4 4 0 100-8 4 4 0 000 8z"></path></svg>
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">Referral Network Locked</h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">You must purchase an investment plan to unlock and view your referral trees. Each plan maintains its own independent network.</p>
-                <Button onClick={() => navigate('/member/plans')}>View Investment Plans</Button>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl text-center border border-gray-100 dark:border-gray-700">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-full mb-6 animate-bounce-slow">
+                    <svg className="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 1.803M15 21a9 9 0 00-9-8.627M15 21a9 9 0 003.75-1.465M12 12a4 4 0 100-8 4 4 0 000 8z"></path></svg>
+                </div>
+                <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-3">Unlock Your Network</h2>
+                <p className="text-gray-500 dark:text-gray-400 max-w-md mb-8 text-lg">
+                    Referral networks are specific to each investment plan. Purchase a plan to start building your team and earning commissions.
+                </p>
+                <Button onClick={() => navigate('/member/plans')} size="lg" className="shadow-lg shadow-blue-500/30">
+                    Browse Investment Plans
+                </Button>
             </div>
         );
     }
 
+    const currentPlanName = uniqueActivePlans.find(p => p.planId === selectedPlanId)?.planName;
+
     return (
-        <div className="space-y-6">
-            {/* Plan Selector Tabs */}
-            <div className="flex overflow-x-auto space-x-2 pb-2">
-                {uniqueActivePlans.map(plan => (
-                    <button
-                        key={plan.planId}
-                        onClick={() => setSelectedPlanId(plan.planId)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                            selectedPlanId === plan.planId
-                                ? 'bg-blue-600 text-white shadow-md'
-                                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        {plan.planName} Network
-                    </button>
-                ))}
-            </div>
-
-            {/* Stats for Selected Tree */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
-                    <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">Total Members in Tree</p>
-                    <p className="text-2xl font-bold text-blue-800 dark:text-blue-100">{treeStats.members}</p>
-                </div>
-                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-100 dark:border-green-800">
-                    <p className="text-sm text-green-600 dark:text-green-300 font-medium">Total Commission (This Plan)</p>
-                    <p className="text-2xl font-bold text-green-800 dark:text-green-100">${treeStats.earnings.toFixed(2)}</p>
-                </div>
-            </div>
-
-             <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-                        Direct Referrals ({flatList.length})
-                        <span className="ml-2 text-sm font-normal text-gray-500">for {uniqueActivePlans.find(p => p.planId === selectedPlanId)?.planName}</span>
-                    </h2>
+        <div className="space-y-8 max-w-6xl mx-auto">
+            
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">My Network</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your team structure and performance.</p>
                 </div>
                 
-                {flatList.length > 0 ? (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-700 dark:text-gray-400">
-                                <tr>
-                                    <th className="px-4 py-2">User</th>
-                                    <th className="px-4 py-2">Status</th>
-                                    <th className="px-4 py-2">Plan Date</th>
-                                    <th className="px-4 py-2">Earnings</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {flatList.map(user => (
-                                    <tr key={user._id} className="border-b dark:border-gray-700">
-                                        <td className="px-4 py-2">
-                                            <p className="font-medium">{user.fullName}</p>
-                                            <p className="text-xs text-gray-500">@{user.username}</p>
-                                        </td>
-                                        <td className="px-4 py-2"><Badge status={user.status} /></td>
-                                        <td className="px-4 py-2">
-                                            {new Date(user.activePlans?.find(p => p.planId === selectedPlanId)?.purchaseDate || Date.now()).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-4 py-2 font-semibold text-green-600 dark:text-green-400">
-                                            ${getCommissionFromReferralForPlan(user._id, selectedPlanId).toFixed(2)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : (
-                    <div className="text-center py-8 text-gray-500">
-                        <p>No direct referrals have joined this plan yet.</p>
-                        <p className="text-xs mt-1">Invite users to purchase the <strong>{uniqueActivePlans.find(p => p.planId === selectedPlanId)?.planName}</strong> to see them here.</p>
-                    </div>
-                )}
-             </div>
+                {/* Modern Plan Tabs */}
+                <div className="flex p-1.5 bg-gray-100 dark:bg-gray-900/50 rounded-xl overflow-x-auto border border-gray-200 dark:border-gray-700">
+                    {uniqueActivePlans.map(plan => (
+                        <button
+                            key={plan.planId}
+                            onClick={() => setSelectedPlanId(plan.planId)}
+                            className={`px-5 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
+                                selectedPlanId === plan.planId
+                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            {plan.planName}
+                        </button>
+                    ))}
+                </div>
+            </div>
 
-            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Network Genealogy</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                    Visualizing the referral tree for <strong>{uniqueActivePlans.find(p => p.planId === selectedPlanId)?.planName}</strong>. 
-                    Only users who hold this specific plan appear in this tree.
-                </p>
-                {buildPlanSpecificTree.length > 0 ? renderTree(buildPlanSpecificTree) : <p className="text-gray-500 italic">Tree is empty for this plan.</p>}
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Total Team Size</p>
+                            <h3 className="text-4xl font-extrabold">{treeStats.members}</h3>
+                            <p className="text-sm text-blue-200 mt-2 font-medium">Members in {currentPlanName}</p>
+                        </div>
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total Earnings</p>
+                            <h3 className="text-4xl font-extrabold">${treeStats.earnings.toFixed(2)}</h3>
+                            <p className="text-sm text-emerald-200 mt-2 font-medium">Commission from {currentPlanName}</p>
+                        </div>
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Team Volume</p>
+                        <h3 className="text-3xl font-bold text-gray-800 dark:text-white">${treeStats.volume.toLocaleString()}</h3>
+                        <p className="text-sm text-gray-500 mt-2">Total active investment in downline</p>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <button 
+                            onClick={() => {
+                                navigator.clipboard.writeText(`https://site.com/register?sponsor=${currentUser.username}`);
+                                alert('Referral link copied!');
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center"
+                        >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                            Copy Referral Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tree Visualization */}
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center">
+                    <div>
+                        <h2 className="font-bold text-gray-800 dark:text-white text-lg">Genealogy Tree</h2>
+                        <p className="text-xs text-gray-500">Interactive view of your {currentPlanName} structure</p>
+                    </div>
+                    <div className="flex space-x-2">
+                        <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">Level 1</span>
+                        <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 font-medium">Level 2+</span>
+                    </div>
+                </div>
+                
+                <div className="p-8 overflow-x-auto min-h-[400px]">
+                    {buildPlanSpecificTree.length > 0 ? (
+                        <ul className="space-y-4 min-w-[600px]">
+                            {buildPlanSpecificTree.map(node => renderTreeNode(node))}
+                        </ul>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-12">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 mb-6 ring-8 ring-gray-50 dark:ring-gray-900">
+                                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Your Team is Empty</h3>
+                            <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mt-2 text-center">
+                                You haven't referred anyone to the <strong>{currentPlanName}</strong> plan yet. 
+                                Share your link to start earning commissions!
+                            </p>
+                            <Button onClick={() => {
+                                navigator.clipboard.writeText(`https://site.com/register?sponsor=${currentUser.username}`);
+                                alert('Referral link copied!');
+                            }} className="mt-8 shadow-lg shadow-blue-500/30" size="lg">
+                                Copy Referral Link
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
