@@ -218,15 +218,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
+                // Fetch core data first
                 const [
                     users, deposits, withdrawals, transactions, notifications, 
                     paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                    passwordResetRequests, disputes
+                    passwordResetRequests
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
                     getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(),
-                    getPasswordResetRequests(), getDisputes()
+                    getPasswordResetRequests()
                 ]);
+
+                // Fetch disputes separately to ensure robustness
+                let disputes: Dispute[] = [];
+                try {
+                    disputes = await getDisputes();
+                } catch (e) {
+                    console.warn("Failed to fetch disputes data:", e);
+                }
+
                 dispatch({ type: 'SET_ALL_DATA', payload: {
                     users, deposits, withdrawals, transactions, notifications,
                     paymentMethods, investmentPlans, rules, settings, transfers, logs,

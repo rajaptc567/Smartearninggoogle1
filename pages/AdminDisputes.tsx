@@ -15,8 +15,10 @@ const AdminDisputes: React.FC = () => {
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [replyMessage, setReplyMessage] = useState('');
+    const [chatFile, setChatFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
@@ -25,6 +27,7 @@ const AdminDisputes: React.FC = () => {
     const handleView = (dispute: Dispute) => {
         setSelectedDispute(dispute);
         setReplyMessage('');
+        setChatFile(null);
         setIsModalOpen(true);
     };
 
@@ -63,15 +66,23 @@ const AdminDisputes: React.FC = () => {
     }, [selectedDispute, deposits, withdrawals, transfers]);
 
     const handleSendMessage = async () => {
-        if (!selectedDispute || !replyMessage.trim()) return;
+        if (!selectedDispute) return;
+        if (!replyMessage.trim() && !chatFile) return;
+
         setIsSubmitting(true);
         try {
-            const updatedDispute = await updateDispute(selectedDispute._id, { 
-                newMessage: replyMessage 
-            });
+            const formData = new FormData();
+            formData.append('sender', 'Admin');
+            if(replyMessage) formData.append('newMessage', replyMessage);
+            if(chatFile) formData.append('file', chatFile);
+
+            const updatedDispute = await updateDispute(selectedDispute._id, formData);
+            
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
-            setSelectedDispute(updatedDispute); // Update local state to show new msg
+            setSelectedDispute(updatedDispute); 
             setReplyMessage('');
+            setChatFile(null);
+            if(fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
             console.error("Failed to send message", error);
             alert("Failed to send message");
@@ -87,7 +98,6 @@ const AdminDisputes: React.FC = () => {
             const updatedDispute = await updateDispute(selectedDispute._id, { status });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute);
-            // Don't close modal, let admin see the status change
         } catch (error) {
             console.error("Failed to update dispute status", error);
             alert("Failed to update dispute status");
@@ -112,7 +122,8 @@ const AdminDisputes: React.FC = () => {
             // Also resolve the dispute automatically
             const updatedDispute = await updateDispute(selectedDispute._id, { 
                 status: Status.Resolved, 
-                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.' 
+                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.',
+                sender: 'Admin'
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
@@ -222,7 +233,7 @@ const AdminDisputes: React.FC = () => {
                                 {/* Proof */}
                                 {selectedDispute.proofUrl && (
                                     <div className="mb-4">
-                                        <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Submitted Proof</h4>
+                                        <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Initial Proof</h4>
                                         <a href={selectedDispute.proofUrl} target="_blank" rel="noreferrer">
                                             <img src={selectedDispute.proofUrl} alt="Proof" className="w-full object-contain rounded border shadow-sm bg-gray-100 hover:opacity-90 transition-opacity" />
                                         </a>
@@ -247,6 +258,11 @@ const AdminDisputes: React.FC = () => {
                                                             ? 'bg-blue-600 text-white rounded-br-none' 
                                                             : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                                                     }`}>
+                                                        {msg.attachmentUrl && (
+                                                            <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
+                                                                <img src={msg.attachmentUrl} alt="Attachment" className="max-h-40 rounded border border-white/20" />
+                                                            </a>
+                                                        )}
                                                         <p className="text-sm">{msg.message}</p>
                                                         <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
                                                             {msg.sender} • {new Date(msg.date).toLocaleString()}
@@ -262,17 +278,32 @@ const AdminDisputes: React.FC = () => {
                                 </div>
 
                                 {/* Input Area */}
-                                <div className="flex gap-2 mb-4">
+                                <div className="flex gap-2 mb-4 items-center">
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        className="hidden" 
+                                        onChange={(e) => setChatFile(e.target.files ? e.target.files[0] : null)} 
+                                    />
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className={`p-2 rounded-full ${chatFile ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
+                                        title="Upload File"
+                                        disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                                    </button>
+                                    
                                     <input 
                                         type="text" 
                                         className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
-                                        placeholder="Type a reply..." 
+                                        placeholder={chatFile ? `File selected: ${chatFile.name}` : "Type a reply..."}
                                         value={replyMessage}
                                         onChange={(e) => setReplyMessage(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                                         disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
                                     />
-                                    <Button onClick={handleSendMessage} disabled={isSubmitting || !replyMessage.trim()}>Send</Button>
+                                    <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !chatFile)}>Send</Button>
                                 </div>
 
                                 {/* Status Actions */}

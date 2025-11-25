@@ -45,6 +45,9 @@ const DisputeSchema = new mongoose.Schema({
             type: String,
             required: true
         },
+        attachmentUrl: {
+            type: String, // Optional Base64/URL for chat attachments
+        },
         date: {
             type: Date,
             default: Date.now
