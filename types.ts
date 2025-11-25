@@ -253,4 +253,6 @@ export interface Dispute {
     adminResponse?: string; // Kept for legacy/summary, actual chat is in messages
     messages?: DisputeMessage[];
     date: string;
+    adminUnread?: boolean;
+    userUnread?: boolean;
 }

@@ -34,6 +34,10 @@ export const createDispute = async (req, res) => {
             disputeData.proofUrl = `data:${mimeType};base64,${b64}`;
         }
         
+        // When a user creates a dispute, it is unread for the admin.
+        disputeData.adminUnread = true;
+        disputeData.userUnread = false;
+
         const dispute = await Dispute.create(disputeData);
 
         // Notify user
@@ -77,13 +81,14 @@ export const updateDispute = async (req, res) => {
             if (!dispute.messages) dispute.messages = [];
             dispute.messages.push(messageData);
             
-            // For notifications, differentiate sender
+            // Set unread flags based on sender
             if (messageData.sender === 'Admin') {
+                dispute.userUnread = true;
                 notificationSubject = `New Message on Dispute #${dispute._id}`;
                 notificationMessage = `Admin: ${messageData.message}`;
             } else { // 'User'
-                // Admin doesn't get a bell notification, they see it in the panel. 
-                // Could add an admin-specific notification here if needed.
+                dispute.adminUnread = true;
+                // Admin doesn't get a bell notification, they see it in the panel.
             }
         }
 
@@ -98,6 +103,7 @@ export const updateDispute = async (req, res) => {
                 message: `Status changed from ${oldStatus} to ${status}`
             });
             
+            dispute.userUnread = true; // Notify user of status change
             notificationSubject = `Dispute Update: #${dispute._id}`;
             notificationMessage = `Your dispute status has changed to ${status}.`;
         }
@@ -116,6 +122,31 @@ export const updateDispute = async (req, res) => {
 
 
         res.status(200).json({ success: true, data: dispute });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Mark a dispute as read by a role
+// @route   PUT /api/v1/disputes/:id/read
+export const markAsRead = async (req, res) => {
+    try {
+        const { role } = req.body; // 'admin' or 'user'
+        const dispute = await Dispute.findById(req.params.id);
+
+        if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
+
+        if (role === 'admin') {
+            dispute.adminUnread = false;
+        } else if (role === 'user') {
+            dispute.userUnread = false;
+        } else {
+            return res.status(400).json({ success: false, error: 'Invalid role provided.' });
+        }
+
+        await dispute.save();
+        res.status(200).json({ success: true, data: dispute });
+
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

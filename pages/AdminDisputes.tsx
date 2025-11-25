@@ -6,7 +6,7 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { updateDispute, updateDeposit } from '../services/api';
+import { updateDispute, updateDeposit, markDisputeAsRead } from '../services/api';
 
 const AdminDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -24,10 +24,21 @@ const AdminDisputes: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
 
-    const handleView = (dispute: Dispute) => {
+    const handleView = async (dispute: Dispute) => {
         setSelectedDispute(dispute);
         setReplyMessage('');
         setIsModalOpen(true);
+
+        // If it's unread for the admin, mark it as read
+        if (dispute.adminUnread) {
+            try {
+                const updatedDispute = await markDisputeAsRead(dispute._id, 'admin');
+                dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+                setSelectedDispute(updatedDispute); // Show the updated state in the modal
+            } catch (error) {
+                console.error("Failed to mark dispute as read:", error);
+            }
+        }
     };
 
     const handleClose = () => {
@@ -169,7 +180,12 @@ const AdminDisputes: React.FC = () => {
                             <td className="px-4 py-3">{dispute.type}</td>
                             <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
                             <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
-                            <td className="px-4 py-3"><Badge status={dispute.status as Status} /></td>
+                            <td className="px-4 py-3">
+                                <div className="flex items-center space-x-2">
+                                    <Badge status={dispute.status as Status} />
+                                    {dispute.adminUnread && <span className="px-2 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full">New Reply</span>}
+                                </div>
+                            </td>
                             <td className="px-4 py-3">
                                 <Button size="sm" onClick={() => handleView(dispute)}>View</Button>
                             </td>

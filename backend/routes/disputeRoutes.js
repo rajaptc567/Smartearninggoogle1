@@ -1,7 +1,8 @@
 
+
 import express from 'express';
 import multer from 'multer';
-import { getDisputes, createDispute, updateDispute } from '../controllers/disputesController.js';
+import { getDisputes, createDispute, updateDispute, markAsRead } from '../controllers/disputesController.js';
 
 // Multer for memory storage (Base64)
 const storage = multer.memoryStorage();
@@ -18,5 +19,8 @@ router.route('/')
 
 router.route('/:id')
     .put(upload.single('file'), updateDispute); // Add multer for file attachments in chat
+
+router.route('/:id/read')
+    .put(markAsRead);
 
 export default router;

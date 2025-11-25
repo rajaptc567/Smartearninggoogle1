@@ -467,3 +467,13 @@ export const updateDispute = async (id: string, data: FormData | { status?: stri
     const result = await handleResponse(response);
     return result.data;
 };
+
+export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Promise<Dispute> => {
+    const response = await fetch(`${API_BASE_URL}/disputes/${id}/read`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+}

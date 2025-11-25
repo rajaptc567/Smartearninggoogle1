@@ -6,7 +6,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { createDispute, updateDispute } from '../../services/api';
+import { createDispute, updateDispute, markDisputeAsRead } from '../../services/api';
 
 const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -33,6 +33,22 @@ const UserDisputes: React.FC = () => {
             chatEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
     }, [selectedDispute, selectedDispute?.messages]);
+    
+    // When a dispute is selected to be viewed
+    const handleViewDispute = async (dispute: Dispute) => {
+        setSelectedDispute(dispute);
+        // If it's unread for the user, mark it as read
+        if (dispute.userUnread) {
+            try {
+                const updatedDispute = await markDisputeAsRead(dispute._id, 'user');
+                dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+                setSelectedDispute(updatedDispute); // Ensure the modal shows the read state
+            } catch (error) {
+                console.error("Failed to mark as read:", error);
+            }
+        }
+    };
+
 
     if (!currentUser) return <div>Loading...</div>;
 
@@ -113,9 +129,14 @@ const UserDisputes: React.FC = () => {
                                 <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{dispute.type}</td>
                                 <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
-                                <td className="px-4 py-3"><Badge status={dispute.status as Status} /></td>
                                 <td className="px-4 py-3">
-                                    <Button size="sm" variant="secondary" onClick={() => setSelectedDispute(dispute)}>View Chat</Button>
+                                    <div className="flex items-center space-x-2">
+                                        <Badge status={dispute.status as Status} />
+                                        {dispute.userUnread && <span className="px-2 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full">New Reply</span>}
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <Button size="sm" variant="secondary" onClick={() => handleViewDispute(dispute)}>View Chat</Button>
                                 </td>
                             </tr>
                         ))}

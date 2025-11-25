@@ -54,7 +54,15 @@ const DisputeSchema = new mongoose.Schema({
     adminResponse: {
         type: String,
     },
-    messages: [MessageSchema] // Use the defined sub-schema
+    messages: [MessageSchema], // Use the defined sub-schema
+    adminUnread: {
+        type: Boolean,
+        default: true, // Unread for admin when user creates it
+    },
+    userUnread: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });
