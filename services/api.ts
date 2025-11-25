@@ -422,6 +422,14 @@ export const getLogs = async (): Promise<Log[]> => {
     return result.data;
 };
 
+export const clearLogs = async (): Promise<[]> => {
+    const response = await fetch(`${API_BASE_URL}/logs`, {
+        method: 'DELETE',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 // --- Dispute API Functions ---
 export const getDisputes = async (): Promise<Dispute[]> => {
     const response = await fetch(`${API_BASE_URL}/disputes`);
