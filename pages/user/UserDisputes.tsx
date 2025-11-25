@@ -6,7 +6,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { createDispute, updateDispute } from '../../services/api';
+import { createDispute } from '../../services/api';
 
 const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -23,16 +23,13 @@ const UserDisputes: React.FC = () => {
 
     // View State
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
-    const [replyMessage, setReplyMessage] = useState('');
-    const [chatFile, setChatFile] = useState<File | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (chatEndRef.current) {
             chatEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-    }, [selectedDispute, selectedDispute?.messages]);
+    }, [selectedDispute]);
 
     if (!currentUser) return <div>Loading...</div>;
 
@@ -96,32 +93,6 @@ const UserDisputes: React.FC = () => {
         } catch (error) {
             console.error("Failed to submit dispute", error);
             alert("Failed to submit dispute");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleSendMessage = async () => {
-        if (!selectedDispute) return;
-        if (!replyMessage.trim() && !chatFile) return;
-
-        setIsSubmitting(true);
-        try {
-            const formData = new FormData();
-            formData.append('sender', 'User');
-            if(replyMessage) formData.append('newMessage', replyMessage);
-            if(chatFile) formData.append('file', chatFile);
-
-            const updatedDispute = await updateDispute(selectedDispute._id, formData);
-            
-            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
-            setSelectedDispute(updatedDispute); 
-            setReplyMessage('');
-            setChatFile(null);
-            if(fileInputRef.current) fileInputRef.current.value = '';
-        } catch (error) {
-            console.error("Failed to send message", error);
-            alert("Failed to send message");
         } finally {
             setIsSubmitting(false);
         }
@@ -274,24 +245,19 @@ const UserDisputes: React.FC = () => {
 
                             {/* Message History */}
                             {selectedDispute.messages && selectedDispute.messages.map((msg, idx) => (
-                                <div key={idx} className={`flex ${msg.sender === 'User' ? 'justify-end' : msg.sender === 'System' ? 'justify-center' : 'justify-start'}`}>
+                                <div key={idx} className={`flex ${msg.sender === 'User' ? 'justify-start' : msg.sender === 'System' ? 'justify-center' : 'justify-end'}`}>
                                     {msg.sender === 'System' ? (
                                         <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-500 px-2 py-1 rounded-full">
                                             {msg.message} - {new Date(msg.date).toLocaleTimeString()}
                                         </span>
                                     ) : (
                                         <div className={`max-w-[85%] p-3 rounded-lg shadow-sm text-sm ${
-                                            msg.sender === 'User' 
+                                            msg.sender === 'Admin' 
                                                 ? 'bg-blue-600 text-white rounded-br-none' 
                                                 : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                                         }`}>
-                                            {msg.attachmentUrl && (
-                                                <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block mb-2">
-                                                    <img src={msg.attachmentUrl} alt="Attachment" className="max-h-40 rounded border border-white/20" />
-                                                </a>
-                                            )}
                                             <p>{msg.message}</p>
-                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'User' ? 'text-blue-100' : 'text-gray-400'}`}>
+                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
                                                 {msg.sender} • {new Date(msg.date).toLocaleString()}
                                             </p>
                                         </div>
@@ -301,39 +267,11 @@ const UserDisputes: React.FC = () => {
                             <div ref={chatEndRef} />
                         </div>
                         
-                        <div className="mt-4 flex gap-2 items-center">
-                            {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' ? (
-                                <>
-                                    <input 
-                                        type="file" 
-                                        ref={fileInputRef} 
-                                        className="hidden" 
-                                        onChange={(e) => setChatFile(e.target.files ? e.target.files[0] : null)} 
-                                    />
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className={`p-2 rounded-full ${chatFile ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}
-                                        title="Upload File"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                                    </button>
-                                    
-                                    <input 
-                                        type="text" 
-                                        className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
-                                        placeholder={chatFile ? `File selected: ${chatFile.name}` : "Type a reply..."}
-                                        value={replyMessage}
-                                        onChange={(e) => setReplyMessage(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                    />
-                                    <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !chatFile)}>Send</Button>
-                                </>
-                            ) : (
-                                <div className="w-full text-center p-2 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded">
-                                    This dispute is closed.
-                                </div>
-                            )}
-                        </div>
+                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
+                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500">
+                                Waiting for Admin response...
+                            </div>
+                        )}
                     </div>
                 </Modal>
             )}
