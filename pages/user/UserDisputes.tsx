@@ -6,7 +6,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { createDispute } from '../../services/api';
+import { createDispute, updateDispute } from '../../services/api';
 
 const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -23,47 +23,25 @@ const UserDisputes: React.FC = () => {
 
     // View State
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
+    const [replyMessage, setReplyMessage] = useState('');
+    const [attachment, setAttachment] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (chatEndRef.current) {
             chatEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-    }, [selectedDispute]);
+    }, [selectedDispute, selectedDispute?.messages]);
 
     if (!currentUser) return <div>Loading...</div>;
 
     const userDisputes = disputes.filter(d => d.userId === currentUser._id);
 
-    // Filter relevant transactions for the dropdown
     const availableTransactions = useMemo(() => {
-        if (type === 'Deposit') {
-            return deposits
-                .filter(d => d.userId === currentUser._id && (d.status === 'Rejected' || d.status === 'Pending'))
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map(d => ({
-                    id: d._id,
-                    label: `${new Date(d.date).toLocaleDateString()} - Deposit $${d.amount} (${d.status})`
-                }));
-        }
-        if (type === 'Withdrawal') {
-            return withdrawals
-                .filter(w => w.userId === currentUser._id && (w.status === 'Rejected' || w.status === 'Paid' || w.status === 'Approved'))
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map(w => ({
-                    id: w._id,
-                    label: `${new Date(w.date).toLocaleDateString()} - Withdraw $${w.amount} (${w.status})`
-                }));
-        }
-        if (type === 'Transfer') {
-            return transfers
-                .filter(t => t.senderId === currentUser._id && t.status === 'Rejected')
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .map(t => ({
-                    id: t._id,
-                    label: `${new Date(t.date).toLocaleDateString()} - Transfer $${t.amount} to ${t.recipientName} (${t.status})`
-                }));
-        }
+        if (type === 'Deposit') return deposits.filter(d => d.userId === currentUser._id && (d.status === 'Rejected' || d.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(d => ({ id: d._id, label: `${new Date(d.date).toLocaleDateString()} - Deposit $${d.amount} (${d.status})` }));
+        if (type === 'Withdrawal') return withdrawals.filter(w => w.userId === currentUser._id && (w.status === 'Rejected' || w.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => ({ id: w._id, label: `${new Date(w.date).toLocaleDateString()} - Withdraw $${w.amount} (${w.status})` }));
+        if (type === 'Transfer') return transfers.filter(t => t.senderId === currentUser._id && t.status === 'Rejected').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => ({ id: t._id, label: `${new Date(t.date).toLocaleDateString()} - Transfer $${t.amount} to ${t.recipientName} (${t.status})` }));
         return [];
     }, [type, deposits, withdrawals, transfers, currentUser]);
 
@@ -84,15 +62,37 @@ const UserDisputes: React.FC = () => {
             const newDispute = await createDispute(formData);
             dispatch({ type: 'ADD_DISPUTE', payload: newDispute });
             setIsCreateModalOpen(false);
-            // Reset form
-            setReferenceId('');
-            setDescription('');
-            setProof(null);
-            setUseManualId(false);
+            setReferenceId(''); setDescription(''); setProof(null); setUseManualId(false);
             alert("Dispute submitted successfully.");
         } catch (error) {
             console.error("Failed to submit dispute", error);
-            alert("Failed to submit dispute");
+            alert(`Failed to submit dispute: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSendMessage = async () => {
+        if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
+        setIsSubmitting(true);
+
+        const formData = new FormData();
+        formData.append('newMessage', replyMessage.trim());
+        formData.append('sender', 'User');
+        if (attachment) {
+            formData.append('file', attachment);
+        }
+
+        try {
+            const updatedDispute = await updateDispute(selectedDispute._id, formData);
+            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+            setSelectedDispute(updatedDispute);
+            setReplyMessage('');
+            setAttachment(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } catch (error) {
+            console.error("Failed to send message", error);
+            alert("Failed to send message");
         } finally {
             setIsSubmitting(false);
         }
@@ -125,7 +125,6 @@ const UserDisputes: React.FC = () => {
                 )}
             </div>
 
-            {/* CREATE MODAL */}
             {isCreateModalOpen && (
                 <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)}>
                     <div className="p-4 w-[90vw] max-w-lg">
@@ -133,75 +132,26 @@ const UserDisputes: React.FC = () => {
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium">Transaction Type</label>
-                                <select 
-                                    value={type} 
-                                    onChange={(e) => { setType(e.target.value as any); setReferenceId(''); }}
-                                    className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600"
-                                >
+                                <select value={type} onChange={(e) => { setType(e.target.value as any); setReferenceId(''); }} className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600">
                                     <option value="Deposit">Deposit</option>
                                     <option value="Withdrawal">Withdrawal</option>
                                     <option value="Transfer">Transfer</option>
                                 </select>
                             </div>
-                            
                             <div>
                                 <div className="flex justify-between">
                                     <label className="block text-sm font-medium">Transaction Reference</label>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setUseManualId(!useManualId)} 
-                                        className="text-xs text-blue-500 hover:underline"
-                                    >
-                                        {useManualId ? 'Select from list' : 'Enter ID Manually'}
-                                    </button>
+                                    <button type="button" onClick={() => setUseManualId(!useManualId)} className="text-xs text-blue-500 hover:underline">{useManualId ? 'Select from list' : 'Enter ID Manually'}</button>
                                 </div>
-                                
-                                {useManualId ? (
-                                    <input 
-                                        type="text" 
-                                        value={referenceId} 
-                                        onChange={(e) => setReferenceId(e.target.value)}
-                                        placeholder="Enter ID of the transaction"
-                                        className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 mt-1"
-                                        required
-                                    />
-                                ) : (
-                                    <select 
-                                        value={referenceId} 
-                                        onChange={(e) => setReferenceId(e.target.value)}
-                                        className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 mt-1"
-                                        required
-                                    >
-                                        <option value="">-- Select a failed transaction --</option>
-                                        {availableTransactions.length > 0 ? (
-                                            availableTransactions.map(tx => (
-                                                <option key={tx.id} value={tx.id}>{tx.label}</option>
-                                            ))
-                                        ) : (
-                                            <option disabled>No recent failed transactions found</option>
-                                        )}
-                                    </select>
-                                )}
+                                {useManualId ? <input type="text" value={referenceId} onChange={(e) => setReferenceId(e.target.value)} placeholder="Enter ID of the transaction" className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 mt-1" required/> : <select value={referenceId} onChange={(e) => setReferenceId(e.target.value)} className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 mt-1" required><option value="">-- Select a failed transaction --</option>{availableTransactions.length > 0 ? availableTransactions.map(tx => <option key={tx.id} value={tx.id}>{tx.label}</option>) : <option disabled>No recent failed transactions found</option>}</select>}
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium">Upload Proof (Screenshot)</label>
-                                <input 
-                                    type="file" 
-                                    onChange={(e) => setProof(e.target.files ? e.target.files[0] : null)}
-                                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                />
+                                <input type="file" onChange={(e) => setProof(e.target.files ? e.target.files[0] : null)} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium">Description</label>
-                                <textarea 
-                                    value={description} 
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    rows={3}
-                                    placeholder="Explain the issue in detail..."
-                                    className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                />
+                                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Explain the issue in detail..." className="w-full rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600" required/>
                             </div>
                             <div className="flex justify-end space-x-3 pt-4">
                                 <Button type="button" variant="secondary" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
@@ -212,66 +162,43 @@ const UserDisputes: React.FC = () => {
                 </Modal>
             )}
 
-            {/* VIEW/CHAT MODAL */}
             {selectedDispute && (
                 <Modal isOpen={true} onClose={() => setSelectedDispute(null)}>
                     <div className="p-4 w-[90vw] max-w-3xl h-[80vh] flex flex-col">
                         <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-2">
-                            <div>
-                                <h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3>
-                                <Badge status={selectedDispute.status as Status} />
-                            </div>
+                            <div><h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3><Badge status={selectedDispute.status as Status} /></div>
                             <Button variant="secondary" size="sm" onClick={() => setSelectedDispute(null)}>Close</Button>
                         </div>
-
                         <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg space-y-4">
-                            {/* Initial User Request */}
                             <div className="flex justify-start">
                                 <div className="max-w-[85%] p-3 rounded-lg rounded-bl-none bg-white dark:bg-gray-700 shadow-sm text-gray-800 dark:text-gray-200">
-                                    <p className="text-sm font-bold mb-1 text-blue-600 dark:text-blue-400">Original Description</p>
+                                    <p className="text-sm font-bold mb-1 text-blue-600 dark:text-blue-400">Your Original Description</p>
                                     <p className="text-sm whitespace-pre-wrap">{selectedDispute.description}</p>
+                                    {selectedDispute.proofUrl && <a href={selectedDispute.proofUrl} target="_blank" rel="noreferrer"><img src={selectedDispute.proofUrl} alt="Initial Proof" className="mt-2 rounded-md max-h-40"/></a>}
                                     <p className="text-[10px] mt-2 text-gray-400 text-right">{new Date(selectedDispute.date).toLocaleString()}</p>
                                 </div>
                             </div>
-
-                            {selectedDispute.proofUrl && (
-                                <div className="flex justify-start">
-                                    <div className="max-w-[50%]">
-                                        <p className="text-xs text-gray-500 mb-1">Attached Proof</p>
-                                        <img src={selectedDispute.proofUrl} alt="Proof" className="rounded border shadow-sm" />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Message History */}
                             {selectedDispute.messages && selectedDispute.messages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.sender === 'User' ? 'justify-start' : msg.sender === 'System' ? 'justify-center' : 'justify-end'}`}>
-                                    {msg.sender === 'System' ? (
-                                        <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-500 px-2 py-1 rounded-full">
-                                            {msg.message} - {new Date(msg.date).toLocaleTimeString()}
-                                        </span>
-                                    ) : (
-                                        <div className={`max-w-[85%] p-3 rounded-lg shadow-sm text-sm ${
-                                            msg.sender === 'Admin' 
-                                                ? 'bg-blue-600 text-white rounded-br-none' 
-                                                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
-                                        }`}>
-                                            <p>{msg.message}</p>
-                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
-                                                {msg.sender} • {new Date(msg.date).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    )}
+                                    {msg.sender === 'System' ? <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-500 px-2 py-1 rounded-full">{msg.message} - {new Date(msg.date).toLocaleTimeString()}</span> : <div className={`max-w-[85%] p-3 rounded-lg shadow-sm text-sm ${msg.sender === 'Admin' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'}`}>
+                                        {msg.attachmentUrl && <img src={msg.attachmentUrl} alt="attachment" className="rounded-md mb-2 max-h-60"/>}
+                                        <p>{msg.message}</p>
+                                        <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>{msg.sender} • {new Date(msg.date).toLocaleString()}</p>
+                                    </div>}
                                 </div>
                             ))}
                             <div ref={chatEndRef} />
                         </div>
                         
-                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
-                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500">
-                                Waiting for Admin response...
+                        {(selectedDispute.status === 'Open' || selectedDispute.status === 'Processing') && (
+                            <div className="mt-4 flex gap-2 items-center">
+                                <input type="text" className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} disabled={isSubmitting}/>
+                                <input type="file" ref={fileInputRef} onChange={(e) => setAttachment(e.target.files ? e.target.files[0] : null)} className="hidden"/>
+                                <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg></Button>
+                                <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !attachment)}>Send</Button>
                             </div>
                         )}
+                        {attachment && <p className="text-xs text-gray-500 mt-1">Selected: {attachment.name}</p>}
                     </div>
                 </Modal>
             )}

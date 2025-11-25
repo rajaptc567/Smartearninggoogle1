@@ -7,7 +7,7 @@ import { getDisputes, createDispute, updateDispute } from '../controllers/disput
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } 
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
 const router = express.Router();
@@ -17,6 +17,6 @@ router.route('/')
     .post(upload.single('proof'), createDispute);
 
 router.route('/:id')
-    .put(updateDispute);
+    .put(upload.single('file'), updateDispute); // Add multer for file attachments in chat
 
 export default router;

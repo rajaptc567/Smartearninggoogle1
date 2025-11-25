@@ -15,8 +15,10 @@ const AdminDisputes: React.FC = () => {
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [replyMessage, setReplyMessage] = useState('');
+    const [attachment, setAttachment] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,15 +65,23 @@ const AdminDisputes: React.FC = () => {
     }, [selectedDispute, deposits, withdrawals, transfers]);
 
     const handleSendMessage = async () => {
-        if (!selectedDispute || !replyMessage.trim()) return;
+        if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
         setIsSubmitting(true);
+
+        const formData = new FormData();
+        formData.append('newMessage', replyMessage.trim());
+        formData.append('sender', 'Admin');
+        if (attachment) {
+            formData.append('file', attachment);
+        }
+
         try {
-            const updatedDispute = await updateDispute(selectedDispute._id, { 
-                newMessage: replyMessage 
-            });
+            const updatedDispute = await updateDispute(selectedDispute._id, formData);
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute); // Update local state to show new msg
             setReplyMessage('');
+            setAttachment(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
             console.error("Failed to send message", error);
             alert("Failed to send message");
@@ -84,10 +94,9 @@ const AdminDisputes: React.FC = () => {
         if (!selectedDispute) return;
         setIsSubmitting(true);
         try {
-            const updatedDispute = await updateDispute(selectedDispute._id, { status });
+            const updatedDispute = await updateDispute(selectedDispute._id, { status, sender: 'System' });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute);
-            // Don't close modal, let admin see the status change
         } catch (error) {
             console.error("Failed to update dispute status", error);
             alert("Failed to update dispute status");
@@ -109,10 +118,10 @@ const AdminDisputes: React.FC = () => {
             dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             
-            // Also resolve the dispute automatically
             const updatedDispute = await updateDispute(selectedDispute._id, { 
                 status: Status.Resolved, 
-                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.' 
+                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.',
+                sender: 'System'
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
@@ -202,7 +211,7 @@ const AdminDisputes: React.FC = () => {
                                     {linkedTransaction ? (
                                         <div className="text-sm space-y-1">
                                             <div className="flex justify-between"><span>ID:</span> <span className="font-mono text-xs">{linkedTransaction._id}</span></div>
-                                            <div className="flex justify-between"><span>Amount:</span> <span className="font-bold">${linkedTransaction.amount.toFixed(2)}</span></div>
+                                            <div className="flex justify-between"><span>Amount:</span> <span className="font-bold">${(linkedTransaction as any).amount.toFixed(2)}</span></div>
                                             <div className="flex justify-between"><span>Date:</span> <span>{new Date(linkedTransaction.date).toLocaleDateString()}</span></div>
                                             <div className="flex justify-between"><span>Status:</span> <Badge status={linkedTransaction.status as Status} /></div>
                                             
@@ -247,6 +256,7 @@ const AdminDisputes: React.FC = () => {
                                                             ? 'bg-blue-600 text-white rounded-br-none' 
                                                             : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                                                     }`}>
+                                                        {msg.attachmentUrl && <img src={msg.attachmentUrl} alt="attachment" className="rounded-md mb-2 max-h-60" />}
                                                         <p className="text-sm">{msg.message}</p>
                                                         <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
                                                             {msg.sender} • {new Date(msg.date).toLocaleString()}
@@ -262,7 +272,7 @@ const AdminDisputes: React.FC = () => {
                                 </div>
 
                                 {/* Input Area */}
-                                <div className="flex gap-2 mb-4">
+                                <div className="flex gap-2 mb-4 items-center">
                                     <input 
                                         type="text" 
                                         className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
@@ -270,10 +280,15 @@ const AdminDisputes: React.FC = () => {
                                         value={replyMessage}
                                         onChange={(e) => setReplyMessage(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                        disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
+                                        disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed' || isSubmitting}
                                     />
-                                    <Button onClick={handleSendMessage} disabled={isSubmitting || !replyMessage.trim()}>Send</Button>
+                                    <input type="file" ref={fileInputRef} onChange={(e) => setAttachment(e.target.files ? e.target.files[0] : null)} className="hidden"/>
+                                    <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
+                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                                    </Button>
+                                    <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !attachment)}>Send</Button>
                                 </div>
+                                {attachment && <p className="text-xs text-gray-500 -mt-3 mb-3">Selected file: {attachment.name}</p>}
 
                                 {/* Status Actions */}
                                 <div className="flex flex-wrap gap-2 justify-end pt-2 border-t dark:border-gray-700">

@@ -1,6 +1,25 @@
 
 import mongoose from 'mongoose';
 
+const MessageSchema = new mongoose.Schema({
+    sender: {
+        type: String,
+        enum: ['User', 'Admin', 'System'],
+        required: true
+    },
+    message: {
+        type: String,
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    },
+    attachmentUrl: { // URL or Base64 string for the image
+        type: String,
+    }
+}, { _id: false });
+
+
 const DisputeSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.ObjectId,
@@ -25,7 +44,7 @@ const DisputeSchema = new mongoose.Schema({
         required: true,
     },
     proofUrl: {
-        type: String, // Base64 or URL
+        type: String, // Base64 or URL for initial proof
     },
     status: {
         type: String,
@@ -35,21 +54,7 @@ const DisputeSchema = new mongoose.Schema({
     adminResponse: {
         type: String,
     },
-    messages: [{
-        sender: {
-            type: String,
-            enum: ['User', 'Admin', 'System'],
-            required: true
-        },
-        message: {
-            type: String,
-            required: true
-        },
-        date: {
-            type: Date,
-            default: Date.now
-        }
-    }]
+    messages: [MessageSchema] // Use the defined sub-schema
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

@@ -48,7 +48,7 @@ export const createDispute = async (req, res) => {
     }
 };
 
-// @desc    Update dispute status (Admin)
+// @desc    Update dispute status or add message (Admin/User)
 // @route   PUT /api/v1/disputes/:id
 export const updateDispute = async (req, res) => {
     try {
@@ -57,55 +57,63 @@ export const updateDispute = async (req, res) => {
 
         if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
 
+        let notificationMessage = '';
+        let notificationSubject = '';
+
         // 1. Add New Message (if any)
-        if (newMessage) {
+        if (newMessage || req.file) {
             const messageData = {
-                sender: sender || 'Admin', // Default to Admin for backward compatibility
-                message: newMessage
+                sender: sender || 'Admin', // Default to Admin if sender is not specified
+                message: newMessage || '' // Message can be empty if only a file is sent
             };
 
             if (req.file) {
                 const b64 = Buffer.from(req.file.buffer).toString('base64');
                 const mimeType = req.file.mimetype;
                 messageData.attachmentUrl = `data:${mimeType};base64,${b64}`;
+                 if (!newMessage) messageData.message = 'File attached';
             }
 
+            if (!dispute.messages) dispute.messages = [];
             dispute.messages.push(messageData);
             
-            // Update the legacy adminResponse field for table summaries if admin sent it
-            if (sender !== 'User') {
-                dispute.adminResponse = newMessage; 
+            // For notifications, differentiate sender
+            if (messageData.sender === 'Admin') {
+                notificationSubject = `New Message on Dispute #${dispute._id}`;
+                notificationMessage = `Admin: ${messageData.message}`;
+            } else { // 'User'
+                // Admin doesn't get a bell notification, they see it in the panel. 
+                // Could add an admin-specific notification here if needed.
             }
         }
 
         // 2. Handle Status Change
         if (status && status !== dispute.status) {
+            const oldStatus = dispute.status;
             dispute.status = status;
             
-            // Log status change in chat history
+            if (!dispute.messages) dispute.messages = [];
             dispute.messages.push({
                 sender: 'System',
-                message: `Status changed to: ${status}`
+                message: `Status changed from ${oldStatus} to ${status}`
             });
-
-            // Notify user of resolution/update
+            
+            notificationSubject = `Dispute Update: #${dispute._id}`;
+            notificationMessage = `Your dispute status has changed to ${status}.`;
+        }
+        
+        await dispute.save();
+        
+        // Send notification to user if there's something to send
+        if (notificationMessage && notificationSubject) {
             await Notification.create({
                 userId: dispute.userId,
-                subject: `Dispute Update: #${dispute._id}`,
-                message: `Your dispute status has changed to ${status}.${newMessage ? ` Admin Message: ${newMessage}` : ''}`,
-                isPopup: status === 'Resolved' || status === 'Closed' // Make final resolutions popup
-            });
-        } else if (newMessage && sender !== 'User') {
-            // Notify user of new message only (if not sent by themselves)
-             await Notification.create({
-                userId: dispute.userId,
-                subject: `New Message on Dispute #${dispute._id}`,
-                message: `Admin: ${newMessage}`,
-                isPopup: false
+                subject: notificationSubject,
+                message: notificationMessage,
+                isPopup: status === 'Resolved' || status === 'Closed'
             });
         }
 
-        await dispute.save();
 
         res.status(200).json({ success: true, data: dispute });
     } catch (err) {

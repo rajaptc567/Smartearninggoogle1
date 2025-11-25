@@ -446,12 +446,14 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const updateDispute = async (id: string, data: { status?: string; newMessage?: string, sender?: string } | FormData): Promise<Dispute> => {
+export const updateDispute = async (id: string, data: FormData | { status?: string; newMessage?: string, sender?: string }): Promise<Dispute> => {
     const headers: HeadersInit = {};
-    let body;
+    let body: BodyInit;
 
     if (data instanceof FormData) {
-        body = data; // Browser sets multipart/form-data boundary
+        // When sending FormData, do not set the 'Content-Type' header.
+        // The browser will automatically set it to 'multipart/form-data' with the correct boundary.
+        body = data;
     } else {
         headers['Content-Type'] = 'application/json';
         body = JSON.stringify(data);
