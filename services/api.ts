@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute } from '../types';
 
 // The base URL of your backend API is determined at runtime.
@@ -40,8 +41,7 @@ const handleResponse = async (response: Response) => {
     }
 };
 
-// --- User API Functions ---
-
+// ... [User API Functions kept as is] ...
 export const getUsers = async (): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`);
     const result = await handleResponse(response);
@@ -76,7 +76,6 @@ export const deleteUser = async (id: string): Promise<{}> => {
     return result.data;
 };
 
-// FIX: Added missing login function
 export const login = async (email: string, password: string): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users/login`, {
         method: 'POST',
@@ -87,7 +86,6 @@ export const login = async (email: string, password: string): Promise<User> => {
     return result.data;
 };
 
-// FIX: Added missing adjustUserWallet function
 export const adjustUserWallet = async (id: string, adjustmentData: { amount: number; description: string }): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
         method: 'POST',
@@ -98,7 +96,6 @@ export const adjustUserWallet = async (id: string, adjustmentData: { amount: num
     return result.data;
 };
 
-// FIX: Added missing purchasePlan function
 export const purchasePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/purchase-plan`, {
         method: 'POST',
@@ -169,7 +166,7 @@ export const getDeposits = async (): Promise<Deposit[]> => {
 export const createDeposit = async (formData: FormData): Promise<{deposit: Deposit, transaction: Transaction}> => {
     const response = await fetch(`${API_BASE_URL}/deposits`, {
         method: 'POST',
-        body: formData, // Don't set Content-Type header, browser does it for FormData
+        body: formData, 
     });
     const result = await handleResponse(response);
     return result.data;
@@ -230,7 +227,15 @@ export const getNotifications = async (): Promise<Notification[]> => {
     return result.data;
 };
 
-export const sendAdminNotification = async (data: { userId: string, subject: string, message: string, isPopup: boolean }): Promise<Notification> => {
+// Updated for Bulk Messaging
+export const sendAdminNotification = async (data: { 
+    userId?: string, 
+    subject: string, 
+    message: string, 
+    isPopup: boolean,
+    targetType?: 'single' | 'plan' | 'all',
+    targetIds?: string[]
+}): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -257,7 +262,6 @@ export const markNotificationPopupAsShown = async (id: string): Promise<Notifica
 };
 
 // --- Payment Method API Functions ---
-// FIX: Added missing payment method API functions
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods`);
     const result = await handleResponse(response);
@@ -293,7 +297,6 @@ export const deletePaymentMethod = async (id: string): Promise<{}> => {
 };
 
 // --- Investment Plan API Functions ---
-// FIX: Added missing investment plan API functions
 export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans`);
     const result = await handleResponse(response);
@@ -329,7 +332,6 @@ export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
 };
 
 // --- Rule API Functions ---
-// FIX: Added missing rule API functions
 export const getRules = async (): Promise<Rule[]> => {
     const response = await fetch(`${API_BASE_URL}/rules`);
     const result = await handleResponse(response);
@@ -355,7 +357,6 @@ export const deleteRule = async (id: string): Promise<{}> => {
 };
 
 // --- Settings API Functions ---
-// FIX: Added missing settings API functions
 export const getSettings = async (): Promise<Settings> => {
     const response = await fetch(`${API_BASE_URL}/settings`);
     const result = await handleResponse(response);
@@ -373,7 +374,6 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
 };
 
 // --- Transfer API Functions ---
-// FIX: Added missing transfer API functions
 export const getTransfers = async (): Promise<Transfer[]> => {
     const response = await fetch(`${API_BASE_URL}/transfers`);
     const result = await handleResponse(response);
@@ -401,7 +401,6 @@ export const updateTransfer = async (id: string, updateData: Partial<Transfer>):
 };
 
 // --- Log API Functions ---
-// FIX: Added missing log API functions
 export const getLogs = async (): Promise<Log[]> => {
     const response = await fetch(`${API_BASE_URL}/logs`);
     const result = await handleResponse(response);
@@ -424,11 +423,21 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const updateDispute = async (id: string, data: { status?: string; newMessage?: string }): Promise<Dispute> => {
+export const updateDispute = async (id: string, data: { status?: string; newMessage?: string, sender?: string } | FormData): Promise<Dispute> => {
+    const headers: HeadersInit = {};
+    let body;
+
+    if (data instanceof FormData) {
+        body = data; // Browser sets multipart/form-data boundary
+    } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify(data);
+    }
+
     const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        headers,
+        body,
     });
     const result = await handleResponse(response);
     return result.data;

@@ -13,27 +13,55 @@ export const getNotifications = async (req, res) => {
     }
 };
 
-// @desc    Create a notification (Admin message)
+// @desc    Create a notification (Admin message, single or bulk)
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {
     try {
-        const { userId, message, subject, isPopup } = req.body;
+        const { userId, message, subject, isPopup, targetType, targetIds } = req.body;
         
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'User not found' });
+        let notificationsToCreate = [];
+
+        // CASE 1: Single User (Legacy or specific selection)
+        if (userId) {
+             const user = await User.findById(userId);
+             if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+             notificationsToCreate.push({ userId, message, subject, isPopup, popupShown: false, read: false });
+        } 
+        // CASE 2: Bulk Messaging
+        else if (targetType) {
+            let query = {};
+            
+            if (targetType === 'all') {
+                query = {}; // Select all users
+            } else if (targetType === 'plan' && targetIds && targetIds.length > 0) {
+                // Select users who have ANY of the selected plans in their activePlans array
+                query = { 'activePlans.planId': { $in: targetIds } };
+            } else if (targetType === 'single' && targetIds && targetIds.length > 0) {
+                query = { _id: { $in: targetIds } };
+            } else {
+                return res.status(400).json({ success: false, error: 'Invalid target configuration' });
+            }
+
+            const users = await User.find(query).select('_id');
+            
+            notificationsToCreate = users.map(u => ({
+                userId: u._id,
+                message,
+                subject,
+                isPopup: isPopup || false,
+                popupShown: false,
+                read: false
+            }));
+        } else {
+             return res.status(400).json({ success: false, error: 'Missing recipient information' });
         }
 
-        const notification = await Notification.create({
-            userId,
-            message,
-            subject,
-            isPopup: isPopup || false,
-            popupShown: false,
-            read: false
-        });
+        if (notificationsToCreate.length > 0) {
+            await Notification.insertMany(notificationsToCreate);
+        }
 
-        res.status(201).json({ success: true, data: notification });
+        // Return a generic success response or the first created one for compatibility
+        res.status(201).json({ success: true, count: notificationsToCreate.length, message: `Sent to ${notificationsToCreate.length} users.` });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Status, UserRestrictions } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -10,7 +10,7 @@ import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiate
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users } = state;
+    const { users, investmentPlans } = state;
     
     const isLoading = users.length === 0;
     
@@ -127,7 +127,7 @@ const Users: React.FC = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
-                    <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Message</Button>
+                    <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
                     <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
                 </div>
             </div>
@@ -194,6 +194,7 @@ const Users: React.FC = () => {
                 <MessageUserModal
                     user={editingUser}
                     allUsers={users}
+                    investmentPlans={investmentPlans}
                     onClose={handleCloseModal}
                 />
             )}
@@ -203,16 +204,21 @@ const Users: React.FC = () => {
 
 
 // MessageUserModal Component
-const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; onClose: () => void }> = ({ user, allUsers, onClose }) => {
+const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ user, allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
     
-    // State for User Selection (if no user pre-selected)
-    const [selectedUserId, setSelectedUserId] = useState<string>(user?._id || '');
+    const [sendMode, setSendMode] = useState<'single' | 'plan' | 'all'>(user ? 'single' : 'single');
+    
+    // Single User State
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(user ? [user._id] : []);
     const [userSearch, setUserSearch] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // State for Message
+    // Plan State
+    const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+
+    // Message State
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isPopup, setIsPopup] = useState(false);
@@ -235,26 +241,46 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; onClose:
     );
 
     const handleSelectUser = (u: User) => {
-        setSelectedUserId(u._id);
-        setUserSearch(`${u.fullName} (@${u.username})`);
+        if (!selectedUserIds.includes(u._id)) {
+            setSelectedUserIds([...selectedUserIds, u._id]);
+        }
         setIsDropdownOpen(false);
+        setUserSearch('');
+    }
+
+    const handleRemoveUser = (id: string) => {
+        setSelectedUserIds(selectedUserIds.filter(uid => uid !== id));
+    }
+
+    const handleTogglePlan = (planId: string) => {
+        if (selectedPlanIds.includes(planId)) {
+            setSelectedPlanIds(selectedPlanIds.filter(id => id !== planId));
+        } else {
+            setSelectedPlanIds([...selectedPlanIds, planId]);
+        }
     }
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if(!selectedUserId) return alert("Please select a user.");
-        if(!message) return alert("Please enter a message.");
+        if (sendMode === 'single' && selectedUserIds.length === 0) return alert("Please select at least one user.");
+        if (sendMode === 'plan' && selectedPlanIds.length === 0) return alert("Please select at least one plan.");
+        if (!message) return alert("Please enter a message.");
 
         setIsSending(true);
         try {
-            const notification = await sendAdminNotification({
-                userId: selectedUserId,
+            const payload = {
                 subject,
                 message,
-                isPopup
-            });
-            dispatch({ type: 'ADD_NOTIFICATION', payload: notification });
-            alert("Message sent successfully!");
+                isPopup,
+                targetType: sendMode,
+                targetIds: sendMode === 'single' ? selectedUserIds : (sendMode === 'plan' ? selectedPlanIds : [])
+            };
+
+            await sendAdminNotification(payload);
+            
+            // We don't get a single notification back for bulk, so we just alert and close
+            // Or trigger a refresh of notifications if needed
+            alert("Messages sent successfully!");
             onClose();
         } catch (error) {
             console.error(error);
@@ -264,39 +290,119 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; onClose:
         }
     }
 
+    // Count affected users for preview
+    const affectedUsersCount = useMemo(() => {
+        if (sendMode === 'single') return selectedUserIds.length;
+        if (sendMode === 'all') return allUsers.length;
+        if (sendMode === 'plan') {
+            const uniqueUsers = new Set();
+            allUsers.forEach(u => {
+                if (u.activePlans && u.activePlans.some(p => selectedPlanIds.includes(p.planId))) {
+                    uniqueUsers.add(u._id);
+                }
+            });
+            return uniqueUsers.size;
+        }
+        return 0;
+    }, [sendMode, selectedUserIds, selectedPlanIds, allUsers]);
+
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-6 w-[90vw] max-w-md">
-                <h3 className="text-xl font-bold mb-4">Send Message to User</h3>
+            <div className="p-6 w-[90vw] max-w-lg">
+                <h3 className="text-xl font-bold mb-4">Send Admin Message</h3>
                 <form onSubmit={handleSend} className="space-y-4">
                     
-                    {/* User Selection */}
-                    <div className="relative" ref={dropdownRef}>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
-                        {user ? (
-                            <input type="text" value={`${user.fullName} (@${user.username})`} disabled className="mt-1 w-full rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
-                        ) : (
-                            <>
-                                <input 
-                                    type="text" 
-                                    value={userSearch} 
-                                    onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); setSelectedUserId(''); }}
-                                    onFocus={() => setIsDropdownOpen(true)}
-                                    placeholder="Search user..."
-                                    className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
-                                />
-                                {isDropdownOpen && (
-                                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto sm:text-sm">
-                                        {filteredUsers.length > 0 ? filteredUsers.map(u => (
-                                            <div key={u._id} onClick={() => handleSelectUser(u)} className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50 dark:hover:bg-gray-600">
-                                                <span className="font-medium block">{u.fullName}</span>
-                                                <span className="text-xs text-gray-500 dark:text-gray-400">@{u.username} | {u.email}</span>
-                                            </div>
-                                        )) : <div className="py-2 px-4 text-gray-500">No users found</div>}
-                                    </div>
-                                )}
-                            </>
-                        )}
+                    {/* Mode Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recipient Type</label>
+                        <div className="flex space-x-2">
+                            <button 
+                                type="button" 
+                                onClick={() => setSendMode('single')} 
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'single' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                            >
+                                Specific Users
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={() => setSendMode('plan')} 
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'plan' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                            >
+                                By Active Plan
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={() => setSendMode('all')} 
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                            >
+                                All Users
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Single User Selection */}
+                    {sendMode === 'single' && (
+                        <div className="relative" ref={dropdownRef}>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select Users</label>
+                            
+                            {/* Selected Tags */}
+                            <div className="flex flex-wrap gap-2 mb-2 mt-1">
+                                {selectedUserIds.map(id => {
+                                    const u = allUsers.find(au => au._id === id);
+                                    if (!u) return null;
+                                    return (
+                                        <span key={id} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                            {u.username}
+                                            <button type="button" onClick={() => handleRemoveUser(id)} className="ml-1 text-blue-600 dark:text-blue-400 hover:text-blue-800">&times;</button>
+                                        </span>
+                                    )
+                                })}
+                            </div>
+
+                            <input 
+                                type="text" 
+                                value={userSearch} 
+                                onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); }}
+                                onFocus={() => setIsDropdownOpen(true)}
+                                placeholder="Search user..."
+                                className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
+                            />
+                            {isDropdownOpen && (
+                                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-40 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto sm:text-sm">
+                                    {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                                        <div key={u._id} onClick={() => handleSelectUser(u)} className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50 dark:hover:bg-gray-600">
+                                            <span className="font-medium block">{u.fullName}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">@{u.username}</span>
+                                        </div>
+                                    )) : <div className="py-2 px-4 text-gray-500">No users found</div>}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Plan Selection */}
+                    {sendMode === 'plan' && (
+                        <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-600 max-h-40 overflow-y-auto">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Plans</label>
+                            <div className="space-y-2">
+                                {investmentPlans.filter(p => p.status === 'Active').map(plan => (
+                                    <label key={plan._id} className="flex items-center space-x-2">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedPlanIds.includes(plan._id)} 
+                                            onChange={() => handleTogglePlan(plan._id)}
+                                            className="rounded text-blue-600"
+                                        />
+                                        <span className="text-sm">{plan.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Count Summary */}
+                    <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                        This message will be sent to <strong>{affectedUsersCount}</strong> user(s).
                     </div>
 
                     <div>
@@ -319,7 +425,7 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; onClose:
 
                     <div className="flex justify-end space-x-3 pt-2">
                         <Button type="button" variant="secondary" onClick={onClose} disabled={isSending}>Cancel</Button>
-                        <Button type="submit" disabled={isSending || !selectedUserId}>{isSending ? 'Sending...' : 'Send Message'}</Button>
+                        <Button type="submit" disabled={isSending || affectedUsersCount === 0}>{isSending ? 'Sending...' : `Send to ${affectedUsersCount} Users`}</Button>
                     </div>
                 </form>
             </div>
