@@ -1,3 +1,4 @@
+
 import express from 'express';
 import {
     getUsers,
@@ -12,6 +13,7 @@ import {
     resetPasswordWithToken,
     userRequestPasswordReset,
     verifyAndStartResetTimer,
+    bulkUpdateRestrictions
 } from '../controllers/usersController.js';
 
 const router = express.Router();
@@ -21,6 +23,7 @@ router.post('/login', loginUser);
 router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
+router.put('/bulk-restrictions', bulkUpdateRestrictions);
 
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
 

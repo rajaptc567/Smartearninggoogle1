@@ -1,6 +1,6 @@
 
 // ... existing imports ...
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions } from '../types';
 
 // The base URL of your backend API is determined at runtime.
 // This allows the same code to work for both local development and live deployment.
@@ -66,6 +66,21 @@ export const updateUser = async (id: string, userData: Partial<User>): Promise<U
     });
     const result = await handleResponse(response);
     return result.data;
+};
+
+export const bulkUpdateUserRestrictions = async (payload: {
+    targetType: 'single' | 'plan' | 'all';
+    targetIds: string[];
+    restrictions: Partial<UserRestrictions>;
+    action: 'enable' | 'disable' | 'toggle';
+}): Promise<{ message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const result = await handleResponse(response);
+    return result;
 };
 
 export const deleteUser = async (id: string): Promise<{}> => {
@@ -200,7 +215,7 @@ export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Pro
     return result.data;
 };
 
-export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal>): Promise<{withdrawal: Withdrawal, user: User}> => {
+export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal> & { p2pName?: string, p2pAccountTitle?: string, p2pAccountNumber?: string, p2pInstructions?: string }): Promise<{withdrawal: Withdrawal, user: User}> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

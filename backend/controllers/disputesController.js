@@ -1,6 +1,7 @@
 
 import Dispute from '../models/Dispute.js';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 
 // @desc    Get all disputes (Admin)
 // @route   GET /api/v1/disputes
@@ -19,16 +20,20 @@ export const createDispute = async (req, res) => {
     try {
         const disputeData = { ...req.body };
 
+        // Check restrictions
+        const user = await User.findById(disputeData.userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
+            return res.status(403).json({ success: false, error: 'You are currently restricted from raising new disputes.' });
+        }
+
         if (req.file) {
             const b64 = Buffer.from(req.file.buffer).toString('base64');
             const mimeType = req.file.mimetype;
             disputeData.proofUrl = `data:${mimeType};base64,${b64}`;
         }
         
-        // Initialize messages array with the description as the opening message from user
-        // But we also keep 'description' field for quick summary
-        // disputeData.messages = [{ sender: 'User', message: disputeData.description }];
-
         const dispute = await Dispute.create(disputeData);
 
         // Notify user
@@ -47,19 +52,30 @@ export const createDispute = async (req, res) => {
 // @route   PUT /api/v1/disputes/:id
 export const updateDispute = async (req, res) => {
     try {
-        const { status, adminResponse, newMessage } = req.body;
+        const { status, newMessage, sender } = req.body;
         const dispute = await Dispute.findById(req.params.id);
 
         if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
 
         // 1. Add New Message (if any)
         if (newMessage) {
-            dispute.messages.push({
-                sender: 'Admin',
+            const messageData = {
+                sender: sender || 'Admin', // Default to Admin for backward compatibility
                 message: newMessage
-            });
-            // Update the legacy adminResponse field for table summaries
-            dispute.adminResponse = newMessage; 
+            };
+
+            if (req.file) {
+                const b64 = Buffer.from(req.file.buffer).toString('base64');
+                const mimeType = req.file.mimetype;
+                messageData.attachmentUrl = `data:${mimeType};base64,${b64}`;
+            }
+
+            dispute.messages.push(messageData);
+            
+            // Update the legacy adminResponse field for table summaries if admin sent it
+            if (sender !== 'User') {
+                dispute.adminResponse = newMessage; 
+            }
         }
 
         // 2. Handle Status Change
@@ -79,8 +95,8 @@ export const updateDispute = async (req, res) => {
                 message: `Your dispute status has changed to ${status}.${newMessage ? ` Admin Message: ${newMessage}` : ''}`,
                 isPopup: status === 'Resolved' || status === 'Closed' // Make final resolutions popup
             });
-        } else if (newMessage) {
-            // Notify user of new message only
+        } else if (newMessage && sender !== 'User') {
+            // Notify user of new message only (if not sent by themselves)
              await Notification.create({
                 userId: dispute.userId,
                 subject: `New Message on Dispute #${dispute._id}`,

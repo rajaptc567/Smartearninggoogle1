@@ -30,7 +30,8 @@ export const createUser = async (req, res, next) => {
             deposit: false,
             withdrawal: false,
             transfer: false,
-            earning: false
+            earning: false,
+            dispute: false
         };
 
         const user = await User.create(req.body);
@@ -175,6 +176,12 @@ export const updateUser = async (req, res) => {
                     message: `Your ability to Earn Commissions has been ${newR.earning ? 'Paused' : 'Resumed'} by admin.` 
                 });
             }
+            if (newR.dispute !== oldR.dispute) {
+                await Notification.create({ 
+                    userId: currentUser._id, 
+                    message: `Your ability to raise Disputes has been ${newR.dispute ? 'Disabled' : 'Enabled'} by admin.` 
+                });
+            }
         }
 
         // Perform the main update
@@ -225,6 +232,115 @@ export const updateUser = async (req, res) => {
         }
 
         res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Bulk update user restrictions
+// @route   PUT /api/v1/users/bulk-restrictions
+export const bulkUpdateRestrictions = async (req, res) => {
+    try {
+        const { targetType, targetIds, restrictions, action } = req.body;
+        
+        let query = {};
+        if (targetType === 'all') {
+            query = {};
+        } else if (targetType === 'plan' && targetIds && targetIds.length > 0) {
+            query = { 'activePlans.planId': { $in: targetIds } };
+        } else if (targetType === 'single' && targetIds && targetIds.length > 0) {
+            query = { _id: { $in: targetIds } };
+        } else {
+            return res.status(400).json({ success: false, error: 'Invalid target configuration' });
+        }
+
+        const usersToUpdate = await User.find(query);
+        const settings = await Setting.getSettings();
+        
+        let updatedCount = 0;
+        const notifications = [];
+
+        for (const user of usersToUpdate) {
+            let currentRestrictions = user.restrictions || {
+                deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
+            };
+            
+            let hasChange = false;
+            let shouldReleaseCommissions = false;
+            
+            for (const key of Object.keys(restrictions)) {
+                if (restrictions[key]) { 
+                    let newValue;
+                    if (action === 'enable') newValue = true; // Blocked/Enabled Restriction
+                    else if (action === 'disable') newValue = false; // Allowed/Disabled Restriction
+                    else if (action === 'toggle') newValue = !currentRestrictions[key];
+                    
+                    if (currentRestrictions[key] !== newValue) {
+                        // Logic for Earning Unblock
+                        if (key === 'earning' && currentRestrictions.earning === true && newValue === false) {
+                            shouldReleaseCommissions = true;
+                        }
+                        currentRestrictions[key] = newValue;
+                        hasChange = true;
+                    }
+                }
+            }
+
+            if (hasChange) {
+                user.restrictions = currentRestrictions;
+                
+                // --- RELEASE LOGIC START ---
+                if (shouldReleaseCommissions) {
+                    const pendingCommissions = await Transaction.find({
+                        userId: user._id,
+                        type: 'Commission',
+                        status: 'Pending'
+                    });
+
+                    let releasedAmount = 0;
+
+                    for (const comm of pendingCommissions) {
+                        let canRelease = true;
+                        if (settings.requirePlanMatchForCommission && comm.relatedPlanId) {
+                            const hasPlan = user.activePlans && user.activePlans.some(p => p.planId.toString() === comm.relatedPlanId.toString());
+                            if (!hasPlan) canRelease = false;
+                        } else if (settings.requireActivePlanForCommission) {
+                            const hasAnyPlan = user.activePlans && user.activePlans.length > 0;
+                            if (!hasAnyPlan) canRelease = false;
+                        }
+
+                        if (canRelease) {
+                            comm.status = 'Approved';
+                            await comm.save();
+                            releasedAmount += comm.amount;
+                        }
+                    }
+
+                    if (releasedAmount > 0) {
+                        user.walletBalance = Number((user.walletBalance + releasedAmount).toFixed(2));
+                        notifications.push({
+                            userId: user._id,
+                            message: `Restrictions removed! $${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
+                        });
+                    }
+                }
+                // --- RELEASE LOGIC END ---
+
+                await user.save();
+                updatedCount++;
+                notifications.push({
+                    userId: user._id,
+                    message: `Your account permissions have been updated by the administrator. Please check your profile settings.`
+                });
+            }
+        }
+
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
+
+        res.status(200).json({ success: true, message: `Updated restrictions for ${updatedCount} users.` });
+
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

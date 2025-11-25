@@ -27,6 +27,7 @@ export interface UserRestrictions {
     withdrawal: boolean;
     transfer: boolean;
     earning: boolean; // Blocks commissions
+    dispute: boolean; // Blocks disputes
 }
 
 export interface User {
@@ -237,6 +238,7 @@ export interface DisputeMessage {
     sender: 'User' | 'Admin' | 'System';
     message: string;
     date: string;
+    attachmentUrl?: string;
 }
 
 export interface Dispute {

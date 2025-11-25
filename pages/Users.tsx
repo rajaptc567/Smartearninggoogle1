@@ -6,7 +6,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, sendAdminNotification } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, sendAdminNotification, bulkUpdateUserRestrictions } from '../services/api';
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
@@ -16,6 +16,7 @@ const Users: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isRestrictionsModalOpen, setIsRestrictionsModalOpen] = useState(false);
+    const [isBulkRestrictionsModalOpen, setIsBulkRestrictionsModalOpen] = useState(false);
     const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
     
     const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -42,6 +43,7 @@ const Users: React.FC = () => {
         setEditingUser(null);
         setIsModalOpen(false);
         setIsRestrictionsModalOpen(false);
+        setIsBulkRestrictionsModalOpen(false);
         setIsMessageModalOpen(false);
     };
 
@@ -121,12 +123,13 @@ const Users: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Members</h2>
                 <div className="flex gap-2">
                     <input 
-                        type="text"
+                        type="text" 
                         placeholder="Filter by name, email, phone..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
+                    <Button variant="secondary" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
                     <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
                     <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
                 </div>
@@ -190,6 +193,13 @@ const Users: React.FC = () => {
                     onSave={handleSaveRestrictions}
                 />
             )}
+            {isBulkRestrictionsModalOpen && (
+                <BulkRestrictionsModal
+                    allUsers={users}
+                    investmentPlans={investmentPlans}
+                    onClose={handleCloseModal}
+                />
+            )}
             {isMessageModalOpen && (
                 <MessageUserModal
                     user={editingUser}
@@ -201,6 +211,214 @@ const Users: React.FC = () => {
         </div>
     );
 };
+
+// BulkRestrictionsModal Component
+const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ allUsers, investmentPlans, onClose }) => {
+    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all'>('single');
+    
+    // Single User Selection
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [userSearch, setUserSearch] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Plan Selection
+    const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+
+    // Action Settings
+    const [restrictions, setRestrictions] = useState<UserRestrictions>({
+        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
+    });
+    const [action, setAction] = useState<'enable' | 'disable' | 'toggle'>('enable'); // enable = Set True (Block), disable = Set False (Unblock)
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredUsers = allUsers.filter(u => 
+        u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.fullName.toLowerCase().includes(userSearch.toLowerCase())
+    );
+
+    const handleSelectUser = (u: User) => {
+        if (!selectedUserIds.includes(u._id)) {
+            setSelectedUserIds([...selectedUserIds, u._id]);
+        }
+        setIsDropdownOpen(false);
+        setUserSearch('');
+    }
+
+    const handleTogglePlan = (planId: string) => {
+        if (selectedPlanIds.includes(planId)) {
+            setSelectedPlanIds(selectedPlanIds.filter(id => id !== planId));
+        } else {
+            setSelectedPlanIds([...selectedPlanIds, planId]);
+        }
+    }
+
+    const handleToggleRestriction = (key: keyof UserRestrictions) => {
+        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
+    }
+
+    const handleSubmit = async () => {
+        if (targetType === 'single' && selectedUserIds.length === 0) return alert("Please select at least one user.");
+        if (targetType === 'plan' && selectedPlanIds.length === 0) return alert("Please select at least one plan.");
+        
+        const hasSelection = Object.values(restrictions).some(v => v);
+        if (!hasSelection) return alert("Please select at least one restriction to modify.");
+
+        setIsSubmitting(true);
+        try {
+            await bulkUpdateUserRestrictions({
+                targetType,
+                targetIds: targetType === 'single' ? selectedUserIds : (targetType === 'plan' ? selectedPlanIds : []),
+                restrictions,
+                action
+            });
+            
+            alert("Bulk restrictions updated successfully! Notifications have been sent.");
+            // We should ideally refresh user list here, but for simplicity assuming immediate UI update isn't strictly required or page refresh will do
+            window.location.reload(); // Simple refresh to get new user states
+        } catch (error) {
+            console.error(error);
+            alert("Failed to update restrictions.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    const affectedUsersCount = useMemo(() => {
+        if (targetType === 'single') return selectedUserIds.length;
+        if (targetType === 'all') return allUsers.length;
+        if (targetType === 'plan') {
+            const uniqueUsers = new Set();
+            allUsers.forEach(u => {
+                if (u.activePlans && u.activePlans.some(p => selectedPlanIds.includes(p.planId))) {
+                    uniqueUsers.add(u._id);
+                }
+            });
+            return uniqueUsers.size;
+        }
+        return 0;
+    }, [targetType, selectedUserIds, selectedPlanIds, allUsers]);
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-6 w-[90vw] max-w-lg">
+                <h3 className="text-xl font-bold mb-4">Bulk User Restrictions</h3>
+                
+                <div className="space-y-6">
+                    {/* 1. Select Targets */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">1. Select Target Audience</label>
+                        <div className="flex space-x-2 mb-3">
+                            <button onClick={() => setTargetType('single')} className={`px-3 py-1.5 rounded text-sm ${targetType === 'single' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>Specific Users</button>
+                            <button onClick={() => setTargetType('plan')} className={`px-3 py-1.5 rounded text-sm ${targetType === 'plan' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>By Active Plan</button>
+                            <button onClick={() => setTargetType('all')} className={`px-3 py-1.5 rounded text-sm ${targetType === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>All Users</button>
+                        </div>
+
+                        {targetType === 'single' && (
+                            <div className="relative" ref={dropdownRef}>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {selectedUserIds.map(id => {
+                                        const u = allUsers.find(au => au._id === id);
+                                        return u ? <span key={id} className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">{u.username} <button onClick={() => setSelectedUserIds(selectedUserIds.filter(uid => uid !== id))} className="ml-1 text-red-500">x</button></span> : null
+                                    })}
+                                </div>
+                                <input type="text" value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); }} placeholder="Search user..." className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                                {isDropdownOpen && (
+                                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-40 overflow-auto rounded-md">
+                                        {filteredUsers.map(u => (
+                                            <div key={u._id} onClick={() => handleSelectUser(u)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm">{u.fullName} (@{u.username})</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {targetType === 'plan' && (
+                            <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-600 max-h-40 overflow-y-auto">
+                                <div className="space-y-2">
+                                    {investmentPlans.filter(p => p.status === 'Active').map(plan => (
+                                        <label key={plan._id} className="flex items-center space-x-2">
+                                            <input type="checkbox" checked={selectedPlanIds.includes(plan._id)} onChange={() => handleTogglePlan(plan._id)} className="rounded text-blue-600" />
+                                            <span className="text-sm">{plan.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <p className="text-xs text-right text-gray-500 mt-1">Targeting <strong>{affectedUsersCount}</strong> users.</p>
+                    </div>
+
+                    {/* 2. Select Restrictions */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">2. Select Restrictions to Modify</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <label className={`flex items-center space-x-2 p-2 rounded border ${restrictions.deposit ? 'bg-blue-50 border-blue-500' : 'border-gray-300 dark:border-gray-700'}`}>
+                                <input type="checkbox" checked={restrictions.deposit} onChange={() => handleToggleRestriction('deposit')} />
+                                <span className="text-sm">Deposits</span>
+                            </label>
+                            <label className={`flex items-center space-x-2 p-2 rounded border ${restrictions.withdrawal ? 'bg-blue-50 border-blue-500' : 'border-gray-300 dark:border-gray-700'}`}>
+                                <input type="checkbox" checked={restrictions.withdrawal} onChange={() => handleToggleRestriction('withdrawal')} />
+                                <span className="text-sm">Withdrawals</span>
+                            </label>
+                            <label className={`flex items-center space-x-2 p-2 rounded border ${restrictions.transfer ? 'bg-blue-50 border-blue-500' : 'border-gray-300 dark:border-gray-700'}`}>
+                                <input type="checkbox" checked={restrictions.transfer} onChange={() => handleToggleRestriction('transfer')} />
+                                <span className="text-sm">Transfers</span>
+                            </label>
+                            <label className={`flex items-center space-x-2 p-2 rounded border ${restrictions.earning ? 'bg-blue-50 border-blue-500' : 'border-gray-300 dark:border-gray-700'}`}>
+                                <input type="checkbox" checked={restrictions.earning} onChange={() => handleToggleRestriction('earning')} />
+                                <span className="text-sm">Earning (Commission)</span>
+                            </label>
+                            <label className={`flex items-center space-x-2 p-2 rounded border ${restrictions.dispute ? 'bg-blue-50 border-blue-500' : 'border-gray-300 dark:border-gray-700'}`}>
+                                <input type="checkbox" checked={restrictions.dispute} onChange={() => handleToggleRestriction('dispute')} />
+                                <span className="text-sm">Disputes</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* 3. Select Action */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">3. Apply Action</label>
+                        <div className="flex space-x-4">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="action" checked={action === 'enable'} onChange={() => setAction('enable')} className="text-red-600" />
+                                <span className="text-sm">Block (Enable Restriction)</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="action" checked={action === 'disable'} onChange={() => setAction('disable')} className="text-green-600" />
+                                <span className="text-sm">Unblock (Disable Restriction)</span>
+                            </label>
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input type="radio" name="action" checked={action === 'toggle'} onChange={() => setAction('toggle')} className="text-gray-600" />
+                                <span className="text-sm">Toggle Current State</span>
+                            </label>
+                        </div>
+                        {action === 'disable' && restrictions.earning && (
+                            <p className="text-xs text-green-600 mt-2">Note: Unblocking "Earning" will automatically release any commissions that were held due to this restriction.</p>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-4 border-t dark:border-gray-700">
+                        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+                        <Button variant="primary" onClick={handleSubmit} disabled={isSubmitting || affectedUsersCount === 0}>
+                            {isSubmitting ? 'Processing...' : 'Apply Bulk Update'}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+    )
+}
 
 
 // MessageUserModal Component
@@ -278,8 +496,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
 
             await sendAdminNotification(payload);
             
-            // We don't get a single notification back for bulk, so we just alert and close
-            // Or trigger a refresh of notifications if needed
             alert("Messages sent successfully!");
             onClose();
         } catch (error) {
@@ -290,7 +506,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
         }
     }
 
-    // Count affected users for preview
     const affectedUsersCount = useMemo(() => {
         if (sendMode === 'single') return selectedUserIds.length;
         if (sendMode === 'all') return allUsers.length;
@@ -344,8 +559,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                     {sendMode === 'single' && (
                         <div className="relative" ref={dropdownRef}>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select Users</label>
-                            
-                            {/* Selected Tags */}
                             <div className="flex flex-wrap gap-2 mb-2 mt-1">
                                 {selectedUserIds.map(id => {
                                     const u = allUsers.find(au => au._id === id);
@@ -629,11 +842,13 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
 
 // Restrictions Modal
 const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave: (restrictions: UserRestrictions) => void; }> = ({ user, onClose, onSave }) => {
-    const [restrictions, setRestrictions] = useState<UserRestrictions>(user.restrictions || {
+    const [restrictions, setRestrictions] = useState<UserRestrictions>({
         deposit: false,
         withdrawal: false,
         transfer: false,
         earning: false,
+        dispute: false,
+        ...user.restrictions
     });
 
     const handleToggle = (key: keyof UserRestrictions) => {
@@ -665,6 +880,7 @@ const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave:
                     <Toggle label="Block Withdrawals" checked={restrictions.withdrawal} onClick={() => handleToggle('withdrawal')} />
                     <Toggle label="Block Transfers" checked={restrictions.transfer} onClick={() => handleToggle('transfer')} />
                     <Toggle label="Pause Earnings (Commissions)" checked={restrictions.earning} onClick={() => handleToggle('earning')} />
+                    <Toggle label="Block Disputes" checked={restrictions.dispute} onClick={() => handleToggle('dispute')} />
                 </div>
                 <div className="mt-8 flex justify-end space-x-3">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>
