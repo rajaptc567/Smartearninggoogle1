@@ -17,6 +17,6 @@ router.route('/')
     .post(upload.single('proof'), createDispute);
 
 router.route('/:id')
-    .put(updateDispute);
+    .put(upload.single('file'), updateDispute); // Added upload middleware
 
 export default router;

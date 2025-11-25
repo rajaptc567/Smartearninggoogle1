@@ -6,7 +6,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { createDispute } from '../../services/api';
+import { createDispute, updateDispute } from '../../services/api';
 
 const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -23,19 +23,21 @@ const UserDisputes: React.FC = () => {
 
     // View State
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
+    const [replyMessage, setReplyMessage] = useState('');
+    const [attachment, setAttachment] = useState<File | null>(null);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (chatEndRef.current) {
             chatEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-    }, [selectedDispute]);
+    }, [selectedDispute, selectedDispute?.messages]);
 
     if (!currentUser) return <div>Loading...</div>;
 
     const userDisputes = disputes.filter(d => d.userId === currentUser._id);
 
-    // Filter relevant transactions for the dropdown
     const availableTransactions = useMemo(() => {
         if (type === 'Deposit') {
             return deposits
@@ -93,6 +95,38 @@ const UserDisputes: React.FC = () => {
         } catch (error) {
             console.error("Failed to submit dispute", error);
             alert("Failed to submit dispute");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSendMessage = async () => {
+        if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
+        setIsSubmitting(true);
+        try {
+            let payload: FormData | object;
+
+            if (attachment) {
+                const formData = new FormData();
+                formData.append('newMessage', replyMessage);
+                formData.append('sender', 'User');
+                formData.append('file', attachment);
+                payload = formData;
+            } else {
+                payload = { 
+                    newMessage: replyMessage,
+                    sender: 'User'
+                };
+            }
+
+            const updatedDispute = await updateDispute(selectedDispute._id, payload);
+            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+            setSelectedDispute(updatedDispute);
+            setReplyMessage('');
+            setAttachment(null);
+        } catch (error) {
+            console.error("Failed to send message", error);
+            alert("Failed to send message");
         } finally {
             setIsSubmitting(false);
         }
@@ -225,40 +259,45 @@ const UserDisputes: React.FC = () => {
                         </div>
 
                         <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg space-y-4">
-                            {/* Initial User Request */}
-                            <div className="flex justify-start">
-                                <div className="max-w-[85%] p-3 rounded-lg rounded-bl-none bg-white dark:bg-gray-700 shadow-sm text-gray-800 dark:text-gray-200">
-                                    <p className="text-sm font-bold mb-1 text-blue-600 dark:text-blue-400">Original Description</p>
+                            {/* Original Description */}
+                            <div className="flex justify-end">
+                                <div className="max-w-[85%] p-3 rounded-lg rounded-br-none bg-blue-600 text-white shadow-sm">
+                                    <p className="text-sm font-bold mb-1 text-blue-100">Original Description</p>
                                     <p className="text-sm whitespace-pre-wrap">{selectedDispute.description}</p>
-                                    <p className="text-[10px] mt-2 text-gray-400 text-right">{new Date(selectedDispute.date).toLocaleString()}</p>
+                                    <p className="text-[10px] mt-2 text-blue-200 text-right">{new Date(selectedDispute.date).toLocaleString()}</p>
                                 </div>
                             </div>
 
                             {selectedDispute.proofUrl && (
-                                <div className="flex justify-start">
+                                <div className="flex justify-end">
                                     <div className="max-w-[50%]">
-                                        <p className="text-xs text-gray-500 mb-1">Attached Proof</p>
-                                        <img src={selectedDispute.proofUrl} alt="Proof" className="rounded border shadow-sm" />
+                                        <p className="text-xs text-gray-500 mb-1 text-right">Attached Proof</p>
+                                        <img src={selectedDispute.proofUrl} alt="Proof" className="rounded border shadow-sm bg-white" />
                                     </div>
                                 </div>
                             )}
 
                             {/* Message History */}
                             {selectedDispute.messages && selectedDispute.messages.map((msg, idx) => (
-                                <div key={idx} className={`flex ${msg.sender === 'User' ? 'justify-start' : msg.sender === 'System' ? 'justify-center' : 'justify-end'}`}>
+                                <div key={idx} className={`flex ${msg.sender === 'Admin' ? 'justify-start' : msg.sender === 'System' ? 'justify-center' : 'justify-end'}`}>
                                     {msg.sender === 'System' ? (
                                         <span className="text-xs bg-gray-200 dark:bg-gray-800 text-gray-500 px-2 py-1 rounded-full">
                                             {msg.message} - {new Date(msg.date).toLocaleTimeString()}
                                         </span>
                                     ) : (
                                         <div className={`max-w-[85%] p-3 rounded-lg shadow-sm text-sm ${
-                                            msg.sender === 'Admin' 
+                                            msg.sender === 'User' 
                                                 ? 'bg-blue-600 text-white rounded-br-none' 
                                                 : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                                         }`}>
+                                            {msg.attachmentUrl && (
+                                                <a href={msg.attachmentUrl} target="_blank" rel="noreferrer">
+                                                    <img src={msg.attachmentUrl} alt="Attachment" className="max-w-full h-32 object-cover rounded mb-2 bg-black/10" />
+                                                </a>
+                                            )}
                                             <p>{msg.message}</p>
-                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
-                                                {msg.sender} • {new Date(msg.date).toLocaleString()}
+                                            <p className={`text-[10px] mt-1 text-right ${msg.sender === 'User' ? 'text-blue-100' : 'text-gray-400'}`}>
+                                                {msg.sender === 'User' ? 'You' : 'Admin'} • {new Date(msg.date).toLocaleString()}
                                             </p>
                                         </div>
                                     )}
@@ -267,9 +306,43 @@ const UserDisputes: React.FC = () => {
                             <div ref={chatEndRef} />
                         </div>
                         
-                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
-                            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500">
-                                Waiting for Admin response...
+                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' ? (
+                            <>
+                                {attachment && (
+                                    <div className="flex items-center bg-gray-50 dark:bg-gray-700 p-2 rounded mt-2 border dark:border-gray-600">
+                                        <span className="text-xs text-gray-600 dark:text-gray-300 flex-grow truncate">Attached: {attachment.name}</span>
+                                        <button onClick={() => setAttachment(null)} className="text-red-500 hover:text-red-700 text-xs font-bold px-2">X</button>
+                                    </div>
+                                )}
+                                <div className="mt-4 flex gap-2">
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        onChange={(e) => e.target.files && setAttachment(e.target.files[0])}
+                                        accept="image/*"
+                                    />
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                        title="Attach Image"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                                    </button>
+                                    <input 
+                                        type="text" 
+                                        className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                                        placeholder="Type a message..." 
+                                        value={replyMessage}
+                                        onChange={(e) => setReplyMessage(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                    />
+                                    <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !attachment)}>Send</Button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500">
+                                This dispute is closed.
                             </div>
                         )}
                     </div>

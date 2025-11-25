@@ -15,8 +15,10 @@ const AdminDisputes: React.FC = () => {
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [replyMessage, setReplyMessage] = useState('');
+    const [attachment, setAttachment] = useState<File | null>(null); // File state
     const [isSubmitting, setIsSubmitting] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
@@ -25,6 +27,7 @@ const AdminDisputes: React.FC = () => {
     const handleView = (dispute: Dispute) => {
         setSelectedDispute(dispute);
         setReplyMessage('');
+        setAttachment(null);
         setIsModalOpen(true);
     };
 
@@ -52,7 +55,6 @@ const AdminDisputes: React.FC = () => {
         return matchesSearch && matchesStatus;
     }), [disputes, searchTerm, statusFilter]);
 
-    // Find the actual transaction object related to this dispute
     const linkedTransaction = useMemo(() => {
         if (!selectedDispute) return null;
         const id = selectedDispute.referenceId;
@@ -63,15 +65,29 @@ const AdminDisputes: React.FC = () => {
     }, [selectedDispute, deposits, withdrawals, transfers]);
 
     const handleSendMessage = async () => {
-        if (!selectedDispute || !replyMessage.trim()) return;
+        if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
         setIsSubmitting(true);
         try {
-            const updatedDispute = await updateDispute(selectedDispute._id, { 
-                newMessage: replyMessage 
-            });
+            let payload: FormData | object;
+
+            if (attachment) {
+                const formData = new FormData();
+                formData.append('newMessage', replyMessage);
+                formData.append('sender', 'Admin');
+                formData.append('file', attachment);
+                payload = formData;
+            } else {
+                payload = { 
+                    newMessage: replyMessage,
+                    sender: 'Admin'
+                };
+            }
+
+            const updatedDispute = await updateDispute(selectedDispute._id, payload);
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
-            setSelectedDispute(updatedDispute); // Update local state to show new msg
+            setSelectedDispute(updatedDispute); 
             setReplyMessage('');
+            setAttachment(null);
         } catch (error) {
             console.error("Failed to send message", error);
             alert("Failed to send message");
@@ -87,7 +103,6 @@ const AdminDisputes: React.FC = () => {
             const updatedDispute = await updateDispute(selectedDispute._id, { status });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute);
-            // Don't close modal, let admin see the status change
         } catch (error) {
             console.error("Failed to update dispute status", error);
             alert("Failed to update dispute status");
@@ -109,10 +124,10 @@ const AdminDisputes: React.FC = () => {
             dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             
-            // Also resolve the dispute automatically
             const updatedDispute = await updateDispute(selectedDispute._id, { 
                 status: Status.Resolved, 
-                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.' 
+                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.',
+                sender: 'Admin'
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
@@ -188,7 +203,6 @@ const AdminDisputes: React.FC = () => {
                         <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
                             {/* LEFT COLUMN: DETAILS & CONTEXT */}
                             <div className="md:w-1/3 overflow-y-auto space-y-4 pr-2 border-r dark:border-gray-700">
-                                 {/* Original Complaint */}
                                  <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                                     <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Issue Description</h4>
                                     <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
@@ -196,7 +210,6 @@ const AdminDisputes: React.FC = () => {
                                     </p>
                                 </div>
 
-                                {/* Transaction Details */}
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
                                     <h4 className="font-semibold text-xs uppercase text-blue-600 dark:text-blue-300 mb-2">Linked Transaction</h4>
                                     {linkedTransaction ? (
@@ -219,7 +232,6 @@ const AdminDisputes: React.FC = () => {
                                     )}
                                 </div>
 
-                                {/* Proof */}
                                 {selectedDispute.proofUrl && (
                                     <div className="mb-4">
                                         <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Submitted Proof</h4>
@@ -247,9 +259,14 @@ const AdminDisputes: React.FC = () => {
                                                             ? 'bg-blue-600 text-white rounded-br-none' 
                                                             : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-none'
                                                     }`}>
+                                                        {msg.attachmentUrl && (
+                                                            <a href={msg.attachmentUrl} target="_blank" rel="noreferrer">
+                                                                <img src={msg.attachmentUrl} alt="Attachment" className="max-w-full h-32 object-cover rounded mb-2 bg-black/10" />
+                                                            </a>
+                                                        )}
                                                         <p className="text-sm">{msg.message}</p>
                                                         <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
-                                                            {msg.sender} • {new Date(msg.date).toLocaleString()}
+                                                            {msg.sender === 'User' ? 'User' : 'You (Admin)'} • {new Date(msg.date).toLocaleString()}
                                                         </p>
                                                     </div>
                                                 )}
@@ -261,8 +278,31 @@ const AdminDisputes: React.FC = () => {
                                     <div ref={chatEndRef} />
                                 </div>
 
+                                {/* Attachment Preview */}
+                                {attachment && (
+                                    <div className="flex items-center bg-gray-50 dark:bg-gray-700 p-2 rounded mb-2 border dark:border-gray-600">
+                                        <span className="text-xs text-gray-600 dark:text-gray-300 flex-grow truncate">Attached: {attachment.name}</span>
+                                        <button onClick={() => setAttachment(null)} className="text-red-500 hover:text-red-700 text-xs font-bold px-2">X</button>
+                                    </div>
+                                )}
+
                                 {/* Input Area */}
                                 <div className="flex gap-2 mb-4">
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        onChange={(e) => e.target.files && setAttachment(e.target.files[0])}
+                                        accept="image/*"
+                                    />
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                        title="Attach Image"
+                                        disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                                    </button>
                                     <input 
                                         type="text" 
                                         className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600" 
@@ -272,7 +312,7 @@ const AdminDisputes: React.FC = () => {
                                         onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                                         disabled={selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed'}
                                     />
-                                    <Button onClick={handleSendMessage} disabled={isSubmitting || !replyMessage.trim()}>Send</Button>
+                                    <Button onClick={handleSendMessage} disabled={isSubmitting || (!replyMessage.trim() && !attachment)}>Send</Button>
                                 </div>
 
                                 {/* Status Actions */}
