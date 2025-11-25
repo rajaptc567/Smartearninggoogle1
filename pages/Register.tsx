@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -19,6 +19,23 @@ const Register: React.FC = () => {
         sponsor: '',
         password: '',
     });
+    const [isSponsorFromUrl, setIsSponsorFromUrl] = useState(false);
+
+    useEffect(() => {
+        // Parse sponsor from URL hash for HashRouter compatibility
+        const hash = window.location.hash;
+        const queryIndex = hash.indexOf('?');
+        if (queryIndex !== -1) {
+            const searchParams = new URLSearchParams(hash.substring(queryIndex));
+            const sponsorUsername = searchParams.get('sponsor');
+
+            if (sponsorUsername) {
+                setFormData(prev => ({ ...prev, sponsor: sponsorUsername }));
+                setIsSponsorFromUrl(true);
+            }
+        }
+    }, []);
+
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -99,7 +116,15 @@ const Register: React.FC = () => {
                     </div>
                      <div>
                         <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username (Optional)</label>
-                        <input id="sponsor" name="sponsor" type="text" value={formData.sponsor} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        <input 
+                            id="sponsor" 
+                            name="sponsor" 
+                            type="text" 
+                            value={formData.sponsor} 
+                            onChange={handleChange} 
+                            readOnly={isSponsorFromUrl}
+                            className={`w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 ${isSponsorFromUrl && 'cursor-not-allowed bg-gray-100 dark:bg-gray-700/50'}`}
+                        />
                     </div>
                     <div>
                         <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
