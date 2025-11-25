@@ -411,15 +411,11 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const updateDispute = async (id: string, data: FormData | { status?: string; newMessage?: string; sender?: 'User' | 'Admin' }): Promise<Dispute> => {
-    const isFormData = data instanceof FormData;
-    const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
-    const body = isFormData ? data : JSON.stringify(data);
-
+export const updateDispute = async (id: string, data: { status?: string; newMessage?: string; sender?: 'User' | 'Admin' }): Promise<Dispute> => {
     const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
-        headers: headers,
-        body: body,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
     });
     const result = await handleResponse(response);
     return result.data;

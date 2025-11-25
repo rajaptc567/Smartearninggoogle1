@@ -25,6 +25,10 @@ export const createDispute = async (req, res) => {
             disputeData.proofUrl = `data:${mimeType};base64,${b64}`;
         }
         
+        // Initialize messages array with the description as the opening message from user
+        // But we also keep 'description' field for quick summary
+        // disputeData.messages = [{ sender: 'User', message: disputeData.description }];
+
         const dispute = await Dispute.create(disputeData);
 
         // Notify user
@@ -48,31 +52,22 @@ export const updateDispute = async (req, res) => {
 
         if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
 
-        // Handle File Upload for Chat
-        let attachmentUrl = null;
-        if (req.file) {
-            const b64 = Buffer.from(req.file.buffer).toString('base64');
-            const mimeType = req.file.mimetype;
-            attachmentUrl = `data:${mimeType};base64,${b64}`;
-        }
-
-        // 1. Add New Message (if any text OR attachment)
-        if (newMessage || attachmentUrl) {
-            const msgSender = sender || 'Admin'; 
+        // 1. Add New Message (if any)
+        if (newMessage) {
+            const msgSender = sender || 'Admin'; // Default to Admin if not specified (legacy)
             
             dispute.messages.push({
                 sender: msgSender,
-                message: newMessage || (attachmentUrl ? 'Sent an attachment' : ''),
-                attachmentUrl: attachmentUrl
+                message: newMessage
             });
             
             // Update legacy field if Admin sent it
             if (msgSender === 'Admin') {
-                dispute.adminResponse = newMessage || 'Sent an attachment';
+                dispute.adminResponse = newMessage;
             }
         }
 
-        // 2. Handle Status Change
+        // 2. Handle Status Change (Admin Only usually, but simplified here)
         if (status && status !== dispute.status) {
             dispute.status = status;
             
@@ -87,20 +82,22 @@ export const updateDispute = async (req, res) => {
                 userId: dispute.userId,
                 subject: `Dispute Update: #${dispute._id}`,
                 message: `Your dispute status has changed to ${status}.${newMessage && sender === 'Admin' ? ` Admin Message: ${newMessage}` : ''}`,
-                isPopup: status === 'Resolved' || status === 'Closed' 
+                isPopup: status === 'Resolved' || status === 'Closed' // Make final resolutions popup
             });
         } 
         // 3. Notifications for new messages
-        else if (newMessage || attachmentUrl) {
+        else if (newMessage) {
             if (sender === 'Admin') {
                 // Notify User
                 await Notification.create({
                     userId: dispute.userId,
                     subject: `New Message on Dispute #${dispute._id}`,
-                    message: `Admin: ${newMessage || 'Sent an attachment'}`,
+                    message: `Admin: ${newMessage}`,
                     isPopup: false
                 });
             } 
+            // If sender is User, we generally don't notify Admin via this Notification model (admins check dashboard), 
+            // but in a real app we might send an email to admin.
         }
 
         await dispute.save();
