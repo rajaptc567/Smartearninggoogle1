@@ -67,8 +67,7 @@ const AdminDisputes: React.FC = () => {
         setIsSubmitting(true);
         try {
             const updatedDispute = await updateDispute(selectedDispute._id, { 
-                newMessage: replyMessage,
-                sender: 'Admin'
+                newMessage: replyMessage 
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute); // Update local state to show new msg
@@ -113,8 +112,7 @@ const AdminDisputes: React.FC = () => {
             // Also resolve the dispute automatically
             const updatedDispute = await updateDispute(selectedDispute._id, { 
                 status: Status.Resolved, 
-                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.',
-                sender: 'Admin'
+                newMessage: 'Deposit has been approved and funds added to your wallet based on provided proof.' 
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
@@ -251,7 +249,7 @@ const AdminDisputes: React.FC = () => {
                                                     }`}>
                                                         <p className="text-sm">{msg.message}</p>
                                                         <p className={`text-[10px] mt-1 text-right ${msg.sender === 'Admin' ? 'text-blue-100' : 'text-gray-400'}`}>
-                                                            {msg.sender === 'User' ? 'User' : 'You (Admin)'} • {new Date(msg.date).toLocaleString()}
+                                                            {msg.sender} • {new Date(msg.date).toLocaleString()}
                                                         </p>
                                                     </div>
                                                 )}

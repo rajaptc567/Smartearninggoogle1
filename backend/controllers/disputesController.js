@@ -43,31 +43,26 @@ export const createDispute = async (req, res) => {
     }
 };
 
-// @desc    Update dispute status or add message (Admin/User)
+// @desc    Update dispute status (Admin)
 // @route   PUT /api/v1/disputes/:id
 export const updateDispute = async (req, res) => {
     try {
-        const { status, newMessage, sender } = req.body;
+        const { status, adminResponse, newMessage } = req.body;
         const dispute = await Dispute.findById(req.params.id);
 
         if (!dispute) return res.status(404).json({ success: false, error: 'Dispute not found' });
 
         // 1. Add New Message (if any)
         if (newMessage) {
-            const msgSender = sender || 'Admin'; // Default to Admin if not specified (legacy)
-            
             dispute.messages.push({
-                sender: msgSender,
+                sender: 'Admin',
                 message: newMessage
             });
-            
-            // Update legacy field if Admin sent it
-            if (msgSender === 'Admin') {
-                dispute.adminResponse = newMessage;
-            }
+            // Update the legacy adminResponse field for table summaries
+            dispute.adminResponse = newMessage; 
         }
 
-        // 2. Handle Status Change (Admin Only usually, but simplified here)
+        // 2. Handle Status Change
         if (status && status !== dispute.status) {
             dispute.status = status;
             
@@ -81,23 +76,17 @@ export const updateDispute = async (req, res) => {
             await Notification.create({
                 userId: dispute.userId,
                 subject: `Dispute Update: #${dispute._id}`,
-                message: `Your dispute status has changed to ${status}.${newMessage && sender === 'Admin' ? ` Admin Message: ${newMessage}` : ''}`,
+                message: `Your dispute status has changed to ${status}.${newMessage ? ` Admin Message: ${newMessage}` : ''}`,
                 isPopup: status === 'Resolved' || status === 'Closed' // Make final resolutions popup
             });
-        } 
-        // 3. Notifications for new messages
-        else if (newMessage) {
-            if (sender === 'Admin') {
-                // Notify User
-                await Notification.create({
-                    userId: dispute.userId,
-                    subject: `New Message on Dispute #${dispute._id}`,
-                    message: `Admin: ${newMessage}`,
-                    isPopup: false
-                });
-            } 
-            // If sender is User, we generally don't notify Admin via this Notification model (admins check dashboard), 
-            // but in a real app we might send an email to admin.
+        } else if (newMessage) {
+            // Notify user of new message only
+             await Notification.create({
+                userId: dispute.userId,
+                subject: `New Message on Dispute #${dispute._id}`,
+                message: `Admin: ${newMessage}`,
+                isPopup: false
+            });
         }
 
         await dispute.save();
