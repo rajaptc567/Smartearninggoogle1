@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, Transaction, ActivePlan } from '../../types';
@@ -237,4 +238,43 @@ const Referrals: React.FC = () => {
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
                     <div className="flex justify-between items-start">
                         <div><p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Total Team Size</p><h3 className="text-4xl font-extrabold">{treeStats.members}</h3><p className="text-sm text-blue-200 mt-2 font-medium">Members in {currentPlanName}</p></div>
-                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                    </div>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
+                    <div className="flex justify-between items-start">
+                        <div><p className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total Earnings</p><h3 className="text-4xl font-extrabold">${treeStats.earnings.toFixed(2)}</h3><p className="text-sm text-emerald-200 mt-2 font-medium">Commission from {currentPlanName}</p></div>
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg></div>
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+                    <div><p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Team Volume</p><h3 className="text-3xl font-bold text-gray-800 dark:text-white">${treeStats.volume.toLocaleString()}</h3><p className="text-sm text-gray-500 mt-2">Total active investment in downline</p></div>
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700"><button onClick={() => { navigator.clipboard.writeText(`https://site.com/register?sponsor=${currentUser.username}`); alert('Referral link copied!'); }} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center"><svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>Copy Referral Link</button></div>
+                </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center">
+                    <div>
+                        <h2 className="font-bold text-gray-800 dark:text-white text-lg">Network Structure</h2>
+                        <p className="text-xs text-gray-500">Interactive view of your {currentPlanName} team</p>
+                    </div>
+                    <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+                        <button onClick={() => setViewMode('tree')} className={`px-3 py-1 text-xs rounded ${viewMode === 'tree' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Tree View</button>
+                        <button onClick={() => setViewMode('level')} className={`px-3 py-1 text-xs rounded ${viewMode === 'level' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Level View</button>
+                    </div>
+                </div>
+                <div className="p-8 overflow-x-auto min-h-[400px]">
+                    {viewMode === 'tree' ? (
+                        buildPlanSpecificTree.length > 0 ? (
+                            <ul className="space-y-4 min-w-[600px]">{buildPlanSpecificTree.map(node => renderTreeNode(node))}</ul>
+                        ) : (
+                             renderEmptyState()
+                        )
+                    ) : renderLevelView()}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default Referrals;

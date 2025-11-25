@@ -217,26 +217,67 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         const fetchInitialData = async () => {
-            try {
-                const [
-                    users, deposits, withdrawals, transactions, notifications, 
-                    paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                    passwordResetRequests, disputes
-                ] = await Promise.all([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
-                    getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(),
-                    getPasswordResetRequests(), getDisputes()
-                ]);
-                dispatch({ type: 'SET_ALL_DATA', payload: {
-                    users, deposits, withdrawals, transactions, notifications,
-                    paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                    passwordResetRequests, disputes
-                }});
-            } catch (error) {
-                console.error("Failed to fetch initial data:", error);
-                const err = error as Error;
-                alert(`There was an error loading the application data: ${err.message}. Please check the API server and refresh.`);
+            const defaultSettings: Settings = {
+                isUserTransferEnabled: true,
+                transferConfig: { enabled: true, tiers: [] },
+                restrictWithdrawalAmount: false,
+                requirePlanMatchForCommission: false,
+                requireActivePlanForCommission: false,
+                withdrawalFrequency: { enabled: false, value: 1, unit: 'days' }
+            };
+
+            // Helper to safely fetch individual data points without crashing the entire app
+            // FIX: Rewrote as a standard function declaration to avoid potential parser issues with async arrow functions.
+            async function safeFetch<T>(fn: () => Promise<T>, fallbackValue: T): Promise<T> {
+                try {
+                    return await fn();
+                // FIX: Explicitly typed the catch block variable to 'any' to resolve 'Cannot find name' error.
+                } catch (error: any) {
+                    console.warn(`Failed to fetch data (using fallback):`, error);
+                    return fallbackValue;
+                }
             }
+
+            // Fetch core data in parallel, handling individual failures gracefully
+            const [
+                users, deposits, withdrawals, transactions, notifications, 
+                paymentMethods, investmentPlans, rules, settings, transfers, logs,
+                passwordResetRequests, disputes
+            ] = await Promise.all([
+                safeFetch(getUsers, []),
+                safeFetch(getDeposits, []),
+                safeFetch(getWithdrawals, []),
+                safeFetch(getTransactions, []),
+                safeFetch(getNotifications, []),
+                safeFetch(getPaymentMethods, []),
+                safeFetch(getInvestmentPlans, []),
+                safeFetch(getRules, []),
+                safeFetch(getSettings, defaultSettings),
+                safeFetch(getTransfers, []),
+                safeFetch(getLogs, []),
+                safeFetch(getPasswordResetRequests, []),
+                safeFetch(getDisputes, [])
+            ]);
+
+            // FIX: Expanded object property shorthand to full form to avoid potential parser issues.
+            dispatch({ 
+                type: 'SET_ALL_DATA', 
+                payload: {
+                    users: users,
+                    deposits: deposits,
+                    withdrawals: withdrawals,
+                    transactions: transactions,
+                    notifications: notifications,
+                    paymentMethods: paymentMethods,
+                    investmentPlans: investmentPlans,
+                    rules: rules,
+                    settings: settings,
+                    transfers: transfers,
+                    logs: logs,
+                    passwordResetRequests: passwordResetRequests,
+                    disputes: disputes
+                }
+            });
         };
 
         fetchInitialData();
