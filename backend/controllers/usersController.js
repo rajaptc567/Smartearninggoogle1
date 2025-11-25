@@ -1,4 +1,3 @@
-
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -145,6 +144,14 @@ export const updateUser = async (req, res) => {
             if (message) {
                 await Notification.create({ userId: currentUser._id, message });
             }
+        }
+
+        // Handle Security/Profile Change Notifications
+        if (req.body.phone && req.body.phone !== currentUser.phone) {
+            await Notification.create({ userId: currentUser._id, message: `Your contact phone number was updated.` });
+        }
+        if (req.body.password) {
+            await Notification.create({ userId: currentUser._id, message: `Your account password has been changed.` });
         }
 
         // Handle Granular Restrictions Notifications & Logic
@@ -794,6 +801,11 @@ export const resetPasswordWithToken = async (req, res) => {
         user.passwordResetToken = undefined;
         user.passwordResetExpires = undefined;
         await user.save();
+
+        await Notification.create({
+            userId: user._id,
+            message: 'Your password has been successfully reset.'
+        });
 
         res.status(200).json({ success: true, data: 'Password reset successful.' });
 
