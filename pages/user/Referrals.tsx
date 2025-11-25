@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status } from '../../types';
@@ -30,7 +31,7 @@ const Referrals: React.FC = () => {
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
     const [viewMode, setViewMode] = useState<'tree' | 'level'>('tree');
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['active']));
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['inactive'])); // Keep inactive collapsed by default
 
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
@@ -42,7 +43,6 @@ const Referrals: React.FC = () => {
         setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
     };
 
-    // FIX: Changed type from 'active' | 'inactive' to 'string' to allow dynamic section IDs like levels.
     const toggleSection = (section: string) => {
         setCollapsedSections(prev => { const newSet = new Set(prev); if (newSet.has(section)) newSet.delete(section); else newSet.add(section); return newSet; });
     };
@@ -54,37 +54,25 @@ const Referrals: React.FC = () => {
 
     const getReferralInvestment = (user: User, planId: string) => user.activePlans?.find(p => p.planId === planId)?.price || 0;
 
-    // --- REFACTORED DATA PROCESSING ---
     const { activeTree, inactiveReferrals, levelViewData, networkStats } = useMemo(() => {
         if (!currentUser) return { activeTree: [], inactiveReferrals: [], levelViewData: {}, networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, volume: 0 } };
 
-        // 1. Build the full genealogy tree of ALL registered referrals
-        const fullGenealogyTree: GenealogyNode[] = [];
-        const allDownlineUsers: User[] = [];
-
-        const buildFullTree = (sponsorUsername: string, level: number) => {
-            const directReferrals = users.filter(u => u.sponsor === sponsorUsername);
-            if (!directReferrals.length) return [];
-            
-            const nodes: GenealogyNode[] = [];
-            directReferrals.forEach(child => {
-                allDownlineUsers.push(child);
-                const children = buildFullTree(child.username, level + 1) || [];
-                nodes.push({ user: child, children, level });
+        const fullDownline: User[] = [];
+        const buildFullDownline = (sponsorUsername: string) => {
+            const referrals = users.filter(u => u.sponsor === sponsorUsername);
+            referrals.forEach(r => {
+                fullDownline.push(r);
+                buildFullDownline(r.username);
             });
-            return nodes;
         };
-        fullGenealogyTree.push(...(buildFullTree(currentUser.username, 1) || []));
-        
-        // 2. Create the static list of users who have NO plans at all
-        const inactiveReferrals = allDownlineUsers.filter(u => !u.activePlans || u.activePlans.length === 0);
+        buildFullDownline(currentUser.username);
 
-        // 3. Dynamically build the ACTIVE tree for the selected plan
+        const inactiveReferrals = fullDownline.filter(u => !u.activePlans || u.activePlans.length === 0);
+
         const buildActiveTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
             const directReferrals = users.filter(u => u.sponsor === sponsorUsername);
             if (!directReferrals.length) return [];
             
-            // Filter only children who have the selected plan
             const activeChildren = directReferrals.filter(child => child.activePlans?.some(p => p.planId === selectedPlanId));
             
             return activeChildren.map(child => ({
@@ -95,7 +83,6 @@ const Referrals: React.FC = () => {
         };
         const activeTree = buildActiveTree(currentUser.username, 1);
         
-        // 4. Calculate stats and level view data based on the ACTIVE tree
         const levels: { [key: number]: User[] } = {};
         let volume = 0;
         let activeMemberCount = 0;
@@ -116,7 +103,7 @@ const Referrals: React.FC = () => {
             .reduce((sum, t) => sum + t.amount, 0);
 
         const stats = {
-            totalReferrals: allDownlineUsers.length,
+            totalReferrals: fullDownline.length,
             activeMembers: activeMemberCount,
             earnings: totalEarnings,
             volume
@@ -167,8 +154,7 @@ const Referrals: React.FC = () => {
             <div className="space-y-4">
                 {levels.map(level => {
                     const members = levelViewData[level] || [];
-                    // FIX: Correctly check collapsed state by converting level number to string for Set lookup. The '!' was also logically incorrect.
-                    const isSectionCollapsed = collapsedSections.has(level.toString());
+                    const isSectionCollapsed = !collapsedSections.has(level.toString());
                     const earnings = members.reduce((sum, u) => sum + getCommissionFromReferralForPlan(u._id, selectedPlanId), 0);
                     const volume = members.reduce((sum, u) => sum + getReferralInvestment(u, selectedPlanId), 0);
 
@@ -241,12 +227,12 @@ const Referrals: React.FC = () => {
         <div className="space-y-8 max-w-6xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div><h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">My Network</h1><p className="text-gray-500 dark:text-gray-400 mt-1">Manage your team structure and performance.</p></div>
-                {uniqueActivePlans.length > 0 && <div className="flex p-1.5 bg-gray-100 dark:bg-gray-900/50 rounded-xl overflow-x-auto border border-gray-200 dark:border-gray-700">{uniqueActivePlans.map(plan => (<button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`px-5 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all duration-200 ${selectedPlanId === plan.planId ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>{plan.planName}</button>))}</div>}
+                {uniqueActivePlans.length > 0 && <div className="flex p-1 bg-gray-200/75 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 backdrop-blur-sm">{uniqueActivePlans.map(plan => (<button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all duration-300 ease-in-out ${selectedPlanId === plan.planId ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-md' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'}`}>{plan.planName}</button>))}</div>}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
                     <div className="flex justify-between items-start">
-                        <div><p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Team Members</p><h3 className="text-4xl font-extrabold">{networkStats.activeMembers} <span className="text-xl font-normal text-blue-200">/ {networkStats.totalReferrals}</span></h3><p className="text-sm text-blue-200 mt-2 font-medium">Active / Total Referrals</p></div>
+                        <div><p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Active Members</p><h3 className="text-4xl font-extrabold">{networkStats.activeMembers}</h3><p className="text-sm text-blue-200 mt-2 font-medium">in {currentPlanName}</p></div>
                         <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
                     </div>
                 </div>
@@ -262,7 +248,6 @@ const Referrals: React.FC = () => {
                 </div>
             </div>
             
-            {/* Main Content Area */}
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center">
                     <div>
@@ -275,23 +260,18 @@ const Referrals: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* Active Network Section */}
                 <div className="p-4 md:p-6">
-                     <button onClick={() => toggleSection('active')} className="w-full flex justify-between items-center p-3 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                    <div className="w-full p-3 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
                         <h3 className="font-semibold text-blue-700 dark:text-blue-300">Active Network ({networkStats.activeMembers})</h3>
-                        <svg className={`w-5 h-5 text-blue-600 transition-transform ${collapsedSections.has('active') ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    {!collapsedSections.has('active') && (
-                        <div className="pl-4 animate-fade-in-down">
-                            {viewMode === 'tree' 
-                                ? (activeTree.length > 0 ? <ul className="space-y-4 min-w-[600px]">{activeTree.map(node => renderTreeNode(node))}</ul> : <p className="text-center text-gray-500 text-sm py-4">No active members in this plan.</p>)
-                                : (Object.keys(levelViewData).length > 0 ? renderLevelView() : <p className="text-center text-gray-500 text-sm py-4">No active members to display in level view.</p>)
-                            }
-                        </div>
-                    )}
+                    </div>
+                    <div className="pl-4">
+                        {viewMode === 'tree' 
+                            ? (activeTree.length > 0 ? <ul className="space-y-4 min-w-[600px]">{activeTree.map(node => renderTreeNode(node))}</ul> : <p className="text-center text-gray-500 text-sm py-4">No active members in this plan.</p>)
+                            : (Object.keys(levelViewData).length > 0 ? renderLevelView() : <p className="text-center text-gray-500 text-sm py-4">No active members to display in level view.</p>)
+                        }
+                    </div>
                 </div>
 
-                {/* Inactive Referrals Section */}
                 {inactiveReferrals.length > 0 && (
                      <div className="p-4 md:p-6 border-t dark:border-gray-700">
                         <button onClick={() => toggleSection('inactive')} className="w-full flex justify-between items-center p-3 mb-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
