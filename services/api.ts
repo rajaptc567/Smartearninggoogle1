@@ -250,15 +250,24 @@ export const sendAdminNotification = async (data: {
     isPopup: boolean,
     targetType?: 'single' | 'plan' | 'all',
     targetIds?: string[]
-}): Promise<any> => {
+}): Promise<{count: number, data: Notification[]}> => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
+    return await handleResponse(response);
+}
+
+export const updateNotification = async (id: string, data: Partial<Notification>): Promise<Notification> => {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
     const result = await handleResponse(response);
     return result.data;
-}
+};
 
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {

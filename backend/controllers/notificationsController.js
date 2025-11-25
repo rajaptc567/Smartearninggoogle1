@@ -20,12 +20,13 @@ export const createNotification = async (req, res) => {
         const { userId, message, subject, isPopup, targetType, targetIds } = req.body;
         
         let notificationsToCreate = [];
+        const senderType = 'Admin'; // Messages sent via this endpoint are always from an Admin
 
         // CASE 1: Single User (Legacy or specific selection)
         if (userId) {
              const user = await User.findById(userId);
              if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-             notificationsToCreate.push({ userId, message, subject, isPopup, popupShown: false, read: false });
+             notificationsToCreate.push({ userId, senderType, message, subject, isPopup, popupShown: false, read: false });
         } 
         // CASE 2: Bulk Messaging
         else if (targetType) {
@@ -46,6 +47,7 @@ export const createNotification = async (req, res) => {
             
             notificationsToCreate = users.map(u => ({
                 userId: u._id,
+                senderType,
                 message,
                 subject,
                 isPopup: isPopup || false,
@@ -57,17 +59,19 @@ export const createNotification = async (req, res) => {
         }
 
         if (notificationsToCreate.length > 0) {
-            await Notification.insertMany(notificationsToCreate);
+            const created = await Notification.insertMany(notificationsToCreate);
+            // Return all newly created notifications so frontend state can be updated
+            return res.status(201).json({ success: true, count: created.length, data: created });
         }
 
-        // Return a generic success response or the first created one for compatibility
-        res.status(201).json({ success: true, count: notificationsToCreate.length, message: `Sent to ${notificationsToCreate.length} users.` });
+        res.status(200).json({ success: true, count: 0, data: [], message: 'No users matched the criteria.' });
+
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
-// @desc    Mark notifications as read for a user
+// @desc    Mark notifications as read for a user (Bulk)
 // @route   PUT /api/v1/notifications/read/:userId
 export const markAsRead = async (req, res) => {
     try {
@@ -81,6 +85,23 @@ export const markAsRead = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     }
 };
+
+// @desc    Update a single notification (e.g., mark as read)
+// @route   PUT /api/v1/notifications/:id
+export const updateNotification = async (req, res) => {
+    try {
+        const notification = await Notification.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true }
+        );
+        if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        res.status(200).json({ success: true, data: notification });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
 
 // @desc    Mark a popup notification as shown (closed by user)
 // @route   PUT /api/v1/notifications/popup-shown/:id

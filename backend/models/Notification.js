@@ -7,6 +7,11 @@ const NotificationSchema = new mongoose.Schema({
         ref: 'User',
         required: true,
     },
+    senderType: {
+        type: String,
+        enum: ['Admin', 'System'],
+        default: 'System',
+    },
     subject: {
         type: String,
     },

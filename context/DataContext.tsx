@@ -88,6 +88,8 @@ type Action =
     | { type: 'ADD_LOG'; payload: Log }
     | { type: 'SET_NOTIFICATIONS'; payload: Notification[] }
     | { type: 'ADD_NOTIFICATION'; payload: Notification }
+    | { type: 'UPDATE_NOTIFICATION'; payload: Notification }
+    | { type: 'UPDATE_NOTIFICATIONS'; payload: Notification[] } // Batch update
     | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: Notification[] }
     | { type: 'SET_PASSWORD_RESET_REQUESTS'; payload: PasswordResetRequest[] }
     | { type: 'DELETE_PASSWORD_RESET_REQUEST'; payload: string }
@@ -176,6 +178,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         // NOTIFICATIONS
         case 'SET_NOTIFICATIONS': return { ...state, notifications: action.payload };
         case 'ADD_NOTIFICATION': return { ...state, notifications: [action.payload, ...state.notifications] };
+        case 'UPDATE_NOTIFICATION':
+            return { ...state, notifications: state.notifications.map(n => n._id === action.payload._id ? action.payload : n) };
+        case 'UPDATE_NOTIFICATIONS': // Handles bulk creation response
+            return { ...state, notifications: [...action.payload, ...state.notifications] };
         case 'MARK_NOTIFICATIONS_AS_READ': return { ...state, notifications: action.payload };
 
         // PASSWORD RESETS
@@ -227,11 +233,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
 
             // Helper to safely fetch individual data points without crashing the entire app
-            // FIX: Rewrote as a standard function declaration to avoid potential parser issues with async arrow functions.
             async function safeFetch<T>(fn: () => Promise<T>, fallbackValue: T): Promise<T> {
                 try {
                     return await fn();
-                // FIX: Explicitly typed the catch block variable to 'any' to resolve 'Cannot find name' error.
                 } catch (error: any) {
                     console.warn(`Failed to fetch data (using fallback):`, error);
                     return fallbackValue;
@@ -259,7 +263,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 safeFetch(getDisputes, [])
             ]);
 
-            // FIX: Expanded object property shorthand to full form to avoid potential parser issues.
             dispatch({ 
                 type: 'SET_ALL_DATA', 
                 payload: {

@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -15,7 +16,8 @@ import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Transfers from './pages/Transfers';
 import PasswordResets from './pages/PasswordResets';
-import AdminDisputes from './pages/AdminDisputes'; // Added
+import AdminDisputes from './pages/AdminDisputes';
+import SentMessages from './pages/SentMessages'; // Added
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -36,7 +38,8 @@ import Referrals from './pages/user/Referrals';
 import Profile from './pages/user/Profile';
 import TransferFunds from './pages/user/TransferFunds';
 import ActivePlans from './pages/user/ActivePlans';
-import UserDisputes from './pages/user/UserDisputes'; // Added
+import UserDisputes from './pages/user/UserDisputes';
+import Messages from './pages/user/Messages';
 
 
 const App: React.FC = () => {
@@ -67,6 +70,7 @@ const App: React.FC = () => {
           <Route path="settings" element={<Settings />} />
           <Route path="logs" element={<Logs />} />
           <Route path="disputes" element={<AdminDisputes />} />
+          <Route path="sent-messages" element={<SentMessages />} />
         </Route>
 
         {/* User Member Area Routes */}
@@ -80,6 +84,7 @@ const App: React.FC = () => {
           <Route path="transactions" element={<Transactions />} />
           <Route path="referrals" element={<Referrals />} />
           <Route path="disputes" element={<UserDisputes />} />
+          <Route path="messages" element={<Messages />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

@@ -208,6 +208,7 @@ export interface Settings {
 export interface Notification {
   _id: string;
   userId: string; // User who receives the notification
+  senderType?: 'Admin' | 'System'; // Who sent it
   subject?: string; // Optional subject
   message: string;
   isPopup?: boolean; // Should this show as a modal?

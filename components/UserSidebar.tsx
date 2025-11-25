@@ -19,23 +19,28 @@ const SettingsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentC
 const DisputeIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>;
 const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
 const ActivePlansIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>;
+const InboxIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>;
 
-
-const userNavLinks = [
-  { to: '/member', label: 'Dashboard', icon: <HomeIcon />, condition: null },
-  { to: '/member/deposit', label: 'Deposit Funds', icon: <DepositIcon />, condition: null },
-  { to: '/member/withdraw', label: 'Withdraw Funds', icon: <WithdrawalIcon />, condition: null },
-  { to: '/member/transfer', label: 'Transfer Funds', icon: <TransferIcon />, condition: 'isUserTransferEnabled' },
-  { to: '/member/plans', label: 'Investment Plans', icon: <PlanIcon />, condition: null },
-  { to: '/member/active-plans', label: 'My Active Plans', icon: <ActivePlansIcon />, condition: null },
-  { to: '/member/transactions', label: 'Transactions', icon: <WalletIcon />, condition: null },
-  { to: '/member/referrals', label: 'My Network', icon: <UsersIcon />, condition: null },
-  { to: '/member/disputes', label: 'Disputes', icon: <DisputeIcon />, condition: null },
-  { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
-];
 
 const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     const { state, dispatch } = useData();
+    const { currentUser, settings, notifications } = state;
+
+    const unreadMessagesCount = notifications.filter(n => n.userId === currentUser?._id && !n.read).length;
+
+    const userNavLinks = [
+        { to: '/member', label: 'Dashboard', icon: <HomeIcon />, condition: null },
+        { to: '/member/deposit', label: 'Deposit Funds', icon: <DepositIcon />, condition: null },
+        { to: '/member/withdraw', label: 'Withdraw Funds', icon: <WithdrawalIcon />, condition: null },
+        { to: '/member/transfer', label: 'Transfer Funds', icon: <TransferIcon />, condition: 'isUserTransferEnabled' },
+        { to: '/member/plans', label: 'Investment Plans', icon: <PlanIcon />, condition: null },
+        { to: '/member/active-plans', label: 'My Active Plans', icon: <ActivePlansIcon />, condition: null },
+        { to: '/member/transactions', label: 'Transactions', icon: <WalletIcon />, condition: null },
+        { to: '/member/referrals', label: 'My Network', icon: <UsersIcon />, condition: null },
+        { to: '/member/messages', label: 'Inbox', icon: <InboxIcon />, badge: unreadMessagesCount },
+        { to: '/member/disputes', label: 'Disputes', icon: <DisputeIcon />, condition: null },
+        { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
+    ];
 
     const baseLinkClass = "flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200";
     const inactiveLinkClass = "text-gray-400 hover:bg-gray-700 hover:text-white";
@@ -56,21 +61,25 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                     <h1 className="text-2xl font-bold text-white">Member Area</h1>
                 </div>
                 <nav className="mt-6 px-4 flex-grow">
-                    {userNavLinks.map(({ to, label, icon, condition }) => {
-                        // Check for feature flags within the `state.settings` object
-                        if (condition && !state.settings[condition as keyof typeof state.settings]) {
+                    {userNavLinks.map(({ to, label, icon, condition, badge }) => {
+                        if (condition && !settings[condition as keyof typeof settings]) {
                           return null;
                         }
                         return (
                           <NavLink
                               key={label}
                               to={to}
-                              end={to === '/member'} // `end` prop for exact match on dashboard link
+                              end={to === '/member'}
                               onClick={() => setSidebarOpen(false)}
                               className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} mt-2`}
                           >
                               {icon}
                               <span className="mx-4 font-medium">{label}</span>
+                              {badge !== undefined && badge > 0 && (
+                                <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                    {badge}
+                                </span>
+                            )}
                           </NavLink>
                         )
                     })}
