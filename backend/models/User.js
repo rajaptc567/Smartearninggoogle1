@@ -1,7 +1,6 @@
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
-import { Currency } from '../../types.ts'; // Assuming types.ts is accessible for enum
 
 const UserSchema = new mongoose.Schema({
     username: {
