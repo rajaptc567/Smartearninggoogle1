@@ -2,6 +2,8 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+
 const UserSchema = new mongoose.Schema({
     username: {
         type: String,
@@ -82,11 +84,28 @@ const UserSchema = new mongoose.Schema({
 
 // Corrected pre-save hook for password hashing
 UserSchema.pre('save', async function(next) {
+    // Data Migration for country if it's missing (for very old docs)
+    if (!this.country) {
+        this.country = 'United States'; // Assign a sensible default
+    }
+
+    // Auto-update currency IF country is modified OR if currency is missing.
+    if (this.isModified('country') || !this.currency) {
+        if (this.country.toLowerCase() === 'pakistan') {
+            this.currency = 'PKR';
+        } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+            this.currency = 'EUR';
+        } else {
+            this.currency = 'USD';
+        }
+    }
+    
+    // Password Hashing
     if (!this.isModified('password')) {
         return next();
     }
     // Double check to prevent re-hashing on updates that don't involve password
-    if(this.password.startsWith('$2a$')) return next();
+    if(this.password && this.password.startsWith('$2a$')) return next();
 
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

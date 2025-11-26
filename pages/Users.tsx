@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -276,7 +276,7 @@ interface UserFormModalProps {
 const UserFormModal: React.FC<UserFormModalProps> = ({ user, mode, onClose, onSave, onSwitchToEdit }) => {
     const { state } = useData();
     const [formData, setFormData] = useState<Partial<User>>(
-        user || { fullName: '', username: '', email: '', phone: '' }
+        user || { fullName: '', username: '', email: '', phone: '', country: '' }
     );
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -313,6 +313,14 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ user, mode, onClose, onSa
                     <div>
                         <label htmlFor="phone" className="block text-sm font-medium">Phone</label>
                         <input type="text" name="phone" value={formData.phone || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                    </div>
+                    <div>
+                        <label htmlFor="country" className="block text-sm font-medium">Country</label>
+                        <select id="country" name="country" value={formData.country || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
+                            <option value="">-- Select country --</option>
+                            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Changing country will automatically update user's currency.</p>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end space-x-3">
@@ -433,6 +441,7 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                             <p className="text-sm"><strong>Username:</strong> @{user.username}</p>
                             <p className="text-sm"><strong>Email:</strong> {user.email}</p>
                             <p className="text-sm"><strong>Phone:</strong> {user.phone}</p>
+                            <p className="text-sm"><strong>Country:</strong> {user.country || 'N/A'}</p>
                             <p className="text-sm"><strong>Sponsor:</strong> @{user.sponsor || 'N/A'}</p>
                             <p className="text-sm"><strong>Registered:</strong> {user.registrationDate}</p>
                         </div>
