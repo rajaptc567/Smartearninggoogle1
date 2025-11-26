@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan } from '../types';
 import Table from '../components/ui/Table';
@@ -891,6 +892,7 @@ const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave:
         transfer: false,
         earning: false,
         dispute: false,
+        excludeFromTicker: false,
         ...user.restrictions
     });
 
@@ -924,6 +926,7 @@ const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave:
                     <Toggle label="Block Transfers" checked={restrictions.transfer} onClick={() => handleToggle('transfer')} />
                     <Toggle label="Pause Earnings (Commissions)" checked={restrictions.earning} onClick={() => handleToggle('earning')} />
                     <Toggle label="Block Disputes" checked={restrictions.dispute} onClick={() => handleToggle('dispute')} />
+                    <Toggle label="Exclude from Activity Ticker" checked={restrictions.excludeFromTicker || false} onClick={() => handleToggle('excludeFromTicker' as keyof UserRestrictions)} />
                 </div>
                 <div className="mt-8 flex justify-end space-x-3">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>

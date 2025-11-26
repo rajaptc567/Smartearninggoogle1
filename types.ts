@@ -28,6 +28,7 @@ export interface UserRestrictions {
     transfer: boolean;
     earning: boolean; // Blocks commissions
     dispute: boolean; // Blocks disputes
+    excludeFromTicker?: boolean;
 }
 
 export interface User {
