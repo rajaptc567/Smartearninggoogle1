@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
-import { Status, User, Transaction, Deposit, formatCurrency } from '../types';
+import { Status, User, Transaction, Deposit, formatCurrency, Currency } from '../types';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { getUploadsBaseUrl } from '../services/api';
@@ -31,6 +31,7 @@ const Reports: React.FC = () => {
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
     const [minAmount, setMinAmount] = useState('');
     const [maxAmount, setMaxAmount] = useState('');
     const [keyword, setKeyword] = useState('');
@@ -68,6 +69,9 @@ const Reports: React.FC = () => {
 
             // Status Filter
             if (statusFilter && item.status && item.status !== statusFilter) return false;
+
+            // Currency Filter
+            if (currencyFilter && item.currency && item.currency !== currencyFilter) return false;
 
             // Amount Filter
             const amountField = item.amount ?? item.walletBalance;
@@ -308,6 +312,7 @@ const Reports: React.FC = () => {
     const reportHeaders = useMemo(() => reportConfigs[reportType].map(c => c.label), [reportType]);
     const hasStatusField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
     const hasAmountField = ['deposits', 'withdrawals', 'transfers', 'users', 'commissions', 'all_transactions'].includes(reportType);
+    const hasCurrencyField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
     
     // Helper for Preview display of receipts
     const renderReceiptPreview = (tx: Transaction) => {
@@ -365,6 +370,17 @@ const Reports: React.FC = () => {
                                     <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                         <option value="">All</option>
                                         {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                )}
+                                {hasCurrencyField && (
+                                <div>
+                                    <label className="block text-sm font-medium">Currency</label>
+                                    <select value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                        <option value="">All</option>
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="PKR">PKR</option>
                                     </select>
                                 </div>
                                 )}

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { Status, Withdrawal, formatCurrency } from '../types';
+import { Status, Withdrawal, formatCurrency, Currency } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
 import { updateWithdrawal, getUploadsBaseUrl } from '../services/api';
@@ -28,6 +28,7 @@ const Withdrawals: React.FC = () => {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
   const UPLOADS_URL = getUploadsBaseUrl();
 
@@ -64,7 +65,9 @@ const Withdrawals: React.FC = () => {
       
       const matchesStatus = statusFilter ? w.status === statusFilter : true;
 
-      return matchesSearch && matchesStatus;
+      const matchesCurrency = currencyFilter ? w.currency === currencyFilter : true;
+
+      return matchesSearch && matchesStatus && matchesCurrency;
   });
 
   const handleRowClick = (w: Withdrawal) => {
@@ -134,6 +137,16 @@ const Withdrawals: React.FC = () => {
                   <option value={Status.Approved}>Approved</option>
                   <option value={Status.Paid}>Paid</option>
                   <option value={Status.Rejected}>Rejected</option>
+              </select>
+               <select
+                  value={currencyFilter}
+                  onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+              >
+                  <option value="">All Currencies</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="PKR">PKR</option>
               </select>
               <input 
                   type="text" 

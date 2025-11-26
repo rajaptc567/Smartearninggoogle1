@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Transfer, Status, formatCurrency } from '../types';
+import { Transfer, Status, formatCurrency, Currency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -23,6 +23,7 @@ const Transfers: React.FC = () => {
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
     useEffect(() => {
         if (selectedTransfer) {
@@ -40,8 +41,9 @@ const Transfers: React.FC = () => {
             t.amount.toString().includes(searchTerm);
         
         const matchesStatus = statusFilter ? t.status === statusFilter : true;
+        const matchesCurrency = currencyFilter ? t.currency === currencyFilter : true;
 
-        return matchesSearch && matchesStatus;
+        return matchesSearch && matchesStatus && matchesCurrency;
     });
 
     const handleSaveChanges = async () => {
@@ -94,6 +96,16 @@ const Transfers: React.FC = () => {
                         <option value={Status.Pending}>Pending</option>
                         <option value={Status.Approved}>Approved</option>
                         <option value={Status.Rejected}>Rejected</option>
+                    </select>
+                     <select
+                        value={currencyFilter}
+                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                        className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
+                    >
+                        <option value="">All Currencies</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="PKR">PKR</option>
                     </select>
                     <input 
                         type="text" 

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -26,6 +26,7 @@ const Users: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [planFilter, setPlanFilter] = useState('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
     const handleOpenModal = (user: User | null = null, mode: 'edit' | 'details' = 'edit') => {
         setEditingUser(user);
@@ -134,9 +135,14 @@ const Users: React.FC = () => {
                 return user.activePlans?.some(p => p.planId === planFilter);
             })();
 
-            return matchesSearch && matchesStatus && matchesPlan;
+            const matchesCurrency = (() => {
+                if (!currencyFilter) return true;
+                return user.currency === currencyFilter;
+            })();
+
+            return matchesSearch && matchesStatus && matchesPlan && matchesCurrency;
         });
-    }, [state.users, searchTerm, statusFilter, planFilter]);
+    }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
 
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
 
@@ -170,6 +176,17 @@ const Users: React.FC = () => {
                         ))}
                     </select>
                     
+                     <select
+                        value={currencyFilter}
+                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Currencies</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="PKR">PKR</option>
+                    </select>
+
                     <input 
                         type="text" 
                         placeholder="Search name, email, ID..."
@@ -262,8 +279,7 @@ const Users: React.FC = () => {
     );
 };
 
-// ... (BulkRestrictionsModal and MessageUserModal remain unchanged)
-
+// ... (Modal components remain unchanged)
 // UserFormModal Component
 interface UserFormModalProps {
     user: User | null;
@@ -467,7 +483,6 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
     );
 };
 
-// ... (BulkRestrictionsModal and MessageUserModal remain unchanged)
 const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ allUsers, investmentPlans, onClose }) => {
     const [targetType, setTargetType] = useState<'single' | 'plan' | 'all'>('single');
     
