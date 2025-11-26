@@ -38,21 +38,18 @@ const UserSchema = new mongoose.Schema({
     country: {
         type: String,
     },
-    currency: {
-        type: String,
-        enum: ['USD', 'EUR', 'PKR'],
-        default: 'USD'
+    walletBalance: {
+        type: Number,
+        default: 0,
     },
-    walletBalances: {
-        type: Map,
-        of: Number,
-        default: { 'USD': 0, 'EUR': 0, 'PKR': 0 }
+    activePlan: {
+        type: String,
+        default: 'None', // Kept for backward compatibility/quick display of latest plan
     },
     activePlans: [{
         planId: { type: mongoose.Schema.ObjectId, ref: 'InvestmentPlan' },
         planName: String,
         price: Number,
-        currency: String,
         purchaseDate: { type: Date, default: Date.now }
     }],
     status: {
@@ -72,9 +69,6 @@ const UserSchema = new mongoose.Schema({
     },
     passwordResetToken: String,
     passwordResetExpires: Date,
-    // LEGACY FIELDS (can be removed after migration)
-    walletBalance: { type: Number, default: 0 },
-    activePlan: { type: String, default: 'None' },
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });

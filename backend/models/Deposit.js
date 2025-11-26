@@ -19,17 +19,13 @@ const DepositSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    currency: {
-        type: String,
-        enum: ['USD', 'EUR', 'PKR'],
-        required: true,
-    },
     transactionId: {
         type: String,
         required: true,
     },
     senderAccountTitle: {
         type: String,
+        // Not strictly required for backward compatibility, but effectively required by frontend
     },
     receiptUrl: {
         type: String,
@@ -46,7 +42,7 @@ const DepositSchema = new mongoose.Schema({
         type: String,
     },
     matchedWithdrawalId: {
-        type: String,
+        type: String, // Can be ObjectId if Withdrawal model is fully implemented
     },
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }

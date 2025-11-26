@@ -15,18 +15,10 @@ export enum Status {
   Closed = 'Closed',
 }
 
-export type Currency = 'USD' | 'EUR' | 'PKR';
-
-export interface CurrencyValue {
-    currency: Currency;
-    value: number;
-}
-
 export interface ActivePlan {
     planId: string;
     planName: string;
-    price: number; // Price at time of purchase
-    currency: Currency; // Currency of purchase
+    price: number;
     purchaseDate: string;
 }
 
@@ -46,16 +38,13 @@ export interface User {
   phone: string;
   whatsapp?: string;
   country?: string;
-  currency: Currency; // User's primary currency
-  walletBalances: Partial<Record<Currency, number>>; // Multi-currency wallet
+  walletBalance: number;
+  activePlan: string; // Primary/Latest plan string for legacy display
   activePlans?: ActivePlan[]; // Array of all purchased plans
   registrationDate: string;
   status: Status;
   sponsor?: string;
   restrictions?: UserRestrictions;
-  // Legacy fields for backward compatibility, should not be used for new logic
-  walletBalance: number;
-  activePlan: string; 
 }
 
 export interface Deposit {
@@ -64,7 +53,6 @@ export interface Deposit {
   userName: string;
   method: string;
   amount: number;
-  currency: Currency;
   transactionId: string;
   senderAccountTitle?: string; // Name on the sender's account
   receiptUrl?: string;
@@ -81,7 +69,6 @@ export interface Withdrawal {
     userName: string;
     method: string;
     amount: number;
-    currency: Currency;
     fee: number;
     finalAmount: number;
     accountTitle: string;
@@ -101,18 +88,11 @@ export interface Transfer {
   recipientId: string;
   recipientName: string;
   amount: number;
-  currency: Currency;
   fee?: number;
   totalDeducted?: number;
   status: Status.Pending | Status.Approved | Status.Rejected;
   date: string;
   adminNotes?: string;
-}
-
-export interface PaymentMethodAmountLimit {
-    currency: Currency;
-    min: number;
-    max: number;
 }
 
 export interface PaymentMethod {
@@ -122,15 +102,12 @@ export interface PaymentMethod {
     accountTitle: string;
     accountNumber: string;
     instructions: string;
-    supportedCurrencies: Currency[];
-    amountLimits: PaymentMethodAmountLimit[];
+    minAmount: number;
+    maxAmount: number;
     feePercent: number;
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
     p2pWithdrawalId?: string; // Optional ID linking to a withdrawal
-    // Legacy fields for backward compatibility
-    minAmount: number;
-    maxAmount: number;
 }
 
 // New types for InvestmentPlan
@@ -144,7 +121,7 @@ export interface Commission {
 export interface InvestmentPlan {
     _id: string;
     name: string;
-    prices: CurrencyValue[];
+    price: number;
     durationDays: number; // 0 for unlimited
     minWithdraw: number;
     description: string;
@@ -170,8 +147,14 @@ export interface InvestmentPlan {
         slots: number[]; // e.g., [5, 6] for holding 5th and 6th referral commissions
     };
     
-    // Legacy field
-    price: number;
+    // Legacy field kept for type compatibility if needed, but main logic uses global settings
+    transferConfig?: {
+        enabled: boolean;
+        feeType: CommissionType;
+        feeValue: number;
+        minAmount: number;
+        maxAmount: number;
+    };
 }
 
 
@@ -181,7 +164,6 @@ export interface Transaction {
     userName: string;
     type: 'Deposit' | 'Withdrawal' | 'Commission' | 'Manual Credit' | 'Manual Debit' | 'Withdrawal Request' | 'Withdrawal Refund' | 'Plan Purchase' | 'Transfer Sent' | 'Transfer Received' | 'Transfer Request' | 'Transfer Refund';
     amount: number;
-    currency: Currency;
     date: string;
     description: string;
     level?: number;
@@ -197,15 +179,17 @@ export interface Rule {
 }
 
 export interface TransferFeeTier {
-    currency: Currency;
     minAmount: number;
     maxAmount: number;
     feeType: 'percentage' | 'fixed';
     feeValue: number;
-    enabled?: boolean;
+    enabled?: boolean; // New flag to enable/disable specific tiers
 }
 
 export interface Settings {
+    // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
+    isUserTransferEnabled: boolean; 
+    
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
@@ -219,8 +203,6 @@ export interface Settings {
         value: number;
         unit: 'hours' | 'days' | 'weeks' | 'months';
     };
-    // Legacy boolean
-    isUserTransferEnabled: boolean; 
 }
 
 export interface Notification {

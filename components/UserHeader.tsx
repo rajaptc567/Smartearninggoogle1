@@ -1,31 +1,11 @@
-
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import NotificationBell from './ui/NotificationBell';
-import { useCurrency } from '../hooks/useCurrency';
-import { Currency } from '../types';
 
 interface UserHeaderProps {
   setSidebarOpen: (open: boolean) => void;
 }
-
-const CurrencySwitcher: React.FC = () => {
-    const { selectedCurrency, setSelectedCurrency } = useCurrency();
-
-    return (
-        <select
-            value={selectedCurrency}
-            onChange={(e) => setSelectedCurrency(e.target.value as Currency)}
-            className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            aria-label="Select currency"
-        >
-            <option value="USD">USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-            <option value="PKR">PKR (Rs)</option>
-        </select>
-    );
-};
 
 const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
   const location = useLocation();
@@ -61,7 +41,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-white ml-2 lg:ml-0">{getTitle()}</h1>
       </div>
       <div className="flex items-center space-x-4">
-        <CurrencySwitcher />
         <NotificationBell notifications={userNotifications} userId={currentUser?._id} />
         <div className="relative">
           <button className="flex items-center focus:outline-none">

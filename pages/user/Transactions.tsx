@@ -1,10 +1,8 @@
-
 import React from 'react';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
 import { Status, Transaction } from '../../types';
 import Badge from '../../components/ui/Badge';
-import { formatCurrency } from '../../utils/formatting';
 
 const Transactions: React.FC = () => {
     const { state } = useData();
@@ -27,12 +25,12 @@ const Transactions: React.FC = () => {
                             <td className="px-4 py-3 text-sm font-mono">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount, tx.currency)}
+                                {tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)}
                             </td>
                              <td className="px-4 py-3 text-xs">
                                 <Badge status={tx.status as Status || Status.Approved} />
                             </td>
-                            <td className="px-4 py-3 text-sm">{new Date(tx.date).toLocaleDateString()}</td>
+                            <td className="px-4 py-3 text-sm">{tx.date}</td>
                             <td className="px-4 py-3 text-sm">
                                 {tx.description}
                                 {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}

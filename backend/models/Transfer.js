@@ -24,17 +24,6 @@ const TransferSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    currency: {
-        type: String,
-        enum: ['USD', 'EUR', 'PKR'],
-        required: true,
-    },
-    fee: {
-        type: Number,
-    },
-    totalDeducted: {
-        type: Number,
-    },
     status: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
