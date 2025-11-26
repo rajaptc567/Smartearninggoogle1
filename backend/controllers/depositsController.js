@@ -114,7 +114,7 @@ export const createDeposit = async (req, res) => {
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
                 
-                // Notify Withdrawal User about Partial Match Pending Verification
+                // Notify Withdrawal User about Partial Payment Pending Verification (Discreet)
                 await Notification.create({
                     userId: withdrawal.userId,
                     message: `Withdrawal Update: A payment of $${depositAmount.toFixed(2)} has been processed. It is currently pending admin verification. Remaining pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
@@ -123,7 +123,7 @@ export const createDeposit = async (req, res) => {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
                 
-                // Notify Withdrawal User about Completion Pending Verification
+                // Notify Withdrawal User about Completion Pending Verification (Discreet)
                 await Notification.create({
                     userId: withdrawal.userId,
                     message: `Withdrawal Update: Your request has been fully funded. Final processing in progress.`
@@ -167,7 +167,6 @@ export const updateDeposit = async (req, res) => {
         }
 
         // --- Find existing transaction to update status ---
-        // Matches "Pending Deposit #123" or "Approved Deposit #123" etc.
         const transaction = await Transaction.findOne({ 
             description: { $regex: `Deposit #${deposit._id}` } 
         });
@@ -176,7 +175,6 @@ export const updateDeposit = async (req, res) => {
         
         // 1. BECOMING APPROVED (From Pending or Rejected)
         if (originalStatus !== 'Approved' && status === 'Approved') {
-            // Precision Fix
             user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
             
@@ -184,16 +182,6 @@ export const updateDeposit = async (req, res) => {
                 transaction.status = 'Approved';
                 transaction.description = `Approved Deposit #${deposit._id}`;
                 await transaction.save();
-            } else {
-                // Fallback if transaction was deleted or missing
-                await Transaction.create({
-                    userId: user._id,
-                    userName: user.username,
-                    type: 'Deposit',
-                    amount: deposit.amount,
-                    status: 'Approved',
-                    description: `Approved Deposit #${deposit._id}`
-                });
             }
 
             await Notification.create({
@@ -201,13 +189,13 @@ export const updateDeposit = async (req, res) => {
                 message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been approved.`
             });
 
-            // Notify Withdrawal User that payment is confirmed (P2P)
+            // Notify Withdrawal User that payment is confirmed (Discreet)
             if (deposit.matchedWithdrawalId) {
                 const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
                 if(withdrawal) {
                     await Notification.create({
                         userId: withdrawal.userId,
-                        message: `Withdrawal Update: The matched payment of $${deposit.amount.toFixed(2)} has been verified and approved.`
+                        message: `Withdrawal Update: A payment of $${deposit.amount.toFixed(2)} towards your request has been approved.`
                     });
                 }
             }
@@ -215,12 +203,9 @@ export const updateDeposit = async (req, res) => {
         } 
         // 2. REVOKING APPROVAL (Going from Approved TO Rejected or Pending)
         else if (originalStatus === 'Approved' && status !== 'Approved') {
-            // Reverting an approval - Deduct funds
-            // Precision Fix
             user.walletBalance = Number((user.walletBalance - deposit.amount).toFixed(2));
             await user.save();
             
-            // Update transaction status
             if (transaction) {
                 transaction.status = status === 'Pending' ? 'Pending' : 'Rejected';
                 transaction.description = `${status} Deposit #${deposit._id}`;
@@ -246,29 +231,23 @@ export const updateDeposit = async (req, res) => {
             if (deposit.matchedWithdrawalId) {
                 const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
                 if (withdrawal) {
-                    // Add amount back to remaining - Precision Fix
                     withdrawal.matchRemainingAmount = Number(((withdrawal.matchRemainingAmount || 0) + deposit.amount).toFixed(2));
-                    
-                    // Remove from matched list
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
                     await withdrawal.save();
                     
-                    // NOTIFY Withdrawal User about Rejection/Restoration
+                    // Notify Withdrawal User about Rejection/Restoration (Discreet)
                     await Notification.create({
                         userId: withdrawal.userId,
-                        message: `Withdrawal Update: A previously matched payment of $${deposit.amount.toFixed(2)} was rejected. This amount has been re-added to your pending match queue.`
+                        message: `Withdrawal Update: A payment of $${deposit.amount.toFixed(2)} towards your withdrawal request failed verification. Your pending withdrawal has been updated.`
                     });
 
-                    // Restore Payment Method
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
                     
                     if (p2pMethod) {
-                        // Method exists, just update maxAmount
                         p2pMethod.maxAmount = withdrawal.matchRemainingAmount;
-                        p2pMethod.status = 'Enabled'; // Ensure it's enabled
+                        p2pMethod.status = 'Enabled';
                         await p2pMethod.save();
                     } else {
-                        // Method was deleted (because it was full), so we must RECREATE it
                         await PaymentMethod.create({
                             name: `P2P - ${withdrawal.method}`,
                             type: 'Deposit',
@@ -278,7 +257,7 @@ export const updateDeposit = async (req, res) => {
                             maxAmount: withdrawal.matchRemainingAmount,
                             feePercent: 0,
                             status: 'Enabled',
-                            instructions: '', // Fallback to empty, admin can edit if needed
+                            instructions: '',
                             p2pWithdrawalId: withdrawal._id
                         });
                     }
@@ -287,16 +266,7 @@ export const updateDeposit = async (req, res) => {
         }
 
         await deposit.save();
-        
-        // Return the updated deposit AND the updated user to sync frontend state
-        res.status(200).json({ 
-            success: true, 
-            data: { 
-                deposit, 
-                user 
-            }
-        });
-
+        res.status(200).json({ success: true, data: { deposit, user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -310,10 +280,6 @@ export const deleteDeposit = async (req, res) => {
         if (!deposit) {
             return res.status(404).json({ success: false, error: 'Deposit not found' });
         }
-        
-        // Also delete associated transaction
-        await Transaction.deleteOne({ description: { $regex: `Deposit #${deposit._id}` } });
-
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
