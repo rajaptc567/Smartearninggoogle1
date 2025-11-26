@@ -74,9 +74,14 @@ const Profile: React.FC = () => {
                             <label className="block text-sm font-medium">WhatsApp Number</label>
                             <input type="text" value={formData.whatsapp || ''} onChange={handleChange} name="whatsapp" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
-                        <div className="md:col-span-2">
+                        <div>
                             <label className="block text-sm font-medium">Country</label>
                             <input type="text" value={formData.country || ''} onChange={handleChange} name="country" placeholder="e.g. United States" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Account Currency</label>
+                            <input type="text" value={currentUser.currency} disabled className="mt-1 block w-full rounded-md sm:text-sm bg-gray-100 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Currency is set on registration and cannot be changed.</p>
                         </div>
                     </div>
                     <div className="text-right pt-2">

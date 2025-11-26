@@ -3,7 +3,7 @@ import React from 'react';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-import { Status } from '../../types';
+import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
@@ -26,7 +26,7 @@ const ActivePlans: React.FC = () => {
                         {activePlans.map((plan, index) => (
                             <tr key={`${plan.planId}-${index}`} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">{plan.planName}</td>
-                                <td className="px-4 py-3">${plan.price.toFixed(2)}</td>
+                                <td className="px-4 py-3">{formatCurrency(plan.price, currentUser.currency)}</td>
                                 <td className="px-4 py-3 text-sm">{new Date(plan.purchaseDate).toLocaleDateString()}</td>
                                 <td className="px-4 py-3"><Badge status={Status.Active} /></td>
                             </tr>

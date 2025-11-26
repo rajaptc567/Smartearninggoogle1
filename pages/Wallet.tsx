@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
-import { Status, Transaction, User, formatCurrency } from '../types';
+import { Status, Transaction, User, formatCurrency, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
 import { adjustUserWallet } from '../services/api';
 
@@ -169,9 +169,31 @@ const Wallet: React.FC = () => {
                             <option value="debit">Debit (Subtract)</option>
                         </select>
                     </div>
-                    <div>
-                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount ({selectedUser?.currency || '...'})</label>
-                        <input type="number" step="0.01" min="0" id="amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 50.00" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
+                     <div>
+                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+                        <div className="relative mt-1">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <span className="text-gray-500 dark:text-gray-400 sm:text-sm">
+                                    {selectedUser ? currencySymbols[selectedUser.currency] : '$'}
+                                </span>
+                            </div>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                id="amount" 
+                                value={amount} 
+                                onChange={e => setAmount(e.target.value)} 
+                                placeholder="50.00" 
+                                className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                                required 
+                            />
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                <span className="text-gray-500 dark:text-gray-400 sm:text-sm">
+                                    {selectedUser?.currency || '...'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                      <div className="pt-6">
                        <Button type="submit" className="w-full" disabled={isSubmitting}>

@@ -8,6 +8,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { markNotificationPopupAsShown } from '../services/api';
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
+import { formatCurrency } from '../types';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -74,10 +75,10 @@ const UserLayout: React.FC = () => {
     realActivitiesSource.forEach(item => {
       switch (item.type) {
         case 'deposit':
-          activities.push({ id: `dep-${item.data._id}`, type: 'deposit', text: `<strong class="font-semibold">${item.data.userName}</strong> made a deposit of <strong>$${item.data.amount.toFixed(0)}</strong>`, time: timeAgo(item.date) });
+          activities.push({ id: `dep-${item.data._id}`, type: 'deposit', text: `<strong class="font-semibold">${item.data.userName}</strong> made a deposit of <strong>${formatCurrency(item.data.amount, item.data.currency)}</strong>`, time: timeAgo(item.date) });
           break;
         case 'withdrawal':
-          activities.push({ id: `wd-${item.data._id}`, type: 'withdrawal', text: `<strong class="font-semibold">${item.data.userName}</strong> withdrew <strong>$${item.data.amount.toFixed(0)}</strong>`, time: timeAgo(item.date) });
+          activities.push({ id: `wd-${item.data._id}`, type: 'withdrawal', text: `<strong class="font-semibold">${item.data.userName}</strong> withdrew <strong>${formatCurrency(item.data.amount, item.data.currency)}</strong>`, time: timeAgo(item.date) });
           break;
         case 'transfer':
           activities.push({ id: `tr-${item.data._id}`, type: 'transfer', text: `<strong class="font-semibold">${item.data.senderName}</strong> sent funds to <strong>${item.data.recipientName}</strong>`, time: timeAgo(item.date) });
@@ -111,7 +112,7 @@ const UserLayout: React.FC = () => {
         let activity: Activity;
         switch(actionType) {
             case 0:
-                activity = { id: `demo-wd-${i}`, type: 'withdrawal', text: `<strong class="font-semibold">${user1}</strong> just withdrew <strong>$${amount}</strong>`, time: `${hoursAgo}h ago` };
+                activity = { id: `demo-wd-${i}`, type: 'withdrawal', text: `<strong class="font-semibold">${user1}</strong> just withdrew <strong>${formatCurrency(amount, 'USD')}</strong>`, time: `${hoursAgo}h ago` };
                 break;
             case 1:
                 activity = { id: `demo-tr-${i}`, type: 'transfer', text: `<strong class="font-semibold">${user1}</strong> sent funds to <strong>${user2}</strong>`, time: `${hoursAgo}h ago` };

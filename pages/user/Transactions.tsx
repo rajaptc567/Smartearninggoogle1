@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
-import { Status, Transaction } from '../../types';
+import { Status, Transaction, formatCurrency } from '../../types';
 import Badge from '../../components/ui/Badge';
 
 const Transactions: React.FC = () => {
@@ -25,7 +26,7 @@ const Transactions: React.FC = () => {
                             <td className="px-4 py-3 text-sm font-mono">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)}
+                                {formatCurrency(tx.amount, tx.currency)}
                             </td>
                              <td className="px-4 py-3 text-xs">
                                 <Badge status={tx.status as Status || Status.Approved} />
