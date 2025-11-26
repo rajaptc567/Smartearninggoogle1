@@ -1,4 +1,26 @@
 
+
+export type Currency = 'USD' | 'EUR' | 'PKR';
+
+export const currencySymbols: Record<Currency, string> = {
+    USD: '$',
+    EUR: '€',
+    PKR: 'Rs',
+};
+
+export const formatCurrency = (amount: number, currency: Currency) => {
+    if (typeof amount !== 'number') {
+        amount = 0;
+    }
+    const symbol = currencySymbols[currency] || '$';
+    // PKR has symbol before, no space.
+    if (currency === 'PKR') {
+      return `${symbol}${amount.toFixed(0)}`;
+    }
+    return `${symbol}${amount.toFixed(2)}`;
+};
+
+
 export enum Status {
   Active = 'Active',
   Blocked = 'Blocked',
@@ -38,7 +60,8 @@ export interface User {
   email: string;
   phone: string;
   whatsapp?: string;
-  country?: string;
+  country: string;
+  currency: Currency;
   walletBalance: number;
   activePlan: string; // Primary/Latest plan string for legacy display
   activePlans?: ActivePlan[]; // Array of all purchased plans
@@ -54,6 +77,7 @@ export interface Deposit {
   userName: string;
   method: string;
   amount: number;
+  currency: Currency;
   transactionId: string;
   senderAccountTitle?: string; // Name on the sender's account
   receiptUrl?: string;
@@ -70,6 +94,7 @@ export interface Withdrawal {
     userName: string;
     method: string;
     amount: number;
+    currency: Currency;
     fee: number;
     finalAmount: number;
     accountTitle: string;
@@ -89,6 +114,7 @@ export interface Transfer {
   recipientId: string;
   recipientName: string;
   amount: number;
+  currency: Currency;
   fee?: number;
   totalDeducted?: number;
   status: Status.Pending | Status.Approved | Status.Rejected;
@@ -99,6 +125,7 @@ export interface Transfer {
 export interface PaymentMethod {
     _id: string;
     name: string;
+    currency: Currency;
     type: 'Deposit' | 'Withdrawal';
     accountTitle: string;
     accountNumber: string;
@@ -122,6 +149,7 @@ export interface Commission {
 export interface InvestmentPlan {
     _id: string;
     name: string;
+    currency: Currency;
     price: number;
     durationDays: number; // 0 for unlimited
     minWithdraw: number;
@@ -165,6 +193,7 @@ export interface Transaction {
     userName: string;
     type: 'Deposit' | 'Withdrawal' | 'Commission' | 'Manual Credit' | 'Manual Debit' | 'Withdrawal Request' | 'Withdrawal Refund' | 'Plan Purchase' | 'Transfer Sent' | 'Transfer Received' | 'Transfer Request' | 'Transfer Refund';
     amount: number;
+    currency: Currency;
     date: string;
     description: string;
     level?: number;
@@ -177,6 +206,7 @@ export interface Rule {
     fromPlan: string;
     toPlan: string;
     requiredEarnings: number;
+    currency: Currency;
 }
 
 export interface TransferFeeTier {
@@ -258,3 +288,26 @@ export interface Dispute {
     adminUnread?: boolean;
     userUnread?: boolean;
 }
+
+export const countries = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
+  "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
+  "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
+  "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo, Democratic Republic of the",
+  "Congo, Republic of the", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti",
+  "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini",
+  "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala",
+  "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland",
+  "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos",
+  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia",
+  "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia",
+  "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger",
+  "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine State", "Panama", "Papua New Guinea",
+  "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis",
+  "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal",
+  "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa",
+  "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan",
+  "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
+  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City",
+  "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"
+];

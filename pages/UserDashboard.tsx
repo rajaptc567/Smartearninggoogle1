@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Status, Transaction, User, Deposit } from '../types';
+import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -15,8 +15,9 @@ const UsersIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColo
 const EarningsIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
 const ClockIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
 const PlanIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
+const MapPinIcon = () => <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
-const PieChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
+const PieChart = ({ data, currency }: { data: { label: string, value: number, color: string }[], currency: string }) => {
     const total = data.reduce((sum, item) => sum + item.value, 0);
     if (total === 0) return <div className="flex items-center justify-center h-full"><p className="text-sm text-gray-500">No commission data yet.</p></div>;
     
@@ -51,7 +52,7 @@ const PieChart = ({ data }: { data: { label: string, value: number, color: strin
                     <div key={item.label} className="flex items-center">
                         <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: item.color }}></span>
                         <span>{item.label}:</span>
-                        <span className="font-semibold ml-1">${item.value.toFixed(2)}</span>
+                        <span className="font-semibold ml-1">{formatCurrency(item.value, currency as any)}</span>
                     </div>
                 ))}
             </div>
@@ -136,9 +137,17 @@ const UserDashboard: React.FC = () => {
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Here's a summary of your account activity.</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">Here's a summary of your account activity.</p>
+                </div>
+                {currentUser.country && (
+                    <div className="hidden sm:flex items-center space-x-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-full text-sm font-semibold text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <MapPinIcon />
+                        <span>{currentUser.country}</span>
+                    </div>
+                )}
             </div>
 
             <div className="relative">
@@ -154,15 +163,15 @@ const UserDashboard: React.FC = () => {
                     </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {visibleWidgets.balance && <StatCard title="Available Balance" value={`$${currentUser.walletBalance.toFixed(2)}`} icon={<WalletIcon />} color="bg-blue-500" />}
-                    {visibleWidgets.deposits && <StatCard title="Total Deposits" value={`$${stats.totalDeposits.toFixed(2)}`} icon={<DepositIcon />} color="bg-sky-500" />}
-                    {visibleWidgets.commission && <StatCard title="Total Commission" value={`$${stats.totalCommission.toFixed(2)}`} icon={<EarningsIcon />} color="bg-green-500" />}
-                    {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={`$${stats.totalWithdrawals.toFixed(2)}`} icon={<WithdrawalIcon />} color="bg-red-500" />}
-                    {visibleWidgets.pending && <StatCard title="Pending Commission" value={`$${stats.pendingCommission.toFixed(2)}`} icon={<ClockIcon />} color="bg-yellow-500" />}
+                    {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
+                    {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
+                    {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
+                    {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
+                    {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
                     {visibleWidgets.referrals && <StatCard title="Total Referrals" value={totalReferrals} icon={<UsersIcon />} color="bg-purple-500" />}
                     {visibleWidgets.plan && <StatCard title="Active Plans" value={stats.activePlansDisplay} icon={<PlanIcon />} color="bg-indigo-500" />}
-                    {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={`$${stats.monthlyEarnings.toFixed(2)}`} icon={<EarningsIcon />} color="bg-teal-500" />}
-                    {visibleWidgets.plan && <StatCard title="Active Plans Value" value={`$${stats.activePlanValue.toFixed(2)}`} icon={<PlanIcon />} color="bg-pink-500" />}
+                    {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
+                    {visibleWidgets.plan && <StatCard title="Active Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-pink-500" />}
                 </div>
             </div>
 
@@ -176,7 +185,7 @@ const UserDashboard: React.FC = () => {
                 </div>
                  {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <h3 className="font-semibold mb-3 text-gray-800 dark:text-white text-center">Referral Commission Breakdown</h3>
-                    <PieChart data={[
+                    <PieChart currency={currentUser.currency} data={[
                         { label: 'Direct', value: stats.directCommission, color: '#3b82f6' },
                         { label: 'Indirect', value: stats.indirectCommission, color: '#8b5cf6' },
                     ]} />
@@ -190,7 +199,7 @@ const UserDashboard: React.FC = () => {
                          <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
                             <td className="px-4 py-3 text-sm">{tx._id}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
-                            <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)}</td>
+                            <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
                             <td className="px-4 py-3 text-xs"><Badge status={tx.status as Status || Status.Approved} /></td>
                             <td className="px-4 py-3 text-sm">{tx.date}</td>
                             <td className="px-4 py-3 text-sm">{tx.description}</td>

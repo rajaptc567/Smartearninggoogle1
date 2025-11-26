@@ -37,6 +37,12 @@ const UserSchema = new mongoose.Schema({
     },
     country: {
         type: String,
+        required: [true, 'Please add a country'],
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
     },
     walletBalance: {
         type: Number,

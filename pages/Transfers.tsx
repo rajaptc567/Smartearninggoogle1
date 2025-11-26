@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Transfer, Status } from '../types';
+import { Transfer, Status, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -114,7 +114,7 @@ const Transfers: React.FC = () => {
                         <td className="px-4 py-3 text-xs font-mono">{transfer._id.substring(0, 8)}...</td>
                         <td className="px-4 py-3">{transfer.senderName}</td>
                         <td className="px-4 py-3">{transfer.recipientName}</td>
-                        <td className="px-4 py-3">${transfer.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3">{formatCurrency(transfer.amount, transfer.currency)}</td>
                         <td className="px-4 py-3"><Badge status={transfer.status} /></td>
                         <td className="px-4 py-3 text-sm">{new Date(transfer.date).toLocaleDateString()}</td>
                     </tr>
@@ -129,7 +129,7 @@ const Transfers: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                             <div><span className="font-semibold">From:</span> {selectedTransfer.senderName} (ID: {selectedTransfer.senderId})</div>
                             <div><span className="font-semibold">To:</span> {selectedTransfer.recipientName} (ID: {selectedTransfer.recipientId})</div>
-                            <div><span className="font-semibold">Amount:</span> ${selectedTransfer.amount.toFixed(2)}</div>
+                            <div><span className="font-semibold">Amount:</span> {formatCurrency(selectedTransfer.amount, selectedTransfer.currency)}</div>
                             <div><span className="font-semibold">Date:</span> {new Date(selectedTransfer.date).toLocaleString()}</div>
                         </div>
 

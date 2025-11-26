@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
-import { Status, Transaction, User } from '../types';
+import { Status, Transaction, User, formatCurrency } from '../types';
 import Badge from '../components/ui/Badge';
 import { adjustUserWallet } from '../services/api';
 
@@ -16,6 +16,7 @@ const Wallet: React.FC = () => {
     const [actionType, setActionType] = useState<'credit' | 'debit'>('credit');
     const [reason, setReason] = useState('Admin manual adjustment');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
     // Dropdown state
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -48,6 +49,7 @@ const Wallet: React.FC = () => {
 
     const handleSelectUser = (user: User) => {
         setIdentifier(user.username);
+        setSelectedUser(user);
         setIsDropdownOpen(false);
     };
 
@@ -87,10 +89,11 @@ const Wallet: React.FC = () => {
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
 
-            alert(`Successfully adjusted ${targetUser.username}'s balance by $${adjustmentAmount.toFixed(2)}.`);
+            alert(`Successfully adjusted ${targetUser.username}'s balance by ${formatCurrency(adjustmentAmount, targetUser.currency)}.`);
             setIdentifier('');
             setAmount('');
             setReason('Admin manual adjustment');
+            setSelectedUser(null);
         } catch (error) {
             console.error('Failed to adjust wallet:', error);
             alert(`Error: ${error instanceof Error ? error.message : 'Could not adjust wallet.'}`);
@@ -113,6 +116,7 @@ const Wallet: React.FC = () => {
                               value={identifier} 
                               onChange={e => {
                                   setIdentifier(e.target.value);
+                                  setSelectedUser(null);
                                   setIsDropdownOpen(true);
                               }}
                               onFocus={() => setIsDropdownOpen(true)}
@@ -137,7 +141,7 @@ const Wallet: React.FC = () => {
                                                     <span className="text-xs text-gray-500 dark:text-gray-400 flex justify-between">
                                                         <span>{user.email}</span>
                                                         <span className={`font-bold ${user.walletBalance >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                                            ${user.walletBalance.toFixed(2)}
+                                                            {formatCurrency(user.walletBalance, user.currency)}
                                                         </span>
                                                     </span>
                                                 </div>
@@ -166,7 +170,7 @@ const Wallet: React.FC = () => {
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+                        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount ({selectedUser?.currency || '...'})</label>
                         <input type="number" step="0.01" min="0" id="amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g., 50.00" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" required />
                     </div>
                      <div className="pt-6">
@@ -186,7 +190,7 @@ const Wallet: React.FC = () => {
                             <td className="px-4 py-3 text-sm">{tx.userName}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                ${tx.amount.toFixed(2)}
+                                {formatCurrency(tx.amount, tx.currency)}
                             </td>
                              <td className="px-4 py-3 text-xs">
                                 <Badge status={tx.status as Status || Status.Approved} />

@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { PaymentMethod } from '../types';
+import { PaymentMethod, Currency, formatCurrency } from '../types';
 import Modal from '../components/ui/Modal';
 import { createPaymentMethod, updatePaymentMethod, deletePaymentMethod } from '../services/api';
 
@@ -12,6 +13,7 @@ const PaymentMethods: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
     const handleOpenModal = (method: PaymentMethod | null = null) => {
         setEditingMethod(method);
@@ -51,26 +53,43 @@ const PaymentMethods: React.FC = () => {
             }
         }
     };
+    
+    const filteredMethods = paymentMethods.filter(method => {
+        if (!currencyFilter) return true;
+        return method.currency === currencyFilter;
+    });
 
     return (
         <div>
           <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Payment Methods</h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Payment Methods</h2>
+                     <select
+                        value={currencyFilter}
+                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Currencies</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="PKR">PKR</option>
+                    </select>
+                </div>
                 <Button onClick={() => handleOpenModal()}>Add New Method</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paymentMethods.map(method => (
+                {filteredMethods.map(method => (
                     <div key={method._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name}</h3>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name} <span className="text-sm font-normal text-gray-400">({method.currency})</span></h3>
                                 <p className={`text-sm font-medium ${method.type === 'Deposit' ? 'text-green-500' : 'text-blue-500'}`}>{method.type}</p>
                             </div>
                             <Badge status={method.status as 'Enabled' | 'Disabled'} />
                         </div>
                         <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
                             <p><span className="font-semibold">Account:</span> {method.accountTitle} ({method.accountNumber})</p>
-                            <p><span className="font-semibold">Limits:</span> ${method.minAmount} - ${method.maxAmount}</p>
+                            <p><span className="font-semibold">Limits:</span> {formatCurrency(method.minAmount, method.currency)} - {formatCurrency(method.maxAmount, method.currency)}</p>
                             <p><span className="font-semibold">Fee:</span> {method.feePercent}%</p>
                         </div>
                         <div className="mt-6 flex justify-end space-x-2">
@@ -100,7 +119,7 @@ interface PaymentMethodFormModalProps {
 
 const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave }) => {
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
-        method || { name: '', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
+        method || { name: '', currency: 'USD', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
     const [isSaving, setIsSaving] = useState(false);
 
@@ -123,12 +142,23 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                  <h2 className="text-xl font-bold">{method ? 'Edit Payment Method' : 'Add New Method'}</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <select
+                        name="currency"
+                        value={formData.currency || 'USD'}
+                        onChange={handleChange}
+                        className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                        required
+                    >
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="PKR">PKR (Rs)</option>
+                    </select>
                     <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                         <option value="Deposit">Deposit</option>
                         <option value="Withdrawal">Withdrawal</option>
                     </select>
                     <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="Account Title" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                      <input type="number" step="0.01" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee % (Optional)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />

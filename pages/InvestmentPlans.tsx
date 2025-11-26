@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { InvestmentPlan, Status, CommissionType, Commission } from '../types';
+import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency } from '../types';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -13,6 +13,7 @@ const InvestmentPlans: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
     const handleOpenModal = (plan: InvestmentPlan | null = null) => {
         setEditingPlan(plan);
@@ -67,30 +68,50 @@ const InvestmentPlans: React.FC = () => {
             }
         });
 
+        const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+        
         if (comms.length > 1) {
-             return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
+             return `Up to ${formattedVal}`;
         }
         
-        return comms[0].type === 'percentage' ? `${comms[0].value}%` : `$${comms[0].value}`;
+        return formattedVal;
     };
+
+    const filteredPlans = investmentPlans.filter(plan => {
+        if (!currencyFilter) return true;
+        return plan.currency === currencyFilter;
+    });
+
 
     return (
         <div>
              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Investment Plans</h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Investment Plans</h2>
+                    <select
+                        value={currencyFilter}
+                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Currencies</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="PKR">PKR</option>
+                    </select>
+                </div>
                 <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {investmentPlans.map((plan: InvestmentPlan) => (
+                {filteredPlans.map((plan: InvestmentPlan) => (
                     <div key={plan._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
                            <Badge status={plan.status} />
                         </div>
-                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-4">${plan.price}</p>
+                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-4">{formatCurrency(plan.price, plan.currency)}</p>
                         <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-grow">
                             <li><span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
-                            <li><span className="font-semibold">Min. Withdraw:</span> ${plan.minWithdraw}</li>
+                            <li><span className="font-semibold">Min. Withdraw:</span> {formatCurrency(plan.minWithdraw, plan.currency)}</li>
                             <li><span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</li>
                             <li>
                                 <span className="font-semibold">Direct Commission: </span> 
@@ -129,7 +150,12 @@ interface PlanFormModalProps {
 
 const defaultCommission: Commission = { type: 'percentage', value: 0 };
 const defaultPlan: Partial<InvestmentPlan> = {
-    name: '', price: 0, durationDays: 30, minWithdraw: 10, status: Status.Active,
+    name: '',
+    currency: 'USD',
+    price: 0,
+    durationDays: 30,
+    minWithdraw: 10,
+    status: Status.Active,
     description: '',
     directReferralLimit: 0,
     directCommissions: [{ ...defaultCommission }], // Default one slot
@@ -311,6 +337,20 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                     <legend className="px-2 font-semibold">Basic Information</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Plan Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
+                         <div>
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
+                            <select
+                                name="currency"
+                                value={formData.currency || 'USD'}
+                                onChange={handleChange}
+                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                required
+                            >
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                                <option value="PKR">PKR (Rs)</option>
+                            </select>
+                        </div>
                         <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} placeholder="Price" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
                         <input type="number" name="durationDays" value={formData.durationDays || ''} onChange={handleChange} placeholder="Duration (Days, 0=unlimited)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         <input type="number" step="0.01" name="minWithdraw" value={formData.minWithdraw || ''} onChange={handleChange} placeholder="Min Withdraw" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
@@ -318,7 +358,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Direct Referral Limit (0 = Unlimited)</label>
                             <input type="number" name="directReferralLimit" value={formData.directReferralLimit || ''} onChange={handleChange} placeholder="Limit" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
-                        <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                        <select name="status" value={formData.status} onChange={handleChange} className="md:col-start-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                             <option value={Status.Active}>Active</option>
                             <option value={Status.Disabled}>Disabled</option>
                         </select>
@@ -381,7 +421,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             {formData.autoUpgrade?.enabled && (
                                 <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                     <option value="">- Select Plan -</option>
-                                    {state.investmentPlans.filter(p => p._id !== plan?._id && p.status === Status.Active).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    {state.investmentPlans.filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                                 </select>
                             )}
                         </div>

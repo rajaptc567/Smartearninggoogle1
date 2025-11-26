@@ -19,6 +19,11 @@ const DepositSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
+    },
     transactionId: {
         type: String,
         required: true,

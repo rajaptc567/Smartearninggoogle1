@@ -1,5 +1,6 @@
+
 import React, { useMemo, useState } from 'react';
-import { Deposit, Status, User, Withdrawal, Transaction, Transfer } from '../types';
+import { Deposit, Status, User, Withdrawal, Transaction, Transfer, Currency, formatCurrency } from '../types';
 import Badge from '../components/ui/Badge';
 import { useData } from '../hooks/useData';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,10 +12,11 @@ const Dashboard: React.FC = () => {
     const navigate = useNavigate();
 
     const [timeframe, setTimeframe] = useState<'7d' | '30d'>('7d');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency>('USD');
 
     // --- Statistics Calculation ---
     const stats = useMemo(() => {
-        const totalUserBalance = users.reduce((sum, u) => sum + u.walletBalance, 0);
+        const totalUserBalance = users.filter(u => u.currency === currencyFilter).reduce((sum, u) => sum + u.walletBalance, 0);
         
         const pendingDeposits = deposits.filter(d => d.status === Status.Pending);
         const pendingWithdrawals = withdrawals.filter(w => w.status === Status.Pending);
@@ -22,8 +24,8 @@ const Dashboard: React.FC = () => {
         const pendingPasswordResets = passwordResetRequests.filter(r => r.status === 'Pending');
         const pendingTransfers = transfers.filter(t => t.status === Status.Pending);
         
-        const grossRevenue = deposits.filter(d => d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0);
-        const totalPaidOut = withdrawals.filter(w => w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0);
+        const grossRevenue = deposits.filter(d => d.status === Status.Approved && d.currency === currencyFilter).reduce((sum, d) => sum + d.amount, 0);
+        const totalPaidOut = withdrawals.filter(w => w.status === Status.Paid && w.currency === currencyFilter).reduce((sum, w) => sum + w.finalAmount, 0);
         const netProfit = grossRevenue - totalPaidOut;
 
         const userStatusCounts = users.reduce((acc, user) => {
@@ -47,11 +49,11 @@ const Dashboard: React.FC = () => {
 
         const chartData = dateArray.map(dateStr => {
             const dayDeposits = deposits
-                .filter(d => d.status === Status.Approved && d.date.startsWith(dateStr))
+                .filter(d => d.status === Status.Approved && d.date.startsWith(dateStr) && d.currency === currencyFilter)
                 .reduce((sum, d) => sum + d.amount, 0);
             
             const dayWithdrawals = withdrawals
-                .filter(w => w.status === Status.Paid && w.date.startsWith(dateStr))
+                .filter(w => w.status === Status.Paid && w.date.startsWith(dateStr) && w.currency === currencyFilter)
                 .reduce((sum, w) => sum + w.amount, 0);
 
             return { date: dateStr, deposit: dayDeposits, withdrawal: dayWithdrawals, net: dayDeposits - dayWithdrawals };
@@ -71,7 +73,7 @@ const Dashboard: React.FC = () => {
             chartData,
             pieChartData,
         };
-    }, [users, deposits, withdrawals, disputes, passwordResetRequests, transfers, timeframe]);
+    }, [users, deposits, withdrawals, disputes, passwordResetRequests, transfers, timeframe, currencyFilter]);
 
     const recentActivity = useMemo(() => {
         const userActivities = users.map(user => ({
@@ -80,7 +82,8 @@ const Dashboard: React.FC = () => {
             date: new Date(user.registrationDate),
             title: user.fullName,
             subtitle: `@${user.username}`,
-            amount: null
+            amount: null,
+            currency: user.currency,
         }));
 
         const transactionActivities = transactions.map(tx => ({
@@ -89,7 +92,8 @@ const Dashboard: React.FC = () => {
             date: new Date(tx.date),
             title: tx.userName,
             subtitle: tx.description,
-            amount: tx.amount
+            amount: tx.amount,
+            currency: tx.currency,
         }));
 
         const allActivities = [...userActivities, ...transactionActivities];
@@ -130,7 +134,7 @@ const Dashboard: React.FC = () => {
         </div>
     );
 
-    const FinancialChart = ({ data }: { data: { date: string, deposit: number, withdrawal: number, net: number }[] }) => {
+    const FinancialChart = ({ data, currency }: { data: { date: string, deposit: number, withdrawal: number, net: number }[], currency: Currency }) => {
         const maxBarValue = Math.max(...data.map(d => Math.max(d.deposit, d.withdrawal)), 100);
         const maxNetValue = Math.max(...data.map(d => Math.abs(d.net)), maxBarValue * 0.5);
         
@@ -138,8 +142,8 @@ const Dashboard: React.FC = () => {
             <div className="h-80 flex flex-col">
                 <div className="flex-grow flex items-end justify-between gap-2 px-4 border-l border-b border-gray-200 dark:border-gray-700 relative">
                     <div className="absolute left-0 top-0 bottom-0 -ml-4 flex flex-col justify-between text-xs text-gray-400 py-2">
-                        <span>${maxBarValue.toLocaleString()}</span>
-                        <span>$0</span>
+                        <span>{formatCurrency(maxBarValue, currency)}</span>
+                        <span>{formatCurrency(0, currency)}</span>
                     </div>
                     {data.map((d, i) => {
                         const dateLabel = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -154,9 +158,9 @@ const Dashboard: React.FC = () => {
                                 <span className="text-xs text-gray-500 mt-2 absolute -bottom-5">{dateLabel}</span>
                                 <div className="absolute bottom-full mb-3 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg py-2 px-3 z-10 whitespace-nowrap shadow-xl transition-opacity">
                                     <p className="font-bold">{dateLabel}</p>
-                                    <div className="text-green-300 mt-1">Deposits: ${d.deposit.toLocaleString()}</div>
-                                    <div className="text-red-300">Withdrawals: ${d.withdrawal.toLocaleString()}</div>
-                                    <div className="text-blue-300 font-semibold mt-1 pt-1 border-t border-gray-700">Net: ${d.net.toLocaleString()}</div>
+                                    <div className="text-green-300 mt-1">Deposits: {formatCurrency(d.deposit, currency)}</div>
+                                    <div className="text-red-300">Withdrawals: {formatCurrency(d.withdrawal, currency)}</div>
+                                    <div className="text-blue-300 font-semibold mt-1 pt-1 border-t border-gray-700">Net: {formatCurrency(d.net, currency)}</div>
                                 </div>
                             </div>
                         )
@@ -241,9 +245,20 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="space-y-8">
+            <div className="flex justify-end">
+                <select
+                    value={currencyFilter}
+                    onChange={(e) => setCurrencyFilter(e.target.value as Currency)}
+                    className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                    <option value="USD">Stats in USD</option>
+                    <option value="EUR">Stats in EUR</option>
+                    <option value="PKR">Stats in PKR</option>
+                </select>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">
                 <StatCard title="Total Users" value={stats.totalUsers} icon={<UsersIcon />} colorClass="bg-blue-500" onClick={() => navigate('/admin/users')} />
-                <StatCard title="Net Profit" value={`$${stats.netProfit.toLocaleString()}`} icon={<WalletIcon />} colorClass="bg-teal-500" />
+                <StatCard title="Net Profit" value={formatCurrency(stats.netProfit, currencyFilter)} icon={<WalletIcon />} colorClass="bg-teal-500" />
                 <StatCard title="Pending Deposits" value={stats.pendingDeposits.length} icon={<DepositIcon />} colorClass="bg-green-500" onClick={() => navigate('/admin/deposits')} />
                 <StatCard title="Pending Withdrawals" value={stats.pendingWithdrawals.length} icon={<WithdrawalIcon />} colorClass="bg-orange-500" onClick={() => navigate('/admin/withdrawals')} />
                 <StatCard title="Open Disputes" value={stats.pendingDisputes.length} icon={<DisputeIcon />} colorClass="bg-red-500" onClick={() => navigate('/admin/disputes')} />
@@ -255,7 +270,7 @@ const Dashboard: React.FC = () => {
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Financial Flow</h3>
+                                <h3 className="text-lg font-bold text-gray-800 dark:text-white">Financial Flow ({currencyFilter})</h3>
                                 <p className="text-xs text-gray-500">Deposits vs. Withdrawals & Net Daily Profit/Loss</p>
                             </div>
                             <div className="flex mt-3 sm:mt-0 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
@@ -263,7 +278,7 @@ const Dashboard: React.FC = () => {
                                 <button onClick={() => setTimeframe('30d')} className={`px-3 py-1 text-xs rounded-md ${timeframe === '30d' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Last 30 Days</button>
                             </div>
                         </div>
-                        <FinancialChart data={stats.chartData} />
+                        <FinancialChart data={stats.chartData} currency={currencyFilter} />
                          <div className="flex space-x-4 text-xs justify-center mt-6 border-t dark:border-gray-700 pt-3">
                             <span className="flex items-center"><span className="w-3 h-3 bg-green-500/80 rounded-full mr-2"></span>Deposits</span>
                             <span className="flex items-center"><span className="w-3 h-3 bg-red-500/80 rounded-full mr-2"></span>Withdrawals</span>
@@ -315,7 +330,7 @@ const Dashboard: React.FC = () => {
                                             : (item.data as any).userName
                                         }
                                         {item.type !== 'Password Reset' && (
-                                            <span className="font-medium"> - ${(item.data as any).amount?.toFixed(2)}</span>
+                                            <span className="font-medium"> - {formatCurrency((item.data as any).amount, (item.data as any).currency)}</span>
                                         )}
                                     </p>
                                 </div>
@@ -341,7 +356,7 @@ const Dashboard: React.FC = () => {
                                 <div className="text-right flex-shrink-0">
                                     {activity.amount !== null && (
                                         <p className={`text-sm font-semibold ${activity.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                            {activity.amount > 0 ? '+' : ''}${activity.amount.toFixed(2)}
+                                            {formatCurrency(activity.amount, activity.currency)}
                                         </p>
                                     )}
                                     <p className="text-xs text-gray-400">{formatRelativeTime(activity.date)}</p>

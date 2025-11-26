@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const TransferSchema = new mongoose.Schema({
@@ -22,6 +23,11 @@ const TransferSchema = new mongoose.Schema({
     },
     amount: {
         type: Number,
+        required: true,
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
         required: true,
     },
     status: {

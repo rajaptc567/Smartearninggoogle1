@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const RuleSchema = new mongoose.Schema({
@@ -13,6 +14,12 @@ const RuleSchema = new mongoose.Schema({
     requiredEarnings: {
         type: Number,
         required: true,
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
+        default: 'USD',
     },
 }, {
     timestamps: true

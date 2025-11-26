@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const WithdrawalSchema = new mongoose.Schema({
@@ -17,6 +18,11 @@ const WithdrawalSchema = new mongoose.Schema({
     },
     amount: {
         type: Number,
+        required: true,
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
         required: true,
     },
     fee: {

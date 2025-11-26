@@ -1,3 +1,4 @@
+
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -102,11 +103,13 @@ export const createWithdrawal = async (req, res) => {
         // Deduct amount from user's balance immediately
         user.walletBalance -= req.body.amount;
         
-        const withdrawal = await Withdrawal.create(req.body);
+        const withdrawalData = { ...req.body, currency: user.currency };
+        const withdrawal = await Withdrawal.create(withdrawalData);
         
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
+            currency: user.currency,
             type: 'Withdrawal Request',
             amount: -withdrawal.amount,
             status: 'Pending',
@@ -115,7 +118,7 @@ export const createWithdrawal = async (req, res) => {
 
         await Notification.create({
             userId: user._id,
-            message: `Your withdrawal request for $${withdrawal.amount.toFixed(2)} has been submitted for review.`
+            message: `Your withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} has been submitted for review.`
         });
         
         await user.save();
@@ -154,6 +157,7 @@ export const updateWithdrawal = async (req, res) => {
             const methodData = {
                 name: p2pName || `P2P - ${withdrawal.method}`,
                 type: 'Deposit',
+                currency: withdrawal.currency,
                 accountTitle: p2pAccountTitle || withdrawal.accountTitle,
                 accountNumber: p2pAccountNumber || withdrawal.accountNumber,
                 minAmount: 1, // Allow partial deposits
@@ -209,6 +213,7 @@ export const updateWithdrawal = async (req, res) => {
             await Transaction.create({
                 userId: user._id,
                 userName: user.username,
+                currency: user.currency,
                 type: 'Withdrawal Refund',
                 amount: withdrawal.amount,
                 status: 'Approved',
@@ -223,7 +228,7 @@ export const updateWithdrawal = async (req, res) => {
 
              await Notification.create({
                 userId: user._id,
-                message: `Your withdrawal for $${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
+                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
             });
         }
         
@@ -234,8 +239,8 @@ export const updateWithdrawal = async (req, res) => {
                 await originalTransaction.save();
             }
             const message = status === 'Paid' 
-                ? `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
-                : `Your withdrawal for $${withdrawal.finalAmount.toFixed(2)} has been approved.`;
+                ? `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
+                : `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been approved.`;
             await Notification.create({ userId: user._id, message });
         }
         

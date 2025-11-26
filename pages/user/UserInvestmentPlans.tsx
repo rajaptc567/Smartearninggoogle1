@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
-import { InvestmentPlan, Status } from '../../types';
+import { InvestmentPlan, Status, formatCurrency } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate } from 'react-router-dom';
@@ -22,11 +23,12 @@ const UserInvestmentPlans: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<InvestmentPlan | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
 
-  const activePlans = investmentPlans.filter(p => p.status === Status.Active);
-
   if (!currentUser) {
     return <div>Loading user data...</div>;
   }
+  
+  const activePlans = investmentPlans.filter(p => p.status === Status.Active && p.currency === currentUser.currency);
+
   
   const handlePurchaseClick = (plan: InvestmentPlan) => {
     setSelectedPlan(plan);
@@ -67,7 +69,8 @@ const UserInvestmentPlans: React.FC = () => {
               maxType = c.type;
           }
       });
-      return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
+      const valStr = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+      return `Up to ${valStr}`;
   };
 
   return (
@@ -90,14 +93,14 @@ const UserInvestmentPlans: React.FC = () => {
                         <div className="p-8 flex-grow flex flex-col">
                             <div className="text-center mb-6">
                                 <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                                <p className="text-6xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">${plan.price}</p>
+                                <p className="text-6xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">{formatCurrency(plan.price, plan.currency)}</p>
                             </div>
                             
                             <p className="text-base text-gray-600 dark:text-gray-300 text-center mb-8">{plan.description}</p>
                             
                             <ul className="space-y-5 text-base text-gray-600 dark:text-gray-300 flex-grow mb-8 border-t border-gray-200 dark:border-gray-700 pt-8">
                                 <li className="flex items-center"><ClockIcon /> <div><span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</div></li>
-                                <li className="flex items-center"><DollarIcon /> <div><span className="font-semibold">Min. Withdraw:</span> ${plan.minWithdraw}</div></li>
+                                <li className="flex items-center"><DollarIcon /> <div><span className="font-semibold">Min. Withdraw:</span> {formatCurrency(plan.minWithdraw, plan.currency)}</div></li>
                                 <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</div></li>
                                 <li className="flex items-center"><StarIcon /> <div><span className="font-semibold">Direct Commission: </span> {renderDirectCommission(plan)}</div></li>
                                 <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Indirect Levels: </span> {plan.indirectCommissions.length}</div></li>
@@ -133,9 +136,9 @@ const UserInvestmentPlans: React.FC = () => {
                     {currentUser.walletBalance >= selectedPlan.price ? (
                         <div>
                              <div className="my-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2 border border-gray-200 dark:border-gray-700">
-                                <div className="flex justify-between text-lg"><span className="text-gray-500">Current Balance:</span> <span className="font-semibold">${currentUser.walletBalance.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-lg"><span className="text-gray-500">Plan Cost:</span> <span className="font-semibold text-red-500">-${selectedPlan.price.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-xl font-bold pt-2 border-t dark:border-gray-600"><span className="text-gray-800 dark:text-white">New Balance:</span> <span className="text-green-600">${(currentUser.walletBalance - selectedPlan.price).toFixed(2)}</span></div>
+                                <div className="flex justify-between text-lg"><span className="text-gray-500">Current Balance:</span> <span className="font-semibold">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</span></div>
+                                <div className="flex justify-between text-lg"><span className="text-gray-500">Plan Cost:</span> <span className="font-semibold text-red-500">-{formatCurrency(selectedPlan.price, selectedPlan.currency)}</span></div>
+                                <div className="flex justify-between text-xl font-bold pt-2 border-t dark:border-gray-600"><span className="text-gray-800 dark:text-white">New Balance:</span> <span className="text-green-600">{formatCurrency((currentUser.walletBalance - selectedPlan.price), currentUser.currency)}</span></div>
                             </div>
                              <div className="mt-8 flex justify-center space-x-4">
                                 <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing} className="w-full">Cancel</Button>
@@ -147,7 +150,7 @@ const UserInvestmentPlans: React.FC = () => {
                     ) : (
                          <div>
                             <p className="my-6 p-4 rounded-md bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                                Your balance of <span className="font-bold">${currentUser.walletBalance.toFixed(2)}</span> is insufficient. Please deposit at least <span className="font-bold">${(selectedPlan.price - currentUser.walletBalance).toFixed(2)}</span> to proceed.
+                                Your balance of <span className="font-bold">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</span> is insufficient. Please deposit at least <span className="font-bold">{formatCurrency((selectedPlan.price - currentUser.walletBalance), currentUser.currency)}</span> to proceed.
                             </p>
                             <div className="mt-8 flex justify-center space-x-4">
                                 <Button variant="secondary" onClick={handleCloseModal} className="w-full">Cancel</Button>

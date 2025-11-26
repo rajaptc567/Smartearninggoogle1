@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
 import Button from '../../components/ui/Button';
@@ -72,6 +73,10 @@ const Profile: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium">WhatsApp Number</label>
                             <input type="text" value={formData.whatsapp || ''} onChange={handleChange} name="whatsapp" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium">Country</label>
+                            <input type="text" value={formData.country || ''} onChange={handleChange} name="country" placeholder="e.g. United States" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
                     </div>
                     <div className="text-right pt-2">

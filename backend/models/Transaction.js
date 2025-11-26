@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -17,6 +18,11 @@ const TransactionSchema = new mongoose.Schema({
     },
     amount: {
         type: Number,
+        required: true,
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
         required: true,
     },
     description: {

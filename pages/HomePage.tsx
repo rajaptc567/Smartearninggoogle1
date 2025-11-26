@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { InvestmentPlan } from '../types';
+import { InvestmentPlan, formatCurrency } from '../types';
 
 
 // --- SVG Icon Components for this page ---
@@ -88,11 +89,11 @@ const HomePage: React.FC = () => {
     const renderDirectCommission = (plan: InvestmentPlan) => {
       const comms = plan.directCommissions;
       if (!comms || comms.length === 0) return 'N/A';
-      let maxVal = 0, maxType = 'percentage';
+      let maxVal = 0, maxType: 'percentage' | 'fixed' = 'percentage';
       comms.forEach(c => {
           if (c.value > maxVal) { maxVal = c.value; maxType = c.type; }
       });
-      const valStr = maxType === 'percentage' ? `${maxVal}%` : `$${maxVal}`;
+      const valStr = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
       return comms.length > 1 ? `Up to ${valStr}` : valStr;
     };
     
@@ -202,11 +203,11 @@ const HomePage: React.FC = () => {
                                 {featuredPlans.map(plan => (
                                     <div key={plan._id} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-8 shadow-lg flex flex-col hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                                         <h4 className="text-2xl font-bold mb-2">{plan.name}</h4>
-                                        <p className="text-5xl font-extrabold text-blue-600 dark:text-blue-400 mb-4">${plan.price}</p>
+                                        <p className="text-5xl font-extrabold text-blue-600 dark:text-blue-400 mb-4">{formatCurrency(plan.price, plan.currency)}</p>
                                         <p className="text-gray-500 dark:text-gray-400 mb-6 flex-grow">{plan.description}</p>
                                         <ul className="space-y-3 text-sm mb-8 border-t dark:border-gray-700 pt-6">
                                             <li className="flex items-center"><CheckIcon /> Duration: {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
-                                            <li className="flex items-center"><CheckIcon /> Min. Withdraw: ${plan.minWithdraw}</li>
+                                            <li className="flex items-center"><CheckIcon /> Min. Withdraw: {formatCurrency(plan.minWithdraw, plan.currency)}</li>
                                             <li className="flex items-center"><CheckIcon /> Direct Commission: {renderDirectCommission(plan)}</li>
                                         </ul>
                                         <Button className="w-full mt-auto" onClick={() => navigate('/register')}>Choose Plan</Button>

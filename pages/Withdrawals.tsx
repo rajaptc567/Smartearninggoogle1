@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { Status, Withdrawal } from '../types';
+import { Status, Withdrawal, formatCurrency } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
 import { updateWithdrawal, getUploadsBaseUrl } from '../services/api';
@@ -153,12 +153,12 @@ const Withdrawals: React.FC = () => {
           >
             <td className="px-4 py-3 text-xs font-mono">{w._id.substring(0, 8)}...</td>
             <td className="px-4 py-3">{w.userName}</td>
-            <td className="px-4 py-3">${w.amount.toFixed(2)}</td>
-            <td className="px-4 py-3 font-semibold">${w.finalAmount.toFixed(2)}</td>
+            <td className="px-4 py-3">{formatCurrency(w.amount, w.currency)}</td>
+            <td className="px-4 py-3 font-semibold">{formatCurrency(w.finalAmount, w.currency)}</td>
             <td className="px-4 py-3">{w.method}</td>
             <td className="px-4 py-3"><Badge status={w.status} /></td>
             <td className="px-4 py-3 text-sm">
-                {w.status === Status.Matching || w.matchRemainingAmount !== undefined ? `$${(w.matchRemainingAmount !== undefined ? w.matchRemainingAmount : w.finalAmount).toFixed(2)}` : 'N/A'}
+                {w.status === Status.Matching || w.matchRemainingAmount !== undefined ? formatCurrency((w.matchRemainingAmount !== undefined ? w.matchRemainingAmount : w.finalAmount), w.currency) : 'N/A'}
             </td>
             <td className="px-4 py-3 text-sm">{new Date(w.date).toLocaleDateString()}</td>
           </tr>
@@ -172,7 +172,7 @@ const Withdrawals: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                   <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
-                  <div><span className="font-semibold">Amount:</span> ${selectedWithdrawal.amount.toFixed(2)}</div>
+                  <div><span className="font-semibold">Amount:</span> {formatCurrency(selectedWithdrawal.amount, selectedWithdrawal.currency)}</div>
                   <div><span className="font-semibold">Method:</span> {selectedWithdrawal.method}</div>
                   <div><span className="font-semibold">Date:</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
               </div>
@@ -211,7 +211,7 @@ const Withdrawals: React.FC = () => {
                                   {selectedWithdrawal.matchedDepositIds.map((deposit: any) => (
                                       <tr key={deposit._id} className="border-b dark:border-gray-700">
                                           <td className="px-3 py-2">{deposit.userName}</td>
-                                          <td className="px-3 py-2 font-bold text-green-600">${deposit.amount.toFixed(2)}</td>
+                                          <td className="px-3 py-2 font-bold text-green-600">{formatCurrency(deposit.amount, selectedWithdrawal.currency)}</td>
                                           <td className="px-3 py-2">{new Date(deposit.date).toLocaleDateString()}</td>
                                           <td className="px-3 py-2">
                                               {deposit.receiptUrl ? (
@@ -225,9 +225,9 @@ const Withdrawals: React.FC = () => {
                           </table>
                       </div>
                       <div className="mt-2 text-right text-sm font-semibold">
-                          Total Matched: <span className="text-green-600">${selectedWithdrawal.matchedDepositIds.reduce((sum: number, d: any) => sum + d.amount, 0).toFixed(2)}</span>
+                          Total Matched: <span className="text-green-600">{formatCurrency(selectedWithdrawal.matchedDepositIds.reduce((sum: number, d: any) => sum + d.amount, 0), selectedWithdrawal.currency)}</span>
                           <span className="mx-2">/</span>
-                          Pending: <span className="text-red-600">${(selectedWithdrawal.matchRemainingAmount ?? selectedWithdrawal.finalAmount).toFixed(2)}</span>
+                          Pending: <span className="text-red-600">{formatCurrency((selectedWithdrawal.matchRemainingAmount ?? selectedWithdrawal.finalAmount), selectedWithdrawal.currency)}</span>
                       </div>
                   </div>
               )}

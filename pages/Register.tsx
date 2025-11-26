@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { User, Status } from '../types';
+import { User, Status, countries } from '../types';
 import { createUser as apiCreateUser } from '../services/api';
 
 const Register: React.FC = () => {
@@ -37,7 +38,7 @@ const Register: React.FC = () => {
     }, []);
 
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
@@ -111,8 +112,11 @@ const Register: React.FC = () => {
                         </div>
                      </div>
                       <div>
-                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country (Optional)</label>
-                        <input id="country" name="country" type="text" value={formData.country} onChange={handleChange} className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
+                        <select id="country" name="country" value={formData.country} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600" >
+                            <option value="">-- Select your country --</option>
+                            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
                     </div>
                      <div>
                         <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username (Optional)</label>

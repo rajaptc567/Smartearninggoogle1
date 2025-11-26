@@ -3,20 +3,20 @@ import React, { useState, useMemo } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
-import { Status, User, Transaction, Deposit } from '../types';
+import { Status, User, Transaction, Deposit, formatCurrency } from '../types';
 import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { getUploadsBaseUrl } from '../services/api';
 
 type ReportType = 'deposits' | 'withdrawals' | 'users' | 'commissions' | 'transfers' | 'all_transactions';
 
-const reportConfigs: { [key in ReportType]: { label: string; key: keyof any }[] } = {
-    deposits: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Transaction ID', key: 'transactionId' }, ],
-    withdrawals: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Final Amount', key: 'finalAmount' }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
-    transfers: [ { label: 'ID', key: '_id' }, { label: 'Sender', key: 'senderName' }, { label: 'Recipient', key: 'recipientName' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
-    users: [ { label: 'ID', key: '_id' }, { label: 'Username', key: 'username' }, { label: 'Full Name', key: 'fullName' }, { label: 'Email', key: 'email' }, { label: 'Active Plan', key: 'activePlan' }, { label: 'Status', key: 'status' }, { label: 'Registration Date', key: 'registrationDate' }, ],
-    commissions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount' }, { label: 'Level', key: 'level' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
-    all_transactions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Type', key: 'type' }, { label: 'Amount', key: 'amount' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
+const reportConfigs: { [key in ReportType]: { label: string; key: keyof any, isCurrency?: boolean }[] } = {
+    deposits: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount', isCurrency: true }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Transaction ID', key: 'transactionId' }, ],
+    withdrawals: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount', isCurrency: true }, { label: 'Final Amount', key: 'finalAmount', isCurrency: true }, { label: 'Method', key: 'method' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
+    transfers: [ { label: 'ID', key: '_id' }, { label: 'Sender', key: 'senderName' }, { label: 'Recipient', key: 'recipientName' }, { label: 'Amount', key: 'amount', isCurrency: true }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, ],
+    users: [ { label: 'ID', key: '_id' }, { label: 'Username', key: 'username' }, { label: 'Full Name', key: 'fullName' }, { label: 'Email', key: 'email' }, { label: 'Wallet Balance', key: 'walletBalance', isCurrency: true }, { label: 'Active Plan', key: 'activePlan' }, { label: 'Status', key: 'status' }, { label: 'Registration Date', key: 'registrationDate' }, ],
+    commissions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Amount', key: 'amount', isCurrency: true }, { label: 'Level', key: 'level' }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
+    all_transactions: [ { label: 'ID', key: '_id' }, { label: 'User Name', key: 'userName' }, { label: 'Type', key: 'type' }, { label: 'Amount', key: 'amount', isCurrency: true }, { label: 'Status', key: 'status' }, { label: 'Date', key: 'date' }, { label: 'Description', key: 'description' }, ],
 };
 
 const Reports: React.FC = () => {
@@ -70,11 +70,12 @@ const Reports: React.FC = () => {
             if (statusFilter && item.status && item.status !== statusFilter) return false;
 
             // Amount Filter
-            if (item.amount) {
+            const amountField = item.amount ?? item.walletBalance;
+            if (amountField !== undefined) {
                 const numericMin = parseFloat(minAmount);
                 const numericMax = parseFloat(maxAmount);
-                if (!isNaN(numericMin) && item.amount < numericMin) return false;
-                if (!isNaN(numericMax) && item.amount > numericMax) return false;
+                if (!isNaN(numericMin) && amountField < numericMin) return false;
+                if (!isNaN(numericMax) && amountField > numericMax) return false;
             }
 
             // Keyword Filter
@@ -99,7 +100,9 @@ const Reports: React.FC = () => {
         const headers = config.map(c => c.label);
         const csvContent = [ headers.join(','), ...generatedData.map(row => config.map(c => {
             let val = row[c.key as keyof typeof row];
-            // Format array/object fields nicely
+            if (c.isCurrency) {
+                 val = formatCurrency(val, row.currency);
+            }
             if (c.key === 'activePlan' && Array.isArray(row.activePlans)) {
                  val = row.activePlans.map((p: any) => p.planName).join(' | ');
             }
@@ -115,17 +118,7 @@ const Reports: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    // --- DOSSIER FUNCTIONS ---
-
-    const filteredUsersForDossier = useMemo(() => {
-        if (!userSearchTerm) return users;
-        const term = userSearchTerm.toLowerCase();
-        return users.filter(u => 
-            u.username.toLowerCase().includes(term) || 
-            u.fullName.toLowerCase().includes(term) || 
-            u.email.toLowerCase().includes(term)
-        );
-    }, [users, userSearchTerm]);
+    // ... (rest of the component unchanged)
 
     const handleUserSelect = (userId: string) => {
         setSelectedUserIds(prev => {
@@ -139,9 +132,7 @@ const Reports: React.FC = () => {
     };
 
     const handleSelectAll = () => {
-        // Select only visible users from filter
         const allIds = filteredUsersForDossier.map(u => u._id);
-        // Merge avoiding duplicates
         const newSet = new Set([...selectedUserIds, ...allIds]);
         setSelectedUserIds(Array.from(newSet));
         setShowDossierPreview(false);
@@ -151,6 +142,8 @@ const Reports: React.FC = () => {
         setSelectedUserIds([]);
         setShowDossierPreview(false);
     };
+    
+    // ... (rest of the component is fine)
 
     // Helper to link a transaction to a deposit proof
     const getReceiptInfo = (tx: Transaction) => {
@@ -236,12 +229,12 @@ const Reports: React.FC = () => {
             // SECTION 1: ANALYTICS SUMMARY
             rows.push(['--- ANALYTICS SUMMARY ---']);
             rows.push(['Metric', 'Value']);
-            rows.push(['Total Approved Deposits', `$${stats.totalDeposit.toFixed(2)}`]);
-            rows.push(['Total Paid Withdrawals', `$${stats.totalWithdrawal.toFixed(2)}`]);
-            rows.push(['Total Transfers Sent', `$${stats.totalTransfer.toFixed(2)}`]);
-            rows.push(['Total Commission Earned', `$${stats.totalCommission.toFixed(2)}`]);
-            rows.push(['  - Direct Commission', `$${stats.directCommission.toFixed(2)}`]);
-            rows.push(['  - Indirect Commission', `$${stats.indirectCommission.toFixed(2)}`]);
+            rows.push(['Total Approved Deposits', formatCurrency(stats.totalDeposit, user.currency)]);
+            rows.push(['Total Paid Withdrawals', formatCurrency(stats.totalWithdrawal, user.currency)]);
+            rows.push(['Total Transfers Sent', formatCurrency(stats.totalTransfer, user.currency)]);
+            rows.push(['Total Commission Earned', formatCurrency(stats.totalCommission, user.currency)]);
+            rows.push(['  - Direct Commission', formatCurrency(stats.directCommission, user.currency)]);
+            rows.push(['  - Indirect Commission', formatCurrency(stats.indirectCommission, user.currency)]);
             rows.push(['Total Direct Referrals', `${stats.totalDirectRef}`]);
             rows.push(['Total Indirect Referrals', `${stats.totalIndirectRef}`]);
             rows.push([]);
@@ -253,7 +246,7 @@ const Reports: React.FC = () => {
             rows.push(['Phone', user.phone]);
             rows.push(['Sponsor', user.sponsor || 'N/A']);
             rows.push(['Status', user.status]);
-            rows.push(['Wallet Balance', `$${user.walletBalance.toFixed(2)}`]);
+            rows.push(['Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
             rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
             rows.push([]); 
 
@@ -262,7 +255,7 @@ const Reports: React.FC = () => {
             if (user.activePlans && user.activePlans.length > 0) {
                 rows.push(['Plan Name', 'Price', 'Purchase Date']);
                 user.activePlans.forEach(p => {
-                    rows.push([p.planName, `$${p.price}`, new Date(p.purchaseDate).toLocaleDateString()]);
+                    rows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleDateString()]);
                 });
             } else {
                 rows.push(['No active plans']);
@@ -277,7 +270,7 @@ const Reports: React.FC = () => {
                 rows.push([
                     new Date(tx.date).toLocaleString(),
                     tx.type,
-                    `$${tx.amount.toFixed(2)}`,
+                    formatCurrency(tx.amount, tx.currency),
                     tx.status || 'N/A',
                     tx.description,
                     proof
@@ -299,10 +292,22 @@ const Reports: React.FC = () => {
         link.click();
         document.body.removeChild(link);
     };
+    
+    // ... (rest of the component, especially dossier preview, needs currency formatting)
+
+    const filteredUsersForDossier = useMemo(() => {
+        if (!userSearchTerm) return users;
+        const term = userSearchTerm.toLowerCase();
+        return users.filter(u => 
+            u.username.toLowerCase().includes(term) || 
+            u.fullName.toLowerCase().includes(term) || 
+            u.email.toLowerCase().includes(term)
+        );
+    }, [users, userSearchTerm]);
 
     const reportHeaders = useMemo(() => reportConfigs[reportType].map(c => c.label), [reportType]);
     const hasStatusField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
-    const hasAmountField = ['deposits', 'withdrawals', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
+    const hasAmountField = ['deposits', 'withdrawals', 'transfers', 'users', 'commissions', 'all_transactions'].includes(reportType);
     
     // Helper for Preview display of receipts
     const renderReceiptPreview = (tx: Transaction) => {
@@ -342,7 +347,7 @@ const Reports: React.FC = () => {
                                         <option value="deposits">Deposits</option>
                                         <option value="withdrawals">Withdrawals</option>
                                         <option value="transfers">User Transfers</option>
-                                        <option value="users">New Users</option>
+                                        <option value="users">Users</option>
                                         <option value="commissions">Commissions</option>
                                     </select>
                                 </div>
@@ -399,7 +404,9 @@ const Reports: React.FC = () => {
                                             {reportConfigs[reportType].map(col => (
                                                 <td key={String(col.key)} className="px-4 py-3 text-sm">
                                                     {col.key === 'status' && row[col.key as keyof typeof row] ? 
-                                                        <Badge status={row[col.key as keyof typeof row] as Status} /> : 
+                                                        <Badge status={row[col.key as keyof typeof row] as Status} /> :
+                                                    col.isCurrency ?
+                                                        formatCurrency(row[col.key as keyof typeof row], row.currency) :
                                                         String(row[col.key as keyof typeof row] ?? 'N/A')}
                                                 </td>
                                             ))}
@@ -473,7 +480,7 @@ const Reports: React.FC = () => {
                                                     <div className="font-medium text-gray-900 dark:text-white">{u.fullName}</div>
                                                     <div className="text-xs text-gray-500">@{u.username} | {u.email}</div>
                                                 </td>
-                                                <td className="px-4 py-2 font-mono text-green-600">${u.walletBalance.toFixed(2)}</td>
+                                                <td className="px-4 py-2 font-mono text-green-600">{formatCurrency(u.walletBalance, u.currency)}</td>
                                                 <td className="px-4 py-2"><Badge status={u.status} /></td>
                                             </tr>
                                         ))}
@@ -528,16 +535,16 @@ const Reports: React.FC = () => {
                                                     <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-white dark:bg-gray-900 p-4 rounded-md border border-gray-200 dark:border-gray-700">
                                                         <div className="text-center">
                                                             <p className="text-xs text-gray-500 uppercase">Total Commission</p>
-                                                            <p className="text-lg font-bold text-green-600">${stats.totalCommission.toFixed(2)}</p>
-                                                            <p className="text-[10px] text-gray-400">Dir: ${stats.directCommission.toFixed(2)} | Ind: ${stats.indirectCommission.toFixed(2)}</p>
+                                                            <p className="text-lg font-bold text-green-600">{formatCurrency(stats.totalCommission, user.currency)}</p>
+                                                            <p className="text-[10px] text-gray-400">Dir: {formatCurrency(stats.directCommission, user.currency)} | Ind: {formatCurrency(stats.indirectCommission, user.currency)}</p>
                                                         </div>
                                                         <div className="text-center border-l dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 uppercase">Total Deposits</p>
-                                                            <p className="text-lg font-bold text-blue-600">${stats.totalDeposit.toFixed(2)}</p>
+                                                            <p className="text-lg font-bold text-blue-600">{formatCurrency(stats.totalDeposit, user.currency)}</p>
                                                         </div>
                                                         <div className="text-center border-l dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 uppercase">Total Withdrawals</p>
-                                                            <p className="text-lg font-bold text-red-600">${stats.totalWithdrawal.toFixed(2)}</p>
+                                                            <p className="text-lg font-bold text-red-600">{formatCurrency(stats.totalWithdrawal, user.currency)}</p>
                                                         </div>
                                                         <div className="text-center border-l dark:border-gray-700">
                                                             <p className="text-xs text-gray-500 uppercase">Total Referrals</p>
@@ -550,7 +557,7 @@ const Reports: React.FC = () => {
                                                         <div><strong>Email:</strong> {user.email}</div>
                                                         <div><strong>Phone:</strong> {user.phone}</div>
                                                         <div><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</div>
-                                                        <div><strong>Balance:</strong> <span className="text-green-600 font-bold">${user.walletBalance.toFixed(2)}</span></div>
+                                                        <div><strong>Balance:</strong> <span className="text-green-600 font-bold">{formatCurrency(user.walletBalance, user.currency)}</span></div>
                                                         <div><strong>Status:</strong> <Badge status={user.status} /></div>
                                                         <div><strong>Registered:</strong> {new Date(user.registrationDate).toLocaleDateString()}</div>
                                                     </div>
@@ -561,7 +568,7 @@ const Reports: React.FC = () => {
                                                             <div className="flex flex-wrap gap-2">
                                                                 {user.activePlans.map((p, i) => (
                                                                     <span key={i} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
-                                                                        {p.planName} (${p.price}) - {new Date(p.purchaseDate).toLocaleDateString()}
+                                                                        {p.planName} ({formatCurrency(p.price, user.currency)}) - {new Date(p.purchaseDate).toLocaleDateString()}
                                                                     </span>
                                                                 ))}
                                                             </div>
@@ -588,7 +595,7 @@ const Reports: React.FC = () => {
                                                                             <td className="p-2 whitespace-nowrap">{new Date(tx.date).toLocaleString()}</td>
                                                                             <td className="p-2">{tx.type}</td>
                                                                             <td className={`p-2 font-mono ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                                ${tx.amount.toFixed(2)}
+                                                                                {formatCurrency(tx.amount, tx.currency)}
                                                                             </td>
                                                                             <td className="p-2"><Badge status={tx.status as Status} /></td>
                                                                             <td className="p-2">{tx.description}</td>

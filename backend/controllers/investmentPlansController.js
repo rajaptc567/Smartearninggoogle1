@@ -33,6 +33,9 @@ export const createInvestmentPlan = async (req, res) => {
         const plan = await InvestmentPlan.create(req.body);
         res.status(201).json({ success: true, data: plan });
     } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, error: `A plan with this name already exists for the selected currency.` });
+        }
         res.status(400).json({ success: false, error: err.message });
     }
 };
@@ -50,6 +53,9 @@ export const updateInvestmentPlan = async (req, res) => {
         }
         res.status(200).json({ success: true, data: plan });
     } catch (err) {
+         if (err.code === 11000) {
+            return res.status(400).json({ success: false, error: `A plan with this name already exists for the selected currency.` });
+        }
         res.status(400).json({ success: false, error: err.message });
     }
 };

@@ -1,4 +1,5 @@
 
+
 import Deposit from '../models/Deposit.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -44,6 +45,9 @@ export const createDeposit = async (req, res) => {
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.deposit)) {
             return res.status(403).json({ success: false, error: `Deposits are currently disabled for your account.` });
         }
+        
+        // Add user's currency to the deposit data
+        depositData.currency = user.currency;
 
         // Check P2P Matching logic BEFORE creating deposit
         if (depositData.matchedWithdrawalId) {
@@ -59,7 +63,7 @@ export const createDeposit = async (req, res) => {
             if (depositAmount > remaining) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Deposit amount $${depositAmount} exceeds the remaining needed amount of $${remaining}.`
+                    error: `Deposit amount ${user.currency}${depositAmount} exceeds the remaining needed amount of ${user.currency}${remaining}.`
                 });
             }
 
@@ -80,6 +84,7 @@ export const createDeposit = async (req, res) => {
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
+            currency: user.currency,
             type: 'Deposit',
             amount: deposit.amount,
             status: 'Pending',
@@ -89,7 +94,7 @@ export const createDeposit = async (req, res) => {
         // Create a notification for the user
         await Notification.create({
             userId: deposit.userId,
-            message: `Your deposit request #${deposit._id} for $${deposit.amount.toFixed(2)} is pending review.`
+            message: `Your deposit request #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} is pending review.`
         });
 
         // --- HANDLE P2P UPDATE ---
@@ -117,7 +122,7 @@ export const createDeposit = async (req, res) => {
                 // Notify Withdrawal User about Partial Payment Pending Verification (Discreet)
                 await Notification.create({
                     userId: withdrawal.userId,
-                    message: `Withdrawal Update: A payment of $${depositAmount.toFixed(2)} has been processed. It is currently pending admin verification. Remaining pending: $${withdrawal.matchRemainingAmount.toFixed(2)}.`
+                    message: `Withdrawal Update: A payment of ${user.currency}${depositAmount.toFixed(2)} has been processed. It is currently pending admin verification. Remaining pending: ${user.currency}${withdrawal.matchRemainingAmount.toFixed(2)}.`
                 });
             } else {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
@@ -186,7 +191,7 @@ export const updateDeposit = async (req, res) => {
 
             await Notification.create({
                 userId: user._id,
-                message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been approved.`
+                message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been approved.`
             });
 
             // Notify Withdrawal User that payment is confirmed (Discreet)
@@ -195,7 +200,7 @@ export const updateDeposit = async (req, res) => {
                 if(withdrawal) {
                     await Notification.create({
                         userId: withdrawal.userId,
-                        message: `Withdrawal Update: A payment of $${deposit.amount.toFixed(2)} towards your request has been approved.`
+                        message: `Withdrawal Update: A payment of ${user.currency}${deposit.amount.toFixed(2)} towards your request has been approved.`
                     });
                 }
             }
@@ -224,7 +229,7 @@ export const updateDeposit = async (req, res) => {
         if (status === 'Rejected') {
              await Notification.create({
                 userId: user._id,
-                message: `Your deposit #${deposit._id} for $${deposit.amount.toFixed(2)} has been rejected. Reason: ${adminNotes || 'Contact support'}`
+                message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been rejected. Reason: ${adminNotes || 'Contact support'}`
             });
             
             // Reverse P2P Matching Logic if Rejected
@@ -238,7 +243,7 @@ export const updateDeposit = async (req, res) => {
                     // Notify Withdrawal User about Rejection/Restoration (Discreet)
                     await Notification.create({
                         userId: withdrawal.userId,
-                        message: `Withdrawal Update: A payment of $${deposit.amount.toFixed(2)} towards your withdrawal request failed verification. Your pending withdrawal has been updated.`
+                        message: `Withdrawal Update: A payment of ${user.currency}${deposit.amount.toFixed(2)} towards your withdrawal request failed verification. Your pending withdrawal has been updated.`
                     });
 
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });

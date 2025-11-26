@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Deposit, Status } from '../types';
+import { Deposit, Status, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -135,7 +135,7 @@ const Deposits: React.FC = () => {
                     >
                         <td className="px-4 py-3 text-xs font-mono">{deposit._id.substring(0, 8)}...</td>
                         <td className="px-4 py-3">{deposit.userName}</td>
-                        <td className="px-4 py-3">${deposit.amount.toFixed(2)}</td>
+                        <td className="px-4 py-3">{formatCurrency(deposit.amount, deposit.currency)}</td>
                         <td className="px-4 py-3">{deposit.method}</td>
                         <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
                         <td className="px-4 py-3">
@@ -174,7 +174,7 @@ const Deposits: React.FC = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                             <div><span className="font-semibold">User:</span> {selectedDeposit.userName} (ID: {selectedDeposit.userId})</div>
-                            <div><span className="font-semibold">Amount:</span> ${selectedDeposit.amount.toFixed(2)}</div>
+                            <div><span className="font-semibold">Amount:</span> {formatCurrency(selectedDeposit.amount, selectedDeposit.currency)}</div>
                             <div><span className="font-semibold">Method:</span> {selectedDeposit.method}</div>
                             <div><span className="font-semibold">Date:</span> {new Date(selectedDeposit.date).toLocaleString()}</div>
                             <div className="md:col-span-2"><span className="font-semibold">Transaction ID:</span> <span className="font-mono">{selectedDeposit.transactionId}</span></div>

@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Table from '../components/ui/Table';
 import { createRule, deleteRule } from '../services/api';
+import { Currency, formatCurrency } from '../types';
 
 const Rules: React.FC = () => {
     const { state, dispatch } = useData();
@@ -11,9 +13,10 @@ const Rules: React.FC = () => {
     const [fromPlan, setFromPlan] = useState('');
     const [toPlan, setToPlan] = useState('');
     const [requiredEarnings, setRequiredEarnings] = useState('');
+    const [currency, setCurrency] = useState<Currency>('USD');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const activePlans = investmentPlans.filter(p => p.status === 'Active');
+    const activePlans = investmentPlans.filter(p => p.status === 'Active' && p.currency === currency);
 
     const handleAddRule = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,6 +30,7 @@ const Rules: React.FC = () => {
                 fromPlan,
                 toPlan,
                 requiredEarnings: parseFloat(requiredEarnings),
+                currency,
             });
             dispatch({ type: 'ADD_RULE', payload: newRule });
             setFromPlan('');
@@ -58,7 +62,15 @@ const Rules: React.FC = () => {
             <div className="space-y-6">
                 <div>
                     <h3 className="text-lg font-medium text-gray-900 dark:text-white">New Upgrade Rule</h3>
-                    <form onSubmit={handleAddRule} className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    <form onSubmit={handleAddRule} className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div>
+                            <label htmlFor="currency" className="block text-sm font-medium">Currency</label>
+                            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="PKR">PKR</option>
+                            </select>
+                        </div>
                         <div>
                             <label htmlFor="fromPlan" className="block text-sm font-medium">From Plan</label>
                             <select id="fromPlan" value={fromPlan} onChange={e => setFromPlan(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
@@ -74,7 +86,7 @@ const Rules: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="requiredEarnings" className="block text-sm font-medium">Required Earnings ($)</label>
+                            <label htmlFor="requiredEarnings" className="block text-sm font-medium">Required Earnings</label>
                             <input type="number" id="requiredEarnings" value={requiredEarnings} onChange={e => setRequiredEarnings(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
                          <div className="">
@@ -88,9 +100,9 @@ const Rules: React.FC = () => {
                         <Table headers={['From Plan', 'To Plan', 'Required Earnings', 'Actions']}>
                             {rules.map(rule => (
                                 <tr key={rule._id} className="text-gray-700 dark:text-gray-400">
-                                    <td className="px-4 py-3">{rule.fromPlan}</td>
-                                    <td className="px-4 py-3">{rule.toPlan}</td>
-                                    <td className="px-4 py-3">${rule.requiredEarnings.toFixed(2)}</td>
+                                    <td className="px-4 py-3">{rule.fromPlan} ({rule.currency})</td>
+                                    <td className="px-4 py-3">{rule.toPlan} ({rule.currency})</td>
+                                    <td className="px-4 py-3">{formatCurrency(rule.requiredEarnings, rule.currency)}</td>
                                     <td className="px-4 py-3">
                                         <Button size="sm" variant="danger" onClick={() => handleDeleteRule(rule._id)}>Delete</Button>
                                     </td>

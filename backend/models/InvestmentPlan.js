@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const CommissionSchema = new mongoose.Schema({
@@ -17,8 +18,13 @@ const InvestmentPlanSchema = new mongoose.Schema({
     name: {
         type: String,
         required: [true, 'Please add a plan name'],
-        unique: true,
         trim: true,
+    },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
+        default: 'USD',
     },
     price: {
         type: Number,
@@ -64,5 +70,9 @@ const InvestmentPlanSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Ensure a unique compound index on name and currency
+InvestmentPlanSchema.index({ name: 1, currency: 1 }, { unique: true });
+
 
 export default mongoose.model('InvestmentPlan', InvestmentPlanSchema);

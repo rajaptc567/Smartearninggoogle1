@@ -8,12 +8,18 @@ import Setting from '../models/Setting.js'; // Import Setting model
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 
+const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+
 // @desc    Register a new user
 // @route   POST /api/v1/users
 // @access  Public
 export const createUser = async (req, res, next) => {
     try {
-        const { fullName, username, email, password, phone, sponsor } = req.body;
+        const { fullName, username, email, password, phone, sponsor, country } = req.body;
+
+        if (!country) {
+            return res.status(400).json({ success: false, error: 'Country is a required field.' });
+        }
 
         if (sponsor) {
             const sponsorExists = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
@@ -22,6 +28,18 @@ export const createUser = async (req, res, next) => {
             }
             req.body.sponsor = sponsorExists.username;
         }
+
+        // Auto-assign currency based on country
+        let currency;
+        if (country.toLowerCase() === 'pakistan') {
+            currency = 'PKR';
+        } else if (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase())) {
+            currency = 'EUR';
+        } else {
+            currency = 'USD';
+        }
+        req.body.currency = currency;
+
 
         // Initialize activePlans as empty array
         req.body.activePlans = [];
@@ -420,6 +438,7 @@ export const adjustWallet = async (req, res) => {
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
+            currency: user.currency,
             type: amount > 0 ? 'Manual Credit' : 'Manual Debit',
             amount: amount,
             description: description || 'Admin manual adjustment',
@@ -428,8 +447,8 @@ export const adjustWallet = async (req, res) => {
         
         // Create Notification for the user
         const notifMessage = amount > 0 
-            ? `Admin credited $${amount.toFixed(2)} to your wallet. Reason: ${description || 'Manual Adjustment'}`
-            : `Admin debited $${Math.abs(amount).toFixed(2)} from your wallet. Reason: ${description || 'Manual Adjustment'}`;
+            ? `Admin credited ${user.currency}${amount.toFixed(2)} to your wallet. Reason: ${description || 'Manual Adjustment'}`
+            : `Admin debited ${user.currency}${Math.abs(amount).toFixed(2)} from your wallet. Reason: ${description || 'Manual Adjustment'}`;
 
         await Notification.create({
             userId: user._id,
@@ -455,6 +474,11 @@ export const purchasePlan = async (req, res) => {
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
+        // Currency Check
+        if (user.currency !== plan.currency) {
+            return res.status(400).json({ success: false, error: `This plan is in ${plan.currency}, but your account is in ${user.currency}.` });
+        }
+
         // Check if user already owns this specific plan
         const alreadyOwnsPlan = user.activePlans && user.activePlans.some(p => p.planId.toString() === plan._id.toString());
         if (alreadyOwnsPlan) {
@@ -484,6 +508,7 @@ export const purchasePlan = async (req, res) => {
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
+            currency: user.currency,
             type: 'Plan Purchase',
             amount: -plan.price,
             description: `Purchased ${plan.name} plan`,
@@ -492,7 +517,7 @@ export const purchasePlan = async (req, res) => {
 
         await Notification.create({
             userId: user._id,
-            message: `You successfully purchased the ${plan.name} plan for $${plan.price.toFixed(2)}.`
+            message: `You successfully purchased the ${plan.name} plan for ${user.currency}${plan.price.toFixed(2)}.`
         });
 
         // --- RELEASE HELD COMMISSIONS LOGIC ---
@@ -527,7 +552,7 @@ export const purchasePlan = async (req, res) => {
             
             await Notification.create({
                 userId: user._id,
-                message: `Congratulations! Purchasing ${plan.name} has unlocked $${totalReleased.toFixed(2)} in previously held commissions.`
+                message: `Congratulations! Purchasing ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in previously held commissions.`
             });
         }
 
@@ -552,6 +577,14 @@ export const purchasePlan = async (req, res) => {
             const checkEligibility = (uplineUser, purchasePlanId) => {
                 let status = 'Approved';
                 let message = '';
+
+                // CURRENCY CHECK: Upline must have same currency as downline to earn
+                if (uplineUser.currency !== user.currency) {
+                    return {
+                        status: 'Rejected',
+                        message: `Commission from ${user.username} was forfeited due to currency mismatch.`
+                    }
+                }
 
                 const activePlans = uplineUser.activePlans || [];
                 const hasAnyPlan = activePlans.length > 0;
@@ -615,9 +648,9 @@ export const purchasePlan = async (req, res) => {
                         await sponsor.save();
                         await Notification.create({
                             userId: sponsor._id,
-                            message: `You earned a direct commission of $${commissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
+                            message: `You earned a direct commission of ${sponsor.currency}${commissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
                         });
-                    } else {
+                    } else if (eligibility.status === 'Pending') {
                         // Send "Held" notification
                         await Notification.create({
                             userId: sponsor._id,
@@ -625,16 +658,19 @@ export const purchasePlan = async (req, res) => {
                         });
                     }
 
-                    await Transaction.create({
-                        userId: sponsor._id,
-                        userName: sponsor.username,
-                        type: 'Commission',
-                        amount: commissionAmount,
-                        level: 1,
-                        description: `Direct Commission From ${user.username} (${plan.name})`,
-                        status: eligibility.status, // Approved or Pending
-                        relatedPlanId: plan._id // Link to plan for future release
-                    });
+                    if (eligibility.status !== 'Rejected') {
+                        await Transaction.create({
+                            userId: sponsor._id,
+                            userName: sponsor.username,
+                            currency: sponsor.currency,
+                            type: 'Commission',
+                            amount: commissionAmount,
+                            level: 1,
+                            description: `Direct Commission From ${user.username} (${plan.name})`,
+                            status: eligibility.status, // Approved or Pending
+                            relatedPlanId: plan._id // Link to plan for future release
+                        });
+                    }
                 }
 
                 // B. Indirect Commissions (Level 2+)
@@ -661,25 +697,28 @@ export const purchasePlan = async (req, res) => {
                                     await uplineUser.save();
                                     await Notification.create({
                                         userId: uplineUser._id,
-                                        message: `You earned a Level ${i + 2} commission of $${levelCommissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
+                                        message: `You earned a Level ${i + 2} commission of ${uplineUser.currency}${levelCommissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
                                     });
-                                } else {
+                                } else if (indirectEligibility.status === 'Pending') {
                                      await Notification.create({
                                         userId: uplineUser._id,
                                         message: indirectEligibility.message
                                     });
                                 }
 
-                                await Transaction.create({
-                                    userId: uplineUser._id,
-                                    userName: uplineUser.username,
-                                    type: 'Commission',
-                                    amount: levelCommissionAmount,
-                                    level: i + 2, // i=0 is Level 2
-                                    description: `Level ${i + 2} Commission From ${user.username} (${plan.name})`,
-                                    status: indirectEligibility.status,
-                                    relatedPlanId: plan._id
-                                });
+                                if (indirectEligibility.status !== 'Rejected') {
+                                    await Transaction.create({
+                                        userId: uplineUser._id,
+                                        userName: uplineUser.username,
+                                        currency: uplineUser.currency,
+                                        type: 'Commission',
+                                        amount: levelCommissionAmount,
+                                        level: i + 2, // i=0 is Level 2
+                                        description: `Level ${i + 2} Commission From ${user.username} (${plan.name})`,
+                                        status: indirectEligibility.status,
+                                        relatedPlanId: plan._id
+                                    });
+                                }
                             }
                         }
                         currentUplineUsername = uplineUser.sponsor;
