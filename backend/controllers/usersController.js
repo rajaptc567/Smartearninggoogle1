@@ -31,7 +31,8 @@ export const createUser = async (req, res, next) => {
             withdrawal: false,
             transfer: false,
             earning: false,
-            dispute: false
+            dispute: false,
+            excludeFromTicker: false
         };
 
         const user = await User.create(req.body);
@@ -190,6 +191,12 @@ export const updateUser = async (req, res) => {
                     message: `Your ability to raise Disputes has been ${newR.dispute ? 'Disabled' : 'Enabled'} by admin.` 
                 });
             }
+            if (newR.excludeFromTicker !== oldR.excludeFromTicker) {
+                await Notification.create({ 
+                   userId: currentUser._id, 
+                   message: `Your activities are now ${newR.excludeFromTicker ? 'hidden from' : 'visible on'} the public activity ticker.` 
+               });
+           }
         }
 
         // Perform the main update
@@ -270,7 +277,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
 
         for (const user of usersToUpdate) {
             let currentRestrictions = user.restrictions || {
-                deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
+                deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false
             };
             
             let hasChange = false;

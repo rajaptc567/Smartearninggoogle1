@@ -63,6 +63,7 @@ const UserSchema = new mongoose.Schema({
         transfer: { type: Boolean, default: false },
         earning: { type: Boolean, default: false },
         dispute: { type: Boolean, default: false },
+        excludeFromTicker: { type: Boolean, default: false },
     },
     sponsor: {
         type: String,
