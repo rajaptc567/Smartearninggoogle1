@@ -822,7 +822,8 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                         </tr>
                     ))}
                 </tbody>
-             {data.length === 0 && <p className="p-2 text-xs text-gray-500">No records found.</p>}
+            </table>
+            {data.length === 0 && <p className="p-2 text-center text-xs text-gray-500">No records found.</p>}
         </div>
     );
 
@@ -880,7 +881,7 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
             </div>
         </Modal>
     );
-}
+};
 
 // Restrictions Modal
 const UserRestrictionsModal: React.FC<{ user: User; onClose: () => void; onSave: (restrictions: UserRestrictions) => void; }> = ({ user, onClose, onSave }) => {
