@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
 import { InvestmentPlan, Status } from '../../types';
@@ -6,6 +5,13 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate } from 'react-router-dom';
 import { purchasePlan as apiPurchasePlan } from '../../services/api';
+
+// --- Icon Components ---
+const ClockIcon = () => <svg className="w-5 h-5 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
+const DollarIcon = () => <svg className="w-5 h-5 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
+const UsersIcon = () => <svg className="w-5 h-5 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
+const StarIcon = () => <svg className="w-5 h-5 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>;
+const CheckMarkIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
@@ -53,70 +59,65 @@ const UserInvestmentPlans: React.FC = () => {
   const renderDirectCommission = (plan: InvestmentPlan) => {
       const comms = plan.directCommissions;
       if (!comms || comms.length === 0) return 'N/A';
-
-      // Find highest commission
       let maxVal = 0;
-      let maxType = 'percentage';
-
+      let maxType: 'percentage' | 'fixed' = 'percentage';
       comms.forEach(c => {
           if (c.value > maxVal) {
               maxVal = c.value;
               maxType = c.type;
           }
       });
-
-      if (comms.length > 1) {
-           return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
-      }
-      
-      return comms[0].type === 'percentage' ? `${comms[0].value}%` : `$${comms[0].value}`;
+      return `Up to ${maxType === 'percentage' ? maxVal + '%' : '$' + maxVal}`;
   };
 
   return (
-    <div className="space-y-6">
-       <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Investment Plans</h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">Choose a plan to start earning or upgrade your current one.</p>
+    <div className="space-y-8 max-w-7xl mx-auto">
+       <div className="text-center">
+            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">Investment Plans</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2 max-w-2xl mx-auto">Choose a plan to start earning or upgrade to unlock greater potential.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activePlans.map((plan) => {
-                // Check if user already has this plan in their activePlans array
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
+            {activePlans.map((plan, index) => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
+                const canAfford = currentUser.walletBalance >= plan.price;
+                const isPopular = index === 1; // Static example to highlight a plan
 
                 return (
-                     <div key={plan._id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col border-2 ${isOwned ? 'border-blue-500' : 'border-transparent'}`}>
-                        {isOwned && <div className="absolute top-0 right-0 -mt-3 -mr-3 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full z-10">Purchased</div>}
+                     <div key={plan._id} className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg flex flex-col border-2 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 ${isPopular ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'}`}>
+                        {isPopular && <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-full z-10 tracking-wider uppercase">Most Popular</div>}
                         
-                        <div className="flex justify-between items-start mb-4">
-                           <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
+                        <div className="p-8 flex-grow flex flex-col">
+                            <div className="text-center mb-6">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
+                                <p className="text-5xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">${plan.price}</p>
+                            </div>
+                            
+                            <p className="text-sm text-gray-600 dark:text-gray-300 text-center mb-8 h-12">{plan.description}</p>
+                            
+                            <ul className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-grow mb-8 border-t border-gray-200 dark:border-gray-700 pt-8">
+                                <li className="flex items-center"><ClockIcon /> <div><span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</div></li>
+                                <li className="flex items-center"><DollarIcon /> <div><span className="font-semibold">Min. Withdraw:</span> ${plan.minWithdraw}</div></li>
+                                <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</div></li>
+                                <li className="flex items-center"><StarIcon /> <div><span className="font-semibold">Direct Commission: </span> {renderDirectCommission(plan)}</div></li>
+                                <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Indirect Levels: </span> {plan.indirectCommissions.length}</div></li>
+                            </ul>
                         </div>
-
-                        <p className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-4">${plan.price}</p>
                         
-                        <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-grow">
-                            <li><CheckIcon /> <span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
-                            <li><CheckIcon /> <span className="font-semibold">Min. Withdraw:</span> ${plan.minWithdraw}</li>
-                            <li><CheckIcon /> <span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</li>
-                            <li><CheckIcon />
-                                <span className="font-semibold">Direct Commission: </span> 
-                                {renderDirectCommission(plan)}
-                            </li>
-                             <li><CheckIcon />
-                                <span className="font-semibold">Indirect Levels: </span> 
-                                {plan.indirectCommissions.length}
-                            </li>
-                        </ul>
-                        <p className="text-xs text-gray-500 mt-4 h-10">{plan.description}</p>
-                        <div className="mt-6">
-                           <Button 
-                                size="lg" 
-                                className="w-full" 
-                                onClick={() => handlePurchaseClick(plan)}
-                                disabled={isOwned}
-                            >
-                                {isOwned ? 'Already Owned' : (plan.price > currentUser.walletBalance ? 'Purchase (Deposit Required)' : 'Purchase Plan')}
-                           </Button>
+                        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl mt-auto">
+                           {isOwned ? (
+                               <Button size="lg" className="w-full flex items-center justify-center bg-green-600 hover:bg-green-700 focus:ring-green-500" disabled>
+                                   <CheckMarkIcon /> Plan is Active
+                               </Button>
+                           ) : canAfford ? (
+                               <Button size="lg" className="w-full shadow-lg shadow-blue-500/30" onClick={() => handlePurchaseClick(plan)}>
+                                   Purchase Plan
+                               </Button>
+                           ) : (
+                               <Button size="lg" className="w-full" variant="secondary" onClick={() => navigate('/member/deposit')}>
+                                   Deposit to Purchase
+                               </Button>
+                           )}
                         </div>
                     </div>
                 )
@@ -125,32 +126,32 @@ const UserInvestmentPlans: React.FC = () => {
 
         {isModalOpen && selectedPlan && (
             <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
-                <div className="p-4 text-center">
-                    <h2 className="text-2xl font-bold">Confirm Purchase</h2>
-                    <p className="my-2">You are about to purchase the <span className="font-bold">{selectedPlan.name}</span> for <span className="font-bold text-blue-500">${selectedPlan.price}</span>.</p>
+                <div className="p-6 text-center max-w-md">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Confirm Purchase</h2>
+                    <p className="my-3 text-gray-600 dark:text-gray-300">You are about to purchase the <span className="font-bold text-blue-500">{selectedPlan.name}</span> plan.</p>
                     
                     {currentUser.walletBalance >= selectedPlan.price ? (
                         <div>
-                             <p className="text-sm text-gray-500">This amount will be deducted from your available balance.</p>
-                             <p className="mt-4">Your balance will be: 
-                                <span className="text-red-500 line-through mx-2">${currentUser.walletBalance.toFixed(2)}</span>
-                                <span className="text-green-500 font-bold">${(currentUser.walletBalance - selectedPlan.price).toFixed(2)}</span>
-                             </p>
-                             <div className="mt-6 flex justify-center space-x-4">
-                                <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing}>Cancel</Button>
-                                <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing}>
+                             <div className="my-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2 border border-gray-200 dark:border-gray-700">
+                                <div className="flex justify-between text-lg"><span className="text-gray-500">Current Balance:</span> <span className="font-semibold">${currentUser.walletBalance.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-lg"><span className="text-gray-500">Plan Cost:</span> <span className="font-semibold text-red-500">-${selectedPlan.price.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-xl font-bold pt-2 border-t dark:border-gray-600"><span className="text-gray-800 dark:text-white">New Balance:</span> <span className="text-green-600">${(currentUser.walletBalance - selectedPlan.price).toFixed(2)}</span></div>
+                            </div>
+                             <div className="mt-8 flex justify-center space-x-4">
+                                <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing} className="w-full">Cancel</Button>
+                                <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing} className="w-full">
                                     {isPurchasing ? 'Processing...' : 'Confirm & Pay'}
                                 </Button>
                              </div>
                         </div>
                     ) : (
                          <div>
-                            <p className="my-4 p-3 rounded-md bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 text-sm">
-                                Your available balance of <span className="font-bold">${currentUser.walletBalance.toFixed(2)}</span> is insufficient. Please deposit at least <span className="font-bold">${(selectedPlan.price - currentUser.walletBalance).toFixed(2)}</span> to proceed.
+                            <p className="my-6 p-4 rounded-md bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
+                                Your balance of <span className="font-bold">${currentUser.walletBalance.toFixed(2)}</span> is insufficient. Please deposit at least <span className="font-bold">${(selectedPlan.price - currentUser.walletBalance).toFixed(2)}</span> to proceed.
                             </p>
-                            <div className="mt-6 flex justify-center space-x-4">
-                                <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                                <Button variant="primary" onClick={() => navigate('/member/deposit')}>Go to Deposit</Button>
+                            <div className="mt-8 flex justify-center space-x-4">
+                                <Button variant="secondary" onClick={handleCloseModal} className="w-full">Cancel</Button>
+                                <Button variant="primary" onClick={() => navigate('/member/deposit')} className="w-full">Go to Deposit</Button>
                             </div>
                          </div>
                     )}
@@ -160,7 +161,5 @@ const UserInvestmentPlans: React.FC = () => {
     </div>
   );
 };
-
-const CheckIcon = () => <svg className="inline-block w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
 
 export default UserInvestmentPlans;
