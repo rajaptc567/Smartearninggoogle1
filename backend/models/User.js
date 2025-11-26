@@ -1,6 +1,7 @@
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { Currency } from '../../types.ts'; // Assuming types.ts is accessible for enum
 
 const UserSchema = new mongoose.Schema({
     username: {
@@ -38,18 +39,21 @@ const UserSchema = new mongoose.Schema({
     country: {
         type: String,
     },
-    walletBalance: {
-        type: Number,
-        default: 0,
-    },
-    activePlan: {
+    currency: {
         type: String,
-        default: 'None', // Kept for backward compatibility/quick display of latest plan
+        enum: ['USD', 'EUR', 'PKR'],
+        default: 'USD'
+    },
+    walletBalances: {
+        type: Map,
+        of: Number,
+        default: { 'USD': 0, 'EUR': 0, 'PKR': 0 }
     },
     activePlans: [{
         planId: { type: mongoose.Schema.ObjectId, ref: 'InvestmentPlan' },
         planName: String,
         price: Number,
+        currency: String,
         purchaseDate: { type: Date, default: Date.now }
     }],
     status: {
@@ -69,6 +73,9 @@ const UserSchema = new mongoose.Schema({
     },
     passwordResetToken: String,
     passwordResetExpires: Date,
+    // LEGACY FIELDS (can be removed after migration)
+    walletBalance: { type: Number, default: 0 },
+    activePlan: { type: String, default: 'None' },
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });

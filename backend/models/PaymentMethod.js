@@ -1,6 +1,12 @@
 
 import mongoose from 'mongoose';
 
+const AmountLimitSchema = new mongoose.Schema({
+    currency: { type: String, enum: ['USD', 'EUR', 'PKR'], required: true },
+    min: { type: Number, default: 0 },
+    max: { type: Number, default: 10000 }
+}, { _id: false });
+
 const PaymentMethodSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -23,14 +29,12 @@ const PaymentMethodSchema = new mongoose.Schema({
     instructions: {
         type: String,
     },
-    minAmount: {
-        type: Number,
-        default: 0,
+    supportedCurrencies: {
+        type: [String],
+        enum: ['USD', 'EUR', 'PKR'],
+        default: ['USD']
     },
-    maxAmount: {
-        type: Number,
-        default: 10000,
-    },
+    amountLimits: [AmountLimitSchema],
     feePercent: {
         type: Number,
         default: 0,
@@ -45,8 +49,11 @@ const PaymentMethodSchema = new mongoose.Schema({
     },
     p2pWithdrawalId: {
         type: mongoose.Schema.ObjectId,
-        ref: 'Withdrawal', // Link to the withdrawal if this is a P2P method
-    }
+        ref: 'Withdrawal',
+    },
+    // Legacy fields
+    minAmount: { type: Number, default: 0 },
+    maxAmount: { type: Number, default: 10000 },
 }, {
     timestamps: true
 });

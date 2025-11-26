@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
 import Button from '../../components/ui/Button';
-import { User } from '../../types';
+import { User, Currency } from '../../types';
+import { updateUser } from '../../services/api';
 
 const Profile: React.FC = () => {
     const { state, dispatch } = useData();
@@ -14,7 +16,7 @@ const Profile: React.FC = () => {
         return <div>Loading...</div>;
     }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
@@ -22,10 +24,15 @@ const Profile: React.FC = () => {
         setPasswords({ ...passwords, [e.target.name]: e.target.value });
     };
 
-    const handleInfoSubmit = (e: React.FormEvent) => {
+    const handleInfoSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        dispatch({ type: 'UPDATE_USER', payload: { ...currentUser, ...formData } as User });
-        alert('Profile information updated successfully!');
+        try {
+            const updatedUser = await updateUser(currentUser._id, formData);
+            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            alert('Profile information updated successfully!');
+        } catch (error) {
+            alert(`Failed to update profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     };
 
     const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -38,7 +45,7 @@ const Profile: React.FC = () => {
             alert("New password must be at least 6 characters long.");
             return;
         }
-        // In a real app, you would verify the current password here
+        // In a real app, you would verify the current password here via an API call
         alert('Password changed successfully! (Simulation)');
         setPasswords({ current: '', new: '', confirm: '' });
     };
@@ -72,6 +79,18 @@ const Profile: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium">WhatsApp Number</label>
                             <input type="text" value={formData.whatsapp || ''} onChange={handleChange} name="whatsapp" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Country</label>
+                            <input type="text" value={formData.country || ''} onChange={handleChange} name="country" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Preferred Currency</label>
+                            <select name="currency" value={formData.currency} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                                <option value="PKR">PKR (Rs)</option>
+                            </select>
                         </div>
                     </div>
                     <div className="text-right pt-2">

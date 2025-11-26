@@ -13,6 +13,11 @@ const CommissionSchema = new mongoose.Schema({
     },
 }, { _id: false });
 
+const CurrencyValueSchema = new mongoose.Schema({
+    currency: { type: String, enum: ['USD', 'EUR', 'PKR'], required: true },
+    value: { type: Number, required: true }
+}, { _id: false });
+
 const InvestmentPlanSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -20,10 +25,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
         unique: true,
         trim: true,
     },
-    price: {
-        type: Number,
-        required: [true, 'Please add a price'],
-    },
+    prices: [CurrencyValueSchema],
     durationDays: {
         type: Number,
         required: true,
@@ -46,7 +48,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: Number,
         default: 0, // 0 for unlimited
     },
-    directCommissions: [CommissionSchema], // Updated to array
+    directCommissions: [CommissionSchema],
     indirectCommissions: [CommissionSchema],
     commissionDeductions: {
         afterMaxPayout: CommissionSchema,
@@ -61,6 +63,8 @@ const InvestmentPlanSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: false },
         slots: [Number],
     },
+    // Legacy field for backward compatibility
+    price: { type: Number, default: 0 },
 }, {
     timestamps: true
 });

@@ -19,6 +19,11 @@ const WithdrawalSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
+    },
     fee: {
         type: Number,
         required: true,

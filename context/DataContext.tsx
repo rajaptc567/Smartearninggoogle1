@@ -1,6 +1,6 @@
 
-import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
-import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute } from '../types';
+import React, { createContext, useReducer, ReactNode, useEffect, useState } from 'react';
+import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Currency } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes 
@@ -21,6 +21,7 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
+    selectedCurrency: Currency;
 }
 
 const initialState: AppState = {
@@ -52,6 +53,7 @@ const initialState: AppState = {
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
+    selectedCurrency: (localStorage.getItem('selectedCurrency') as Currency) || 'USD',
 };
 
 type Action =
@@ -96,7 +98,8 @@ type Action =
     | { type: 'SET_DISPUTES'; payload: Dispute[] }
     | { type: 'ADD_DISPUTE'; payload: Dispute }
     | { type: 'UPDATE_DISPUTE'; payload: Dispute }
-    | { type: 'SET_CURRENT_USER'; payload: User | null };
+    | { type: 'SET_CURRENT_USER'; payload: User | null }
+    | { type: 'SET_CURRENCY'; payload: Currency };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -116,6 +119,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 console.error("Could not access localStorage:", error);
             }
             return { ...state, currentUser: action.payload };
+        
+        case 'SET_CURRENCY':
+            localStorage.setItem('selectedCurrency', action.payload);
+            return { ...state, selectedCurrency: action.payload };
 
         // USERS
         case 'SET_USERS': return { ...state, users: action.payload };
@@ -209,7 +216,11 @@ const initializer = (initialState: AppState) => {
     try {
         const savedUser = localStorage.getItem('currentUser');
         if (savedUser) {
-            return { ...initialState, currentUser: JSON.parse(savedUser) as User };
+            const user = JSON.parse(savedUser) as User;
+            // When user logs back in, set their selected currency to their primary currency
+            const userCurrency = user.currency || 'USD';
+            localStorage.setItem('selectedCurrency', userCurrency);
+            return { ...initialState, currentUser: user, selectedCurrency: userCurrency };
         }
     } catch (error) {
         console.error("Could not parse user from localStorage", error);
@@ -222,7 +233,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
 
     useEffect(() => {
-        const fetchInitialData = async () => {
+        async function fetchInitialData() {
             const defaultSettings: Settings = {
                 isUserTransferEnabled: true,
                 transferConfig: { enabled: true, tiers: [] },

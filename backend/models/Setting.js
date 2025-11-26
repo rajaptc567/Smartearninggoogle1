@@ -2,6 +2,7 @@
 import mongoose from 'mongoose';
 
 const TransferTierSchema = new mongoose.Schema({
+    currency: { type: String, enum: ['USD', 'EUR', 'PKR'], required: true },
     minAmount: { type: Number, required: true },
     maxAmount: { type: Number, required: true },
     feeType: { type: String, enum: ['percentage', 'fixed'], required: true },
@@ -53,8 +54,8 @@ SettingSchema.statics.getSettings = async function() {
             transferConfig: {
                 enabled: true,
                 tiers: [
-                    { minAmount: 1, maxAmount: 100, feeType: 'fixed', feeValue: 1, enabled: true }, // Default example
-                    { minAmount: 101, maxAmount: 10000, feeType: 'percentage', feeValue: 2, enabled: true }
+                    { currency: 'USD', minAmount: 1, maxAmount: 100, feeType: 'fixed', feeValue: 1, enabled: true },
+                    { currency: 'USD', minAmount: 101, maxAmount: 10000, feeType: 'percentage', feeValue: 2, enabled: true }
                 ]
             },
             restrictWithdrawalAmount: false,

@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -19,6 +20,11 @@ const TransactionSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    currency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+        required: true,
+    },
     description: {
         type: String,
         required: true,
@@ -29,6 +35,9 @@ const TransactionSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
+    },
+    relatedPlanId: {
+        type: String,
     },
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
