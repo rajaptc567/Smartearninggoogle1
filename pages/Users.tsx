@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan } from '../types';
 import Table from '../components/ui/Table';
@@ -21,7 +20,11 @@ const Users: React.FC = () => {
     
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
+    
+    // Filtering State
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [planFilter, setPlanFilter] = useState('');
 
     const handleOpenModal = (user: User | null = null, mode: 'edit' | 'details' = 'edit') => {
         setEditingUser(user);
@@ -103,36 +106,82 @@ const Users: React.FC = () => {
         }
     };
 
-    const filteredUsers = useMemo(() => state.users.filter(user => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-            user.username.toLowerCase().includes(term) ||
-            user.fullName.toLowerCase().includes(term) ||
-            user.email.toLowerCase().includes(term) ||
-            user.phone.includes(term) ||
-            user._id.toString().includes(term)
-        );
-    }), [state.users, searchTerm]);
+    const filteredUsers = useMemo(() => {
+        return state.users.filter(user => {
+            const matchesSearch = (() => {
+                if (!searchTerm) return true;
+                const term = searchTerm.toLowerCase();
+                return (
+                    user.username.toLowerCase().includes(term) ||
+                    user.fullName.toLowerCase().includes(term) ||
+                    user.email.toLowerCase().includes(term) ||
+                    (user.phone && user.phone.includes(term)) ||
+                    user._id.toString().includes(term)
+                );
+            })();
+
+            const matchesStatus = (() => {
+                if (!statusFilter) return true;
+                return user.status === statusFilter;
+            })();
+
+            const matchesPlan = (() => {
+                if (!planFilter) return true;
+                if (planFilter === 'NO_PLAN') {
+                    return !user.activePlans || user.activePlans.length === 0;
+                }
+                return user.activePlans?.some(p => p.planId === planFilter);
+            })();
+
+            return matchesSearch && matchesStatus && matchesPlan;
+        });
+    }, [state.users, searchTerm, statusFilter, planFilter]);
 
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Members</h2>
-                <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Members ({filteredUsers.length})</h2>
+                <div className="flex flex-wrap items-center gap-2 justify-end w-full">
+                    {/* Filters */}
+                     <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Statuses</option>
+                        <option value={Status.Active}>Active</option>
+                        <option value={Status.Blocked}>Blocked</option>
+                        <option value={Status.Paused}>Paused</option>
+                        <option value={Status.Pending}>Pending</option>
+                    </select>
+
+                     <select
+                        value={planFilter}
+                        onChange={(e) => setPlanFilter(e.target.value)}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Plans</option>
+                        <option value="NO_PLAN">No Active Plan</option>
+                        {investmentPlans.map(plan => (
+                            <option key={plan._id} value={plan._id}>{plan.name}</option>
+                        ))}
+                    </select>
+                    
                     <input 
                         type="text" 
-                        placeholder="Filter by name, email, phone..."
+                        placeholder="Search name, email, ID..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
-                    <Button variant="secondary" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
-                    <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
-                    <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
                 </div>
+            </div>
+             <div className="flex justify-end gap-2 mb-4">
+                <Button variant="secondary" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
+                <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
+                <Button onClick={() => handleOpenModal(null, 'edit')}>Add User</Button>
             </div>
              {isLoading ? <p>Loading users...</p> : (
                  <Table headers={tableHeaders}>
@@ -425,9 +474,9 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
 const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ user, allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
     
-    const [sendMode, setSendMode] = useState<'single' | 'plan' | 'all'>(user ? 'single' : 'single');
+    const [sendMode, setSendMode] = useState<'single' | 'plan' | 'all' | 'inactive'>(user ? 'single' : 'single');
     
-    // Single User State
+    // Single User State & Inactive User State
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(user ? [user._id] : []);
     const [userSearch, setUserSearch] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -435,6 +484,9 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
 
     // Plan State
     const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+
+    // Inactive State
+    const [inactiveMode, setInactiveMode] = useState<'all' | 'specific'>('all');
 
     // Message State
     const [subject, setSubject] = useState('');
@@ -451,12 +503,29 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+    
+    // Reset selections when mode changes
+    useEffect(() => {
+        setSelectedUserIds(user && sendMode === 'single' ? [user._id] : []);
+        setSelectedPlanIds([]);
+    }, [sendMode, user]);
+    
+    useEffect(() => {
+        setSelectedUserIds([]);
+    }, [inactiveMode]);
 
-    const filteredUsers = allUsers.filter(u => 
-        u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.fullName.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearch.toLowerCase())
-    );
+    const inactiveUsers = useMemo(() => allUsers.filter(u => !u.activePlans || u.activePlans.length === 0), [allUsers]);
+
+    const filteredUsers = useMemo(() => {
+        const source = (sendMode === 'inactive' && inactiveMode === 'specific') ? inactiveUsers : allUsers;
+        if (!userSearch) return source;
+        const term = userSearch.toLowerCase();
+        return source.filter(u => 
+            u.username.toLowerCase().includes(term) ||
+            u.fullName.toLowerCase().includes(term) ||
+            u.email.toLowerCase().includes(term)
+        );
+    }, [userSearch, allUsers, inactiveUsers, sendMode, inactiveMode]);
 
     const handleSelectUser = (u: User) => {
         if (!selectedUserIds.includes(u._id)) {
@@ -480,23 +549,43 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (sendMode === 'single' && selectedUserIds.length === 0) return alert("Please select at least one user.");
+        
+        // Validation checks
+        if ((sendMode === 'single' || (sendMode === 'inactive' && inactiveMode === 'specific')) && selectedUserIds.length === 0) return alert("Please select at least one user.");
         if (sendMode === 'plan' && selectedPlanIds.length === 0) return alert("Please select at least one plan.");
         if (!message) return alert("Please enter a message.");
 
         setIsSending(true);
         try {
-            const payload = {
+            let finalTargetType = sendMode;
+            let finalTargetIds = sendMode === 'single' ? selectedUserIds : (sendMode === 'plan' ? selectedPlanIds : []);
+            
+            // If selecting specific inactive users, re-use the 'single' user logic on the backend
+            if (sendMode === 'inactive' && inactiveMode === 'specific') {
+                finalTargetType = 'single';
+                finalTargetIds = selectedUserIds;
+            }
+
+            const payload: any = {
                 subject,
                 message,
                 isPopup,
-                targetType: sendMode,
-                targetIds: sendMode === 'single' ? selectedUserIds : (sendMode === 'plan' ? selectedPlanIds : [])
+                targetType: finalTargetType,
+                targetIds: finalTargetIds
             };
-
-            await sendAdminNotification(payload);
             
-            alert("Messages sent successfully!");
+            // For 'inactive' 'all' mode, we don't need to send targetIds
+            if (sendMode === 'inactive' && inactiveMode === 'all') {
+                payload.targetIds = [];
+            }
+
+            const result = await sendAdminNotification(payload);
+            
+            if (result.data) {
+                dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
+            }
+
+            alert(`Messages sent to ${result.count || 0} user(s) successfully!`);
             onClose();
         } catch (error) {
             console.error(error);
@@ -507,7 +596,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
     }
 
     const affectedUsersCount = useMemo(() => {
-        if (sendMode === 'single') return selectedUserIds.length;
         if (sendMode === 'all') return allUsers.length;
         if (sendMode === 'plan') {
             const uniqueUsers = new Set();
@@ -518,8 +606,13 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
             });
             return uniqueUsers.size;
         }
+        if (sendMode === 'inactive') {
+            if (inactiveMode === 'all') return inactiveUsers.length;
+            if (inactiveMode === 'specific') return selectedUserIds.length;
+        }
+        if (sendMode === 'single') return selectedUserIds.length;
         return 0;
-    }, [sendMode, selectedUserIds, selectedPlanIds, allUsers]);
+    }, [sendMode, selectedUserIds, selectedPlanIds, allUsers, inactiveMode, inactiveUsers]);
 
     return (
         <Modal isOpen={true} onClose={onClose}>
@@ -530,33 +623,16 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                     {/* Mode Selection */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Recipient Type</label>
-                        <div className="flex space-x-2">
-                            <button 
-                                type="button" 
-                                onClick={() => setSendMode('single')} 
-                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'single' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                            >
-                                Specific Users
-                            </button>
-                            <button 
-                                type="button" 
-                                onClick={() => setSendMode('plan')} 
-                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'plan' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                            >
-                                By Active Plan
-                            </button>
-                            <button 
-                                type="button" 
-                                onClick={() => setSendMode('all')} 
-                                className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                            >
-                                All Users
-                            </button>
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setSendMode('single')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'single' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>Specific Users</button>
+                            <button type="button" onClick={() => setSendMode('plan')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'plan' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>By Active Plan</button>
+                            <button type="button" onClick={() => setSendMode('inactive')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'inactive' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>By Inactive Status</button>
+                            <button type="button" onClick={() => setSendMode('all')} className={`px-3 py-1.5 rounded-md text-sm font-medium ${sendMode === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>All Users</button>
                         </div>
                     </div>
 
-                    {/* Single User Selection */}
-                    {sendMode === 'single' && (
+                    {/* Target Selection UI */}
+                    {(sendMode === 'single' || (sendMode === 'inactive' && inactiveMode === 'specific')) && (
                         <div className="relative" ref={dropdownRef}>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select Users</label>
                             <div className="flex flex-wrap gap-2 mb-2 mt-1">
@@ -572,14 +648,7 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                                 })}
                             </div>
 
-                            <input 
-                                type="text" 
-                                value={userSearch} 
-                                onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); }}
-                                onFocus={() => setIsDropdownOpen(true)}
-                                placeholder="Search user..."
-                                className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
-                            />
+                            <input type="text" value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setIsDropdownOpen(true); }} onFocus={() => setIsDropdownOpen(true)} placeholder="Search user..." className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"/>
                             {isDropdownOpen && (
                                 <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 shadow-lg max-h-40 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto sm:text-sm">
                                     {filteredUsers.length > 0 ? filteredUsers.map(u => (
@@ -592,54 +661,28 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                             )}
                         </div>
                     )}
-
-                    {/* Plan Selection */}
                     {sendMode === 'plan' && (
                         <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-600 max-h-40 overflow-y-auto">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Plans</label>
-                            <div className="space-y-2">
-                                {investmentPlans.filter(p => p.status === 'Active').map(plan => (
-                                    <label key={plan._id} className="flex items-center space-x-2">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedPlanIds.includes(plan._id)} 
-                                            onChange={() => handleTogglePlan(plan._id)}
-                                            className="rounded text-blue-600"
-                                        />
-                                        <span className="text-sm">{plan.name}</span>
-                                    </label>
-                                ))}
+                            <div className="space-y-2">{investmentPlans.filter(p => p.status === 'Active').map(plan => (<label key={plan._id} className="flex items-center space-x-2"><input type="checkbox" checked={selectedPlanIds.includes(plan._id)} onChange={() => handleTogglePlan(plan._id)} className="rounded text-blue-600" /><span className="text-sm">{plan.name}</span></label>))}</div>
+                        </div>
+                    )}
+                    {sendMode === 'inactive' && (
+                        <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-600">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target Inactive Members (No Plan)</label>
+                            <div className="flex items-center space-x-4">
+                                <label className="flex items-center space-x-2"><input type="radio" name="inactiveMode" checked={inactiveMode === 'all'} onChange={() => setInactiveMode('all')} /> <span className="text-sm">All Inactive Members</span></label>
+                                <label className="flex items-center space-x-2"><input type="radio" name="inactiveMode" checked={inactiveMode === 'specific'} onChange={() => setInactiveMode('specific')} /> <span className="text-sm">Select Specific Members</span></label>
                             </div>
                         </div>
                     )}
+                    
+                    <div className="text-xs text-gray-500 dark:text-gray-400 text-right">This message will be sent to <strong>{affectedUsersCount}</strong> user(s).</div>
 
-                    {/* Count Summary */}
-                    <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
-                        This message will be sent to <strong>{affectedUsersCount}</strong> user(s).
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subject (Optional)</label>
-                        <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. Important Update" />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message</label>
-                        <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Type your message here..." required />
-                    </div>
-
-                    <div className="flex items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
-                        <input type="checkbox" id="isPopup" checked={isPopup} onChange={(e) => setIsPopup(e.target.checked)} className="h-4 w-4 text-blue-600 rounded" />
-                        <label htmlFor="isPopup" className="ml-2 block text-sm text-gray-900 dark:text-gray-300 font-medium">
-                            Show as Popup on Login
-                            <p className="text-xs text-gray-500 font-normal">If checked, this message will appear as a modal when the user visits their dashboard.</p>
-                        </label>
-                    </div>
-
-                    <div className="flex justify-end space-x-3 pt-2">
-                        <Button type="button" variant="secondary" onClick={onClose} disabled={isSending}>Cancel</Button>
-                        <Button type="submit" disabled={isSending || affectedUsersCount === 0}>{isSending ? 'Sending...' : `Send to ${affectedUsersCount} Users`}</Button>
-                    </div>
+                    <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subject (Optional)</label><input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. Important Update" /></div>
+                    <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message</label><textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={4} className="mt-1 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Type your message here..." required /></div>
+                    <div className="flex items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800"><input type="checkbox" id="isPopup" checked={isPopup} onChange={(e) => setIsPopup(e.target.checked)} className="h-4 w-4 text-blue-600 rounded" /><label htmlFor="isPopup" className="ml-2 block text-sm text-gray-900 dark:text-gray-300 font-medium">Show as Popup on Login<p className="text-xs text-gray-500 font-normal">If checked, this message will appear as a modal when the user visits their dashboard.</p></label></div>
+                    <div className="flex justify-end space-x-3 pt-2"><Button type="button" variant="secondary" onClick={onClose} disabled={isSending}>Cancel</Button><Button type="submit" disabled={isSending || affectedUsersCount === 0}>{isSending ? 'Sending...' : `Send to ${affectedUsersCount} Users`}</Button></div>
                 </form>
             </div>
         </Modal>
@@ -779,7 +822,6 @@ const UserDetailsModal: React.FC<{ user: User; onClose: () => void; onSwitchToEd
                         </tr>
                     ))}
                 </tbody>
-            </table>
              {data.length === 0 && <p className="p-2 text-xs text-gray-500">No records found.</p>}
         </div>
     );

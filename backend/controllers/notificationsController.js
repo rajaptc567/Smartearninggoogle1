@@ -1,4 +1,3 @@
-
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
@@ -17,7 +16,7 @@ export const getNotifications = async (req, res) => {
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {
     try {
-        const { userId, message, subject, isPopup, targetType, targetIds } = req.body;
+        const { userId, message, subject, isPopup, targetType, targetIds, randomCount } = req.body;
         
         let notificationsToCreate = [];
         const senderType = 'Admin'; // Messages sent via this endpoint are always from an Admin
@@ -30,20 +29,42 @@ export const createNotification = async (req, res) => {
         } 
         // CASE 2: Bulk Messaging
         else if (targetType) {
+            let users = [];
             let query = {};
             
             if (targetType === 'all') {
                 query = {}; // Select all users
+                users = await User.find(query).select('_id');
             } else if (targetType === 'plan' && targetIds && targetIds.length > 0) {
                 // Select users who have ANY of the selected plans in their activePlans array
                 query = { 'activePlans.planId': { $in: targetIds } };
+                users = await User.find(query).select('_id');
             } else if (targetType === 'single' && targetIds && targetIds.length > 0) {
                 query = { _id: { $in: targetIds } };
+                users = await User.find(query).select('_id');
+            } else if (targetType === 'inactive') {
+                query = { 
+                    $or: [
+                        { activePlans: { $exists: false } }, 
+                        { activePlans: { $size: 0 } }
+                    ] 
+                };
+                let inactiveUsers = await User.find(query).select('_id');
+
+                const count = randomCount ? parseInt(randomCount, 10) : 0;
+                if (count > 0 && count < inactiveUsers.length) {
+                    // Fisher-Yates shuffle algorithm
+                    for (let i = inactiveUsers.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [inactiveUsers[i], inactiveUsers[j]] = [inactiveUsers[j], inactiveUsers[i]];
+                    }
+                    users = inactiveUsers.slice(0, count);
+                } else {
+                    users = inactiveUsers;
+                }
             } else {
                 return res.status(400).json({ success: false, error: 'Invalid target configuration' });
             }
-
-            const users = await User.find(query).select('_id');
             
             notificationsToCreate = users.map(u => ({
                 userId: u._id,

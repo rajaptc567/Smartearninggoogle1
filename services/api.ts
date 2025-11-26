@@ -1,4 +1,3 @@
-
 // ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions } from '../types';
 
@@ -248,8 +247,9 @@ export const sendAdminNotification = async (data: {
     subject: string, 
     message: string, 
     isPopup: boolean,
-    targetType?: 'single' | 'plan' | 'all',
-    targetIds?: string[]
+    targetType?: 'single' | 'plan' | 'all' | 'inactive',
+    targetIds?: string[],
+    randomCount?: number;
 }): Promise<{count: number, data: Notification[]}> => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
         method: 'POST',

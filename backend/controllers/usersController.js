@@ -1,3 +1,4 @@
+
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -607,7 +608,7 @@ export const purchasePlan = async (req, res) => {
                         await sponsor.save();
                         await Notification.create({
                             userId: sponsor._id,
-                            message: `You earned a direct commission of $${commissionAmount.toFixed(2)} from ${user.username}.`
+                            message: `You earned a direct commission of $${commissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
                         });
                     } else {
                         // Send "Held" notification
@@ -653,7 +654,7 @@ export const purchasePlan = async (req, res) => {
                                     await uplineUser.save();
                                     await Notification.create({
                                         userId: uplineUser._id,
-                                        message: `You earned a Level ${i + 2} commission of $${levelCommissionAmount.toFixed(2)} from ${user.username}.`
+                                        message: `You earned a Level ${i + 2} commission of $${levelCommissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
                                     });
                                 } else {
                                      await Notification.create({
