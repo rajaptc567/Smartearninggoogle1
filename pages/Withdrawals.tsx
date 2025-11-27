@@ -65,7 +65,7 @@ const Withdrawals: React.FC = () => {
       
       const matchesStatus = statusFilter ? w.status === statusFilter : true;
 
-      const matchesCurrency = currencyFilter ? w.currency === currencyFilter : true;
+      const matchesCurrency = currencyFilter ? w.currency?.toUpperCase() === currencyFilter : true;
 
       return matchesSearch && matchesStatus && matchesCurrency;
   });

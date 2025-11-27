@@ -16,7 +16,7 @@ const Dashboard: React.FC = () => {
 
     // --- Statistics Calculation ---
     const stats = useMemo(() => {
-        const totalUserBalance = users.filter(u => u.currency === currencyFilter).reduce((sum, u) => sum + u.walletBalance, 0);
+        const totalUserBalance = users.filter(u => u.currency?.toUpperCase() === currencyFilter).reduce((sum, u) => sum + u.walletBalance, 0);
         
         const pendingDeposits = deposits.filter(d => d.status === Status.Pending);
         const pendingWithdrawals = withdrawals.filter(w => w.status === Status.Pending);
@@ -24,8 +24,8 @@ const Dashboard: React.FC = () => {
         const pendingPasswordResets = passwordResetRequests.filter(r => r.status === 'Pending');
         const pendingTransfers = transfers.filter(t => t.status === Status.Pending);
         
-        const grossRevenue = deposits.filter(d => d.status === Status.Approved && d.currency === currencyFilter).reduce((sum, d) => sum + d.amount, 0);
-        const totalPaidOut = withdrawals.filter(w => w.status === Status.Paid && w.currency === currencyFilter).reduce((sum, w) => sum + w.finalAmount, 0);
+        const grossRevenue = deposits.filter(d => d.status === Status.Approved && d.currency?.toUpperCase() === currencyFilter).reduce((sum, d) => sum + d.amount, 0);
+        const totalPaidOut = withdrawals.filter(w => w.status === Status.Paid && w.currency?.toUpperCase() === currencyFilter).reduce((sum, w) => sum + w.finalAmount, 0);
         const netProfit = grossRevenue - totalPaidOut;
 
         const userStatusCounts = users.reduce((acc, user) => {
@@ -49,11 +49,11 @@ const Dashboard: React.FC = () => {
 
         const chartData = dateArray.map(dateStr => {
             const dayDeposits = deposits
-                .filter(d => d.status === Status.Approved && d.date.startsWith(dateStr) && d.currency === currencyFilter)
+                .filter(d => d.status === Status.Approved && d.date.startsWith(dateStr) && d.currency?.toUpperCase() === currencyFilter)
                 .reduce((sum, d) => sum + d.amount, 0);
             
             const dayWithdrawals = withdrawals
-                .filter(w => w.status === Status.Paid && w.date.startsWith(dateStr) && w.currency === currencyFilter)
+                .filter(w => w.status === Status.Paid && w.date.startsWith(dateStr) && w.currency?.toUpperCase() === currencyFilter)
                 .reduce((sum, w) => sum + w.amount, 0);
 
             return { date: dateStr, deposit: dayDeposits, withdrawal: dayWithdrawals, net: dayDeposits - dayWithdrawals };

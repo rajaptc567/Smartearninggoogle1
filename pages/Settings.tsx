@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType, TransferFeeTier } from '../types';
+import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols } from '../types';
 import { updateSettings } from '../services/api';
 
 const Settings: React.FC = () => {
@@ -12,6 +12,7 @@ const Settings: React.FC = () => {
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions'>('general');
+  const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
 
   useEffect(() => {
     setLocalSettings(prev => ({
@@ -53,11 +54,12 @@ const Settings: React.FC = () => {
 
   // --- Transfer Tier Handlers ---
   const handleAddTier = () => {
+      if (!tierCurrencyFilter) return; // Should not happen if button is disabled
       setLocalSettings(prev => ({
           ...prev,
           transferConfig: {
               ...prev.transferConfig,
-              tiers: [...prev.transferConfig.tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0, enabled: true }]
+              tiers: [...prev.transferConfig.tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0, currency: tierCurrencyFilter, enabled: true }]
           }
       }));
   };
@@ -75,10 +77,18 @@ const Settings: React.FC = () => {
   const handleTierChange = (index: number, field: keyof TransferFeeTier, value: string | boolean) => {
       setLocalSettings(prev => {
           const newTiers = [...prev.transferConfig.tiers];
-          newTiers[index] = {
-              ...newTiers[index],
-              [field]: (field === 'feeType' || field === 'enabled') ? value : (parseFloat(value as string) || 0)
-          };
+          const updatedTier = { ...newTiers[index] };
+
+          if (field === 'enabled') {
+              updatedTier.enabled = value as boolean;
+          } else if (field === 'feeType') {
+              updatedTier.feeType = value as 'percentage' | 'fixed';
+          } else if (field === 'minAmount' || field === 'maxAmount' || field === 'feeValue') {
+              (updatedTier as any)[field] = parseFloat(value as string) || 0;
+          }
+
+          newTiers[index] = updatedTier;
+          
           return {
               ...prev,
               transferConfig: { ...prev.transferConfig, tiers: newTiers }
@@ -168,7 +178,19 @@ const Settings: React.FC = () => {
         {activeTab === 'transfers' && (
             <div className="space-y-6 animate-fade-in">
                 <div>
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Transfer Fee Structure</h3>
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Transfer Fee Structure</h3>
+                        <select
+                            value={tierCurrencyFilter}
+                            onChange={(e) => setTierCurrencyFilter(e.target.value as Currency | '')}
+                            className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                            <option value="">Show All</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="PKR">PKR</option>
+                        </select>
+                    </div>
                     <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-md text-sm text-purple-800 dark:text-purple-200 mb-4">
                         Define fees for user transfers based on amount ranges. If an amount doesn't match any enabled tier, the transfer will be blocked.
                     </div>
@@ -182,15 +204,21 @@ const Settings: React.FC = () => {
                     <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
                         <div className="space-y-2">
                             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase items-center mb-2 px-1">
-                                <div className="col-span-2">Min ($)</div>
-                                <div className="col-span-2">Max ($)</div>
+                                <div className="col-span-1">Currency</div>
+                                <div className="col-span-2">Min Amount</div>
+                                <div className="col-span-2">Max Amount</div>
                                 <div className="col-span-2">Type</div>
                                 <div className="col-span-2">Value</div>
-                                <div className="col-span-2 text-center">Active</div>
+                                <div className="col-span-1 text-center">Active</div>
                                 <div className="col-span-2 text-right">Action</div>
                             </div>
-                            {localSettings.transferConfig.tiers.map((tier, index) => (
+                            {localSettings.transferConfig.tiers.map((tier, index) => {
+                                if (tierCurrencyFilter && tier.currency !== tierCurrencyFilter) return null;
+                                return (
                                 <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white dark:bg-gray-800 p-2 rounded shadow-sm">
+                                    <div className="col-span-1">
+                                        <span className="px-2 py-1 text-xs font-semibold rounded bg-gray-200 dark:bg-gray-900">{tier.currency}</span>
+                                    </div>
                                     <div className="col-span-2">
                                         <input 
                                             type="number" 
@@ -215,7 +243,7 @@ const Settings: React.FC = () => {
                                             onChange={(e) => handleTierChange(index, 'feeType', e.target.value)}
                                             className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 py-1"
                                         >
-                                            <option value="fixed">Fixed ($)</option>
+                                            <option value="fixed">Fixed ({currencySymbols[tier.currency]})</option>
                                             <option value="percentage">Percent (%)</option>
                                         </select>
                                     </div>
@@ -229,7 +257,7 @@ const Settings: React.FC = () => {
                                             placeholder="Fee"
                                         />
                                     </div>
-                                    <div className="col-span-2 flex justify-center items-center">
+                                    <div className="col-span-1 flex justify-center items-center">
                                         <label className="inline-flex items-center cursor-pointer">
                                             <input 
                                                 type="checkbox" 
@@ -244,10 +272,13 @@ const Settings: React.FC = () => {
                                         <Button type="button" size="sm" variant="danger" onClick={() => handleRemoveTier(index)} className="py-1 px-2">X</Button>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <div className="mt-4">
-                            <Button type="button" size="sm" variant="secondary" onClick={handleAddTier}>+ Add Fee Tier</Button>
+                            <Button type="button" size="sm" variant="secondary" onClick={handleAddTier} disabled={!tierCurrencyFilter}>
+                               {tierCurrencyFilter ? `+ Add Fee Tier for ${tierCurrencyFilter}` : 'Select a Currency to Add Tier'}
+                            </Button>
                         </div>
                     </div>
                 </div>

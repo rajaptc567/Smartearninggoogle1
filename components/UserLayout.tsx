@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import UserSidebar from './UserSidebar';
@@ -8,7 +9,8 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { markNotificationPopupAsShown } from '../services/api';
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
-import { formatCurrency } from '../types';
+// FIX: Add specific types to allow for proper casting and type narrowing.
+import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal } from '../types';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -74,22 +76,37 @@ const UserLayout: React.FC = () => {
 
     realActivitiesSource.forEach(item => {
       switch (item.type) {
-        case 'deposit':
-          activities.push({ id: `dep-${item.data._id}`, type: 'deposit', text: `<strong class="font-semibold">${item.data.userName}</strong> made a deposit of <strong>${formatCurrency(item.data.amount, item.data.currency)}</strong>`, time: timeAgo(item.date) });
+        case 'deposit': {
+          // FIX: Cast item.data to the correct type to resolve property access errors.
+          const data = item.data as Deposit;
+          activities.push({ id: `dep-${data._id}`, type: 'deposit', text: `<strong class="font-semibold">${data.userName}</strong> made a deposit of <strong>${formatCurrency(data.amount, data.currency)}</strong>`, time: timeAgo(item.date) });
           break;
-        case 'withdrawal':
-          activities.push({ id: `wd-${item.data._id}`, type: 'withdrawal', text: `<strong class="font-semibold">${item.data.userName}</strong> withdrew <strong>${formatCurrency(item.data.amount, item.data.currency)}</strong>`, time: timeAgo(item.date) });
+        }
+        case 'withdrawal': {
+          // FIX: Cast item.data to the correct type to resolve property access errors.
+          const data = item.data as Withdrawal;
+          activities.push({ id: `wd-${data._id}`, type: 'withdrawal', text: `<strong class="font-semibold">${data.userName}</strong> withdrew <strong>${formatCurrency(data.amount, data.currency)}</strong>`, time: timeAgo(item.date) });
           break;
-        case 'transfer':
-          activities.push({ id: `tr-${item.data._id}`, type: 'transfer', text: `<strong class="font-semibold">${item.data.senderName}</strong> sent funds to <strong>${item.data.recipientName}</strong>`, time: timeAgo(item.date) });
+        }
+        case 'transfer': {
+          // FIX: Cast item.data to the correct type to resolve property access errors.
+          const data = item.data as Transfer;
+          activities.push({ id: `tr-${data._id}`, type: 'transfer', text: `<strong class="font-semibold">${data.senderName}</strong> sent funds to <strong>${data.recipientName}</strong>`, time: timeAgo(item.date) });
           break;
-        case 'plan':
-          const planName = item.data.description.split(' ')[1] || 'a new';
-          activities.push({ id: `pl-${item.data._id}`, type: 'plan', text: `<strong class="font-semibold">${item.data.userName}</strong> purchased the <strong>${planName}</strong> plan`, time: timeAgo(item.date) });
+        }
+        case 'plan': {
+          // FIX: Cast item.data to the correct type to resolve property access errors.
+          const data = item.data as Transaction;
+          const planName = data.description.split(' ')[1] || 'a new';
+          activities.push({ id: `pl-${data._id}`, type: 'plan', text: `<strong class="font-semibold">${data.userName}</strong> purchased the <strong>${planName}</strong> plan`, time: timeAgo(item.date) });
           break;
-        case 'joined':
-           activities.push({ id: `jn-${item.data._id}`, type: 'joined', text: `<strong class="font-semibold">${item.data.username}</strong> just joined SmartEarning`, time: timeAgo(item.date) });
+        }
+        case 'joined': {
+           // FIX: Cast item.data to the correct type to resolve property access errors.
+           const data = item.data as User;
+           activities.push({ id: `jn-${data._id}`, type: 'joined', text: `<strong class="font-semibold">${data.username}</strong> just joined SmartEarning`, time: timeAgo(item.date) });
            break;
+        }
       }
     });
 

@@ -38,6 +38,7 @@ const Wallet: React.FC = () => {
     }, []);
 
     const filteredUsers = users.filter(user => {
+        if (!identifier) return true; // Show all if input is empty
         const term = identifier.toLowerCase();
         return (
             user.username.toLowerCase().includes(term) ||
@@ -53,11 +54,22 @@ const Wallet: React.FC = () => {
         setIsDropdownOpen(false);
     };
 
+    const handleIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setIdentifier(value);
+        setIsDropdownOpen(true);
+        // If user clears the input, clear the selected user and their currency
+        if (value === '') {
+            setSelectedUser(null);
+        }
+    };
+
     const handleAdjustment = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         
-        const targetUser = users.find(u => 
+        // Use the selectedUser if available, otherwise find by identifier
+        const targetUser = selectedUser || users.find(u => 
             u._id.toString() === identifier ||
             u.username.toLowerCase() === identifier.toLowerCase() ||
             u.email.toLowerCase() === identifier.toLowerCase() ||
@@ -114,11 +126,7 @@ const Wallet: React.FC = () => {
                               type="text" 
                               id="user-identifier" 
                               value={identifier} 
-                              onChange={e => {
-                                  setIdentifier(e.target.value);
-                                  setSelectedUser(null);
-                                  setIsDropdownOpen(true);
-                              }}
+                              onChange={handleIdentifierChange}
                               onFocus={() => setIsDropdownOpen(true)}
                               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
                               placeholder="Search name, username, email..."

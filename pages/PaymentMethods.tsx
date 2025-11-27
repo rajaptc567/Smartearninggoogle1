@@ -56,7 +56,7 @@ const PaymentMethods: React.FC = () => {
     
     const filteredMethods = paymentMethods.filter(method => {
         if (!currencyFilter) return true;
-        return method.currency === currencyFilter;
+        return method.currency?.toUpperCase() === currencyFilter;
     });
 
     return (

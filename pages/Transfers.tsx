@@ -41,7 +41,7 @@ const Transfers: React.FC = () => {
             t.amount.toString().includes(searchTerm);
         
         const matchesStatus = statusFilter ? t.status === statusFilter : true;
-        const matchesCurrency = currencyFilter ? t.currency === currencyFilter : true;
+        const matchesCurrency = currencyFilter ? t.currency?.toUpperCase() === currencyFilter : true;
 
         return matchesSearch && matchesStatus && matchesCurrency;
     });

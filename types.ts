@@ -214,6 +214,7 @@ export interface TransferFeeTier {
     maxAmount: number;
     feeType: 'percentage' | 'fixed';
     feeValue: number;
+    currency: Currency;
     enabled?: boolean; // New flag to enable/disable specific tiers
 }
 

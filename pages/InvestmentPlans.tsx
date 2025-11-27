@@ -79,7 +79,7 @@ const InvestmentPlans: React.FC = () => {
 
     const filteredPlans = investmentPlans.filter(plan => {
         if (!currencyFilter) return true;
-        return plan.currency === currencyFilter;
+        return plan.currency?.toUpperCase() === currencyFilter;
     });
 
 

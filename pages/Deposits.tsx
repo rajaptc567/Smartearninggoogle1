@@ -48,7 +48,7 @@ const Deposits: React.FC = () => {
         
         const matchesStatus = statusFilter ? deposit.status === statusFilter : true;
 
-        const matchesCurrency = currencyFilter ? deposit.currency === currencyFilter : true;
+        const matchesCurrency = currencyFilter ? deposit.currency?.toUpperCase() === currencyFilter : true;
 
         return matchesSearch && matchesStatus && matchesCurrency;
     });

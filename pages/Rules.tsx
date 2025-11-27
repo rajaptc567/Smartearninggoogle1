@@ -10,13 +10,24 @@ const Rules: React.FC = () => {
     const { state, dispatch } = useData();
     const { rules, investmentPlans } = state;
     
+    // Form state
     const [fromPlan, setFromPlan] = useState('');
     const [toPlan, setToPlan] = useState('');
     const [requiredEarnings, setRequiredEarnings] = useState('');
-    const [currency, setCurrency] = useState<Currency>('USD');
+    const [formCurrency, setFormCurrency] = useState<Currency>('USD');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const activePlans = investmentPlans.filter(p => p.status === 'Active' && p.currency === currency);
+    // Filter state for the table
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+
+    // Plans available in the form dropdowns, based on the form's currency selector
+    const activePlansForForm = investmentPlans.filter(p => p.status === 'Active' && p.currency === formCurrency);
+
+    // Filtered rules for the table display
+    const filteredRules = rules.filter(rule => {
+        if (!currencyFilter) return true;
+        return rule.currency?.toUpperCase() === currencyFilter;
+    });
 
     const handleAddRule = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,7 +41,7 @@ const Rules: React.FC = () => {
                 fromPlan,
                 toPlan,
                 requiredEarnings: parseFloat(requiredEarnings),
-                currency,
+                currency: formCurrency,
             });
             dispatch({ type: 'ADD_RULE', payload: newRule });
             setFromPlan('');
@@ -65,7 +76,7 @@ const Rules: React.FC = () => {
                     <form onSubmit={handleAddRule} className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                         <div>
                             <label htmlFor="currency" className="block text-sm font-medium">Currency</label>
-                            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                            <select id="currency" value={formCurrency} onChange={e => setFormCurrency(e.target.value as Currency)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="USD">USD</option>
                                 <option value="EUR">EUR</option>
                                 <option value="PKR">PKR</option>
@@ -75,14 +86,14 @@ const Rules: React.FC = () => {
                             <label htmlFor="fromPlan" className="block text-sm font-medium">From Plan</label>
                             <select id="fromPlan" value={fromPlan} onChange={e => setFromPlan(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="">Select Plan</option>
-                                {activePlans.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
+                                {activePlansForForm.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label htmlFor="toPlan" className="block text-sm font-medium">To Plan</label>
                             <select id="toPlan" value={toPlan} onChange={e => setToPlan(e.target.value)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="">Select Plan</option>
-                                {activePlans.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
+                                {activePlansForForm.map(p => <option key={p._id} value={p.name}>{p.name}</option>)}
                             </select>
                         </div>
                         <div>
@@ -95,10 +106,22 @@ const Rules: React.FC = () => {
                     </form>
                 </div>
                  <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Existing Rules</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Existing Rules</h3>
+                        <select
+                            value={currencyFilter}
+                            onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                            className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        >
+                            <option value="">All Currencies</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="PKR">PKR</option>
+                        </select>
+                    </div>
                      <div className="mt-4">
                         <Table headers={['From Plan', 'To Plan', 'Required Earnings', 'Actions']}>
-                            {rules.map(rule => (
+                            {filteredRules.map(rule => (
                                 <tr key={rule._id} className="text-gray-700 dark:text-gray-400">
                                     <td className="px-4 py-3">{rule.fromPlan} ({rule.currency})</td>
                                     <td className="px-4 py-3">{rule.toPlan} ({rule.currency})</td>

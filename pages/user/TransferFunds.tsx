@@ -46,11 +46,16 @@ const TransferFunds: React.FC = () => {
             return;
         }
 
-        // Find Tier
-        const tier = config.tiers?.find(t => val >= t.minAmount && val <= t.maxAmount);
+        // Find Tier, now also matching currency
+        const tier = config.tiers?.find(t => 
+            t.currency === currentUser.currency &&
+            val >= t.minAmount && 
+            val <= t.maxAmount &&
+            (t.enabled === undefined || t.enabled === true)
+        );
 
         if (!tier) {
-            setFeeError("Amount is outside the allowed transfer limits.");
+            setFeeError("Amount is outside the allowed transfer limits for your currency.");
             setFee(0);
             setTotalDeduction(0);
         } else {

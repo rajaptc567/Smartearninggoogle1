@@ -137,7 +137,7 @@ const Users: React.FC = () => {
 
             const matchesCurrency = (() => {
                 if (!currencyFilter) return true;
-                return user.currency === currencyFilter;
+                return user.currency?.toUpperCase() === currencyFilter;
             })();
 
             return matchesSearch && matchesStatus && matchesPlan && matchesCurrency;

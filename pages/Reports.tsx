@@ -71,7 +71,7 @@ const Reports: React.FC = () => {
             if (statusFilter && item.status && item.status !== statusFilter) return false;
 
             // Currency Filter
-            if (currencyFilter && item.currency && item.currency !== currencyFilter) return false;
+            if (currencyFilter && item.currency?.toUpperCase() !== currencyFilter) return false;
 
             // Amount Filter
             const amountField = item.amount ?? item.walletBalance;

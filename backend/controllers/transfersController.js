@@ -46,6 +46,7 @@ export const createTransfer = async (req, res) => {
         // 3. Determine Fee based on Tiers
         // Find a tier where the amount falls within minAmount and maxAmount AND is enabled
         const tier = config.tiers.find(t => 
+            t.currency === sender.currency &&
             amount >= t.minAmount && 
             amount <= t.maxAmount && 
             (t.enabled === undefined || t.enabled === true) // Default to true if missing
