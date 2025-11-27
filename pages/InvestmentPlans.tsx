@@ -167,6 +167,7 @@ const defaultPlan: Partial<InvestmentPlan> = {
     },
     autoUpgrade: { enabled: false, toPlanId: undefined },
     holdPosition: { enabled: false, slots: [] },
+    equivalentPlanIds: [],
 };
 
 const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) => {
@@ -174,7 +175,9 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     
     // Ensure existing plans have directCommissions array if migration happened
     const initialPlan = plan ? {
+        ...defaultPlan,
         ...plan,
+        equivalentPlanIds: plan.equivalentPlanIds || [],
         directCommissions: plan.directCommissions && plan.directCommissions.length > 0 
             ? plan.directCommissions 
             : (plan.directReferralLimit > 0 ? new Array(plan.directReferralLimit).fill(defaultCommission) : [defaultCommission])
@@ -304,6 +307,13 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, slots: currentSlots } }));
     };
 
+    const handleEquivalencyChange = (selectedIds: string[]) => {
+        setFormData(prev => ({
+            ...prev,
+            equivalentPlanIds: selectedIds
+        }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
@@ -410,6 +420,34 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                         <CommissionInput label="After Max Payout" path="commissionDeductions.afterMaxPayout" value={formData.commissionDeductions!.afterMaxPayout} onChange={handleCommissionChange} />
                         <CommissionInput label="After Max Earning" path="commissionDeductions.afterMaxEarning" value={formData.commissionDeductions!.afterMaxEarning} onChange={handleCommissionChange} />
                         <CommissionInput label="After Max Direct" path="commissionDeductions.afterMaxDirect" value={formData.commissionDeductions!.afterMaxDirect} onChange={handleCommissionChange} />
+                    </div>
+                </fieldset>
+
+                <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                    <legend className="px-2 font-semibold">Plan Equivalency</legend>
+                    <p className="text-xs text-gray-500 mb-2">Select plans from other currencies that should be treated as equal to this one for commission eligibility.</p>
+                    <div className="max-h-40 overflow-y-auto space-y-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded-md">
+                        {state.investmentPlans
+                            .filter(p => p._id !== plan?._id && p.currency !== formData.currency)
+                            .map(p => (
+                                <label key={p._id} className="flex items-center space-x-3 p-2 bg-white dark:bg-gray-800 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        checked={(formData.equivalentPlanIds || []).includes(p._id)}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            const currentIds = formData.equivalentPlanIds || [];
+                                            const newIds = checked 
+                                                ? [...currentIds, p._id]
+                                                : currentIds.filter(id => id !== p._id);
+                                            handleEquivalencyChange(newIds);
+                                        }}
+                                    />
+                                    <span className="text-sm font-medium">{p.name} ({p.currency})</span>
+                                </label>
+                            ))
+                        }
                     </div>
                 </fieldset>
 

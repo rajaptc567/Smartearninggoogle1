@@ -154,6 +154,7 @@ export interface InvestmentPlan {
     minWithdraw: number;
     description: string;
     status: Status.Active | Status.Disabled;
+    equivalentPlanIds?: string[]; // For cross-currency commission eligibility
     
     directReferralLimit: number; // 0 for unlimited
     directCommissions: Commission[]; // Array for tiered commissions

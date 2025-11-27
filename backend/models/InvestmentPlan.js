@@ -1,5 +1,4 @@
 
-
 import mongoose from 'mongoose';
 
 const CommissionSchema = new mongoose.Schema({
@@ -48,6 +47,10 @@ const InvestmentPlanSchema = new mongoose.Schema({
         enum: ['Active', 'Disabled'],
         default: 'Active',
     },
+    equivalentPlanIds: [{
+        type: mongoose.Schema.ObjectId,
+        ref: 'InvestmentPlan'
+    }],
     directReferralLimit: {
         type: Number,
         default: 0, // 0 for unlimited

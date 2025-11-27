@@ -225,18 +225,43 @@ export const updateUser = async (req, res) => {
         // --- RELEASE LOGIC: If earning restriction was removed, release pending commissions ---
         if (req.body.restrictions && req.body.restrictions.earning === false && userBeforeUpdate.restrictions?.earning === true) {
             const settings = await Setting.getSettings();
+            const allPlans = await InvestmentPlan.find(); // Fetch all plans for equivalency check
             const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
 
             let releasedAmount = 0;
             for (const comm of pendingCommissions) {
                 let canRelease = true;
                 if (settings.requirePlanMatchForCommission && comm.relatedPlanId) {
-                    const hasPlan = updatedUser.activePlans && updatedUser.activePlans.some(p => p.planId.toString() === comm.relatedPlanId.toString());
-                    if (!hasPlan) canRelease = false;
+                    
+                    // --- NEW EQUIVALENCY LOGIC ---
+                    const referralPlanId = comm.relatedPlanId.toString();
+                    const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
+                    
+                    if (!referralPlan) {
+                        canRelease = false;
+                    } else {
+                        const equivalentIds = new Set([referralPlanId]);
+                        (referralPlan.equivalentPlanIds || []).forEach(id => equivalentIds.add(id.toString()));
+                        allPlans.forEach(p => {
+                            if (p.equivalentPlanIds && p.equivalentPlanIds.some(id => id.toString() === referralPlanId)) {
+                                equivalentIds.add(p._id.toString());
+                            }
+                        });
+
+                        const sponsorActivePlanIds = (updatedUser.activePlans || []).map(p => p.planId.toString());
+                        const hasEquivalentPlan = sponsorActivePlanIds.some(id => equivalentIds.has(id));
+
+                        if (!hasEquivalentPlan) {
+                            canRelease = false;
+                        }
+                    }
+                    // --- END NEW LOGIC ---
+
                 } else if (settings.requireActivePlanForCommission) {
                     const hasAnyPlan = updatedUser.activePlans && updatedUser.activePlans.length > 0;
                     if (!hasAnyPlan) canRelease = false;
                 }
+
                 if (canRelease) {
                     comm.status = 'Approved';
                     await comm.save();
@@ -279,6 +304,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
 
         const usersToUpdate = await User.find(query);
         const settings = await Setting.getSettings();
+        const allPlans = await InvestmentPlan.find(); // Fetch for equivalency check
         
         let updatedCount = 0;
         const notifications = [];
@@ -325,8 +351,29 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     for (const comm of pendingCommissions) {
                         let canRelease = true;
                         if (settings.requirePlanMatchForCommission && comm.relatedPlanId) {
-                            const hasPlan = user.activePlans && user.activePlans.some(p => p.planId.toString() === comm.relatedPlanId.toString());
-                            if (!hasPlan) canRelease = false;
+                            // --- NEW EQUIVALENCY LOGIC ---
+                            const referralPlanId = comm.relatedPlanId.toString();
+                            const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
+                            
+                            if (!referralPlan) {
+                                canRelease = false;
+                            } else {
+                                const equivalentIds = new Set([referralPlanId]);
+                                (referralPlan.equivalentPlanIds || []).forEach(id => equivalentIds.add(id.toString()));
+                                allPlans.forEach(p => {
+                                    if (p.equivalentPlanIds && p.equivalentPlanIds.some(id => id.toString() === referralPlanId)) {
+                                        equivalentIds.add(p._id.toString());
+                                    }
+                                });
+
+                                const sponsorActivePlanIds = (user.activePlans || []).map(p => p.planId.toString());
+                                const hasEquivalentPlan = sponsorActivePlanIds.some(id => equivalentIds.has(id));
+
+                                if (!hasEquivalentPlan) {
+                                    canRelease = false;
+                                }
+                            }
+                            // --- END NEW LOGIC ---
                         } else if (settings.requireActivePlanForCommission) {
                             const hasAnyPlan = user.activePlans && user.activePlans.length > 0;
                             if (!hasAnyPlan) canRelease = false;
@@ -343,7 +390,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
                         user.walletBalance = Number((user.walletBalance + releasedAmount).toFixed(2));
                         notifications.push({
                             userId: user._id,
-                            message: `Restrictions removed! $${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
+                            message: `Restrictions removed! ${user.currency}${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
                         });
                     }
                 }
@@ -460,6 +507,7 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(planId);
         const settings = await Setting.getSettings(); // Fetch settings for commission logic
         const { exchangeRates } = settings;
+        const allPlans = await InvestmentPlan.find(); // Fetch all plans for equivalency check
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
@@ -507,25 +555,48 @@ export const purchasePlan = async (req, res) => {
         });
 
         // --- RELEASE HELD COMMISSIONS LOGIC ---
-        let releasedCommissionsQuery = { userId: user._id, type: 'Commission', status: 'Pending' };
-        if (settings.requirePlanMatchForCommission) {
-            releasedCommissionsQuery.relatedPlanId = plan._id;
-        }
-        const heldCommissions = await Transaction.find(releasedCommissionsQuery);
+        const heldCommissions = await Transaction.find({ userId: user._id, type: 'Commission', status: 'Pending' });
 
         if (heldCommissions.length > 0) {
             let totalReleased = 0;
             for (const comm of heldCommissions) {
-                comm.status = 'Approved';
-                await comm.save();
-                totalReleased += comm.amount;
+                let canRelease = true;
+                 if (settings.requirePlanMatchForCommission && comm.relatedPlanId) {
+                    const referralPlanId = comm.relatedPlanId.toString();
+                    const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
+                    if (!referralPlan) {
+                        canRelease = false;
+                    } else {
+                        const equivalentIds = new Set([referralPlanId]);
+                        (referralPlan.equivalentPlanIds || []).forEach(id => equivalentIds.add(id.toString()));
+                        allPlans.forEach(p => {
+                            if (p.equivalentPlanIds && p.equivalentPlanIds.some(id => id.toString() === referralPlanId)) {
+                                equivalentIds.add(p._id.toString());
+                            }
+                        });
+                        const allSponsorPlanIds = (user.activePlans || []).map(p => p.planId.toString());
+                        if (!allSponsorPlanIds.some(id => equivalentIds.has(id))) {
+                            canRelease = false;
+                        }
+                    }
+                } else if (!settings.requireActivePlanForCommission) {
+                    canRelease = true;
+                }
+                
+                if (canRelease) {
+                    comm.status = 'Approved';
+                    await comm.save();
+                    totalReleased += comm.amount;
+                }
             }
-            user.walletBalance = Number((user.walletBalance + totalReleased).toFixed(2));
-            await user.save(); 
-            await Notification.create({
-                userId: user._id,
-                message: `Congratulations! Purchasing ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in previously held commissions.`
-            });
+            if (totalReleased > 0) {
+                user.walletBalance = Number((user.walletBalance + totalReleased).toFixed(2));
+                await user.save(); 
+                await Notification.create({
+                    userId: user._id,
+                    message: `Congratulations! Purchasing ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in previously held commissions.`
+                });
+            }
         }
 
         // --- COMMISSION DISTRIBUTION LOGIC ---
@@ -552,8 +623,21 @@ export const purchasePlan = async (req, res) => {
                      return { status: 'Pending', message: `Commission Held! Your earnings are currently paused by the administrator.` };
                 }
                 if (settings.requirePlanMatchForCommission) {
-                    const hasSamePlan = (uplineUser.activePlans || []).some(p => p.planId.toString() === purchasePlanId.toString());
-                    if (!hasSamePlan) return { status: 'Pending', message: `Commission Held! Purchase the ${plan.name} plan to start earning commissions from your referrals.` };
+                    const referralPlanId = purchasePlanId.toString();
+                    const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
+                    let hasEquivalentPlan = false;
+                    if (referralPlan) {
+                        const equivalentIds = new Set([referralPlanId]);
+                        (referralPlan.equivalentPlanIds || []).forEach(id => equivalentIds.add(id.toString()));
+                        allPlans.forEach(p => {
+                            if (p.equivalentPlanIds && p.equivalentPlanIds.some(id => id.toString() === referralPlanId)) {
+                                equivalentIds.add(p._id.toString());
+                            }
+                        });
+                        const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
+                        hasEquivalentPlan = sponsorActivePlanIds.some(id => equivalentIds.has(id));
+                    }
+                    if (!hasEquivalentPlan) return { status: 'Pending', message: `Commission Held! Purchase the ${plan.name} or an equivalent plan to earn from this referral.` };
                 }
                 else if (settings.requireActivePlanForCommission) {
                     if (!hasAnyPlan) return { status: 'Pending', message: `Commission Held! Purchase any plan to activate your earnings from ${user.username}.` };
