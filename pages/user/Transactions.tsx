@@ -35,6 +35,11 @@ const Transactions: React.FC = () => {
                             <td className="px-4 py-3 text-sm">
                                 {tx.description}
                                 {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
+                                {tx.originalAmount && tx.originalCurrency && (
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                        (Original: {formatCurrency(tx.originalAmount, tx.originalCurrency)})
+                                    </span>
+                                )}
                             </td>
                         </tr>
                     ))}

@@ -36,6 +36,21 @@ const TransactionSchema = new mongoose.Schema({
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
     },
+    relatedPlanId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'InvestmentPlan'
+    },
+    // For multi-currency commission tracking
+    originalAmount: {
+        type: Number,
+    },
+    originalCurrency: {
+        type: String,
+        enum: ['USD', 'EUR', 'PKR'],
+    },
+    exchangeRate: {
+        type: Number,
+    }
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

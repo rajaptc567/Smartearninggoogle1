@@ -198,6 +198,10 @@ export interface Transaction {
     level?: number;
     status?: 'Pending' | 'Approved' | 'Rejected';
     relatedPlanId?: string;
+    // Fields for multi-currency commissions
+    originalAmount?: number;
+    originalCurrency?: Currency;
+    exchangeRate?: number;
 }
 
 export interface Rule {
@@ -238,6 +242,12 @@ export interface Settings {
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
+    };
+
+    exchangeRates: {
+        USD: number;
+        EUR: number;
+        PKR: number;
     };
 
     restrictWithdrawalAmount: boolean; // Restrict to own active plan prices

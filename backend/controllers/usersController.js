@@ -471,6 +471,7 @@ export const purchasePlan = async (req, res) => {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(planId);
         const settings = await Setting.getSettings(); // Fetch settings for commission logic
+        const { exchangeRates } = settings;
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
@@ -491,10 +492,7 @@ export const purchasePlan = async (req, res) => {
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         
         // 2. Add to Active Plans
-        // Update the legacy 'activePlan' string to the latest plan name for quick display
         user.activePlan = plan.name;
-        
-        // Add to the array of active plans
         if (!user.activePlans) user.activePlans = [];
         user.activePlans.push({
             planId: plan._id,
@@ -521,21 +519,10 @@ export const purchasePlan = async (req, res) => {
         });
 
         // --- RELEASE HELD COMMISSIONS LOGIC ---
-        
-        let releasedCommissionsQuery = {
-            userId: user._id,
-            type: 'Commission',
-            status: 'Pending',
-        };
-
-        // STRICT PLAN MATCHING RULE
+        let releasedCommissionsQuery = { userId: user._id, type: 'Commission', status: 'Pending' };
         if (settings.requirePlanMatchForCommission) {
             releasedCommissionsQuery.relatedPlanId = plan._id;
-        } else {
-            // Fallback: default behavior releases related plan commissions to be safe
-            releasedCommissionsQuery.relatedPlanId = plan._id;
         }
-
         const heldCommissions = await Transaction.find(releasedCommissionsQuery);
 
         if (heldCommissions.length > 0) {
@@ -545,11 +532,8 @@ export const purchasePlan = async (req, res) => {
                 await comm.save();
                 totalReleased += comm.amount;
             }
-            
-            // Re-add released amount to wallet - Precision Fix
             user.walletBalance = Number((user.walletBalance + totalReleased).toFixed(2));
             await user.save(); 
-            
             await Notification.create({
                 userId: user._id,
                 message: `Congratulations! Purchasing ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in previously held commissions.`
@@ -557,177 +541,98 @@ export const purchasePlan = async (req, res) => {
         }
 
         // --- COMMISSION DISTRIBUTION LOGIC ---
-
+        const convertCurrency = (amount, from, to) => {
+            if (from === to) return Number(amount.toFixed(2));
+            const amountInUSD = amount / exchangeRates[from];
+            const convertedAmount = amountInUSD * exchangeRates[to];
+            return Number(convertedAmount.toFixed(2));
+        };
+        
         const calculateAmount = (commissionConfig, planPrice) => {
             if (!commissionConfig) return 0;
             const value = parseFloat(commissionConfig.value);
             if (isNaN(value)) return 0;
-
-            if (commissionConfig.type === 'percentage') {
-                return (planPrice * value) / 100;
-            }
-            return value; // Fixed amount
+            return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
         };
 
         if (user.sponsor) {
-            // A. Direct Commission (Level 1)
-            const sponsor = await User.findOne({ username: { $regex: new RegExp(`^${user.sponsor}$`, 'i') } });
-            
-            // Helper to determine eligibility based on settings
             const checkEligibility = (uplineUser, purchasePlanId) => {
-                let status = 'Approved';
-                let message = '';
-
-                // CURRENCY CHECK: Upline must have same currency as downline to earn
-                if (uplineUser.currency !== user.currency) {
-                    return {
-                        status: 'Rejected',
-                        message: `Commission from ${user.username} was forfeited due to currency mismatch.`
-                    }
-                }
-
-                const activePlans = uplineUser.activePlans || [];
-                const hasAnyPlan = activePlans.length > 0;
+                let status = 'Approved', message = '';
+                const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
                 
-                // Check Restriction First
                 if (uplineUser.restrictions && uplineUser.restrictions.earning) {
-                     return { 
-                        status: 'Pending', 
-                        message: `Commission Held! Your earnings are currently paused by the administrator.`
-                    };
+                     return { status: 'Pending', message: `Commission Held! Your earnings are currently paused by the administrator.` };
                 }
-
-                // Check Strict Match Rule
                 if (settings.requirePlanMatchForCommission) {
-                    const hasSamePlan = activePlans.some(p => p.planId.toString() === purchasePlanId.toString());
-                    if (!hasSamePlan) {
-                        return { 
-                            status: 'Pending', 
-                            message: `Commission Held! Purchase the ${plan.name} plan to start earning commissions from your referrals.`
-                        };
-                    }
+                    const hasSamePlan = (uplineUser.activePlans || []).some(p => p.planId.toString() === purchasePlanId.toString());
+                    if (!hasSamePlan) return { status: 'Pending', message: `Commission Held! Purchase the ${plan.name} plan to start earning commissions from your referrals.` };
                 }
-                // Check General Active Rule
                 else if (settings.requireActivePlanForCommission) {
-                    if (!hasAnyPlan) {
-                        return { 
-                            status: 'Pending', 
-                            message: `Commission Held! Purchase any plan to activate your earnings from ${user.username}.`
-                        };
-                    }
+                    if (!hasAnyPlan) return { status: 'Pending', message: `Commission Held! Purchase any plan to activate your earnings from ${user.username}.` };
                 }
-
                 return { status, message };
             };
 
-            // STRICT: Sponsor MUST be Active (not Blocked)
-            if (sponsor && sponsor.status !== 'Blocked') {
-                let commissionAmount = 0;
+            let currentUplineUsername = user.sponsor;
+            const commissionLevels = [plan.directCommissions, ...(plan.indirectCommissions || [])];
 
-                // Logic for Tiered vs Standard Direct Commission
-                if (plan.directReferralLimit > 0) {
-                    const directReferrals = await User.find({ sponsor: { $regex: new RegExp(`^${sponsor.username}$`, 'i') } }).sort({ registrationDate: 1 });
-                    const referralIndex = directReferrals.findIndex(u => u._id.toString() === user._id.toString());
-                    
-                    if (referralIndex !== -1 && plan.directCommissions && referralIndex < plan.directCommissions.length) {
-                        commissionAmount = calculateAmount(plan.directCommissions[referralIndex], plan.price);
-                    }
-                } else {
-                    if (plan.directCommissions && plan.directCommissions.length > 0) {
-                        commissionAmount = calculateAmount(plan.directCommissions[0], plan.price);
-                    }
-                }
+            for (let level = 0; level < commissionLevels.length; level++) {
+                if (!currentUplineUsername) break;
+                const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
+                if (!uplineUser || uplineUser.status === 'Blocked') break;
 
-                if (commissionAmount > 0) {
-                    // Check Eligibility
-                    const eligibility = checkEligibility(sponsor, plan._id);
-                    
-                    if (eligibility.status === 'Approved') {
-                        // Precision Fix
-                        sponsor.walletBalance = Number((sponsor.walletBalance + commissionAmount).toFixed(2));
-                        await sponsor.save();
-                        await Notification.create({
-                            userId: sponsor._id,
-                            message: `You earned a direct commission of ${sponsor.currency}${commissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
-                        });
-                    } else if (eligibility.status === 'Pending') {
-                        // Send "Held" notification
-                        await Notification.create({
-                            userId: sponsor._id,
-                            message: eligibility.message
-                        });
-                    }
-
-                    if (eligibility.status !== 'Rejected') {
-                        await Transaction.create({
-                            userId: sponsor._id,
-                            userName: sponsor.username,
-                            currency: sponsor.currency,
-                            type: 'Commission',
-                            amount: commissionAmount,
-                            level: 1,
-                            description: `Direct Commission From ${user.username} (${plan.name})`,
-                            status: eligibility.status, // Approved or Pending
-                            relatedPlanId: plan._id // Link to plan for future release
-                        });
-                    }
-                }
-
-                // B. Indirect Commissions (Level 2+)
-                if (plan.indirectCommissions && plan.indirectCommissions.length > 0) {
-                    let currentUplineUsername = sponsor.sponsor;
-                    
-                    for (let i = 0; i < plan.indirectCommissions.length; i++) {
-                        if (!currentUplineUsername) break; 
-
-                        const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
-                        if (!uplineUser) break; 
-
-                        // STRICT: Upline user MUST be Active
-                        if (uplineUser.status !== 'Blocked') {
-                            const levelCommissionAmount = calculateAmount(plan.indirectCommissions[i], plan.price);
-
-                            if (levelCommissionAmount > 0) {
-                                // Check Eligibility for Indirect Upline too
-                                const indirectEligibility = checkEligibility(uplineUser, plan._id);
-
-                                if (indirectEligibility.status === 'Approved') {
-                                    // Precision Fix
-                                    uplineUser.walletBalance = Number((uplineUser.walletBalance + levelCommissionAmount).toFixed(2));
-                                    await uplineUser.save();
-                                    await Notification.create({
-                                        userId: uplineUser._id,
-                                        message: `You earned a Level ${i + 2} commission of ${uplineUser.currency}${levelCommissionAmount.toFixed(2)} from ${user.username} for the ${plan.name} plan.`
-                                    });
-                                } else if (indirectEligibility.status === 'Pending') {
-                                     await Notification.create({
-                                        userId: uplineUser._id,
-                                        message: indirectEligibility.message
-                                    });
-                                }
-
-                                if (indirectEligibility.status !== 'Rejected') {
-                                    await Transaction.create({
-                                        userId: uplineUser._id,
-                                        userName: uplineUser.username,
-                                        currency: uplineUser.currency,
-                                        type: 'Commission',
-                                        amount: levelCommissionAmount,
-                                        level: i + 2, // i=0 is Level 2
-                                        description: `Level ${i + 2} Commission From ${user.username} (${plan.name})`,
-                                        status: indirectEligibility.status,
-                                        relatedPlanId: plan._id
-                                    });
-                                }
-                            }
+                let commissionConfig;
+                if (level === 0) { // Direct Commission
+                    if (plan.directReferralLimit > 0) {
+                        const directReferrals = await User.find({ sponsor: { $regex: new RegExp(`^${uplineUser.username}$`, 'i') } }).sort({ registrationDate: 1 });
+                        const referralIndex = directReferrals.findIndex(u => u._id.toString() === user._id.toString());
+                        if (referralIndex !== -1 && plan.directCommissions && referralIndex < plan.directCommissions.length) {
+                            commissionConfig = plan.directCommissions[referralIndex];
                         }
-                        currentUplineUsername = uplineUser.sponsor;
+                    } else {
+                        commissionConfig = plan.directCommissions?.[0];
                     }
+                } else { // Indirect Commission
+                     commissionConfig = plan.indirectCommissions?.[level - 1];
                 }
+
+                if (!commissionConfig) continue;
+
+                const commissionInPurchaserCurrency = calculateAmount(commissionConfig, plan.price);
+                if (commissionInPurchaserCurrency <= 0) continue;
+
+                const finalCommissionAmount = convertCurrency(commissionInPurchaserCurrency, user.currency, uplineUser.currency);
+                const eligibility = checkEligibility(uplineUser, plan._id);
+
+                if (eligibility.status === 'Approved') {
+                    uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
+                    await uplineUser.save();
+                    await Notification.create({
+                        userId: uplineUser._id,
+                        message: `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`
+                    });
+                } else if (eligibility.status === 'Pending') {
+                    await Notification.create({ userId: uplineUser._id, message: eligibility.message });
+                }
+
+                await Transaction.create({
+                    userId: uplineUser._id,
+                    userName: uplineUser.username,
+                    currency: uplineUser.currency,
+                    type: 'Commission',
+                    amount: finalCommissionAmount,
+                    level: level + 1,
+                    description: `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
+                    status: eligibility.status,
+                    relatedPlanId: plan._id,
+                    originalAmount: commissionInPurchaserCurrency,
+                    originalCurrency: user.currency,
+                    exchangeRate: exchangeRates[user.currency]
+                });
+                
+                currentUplineUsername = uplineUser.sponsor;
             }
         }
-
-        // --- END COMMISSION LOGIC ---
         
         res.status(200).json({ success: true, data: { user, transaction } });
     } catch (err) {

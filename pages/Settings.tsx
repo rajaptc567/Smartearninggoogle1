@@ -11,13 +11,14 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
 
   useEffect(() => {
     setLocalSettings(prev => ({
         ...settings,
-        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] }
+        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
+        exchangeRates: settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 }
     }));
   }, [settings]);
 
@@ -51,6 +52,18 @@ const Settings: React.FC = () => {
           }
       }));
   }
+
+    const handleExchangeRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        const currency = name.split('.')[1] as keyof SettingsType['exchangeRates'];
+        setLocalSettings(prev => ({
+            ...prev,
+            exchangeRates: {
+                ...prev.exchangeRates,
+                [currency]: parseFloat(value) || 0
+            }
+        }));
+    };
 
   // --- Transfer Tier Handlers ---
   const handleAddTier = () => {
@@ -137,6 +150,7 @@ const Settings: React.FC = () => {
           <TabButton id="transfers" label="Transfers & Fees" />
           <TabButton id="withdrawals" label="Withdrawals" />
           <TabButton id="commissions" label="Commissions" />
+          <TabButton id="exchange_rates" label="Exchange Rates" />
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 min-h-[400px]">
@@ -168,6 +182,57 @@ const Settings: React.FC = () => {
                                 onChange={handleCheckboxChange}
                             />
                             <label htmlFor="transferConfig.enabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.enabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* EXCHANGE RATES TAB */}
+        {activeTab === 'exchange_rates' && (
+            <div className="space-y-6 animate-fade-in">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Currency Exchange Rates</h3>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md text-sm text-green-800 dark:text-green-200 mb-4">
+                    Define how other currencies convert to the base currency (USD). This is crucial for calculating cross-currency commissions.
+                </div>
+                <div className="space-y-4 max-w-md">
+                    <div>
+                        <label htmlFor="rate-usd" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Base Currency</label>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-bold text-lg">1 USD =</span>
+                            <input id="rate-usd" type="number" value="1" disabled className="w-full rounded-md bg-gray-100 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
+                        </div>
+                    </div>
+                     <div>
+                        <label htmlFor="rate-eur" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Euro Rate</label>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-bold text-lg">1 USD =</span>
+                            <input 
+                                id="rate-eur"
+                                name="exchangeRates.EUR"
+                                type="number" 
+                                step="0.0001"
+                                value={localSettings.exchangeRates?.EUR || ''} 
+                                onChange={handleExchangeRateChange} 
+                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            />
+                            <span className="font-bold">EUR</span>
+                        </div>
+                    </div>
+                     <div>
+                        <label htmlFor="rate-pkr" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pakistani Rupee Rate</label>
+                        <div className="mt-1 flex items-center gap-2">
+                            <span className="font-bold text-lg">1 USD =</span>
+                            <input 
+                                id="rate-pkr"
+                                name="exchangeRates.PKR"
+                                type="number" 
+                                step="0.01"
+                                value={localSettings.exchangeRates?.PKR || ''} 
+                                onChange={handleExchangeRateChange} 
+                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            />
+                             <span className="font-bold">PKR</span>
                         </div>
                     </div>
                 </div>

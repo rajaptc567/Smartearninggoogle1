@@ -38,6 +38,12 @@ const initialState: AppState = {
             enabled: true,
             tiers: []
         },
+        // FIX: Add missing exchangeRates property to satisfy the Settings type.
+        exchangeRates: {
+            USD: 1,
+            EUR: 0.92,
+            PKR: 278.50,
+        },
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,
@@ -226,6 +232,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const defaultSettings: Settings = {
                 isUserTransferEnabled: true,
                 transferConfig: { enabled: true, tiers: [] },
+                // FIX: Add missing exchangeRates property to satisfy the Settings type.
+                exchangeRates: {
+                    USD: 1,
+                    EUR: 0.92,
+                    PKR: 278.50,
+                },
                 restrictWithdrawalAmount: false,
                 requirePlanMatchForCommission: false,
                 requireActivePlanForCommission: false,
