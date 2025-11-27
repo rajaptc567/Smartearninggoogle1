@@ -82,7 +82,7 @@ const UserSchema = new mongoose.Schema({
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });
 
-// Corrected pre-save hook for password hashing
+// Corrected pre-save hook for password hashing and data migration
 UserSchema.pre('save', async function(next) {
     // Data Migration for country if it's missing (for very old docs)
     if (!this.country) {
@@ -101,14 +101,12 @@ UserSchema.pre('save', async function(next) {
     }
     
     // Password Hashing
-    if (!this.isModified('password')) {
-        return next();
+    if (this.isModified('password')) {
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
     }
-    // Double check to prevent re-hashing on updates that don't involve password
-    if(this.password && this.password.startsWith('$2a$')) return next();
 
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+    next();
 });
 
 // Method to match entered password to hashed password in database

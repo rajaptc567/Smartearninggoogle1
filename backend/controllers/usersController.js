@@ -431,33 +431,31 @@ export const adjustWallet = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-        // Precision Fix
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
-        await user.save();
+        const updatedUser = await user.save(); // Capture the saved document which includes hook modifications
 
         const transaction = await Transaction.create({
-            userId: user._id,
-            userName: user.username,
-            currency: user.currency,
+            userId: updatedUser._id,
+            userName: updatedUser.username,
+            currency: updatedUser.currency, // Use currency from the reliably saved user object
             type: amount > 0 ? 'Manual Credit' : 'Manual Debit',
             amount: amount,
             description: description || 'Admin manual adjustment',
             status: 'Approved'
         });
         
-        // Create Notification for the user
         const notifMessage = amount > 0 
-            ? `Admin credited ${user.currency}${amount.toFixed(2)} to your wallet. Reason: ${description || 'Manual Adjustment'}`
-            : `Admin debited ${user.currency}${Math.abs(amount).toFixed(2)} from your wallet. Reason: ${description || 'Manual Adjustment'}`;
+            ? `Admin credited ${updatedUser.currency}${amount.toFixed(2)} to your wallet. Reason: ${description || 'Manual Adjustment'}`
+            : `Admin debited ${updatedUser.currency}${Math.abs(amount).toFixed(2)} from your wallet. Reason: ${description || 'Manual Adjustment'}`;
 
         await Notification.create({
-            userId: user._id,
+            userId: updatedUser._id,
             message: notifMessage
         });
         
-        await createLog('Wallet Adjusted', user.username, `Adjusted balance by ${amount}. Reason: ${description}`, 'admin');
+        await createLog('Wallet Adjusted', updatedUser.username, `Adjusted balance by ${amount}. Reason: ${description}`, 'admin');
 
-        res.status(200).json({ success: true, data: { user, transaction }});
+        res.status(200).json({ success: true, data: { user: updatedUser, transaction }});
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
