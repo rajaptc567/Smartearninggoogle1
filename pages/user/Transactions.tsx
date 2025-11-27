@@ -23,7 +23,7 @@ const Transactions: React.FC = () => {
                 <Table headers={tableHeaders}>
                     {userTransactions.map((tx: Transaction) => (
                          <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm font-mono">{tx._id}</td>
+                            <td className="px-4 py-3 text-sm font-mono">{tx._id.substring(0, 8)}...</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatCurrency(tx.amount, tx.currency)}

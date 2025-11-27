@@ -86,13 +86,8 @@ const UserDashboard: React.FC = () => {
         const directCommission = approvedCommissions.filter(t => t.level === 1).reduce((sum, t) => sum + t.amount, 0);
         const indirectCommission = totalCommission - directCommission;
 
-        // Sum of prices of all active plans
+        const activePlanCount = (currentUser.activePlans || []).length;
         const activePlanValue = (currentUser.activePlans || []).reduce((sum, p) => sum + p.price, 0);
-        
-        // Display string for active plans
-        const activePlansDisplay = (currentUser.activePlans || []).length > 0 
-            ? currentUser.activePlans!.map(p => p.planName).join(', ') 
-            : 'None';
 
         return {
             totalDeposits: deposits.filter(d => d.userId === currentUser._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0),
@@ -102,8 +97,8 @@ const UserDashboard: React.FC = () => {
             indirectCommission,
             pendingCommission: userTransactions.filter(t => t.type === 'Commission' && t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0),
             monthlyEarnings: approvedCommissions.filter(t => t.date >= firstDayOfMonth).reduce((sum, t) => sum + t.amount, 0),
+            activePlanCount,
             activePlanValue,
-            activePlansDisplay
         };
     }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser._id, currentUser.activePlans]);
     
@@ -162,7 +157,7 @@ const UserDashboard: React.FC = () => {
                     {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
                     {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
                     {visibleWidgets.referrals && <StatCard title="Total Referrals" value={totalReferrals} icon={<UsersIcon />} color="bg-purple-500" />}
-                    {visibleWidgets.plan && <StatCard title="Active Plans" value={stats.activePlansDisplay} icon={<PlanIcon />} color="bg-indigo-500" />}
+                    {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
                     {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
                     {visibleWidgets.plan && <StatCard title="Active Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-pink-500" />}
                 </div>
@@ -184,7 +179,7 @@ const UserDashboard: React.FC = () => {
                 <Table headers={['ID', 'Type', 'Amount', 'Status', 'Date', 'Description']}>
                     {recentTransactions.map((tx: Transaction) => (
                          <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm">{tx._id}</td>
+                            <td className="px-4 py-3 text-sm">{tx._id.substring(0, 8)}...</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
                             <td className="px-4 py-3 text-xs"><Badge status={tx.status as Status || Status.Approved} /></td>
