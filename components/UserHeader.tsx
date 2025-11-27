@@ -3,6 +3,7 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import NotificationBell from './ui/NotificationBell';
+import { currencySymbols, Currency } from '../types';
 
 interface UserHeaderProps {
   setSidebarOpen: (open: boolean) => void;
@@ -44,7 +45,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
             {currentUser && (
                 <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
                     <MapPinIcon />
-                    <span>{currentUser.country} ({currentUser.currency})</span>
+                    <span>{currentUser.country} ({currencySymbols[currentUser.currency?.toUpperCase() as Currency] || '$'})</span>
                 </div>
             )}
         </div>

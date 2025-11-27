@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../components/ui/Badge';
+import ShareButtons from '../components/ui/ShareButtons';
 
 // Icons
 const WalletIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
@@ -65,7 +66,6 @@ const UserDashboard: React.FC = () => {
     const { state } = useData();
     const { currentUser, deposits, withdrawals, transactions, users, investmentPlans } = state;
     
-    const [copied, setCopied] = useState(false);
     const [visibleWidgets, setVisibleWidgets] = useState({
       balance: true, deposits: true, commission: true, withdrawals: true,
       pending: true, referrals: true, plan: true, monthly: true, breakdown: true
@@ -115,14 +115,7 @@ const UserDashboard: React.FC = () => {
     const totalReferrals = useMemo(() => countAllReferrals(currentUser.username, users), [currentUser.username, users, countAllReferrals]);
 
     const recentTransactions = userTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
-    const referralLink = `https://site.com/register?sponsor=${currentUser.username}`;
-
-    const handleCopy = () => {
-        navigator.clipboard.writeText(referralLink).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        });
-    };
+    const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
     const toggleWidget = (widget: keyof typeof visibleWidgets) => {
       setVisibleWidgets(prev => ({ ...prev, [widget]: !prev[widget] }));
@@ -176,13 +169,7 @@ const UserDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <h3 className="font-semibold mb-3 text-gray-800 dark:text-white">Your Referral Link</h3>
-                    <div className="flex items-center space-x-2">
-                        <input type="text" readOnly value={referralLink} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-0"/>
-                        <Button onClick={handleCopy} className="flex-shrink-0">{copied ? 'Copied!' : 'Copy'}</Button>
-                    </div>
-                </div>
+                <ShareButtons url={referralLink} title="Join me on SmartEarning and start earning today!" />
                  {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <h3 className="font-semibold mb-3 text-gray-800 dark:text-white text-center">Referral Commission Breakdown</h3>
                     <PieChart currency={currentUser.currency} data={[

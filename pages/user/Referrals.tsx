@@ -5,6 +5,7 @@ import { User, Status, formatCurrency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import ShareButtons from '../../components/ui/ShareButtons';
 
 interface GenealogyNode {
     user: User;
@@ -204,7 +205,9 @@ const Referrals: React.FC = () => {
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 mb-6 ring-8 ring-gray-50 dark:ring-gray-900"><svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg></div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">{planName ? 'Team is Empty' : 'Your Team is Empty'}</h3>
             <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mt-2 text-center">{planName ? `You haven't referred anyone to the ${planName} plan yet.` : "You haven't referred anyone yet."} Share your link to start building your network!</p>
-            <Button onClick={() => { const link = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`; navigator.clipboard.writeText(link); alert('Referral link copied!'); }} className="mt-8 shadow-lg shadow-blue-500/30" size="lg">Copy Referral Link</Button>
+             <div className="mt-8 w-full max-w-2xl">
+                <ShareButtons url={`${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`} title="Join my team on SmartEarning! Let's grow together." />
+            </div>
         </div>
     );
 
@@ -244,10 +247,13 @@ const Referrals: React.FC = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
                     <div><p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Team Volume</p><h3 className="text-3xl font-bold text-gray-800 dark:text-white">{formatCurrency(networkStats.volume, currentUser.currency)}</h3><p className="text-sm text-gray-500 mt-2">Active investment in {currentPlanName}</p></div>
-                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700"><button onClick={() => { const link = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`; navigator.clipboard.writeText(link); alert('Referral link copied!'); }} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center"><svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>Copy Referral Link</button></div>
                 </div>
             </div>
             
+             <div className="mt-8">
+                <ShareButtons url={`${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`} title="Join my team on SmartEarning! Let's grow together." />
+            </div>
+
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center">
                     <div>
