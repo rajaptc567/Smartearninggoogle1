@@ -1,5 +1,4 @@
 
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export const currencySymbols: Record<Currency, string> = {
@@ -225,7 +224,6 @@ export interface DemoProfile {
     currency: Currency;
 }
 
-// FIX: Renamed DemoActivity to DemoActivityTemplate and updated properties to match backend
 export interface DemoActivityTemplate {
     _id: string;
     template: string;
@@ -251,7 +249,6 @@ export interface Settings {
         unit: 'hours' | 'days' | 'weeks' | 'months';
     };
     demoProfiles?: DemoProfile[];
-    // FIX: Renamed demoActivities to demoActivityTemplates to match backend model
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
 }

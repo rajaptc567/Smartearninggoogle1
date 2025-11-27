@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import UserSidebar from './UserSidebar';
@@ -78,7 +79,6 @@ const UserLayout: React.FC = () => {
       if(text) activities.push({ id: `${item.type}-${item.data._id}`, type: item.type as any, text, time: timeAgo(item.date) });
     });
     
-    // FIX: Updated logic to use demoActivityTemplates and generate activities dynamically
     // 2. Add Demo Activities from Settings
     const demoProfiles = settings.demoProfiles || [];
     const demoTemplates = (settings.demoActivityTemplates || []).filter(t => t.enabled);
@@ -86,31 +86,35 @@ const UserLayout: React.FC = () => {
     if (demoProfiles.length > 0 && demoTemplates.length > 0) {
         demoTemplates.forEach(template => {
             const profile = demoProfiles[Math.floor(Math.random() * demoProfiles.length)];
-            
-            if (!template || !profile) return;
+            if (!profile) return;
 
             let text = template.template;
-
-            text = text.replace(/{name}/g, `<strong class="font-semibold">${profile.name}</strong>`);
-            text = text.replace(/{country}/g, `<strong>${profile.country}</strong>`);
+            
+            text = text.replace('{name}', `<strong class="font-semibold">${profile.name}</strong>`);
+            text = text.replace('{country}', `<strong>${profile.country}</strong>`);
 
             if (text.includes('{amount}')) {
-                const randomAmount = Math.floor(Math.random() * (profile.currency === 'PKR' ? 45000 : 450)) + (profile.currency === 'PKR' ? 5000 : 50);
+                const randomAmount = Math.floor(Math.random() * 500) + 50; // More realistic amounts
                 text = text.replace('{amount}', `<strong>${formatCurrency(randomAmount, profile.currency)}</strong>`);
             }
-            
+            if (text.includes('{currency}')) {
+                text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
+            }
             if (text.includes('{plan}')) {
-                const availablePlans = investmentPlans.filter(p => p.currency === profile.currency && p.status === 'Active');
-                if (availablePlans.length > 0) {
-                    const randomPlan = availablePlans[Math.floor(Math.random() * availablePlans.length)];
+                const plansForCurrency = investmentPlans.filter(p => p.status === 'Active' && p.currency === profile.currency);
+                if (plansForCurrency.length > 0) {
+                    const randomPlan = plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)];
                     text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
                 } else {
-                    text = text.replace('{plan}', 'a new plan'); // Fallback
+                    return; // Skip if no suitable plan exists
                 }
             }
             
-            const hoursAgo = Math.floor(Math.random() * 10) + 1;
-            activities.push({ id: `demo-${template._id}-${profile._id}`, type: template.type, text, time: `${hoursAgo}h ago` });
+            if (text) {
+                const hoursAgo = Math.floor(Math.random() * 10) + 1;
+                // Make ID more unique
+                activities.push({ id: `demo-${template._id}-${profile._id}-${Date.now()}`, type: template.type, text, time: `${hoursAgo}h ago` });
+            }
         });
     }
     
