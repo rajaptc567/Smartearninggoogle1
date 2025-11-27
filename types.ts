@@ -1,4 +1,5 @@
 
+
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export const currencySymbols: Record<Currency, string> = {
@@ -154,7 +155,6 @@ export interface InvestmentPlan {
     minWithdraw: number;
     description: string;
     status: Status.Active | Status.Disabled;
-    equivalentPlanIds?: string[]; // For cross-currency commission eligibility
     
     directReferralLimit: number; // 0 for unlimited
     directCommissions: Commission[]; // Array for tiered commissions
@@ -184,6 +184,8 @@ export interface InvestmentPlan {
         minAmount: number;
         maxAmount: number;
     };
+    // FIX: Add missing 'equivalentPlanIds' property to match its usage in the application and backend model.
+    equivalentPlanIds?: string[];
 }
 
 
@@ -236,6 +238,13 @@ export interface DemoActivityTemplate {
     enabled: boolean;
 }
 
+export interface PlanEquivalencyGroup {
+    _id: string; // Client-side unique ID for mapping
+    usdPlanId?: string;
+    pkrPlanId?: string;
+    eurPlanId?: string;
+}
+
 export interface Settings {
     // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
     isUserTransferEnabled: boolean; 
@@ -262,6 +271,7 @@ export interface Settings {
     demoProfiles?: DemoProfile[];
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
+    planEquivalencyGroups?: PlanEquivalencyGroup[];
 }
 
 export interface Notification {

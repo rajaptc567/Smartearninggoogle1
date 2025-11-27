@@ -9,6 +9,7 @@ import Deposits from './pages/Deposits';
 import Withdrawals from './pages/Withdrawals';
 import PaymentMethods from './pages/PaymentMethods';
 import InvestmentPlans from './pages/InvestmentPlans';
+import PlanEquivalency from './pages/PlanEquivalency';
 import Wallet from './pages/Wallet';
 import Rules from './pages/Rules';
 import Reports from './pages/Reports';
@@ -18,7 +19,7 @@ import Transfers from './pages/Transfers';
 import PasswordResets from './pages/PasswordResets';
 import AdminDisputes from './pages/AdminDisputes';
 import SentMessages from './pages/SentMessages';
-import TickerSettings from './pages/TickerSettings'; // Added
+import TickerSettings from './pages/TickerSettings';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -65,6 +66,7 @@ const App: React.FC = () => {
           <Route path="password-resets" element={<PasswordResets />} />
           <Route path="payment-methods" element={<PaymentMethods />} />
           <Route path="investment-plans" element={<InvestmentPlans />} />
+          <Route path="plan-equivalency" element={<PlanEquivalency />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
           <Route path="reports" element={<Reports />} />
