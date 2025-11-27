@@ -218,6 +218,21 @@ export interface TransferFeeTier {
     enabled?: boolean; // New flag to enable/disable specific tiers
 }
 
+export interface DemoProfile {
+    _id: string;
+    name: string;
+    country: string;
+    currency: Currency;
+}
+
+// FIX: Renamed DemoActivity to DemoActivityTemplate and updated properties to match backend
+export interface DemoActivityTemplate {
+    _id: string;
+    template: string;
+    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan';
+    enabled: boolean;
+}
+
 export interface Settings {
     // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
     isUserTransferEnabled: boolean; 
@@ -235,6 +250,10 @@ export interface Settings {
         value: number;
         unit: 'hours' | 'days' | 'weeks' | 'months';
     };
+    demoProfiles?: DemoProfile[];
+    // FIX: Renamed demoActivities to demoActivityTemplates to match backend model
+    demoActivityTemplates?: DemoActivityTemplate[];
+    tickerSpeed?: number;
 }
 
 export interface Notification {

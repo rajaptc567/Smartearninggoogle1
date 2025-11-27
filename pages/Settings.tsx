@@ -39,7 +39,7 @@ const Settings: React.FC = () => {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     }
   };
-
+  
   const handleFrequencyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
       const field = name.split('.')[1];

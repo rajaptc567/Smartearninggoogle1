@@ -17,7 +17,8 @@ import Logs from './pages/Logs';
 import Transfers from './pages/Transfers';
 import PasswordResets from './pages/PasswordResets';
 import AdminDisputes from './pages/AdminDisputes';
-import SentMessages from './pages/SentMessages'; // Added
+import SentMessages from './pages/SentMessages';
+import TickerSettings from './pages/TickerSettings'; // Added
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -68,6 +69,7 @@ const App: React.FC = () => {
           <Route path="rules" element={<Rules />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="ticker-settings" element={<TickerSettings />} />
           <Route path="logs" element={<Logs />} />
           <Route path="disputes" element={<AdminDisputes />} />
           <Route path="sent-messages" element={<SentMessages />} />

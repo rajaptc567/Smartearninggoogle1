@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Icons for different activities
@@ -22,16 +23,17 @@ export interface Activity {
 
 interface ActivityTickerProps {
   activities: Activity[];
+  speed: number;
 }
 
-const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities }) => {
+const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities, speed = 6 }) => {
     if (!activities || activities.length === 0) {
         return null;
     }
 
     // Duplicate the activities to create a seamless loop, ensuring there's enough content to scroll
     const extendedActivities = activities.length > 20 ? [...activities] : [...activities, ...activities, ...activities];
-
+    const duration = extendedActivities.length * speed;
 
     return (
         <div className="relative w-full h-10 bg-white dark:bg-gray-800 border-b dark:border-gray-700 overflow-hidden shadow-inner">
@@ -54,7 +56,7 @@ const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities }) => {
                     100% { transform: translateX(-${100 / (extendedActivities.length / activities.length)}%); }
                 }
                 .animate-marquee {
-                    animation: marquee ${activities.length * 6}s linear infinite;
+                    animation: marquee ${duration}s linear infinite;
                 }
             `}
             </style>

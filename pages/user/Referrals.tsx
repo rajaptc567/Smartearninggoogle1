@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
-import { User, Status } from '../../types';
+import { User, Status, formatCurrency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -137,8 +137,8 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
                     <div className="mt-4 md:mt-0 flex items-center justify-between md:justify-end space-x-6 pl-16 md:pl-0 border-t md:border-t-0 border-gray-100 dark:border-gray-700 pt-3 md:pt-0">
-                        <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plan Value</p><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">${investment.toFixed(0)}</p></div>
-                        <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p><p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>+${commission.toFixed(2)}</p></div>
+                        <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plan Value</p><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(investment, node.user.currency)}</p></div>
+                        <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p><p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>+{formatCurrency(commission, currentUser.currency)}</p></div>
                     </div>
                 </div>
                 {hasChildren && !isCollapsed && <ul className="mt-2 ml-2 border-l-2 border-gray-200/50 dark:border-gray-700/50 pl-2 space-y-2 animate-fade-in-down">{node.children.map(child => renderTreeNode(child))}</ul>}
@@ -165,8 +165,8 @@ const Referrals: React.FC = () => {
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${level === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>Level {level}</span>
                                     <div className="text-left text-sm text-gray-600 dark:text-gray-400 hidden sm:flex gap-4">
                                         <span><span className="font-bold">{members.length}</span> Active Members</span>
-                                        <span className="text-green-600"><span className="font-bold">${earnings.toFixed(2)}</span> Earnings</span>
-                                        <span><span className="font-bold">${volume.toLocaleString()}</span> Volume</span>
+                                        <span className="text-green-600"><span className="font-bold">{formatCurrency(earnings, currentUser.currency)}</span> Earnings</span>
+                                        <span><span className="font-bold">{formatCurrency(volume, currentUser.currency)}</span> Volume</span>
                                     </div>
                                 </div>
                                 <svg className={`w-5 h-5 text-gray-500 transform transition-transform ${isSectionCollapsed ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -184,8 +184,8 @@ const Referrals: React.FC = () => {
                                                     <div className="col-span-4 font-semibold">{member.fullName} <span className="text-gray-400 font-normal">@{member.username}</span></div>
                                                     <div className="col-span-2"><Badge status={member.status}/></div>
                                                     <div className="col-span-2 text-gray-500">{new Date(joinDate || Date.now()).toLocaleDateString()}</div>
-                                                    <div className="col-span-2 text-right">${investment.toFixed(0)}</div>
-                                                    <div className="col-span-2 text-right font-bold text-green-600">+${commission.toFixed(2)}</div>
+                                                    <div className="col-span-2 text-right">{formatCurrency(investment, member.currency)}</div>
+                                                    <div className="col-span-2 text-right font-bold text-green-600">+{formatCurrency(commission, currentUser.currency)}</div>
                                                 </div>
                                             )
                                         })}
@@ -238,12 +238,12 @@ const Referrals: React.FC = () => {
                 </div>
                 <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
                     <div className="flex justify-between items-start">
-                        <div><p className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total Earnings</p><h3 className="text-4xl font-extrabold">${networkStats.earnings.toFixed(2)}</h3><p className="text-sm text-emerald-200 mt-2 font-medium">Commission from {currentPlanName}</p></div>
+                        <div><p className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Total Earnings</p><h3 className="text-4xl font-extrabold">{formatCurrency(networkStats.earnings, currentUser.currency)}</h3><p className="text-sm text-emerald-200 mt-2 font-medium">Commission from {currentPlanName}</p></div>
                         <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg></div>
                     </div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
-                    <div><p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Team Volume</p><h3 className="text-3xl font-bold text-gray-800 dark:text-white">${networkStats.volume.toLocaleString()}</h3><p className="text-sm text-gray-500 mt-2">Active investment in {currentPlanName}</p></div>
+                    <div><p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Team Volume</p><h3 className="text-3xl font-bold text-gray-800 dark:text-white">{formatCurrency(networkStats.volume, currentUser.currency)}</h3><p className="text-sm text-gray-500 mt-2">Active investment in {currentPlanName}</p></div>
                     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700"><button onClick={() => { const link = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`; navigator.clipboard.writeText(link); alert('Referral link copied!'); }} className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center"><svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>Copy Referral Link</button></div>
                 </div>
             </div>

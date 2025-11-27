@@ -26,6 +26,7 @@ const UserViewIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentC
 const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
 const DisputeIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>;
 const SentIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>;
+const MegaphoneIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.433 9.168-6M10 15V5a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h4a2 2 0 002-2z"></path></svg>;
 
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
@@ -48,6 +49,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/rules', label: 'Rules', icon: <RulesIcon /> },
       { to: '/admin/reports', label: 'Reports', icon: <ReportIcon /> },
       { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
+      { to: '/admin/ticker-settings', label: 'Ticker Settings', icon: <MegaphoneIcon /> },
       { to: '/admin/logs', label: 'Logs', icon: <LogsIcon /> },
       { to: '/member', label: 'View User Panel as Admin', icon: <UserViewIcon /> },
     ];

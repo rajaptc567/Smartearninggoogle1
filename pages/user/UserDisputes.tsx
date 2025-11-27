@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
-import { Dispute, Status } from '../../types';
+import { Dispute, Status, formatCurrency } from '../../types';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -55,11 +55,20 @@ const UserDisputes: React.FC = () => {
     const userDisputes = disputes.filter(d => d.userId === currentUser._id);
 
     const availableTransactions = useMemo(() => {
-        if (type === 'Deposit') return deposits.filter(d => d.userId === currentUser._id && (d.status === 'Rejected' || d.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(d => ({ id: d._id, label: `${new Date(d.date).toLocaleDateString()} - Deposit $${d.amount} (${d.status})` }));
-        if (type === 'Withdrawal') return withdrawals.filter(w => w.userId === currentUser._id && (w.status === 'Rejected' || w.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => ({ id: w._id, label: `${new Date(w.date).toLocaleDateString()} - Withdraw $${w.amount} (${w.status})` }));
-        if (type === 'Transfer') return transfers.filter(t => t.senderId === currentUser._id && t.status === 'Rejected').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => ({ id: t._id, label: `${new Date(t.date).toLocaleDateString()} - Transfer $${t.amount} to ${t.recipientName} (${t.status})` }));
+        if (type === 'Deposit') return deposits.filter(d => d.userId === currentUser._id && (d.status === 'Rejected' || d.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(d => ({ id: d._id, label: `${new Date(d.date).toLocaleDateString()} - Deposit ${formatCurrency(d.amount, d.currency)} (${d.status})` }));
+        if (type === 'Withdrawal') return withdrawals.filter(w => w.userId === currentUser._id && (w.status === 'Rejected' || w.status === 'Pending')).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => ({ id: w._id, label: `${new Date(w.date).toLocaleDateString()} - Withdraw ${formatCurrency(w.amount, w.currency)} (${w.status})` }));
+        if (type === 'Transfer') return transfers.filter(t => t.senderId === currentUser._id && t.status === 'Rejected').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => ({ id: t._id, label: `${new Date(t.date).toLocaleDateString()} - Transfer ${formatCurrency(t.amount, t.currency)} to ${t.recipientName} (${t.status})` }));
         return [];
     }, [type, deposits, withdrawals, transfers, currentUser]);
+
+    const linkedTransaction = useMemo(() => {
+        if (!selectedDispute) return null;
+        const id = selectedDispute.referenceId;
+        if (selectedDispute.type === 'Deposit') return deposits.find(d => d._id === id);
+        if (selectedDispute.type === 'Withdrawal') return withdrawals.find(w => w._id === id);
+        if (selectedDispute.type === 'Transfer') return transfers.find(t => t._id === id);
+        return null;
+    }, [selectedDispute, deposits, withdrawals, transfers]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -187,7 +196,11 @@ const UserDisputes: React.FC = () => {
                 <Modal isOpen={true} onClose={() => setSelectedDispute(null)}>
                     <div className="p-4 w-[90vw] max-w-3xl h-[80vh] flex flex-col">
                         <div className="flex justify-between items-center mb-4 border-b dark:border-gray-700 pb-2">
-                            <div><h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3><Badge status={selectedDispute.status as Status} /></div>
+                             <div>
+                                <h3 className="text-xl font-bold">Dispute #{selectedDispute._id}</h3>
+                                {linkedTransaction && <div className="text-xs text-gray-500">Regarding {selectedDispute.type} <span className="font-bold">{formatCurrency((linkedTransaction as any).amount, (linkedTransaction as any).currency)}</span></div>}
+                                <Badge status={selectedDispute.status as Status} />
+                            </div>
                             <Button variant="secondary" size="sm" onClick={() => setSelectedDispute(null)}>Close</Button>
                         </div>
                         <div className="flex-grow overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 rounded-lg space-y-4">

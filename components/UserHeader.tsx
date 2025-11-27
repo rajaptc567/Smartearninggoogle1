@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useData';
@@ -38,7 +39,15 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
             <path d="M4 6H20M4 12H20M4 18H11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
-        <h1 className="text-2xl font-semibold text-gray-800 dark:text-white ml-2 lg:ml-0">{getTitle()}</h1>
+        <div className="flex items-center space-x-3 sm:space-x-4 ml-2 lg:ml-0">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white">{getTitle()}</h1>
+            {currentUser && (
+                <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
+                    <MapPinIcon />
+                    <span>{currentUser.country} ({currentUser.currency})</span>
+                </div>
+            )}
+        </div>
       </div>
       <div className="flex items-center space-x-4">
         <NotificationBell notifications={userNotifications} userId={currentUser?._id} />
@@ -52,5 +61,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
     </header>
   );
 };
+
+const MapPinIcon = () => <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 export default UserHeader;
