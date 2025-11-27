@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -18,8 +18,10 @@ const Users: React.FC = () => {
     const [isRestrictionsModalOpen, setIsRestrictionsModalOpen] = useState(false);
     const [isBulkRestrictionsModalOpen, setIsBulkRestrictionsModalOpen] = useState(false);
     const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [userToDelete, setUserToDelete] = useState<User | null>(null);
     const [modalMode, setModalMode] = useState<'edit' | 'details'>('edit');
     
     // Filtering State
@@ -43,13 +45,20 @@ const Users: React.FC = () => {
         setEditingUser(user);
         setIsMessageModalOpen(true);
     }
+    
+    const handleOpenDeleteModal = (user: User) => {
+        setUserToDelete(user);
+        setIsDeleteModalOpen(true);
+    };
 
     const handleCloseModal = () => {
         setEditingUser(null);
+        setUserToDelete(null);
         setIsModalOpen(false);
         setIsRestrictionsModalOpen(false);
         setIsBulkRestrictionsModalOpen(false);
         setIsMessageModalOpen(false);
+        setIsDeleteModalOpen(false);
     };
 
     const handleSaveUser = async (user: User) => {
@@ -95,16 +104,15 @@ const Users: React.FC = () => {
         }
     }
     
-    const handleDeleteUser = async (user: User) => {
-        if (window.confirm(`Are you sure you want to delete user ${user.username}? THIS ACTION CANNOT BE UNDONE and will delete all associated data (deposits, withdrawals, etc.).`)) {
-             try {
-                await deleteUser(user._id);
-                dispatch({ type: 'DELETE_USER', payload: user._id });
-                alert('User deleted successfully.');
-            } catch (error) {
-                console.error("Failed to delete user:", error);
-                alert(`Error: ${error instanceof Error ? error.message : 'Could not delete user.'}`);
-            }
+    const handleConfirmDelete = async (userId: string) => {
+        try {
+            await deleteUser(userId);
+            dispatch({ type: 'DELETE_USER', payload: userId });
+            alert('User and all associated data deleted successfully.');
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to delete user:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not delete user.'}`);
         }
     };
 
@@ -237,7 +245,7 @@ const Users: React.FC = () => {
                                     <Button size="sm" variant={user.status === Status.Blocked ? 'success' : 'danger'} onClick={() => handleToggleStatus(user)}>
                                         {user.status === Status.Blocked ? 'Unblock' : 'Block'}
                                     </Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleDeleteUser(user)}>Delete</Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleOpenDeleteModal(user)}>Delete</Button>
                                 </div>
                             </td>
                         </tr>
@@ -275,12 +283,167 @@ const Users: React.FC = () => {
                     onClose={handleCloseModal}
                 />
             )}
+            {isDeleteModalOpen && userToDelete && (
+                <DeleteUserModal
+                    user={userToDelete}
+                    onClose={handleCloseModal}
+                    onConfirmDelete={handleConfirmDelete}
+                />
+            )}
         </div>
     );
 };
 
-// ... (Modal components remain unchanged)
-// UserFormModal Component
+// ... (Other Modals: UserFormModal, UserDetailsModal, BulkRestrictionsModal, MessageUserModal, UserRestrictionsModal) ...
+// NOTE: For brevity, the other modals are assumed to be here but are not repeated. The new DeleteUserModal is added below.
+
+interface DeleteUserModalProps {
+    user: User;
+    onClose: () => void;
+    onConfirmDelete: (userId: string) => Promise<void>;
+}
+
+const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
+    const { state } = useData();
+    const { users, deposits, withdrawals, transfers, transactions } = state;
+
+    const [isConfirmed, setIsConfirmed] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const generateAndDownloadDossier = () => {
+        let csvContent = "";
+
+        const addSection = (title: string, headers: string[], data: (string | number | undefined)[][]) => {
+            csvContent += `\n"${title}"\n`;
+            if (headers.length > 0) csvContent += headers.map(h => `"${h}"`).join(',') + '\n';
+            if (data.length > 0) {
+                data.forEach(row => {
+                    csvContent += row.map(cell => `"${String(cell ?? 'N/A').replace(/"/g, '""')}"`).join(',') + '\n';
+                });
+            } else {
+                csvContent += '"No data available for this section."\n';
+            }
+        };
+        
+        // --- 1. Profile Summary ---
+        csvContent += `"USER DOSSIER FOR:","${user.username}","GENERATED ON:","${new Date().toLocaleString()}"\n\n`;
+        addSection("PROFILE SUMMARY", [], [
+            ['User ID', user._id],
+            ['Full Name', user.fullName],
+            ['Username', user.username],
+            ['Email', user.email],
+            ['Phone', user.phone],
+            ['Country', user.country],
+            ['Currency', user.currency],
+            ['Sponsor', user.sponsor || 'N/A'],
+            ['Status', user.status],
+            ['Registration Date', new Date(user.registrationDate).toLocaleString()],
+        ]);
+
+        // --- 2. Wallet & Plans ---
+        const planData = (user.activePlans || []).map(p => [p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString()]);
+        addSection("WALLET & PLANS", ['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)], []);
+        addSection("Active Plans", ['Plan Name', 'Price', 'Purchase Date'], planData);
+
+        // --- 3. Histories ---
+        const userDeposits = deposits.filter(d => d.userId === user._id);
+        addSection("DEPOSIT HISTORY", ['ID', 'Amount', 'Method', 'Status', 'Date', 'Transaction ID'], userDeposits.map(d => [d._id, formatCurrency(d.amount, d.currency), d.method, d.status, new Date(d.date).toLocaleString(), d.transactionId]));
+
+        const userWithdrawals = withdrawals.filter(w => w.userId === user._id);
+        addSection("WITHDRAWAL HISTORY", ['ID', 'Amount', 'Fee', 'Final Amount', 'Method', 'Status', 'Date'], userWithdrawals.map(w => [w._id, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.method, w.status, new Date(w.date).toLocaleString()]));
+
+        const userTransfers = transfers.filter(t => t.senderId === user._id || t.recipientId === user._id);
+        addSection("TRANSFER HISTORY", ['ID', 'Type', 'From/To', 'Amount', 'Status', 'Date'], userTransfers.map(t => {
+            const type = t.senderId === user._id ? 'Sent' : 'Received';
+            const otherParty = type === 'Sent' ? t.recipientName : t.senderName;
+            return [t._id, type, otherParty, formatCurrency(t.amount, t.currency), t.status, new Date(t.date).toLocaleString()];
+        }));
+        
+        // --- 4. Full Ledger ---
+        const userTransactions = transactions.filter(t => t.userId === user._id);
+        addSection("FULL TRANSACTION LEDGER", ['ID', 'Type', 'Amount', 'Status', 'Date', 'Description'], userTransactions.map(tx => [tx._id, tx.type, formatCurrency(tx.amount, tx.currency), tx.status || 'Approved', new Date(tx.date).toLocaleString(), tx.description]));
+
+        // --- 5. Referrals ---
+        const getFullDownlineWithLevels = (sponsorUsername: string, allUsers: User[], currentLevel = 1): { user: User, level: number }[] => {
+            const directReferrals = allUsers.filter(u => u.sponsor === sponsorUsername);
+            let downline: { user: User, level: number }[] = [];
+
+            for (const referral of directReferrals) {
+                downline.push({ user: referral, level: currentLevel });
+                downline = downline.concat(getFullDownlineWithLevels(referral.username, allUsers, currentLevel + 1));
+            }
+            return downline;
+        };
+
+        const fullDownline = getFullDownlineWithLevels(user.username, users);
+        const directRefs = fullDownline.filter(item => item.level === 1).map(item => item.user);
+        const indirectRefs = fullDownline.filter(item => item.level > 1);
+
+        addSection("DIRECT REFERRALS (Level 1)", ['Username', 'Full Name', 'Status', 'Registration Date'], directRefs.map(ref => [ref.username, ref.fullName, ref.status, new Date(ref.registrationDate).toLocaleString()]));
+        addSection("INDIRECT REFERRALS (Level 2+)", ['Level', 'Username', 'Full Name', 'Status', 'Registration Date', 'Direct Sponsor'], indirectRefs.map(item => [item.level, item.user.username, item.user.fullName, item.user.status, new Date(item.user.registrationDate).toLocaleString(), item.user.sponsor]));
+
+        // --- Download Trigger ---
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert('Dossier download started.');
+    };
+
+    const handleConfirm = async () => {
+        setIsDeleting(true);
+        await onConfirmDelete(user._id);
+        setIsDeleting(false); // Should unmount on success, but good practice
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-6 w-[90vw] max-w-lg">
+                <div className="text-center">
+                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/50">
+                        <svg className="h-6 w-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-3">Delete User Account</h3>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        You are about to permanently delete the user <strong>{user.username}</strong>. This will erase all their associated data, including wallet, transactions, and history. This action is irreversible.
+                    </p>
+                </div>
+                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center">
+                    <h4 className="font-semibold">Step 1: Download User Dossier</h4>
+                    <p className="text-xs text-gray-500 mt-1 mb-3">For archival purposes, download a complete CSV file of all user data before deleting.</p>
+                    <Button variant="secondary" onClick={generateAndDownloadDossier}>Download User Dossier (.csv)</Button>
+                </div>
+
+                <div className="mt-6">
+                    <label className="flex items-start space-x-3 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={isConfirmed}
+                            onChange={(e) => setIsConfirmed(e.target.checked)}
+                            className="h-5 w-5 rounded mt-0.5 border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        <span className="text-sm">
+                            I have downloaded the user dossier and understand that deleting this account is permanent and cannot be undone.
+                        </span>
+                    </label>
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
+                    <Button variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+                    <Button variant="danger" onClick={handleConfirm} disabled={!isConfirmed || isDeleting}>
+                        {isDeleting ? 'Deleting User...' : 'Confirm & Permanently Delete'}
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+// UserFormModal, UserDetailsModal, etc. remain here...
+// ... (rest of the modal components as before) ...
 interface UserFormModalProps {
     user: User | null;
     mode: 'edit' | 'details';
