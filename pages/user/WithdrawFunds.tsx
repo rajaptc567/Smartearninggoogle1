@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentMethod, Status, Withdrawal } from '../../types';
+import { PaymentMethod, Status, Withdrawal, formatCurrency } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createWithdrawal } from '../../services/api';
@@ -20,10 +20,14 @@ const WithdrawFunds: React.FC = () => {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
 
-    const withdrawalMethods = useMemo(() =>
-        paymentMethods.filter(method => method.type === 'Withdrawal' && method.status === 'Enabled'),
-        [paymentMethods]
-    );
+    const withdrawalMethods = useMemo(() => {
+        if (!currentUser) return [];
+        return paymentMethods.filter(method => 
+            method.type === 'Withdrawal' && 
+            method.status === 'Enabled' &&
+            method.currency === currentUser.currency
+        );
+    }, [paymentMethods, currentUser]);
     
     // FILTER: Use the CURRENT USER'S active plans if restriction is enabled
     const userActivePlanPrices = useMemo(() => {
@@ -112,7 +116,7 @@ const WithdrawFunds: React.FC = () => {
             return alert("Withdrawal amount cannot exceed your wallet balance.");
         }
         if (numericAmount < selectedMethod.minAmount || numericAmount > selectedMethod.maxAmount) {
-            return alert(`Amount must be between $${selectedMethod.minAmount} and $${selectedMethod.maxAmount}.`);
+            return alert(`Amount must be between ${formatCurrency(selectedMethod.minAmount, selectedMethod.currency)} and ${formatCurrency(selectedMethod.maxAmount, selectedMethod.currency)}.`);
         }
         if (cooldownMessage) {
             return alert("You are currently restricted from withdrawing. Please wait for the cooldown period to end.");
@@ -167,7 +171,7 @@ const WithdrawFunds: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Available Wallet Balance</p>
-                    <p className="text-4xl font-bold text-green-600 dark:text-green-400">${currentUser.walletBalance.toFixed(2)}</p>
+                    <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
                 </div>
 
                 <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Request Withdrawal</h2>
@@ -191,6 +195,9 @@ const WithdrawFunds: React.FC = () => {
                                 <option key={method._id} value={method._id}>{method.name}</option>
                             ))}
                         </select>
+                         {withdrawalMethods.length === 0 && (
+                            <p className="text-xs text-red-500 mt-1">No withdrawal methods available for your currency ({currentUser.currency}).</p>
+                        )}
                     </div>
 
                     {selectedMethod && (
@@ -201,23 +208,23 @@ const WithdrawFunds: React.FC = () => {
                                     <>
                                         <select id="amount" value={amount} onChange={e => setAmount(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required>
                                             <option value="">-- Select plan amount --</option>
-                                            {userActivePlanPrices.map(price => <option key={price} value={price}>${price.toFixed(2)}</option>)}
+                                            {userActivePlanPrices.map(price => <option key={price} value={price}>{formatCurrency(price, currentUser.currency)}</option>)}
                                         </select>
                                         {userActivePlanPrices.length === 0 && <p className="text-xs text-red-500 mt-1">You do not have any active plans to withdraw from.</p>}
                                     </>
                                 ) : (
-                                    <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${selectedMethod.minAmount}, Max ${selectedMethod.maxAmount}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
+                                    <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${formatCurrency(selectedMethod.minAmount, selectedMethod.currency)}, Max ${formatCurrency(selectedMethod.maxAmount, selectedMethod.currency)}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />
                                 )}
                             </div>
                             
                             <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-600 dark:text-gray-300">Service Fee ({selectedMethod.feePercent}%):</span>
-                                    <span className="font-medium text-red-600 dark:text-red-400">-${fee.toFixed(2)}</span>
+                                    <span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(fee, currentUser.currency)}</span>
                                 </div>
                                 <div className="flex justify-between mt-1 font-bold">
                                     <span className="text-gray-800 dark:text-white">You Will Receive:</span>
-                                    <span className="text-green-600 dark:text-green-400">${finalAmount.toFixed(2)}</span>
+                                    <span className="text-green-600 dark:text-green-400">{formatCurrency(finalAmount, currentUser.currency)}</span>
                                 </div>
                             </div>
 
@@ -254,9 +261,9 @@ const WithdrawFunds: React.FC = () => {
                             <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(withdrawal.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{withdrawal.method}</td>
-                                <td className="px-4 py-3 font-semibold">${withdrawal.amount.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-sm text-red-500">-${withdrawal.fee.toFixed(2)}</td>
-                                <td className="px-4 py-3 font-bold text-green-600">${withdrawal.finalAmount.toFixed(2)}</td>
+                                <td className="px-4 py-3 font-semibold">{formatCurrency(withdrawal.amount, withdrawal.currency)}</td>
+                                <td className="px-4 py-3 text-sm text-red-500">-{formatCurrency(withdrawal.fee, withdrawal.currency)}</td>
+                                <td className="px-4 py-3 font-bold text-green-600">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</td>
                                 <td className="px-4 py-3"><Badge status={withdrawal.status} /></td>
                             </tr>
                         ))}

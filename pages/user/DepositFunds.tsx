@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentMethod, Status, Withdrawal, Deposit } from '../../types';
+import { PaymentMethod, Status, Deposit, formatCurrency, currencySymbols } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createDeposit } from '../../services/api';
@@ -20,28 +20,31 @@ const DepositFunds: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
-    // Get unique prices from active investment plans for the dropdown
+    // Get unique prices from active investment plans for the dropdown, filtered by user's currency
     const planPrices = useMemo(() => {
+        if (!currentUser) return [];
         return investmentPlans
-            .filter(p => p.status === Status.Active)
+            .filter(p => p.status === Status.Active && p.currency === currentUser.currency)
             .map(p => p.price)
             .sort((a, b) => a - b)
             // Filter unique values
             .filter((value, index, self) => self.indexOf(value) === index);
-    }, [investmentPlans]);
+    }, [investmentPlans, currentUser]);
 
-    // Filter methods based on the selected amount
+    // Filter methods based on the selected amount and user's currency
     const availableMethods = useMemo(() => {
+        if (!currentUser) return [];
         const numericAmount = parseFloat(amount);
         if (isNaN(numericAmount) || numericAmount <= 0) return [];
 
         return paymentMethods.filter(method => 
             method.type === 'Deposit' && 
             method.status === 'Enabled' &&
+            method.currency === currentUser.currency &&
             method.minAmount <= numericAmount && 
             method.maxAmount >= numericAmount
         );
-    }, [paymentMethods, amount]);
+    }, [paymentMethods, amount, currentUser]);
 
     const selectedMethod: PaymentMethod | undefined = useMemo(() =>
         availableMethods.find(method => method._id.toString() === selectedMethodId),
@@ -99,6 +102,8 @@ const DepositFunds: React.FC = () => {
             setIsSubmitting(false);
         }
     };
+    
+    if (!currentUser) return null;
 
     if (isSubmitted) {
         return (
@@ -128,7 +133,7 @@ const DepositFunds: React.FC = () => {
                         
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500 sm:text-sm">$</span>
+                                <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
                             </div>
                             <select
                                 id="amount"
@@ -139,12 +144,12 @@ const DepositFunds: React.FC = () => {
                             >
                                 <option value="">-- Select Amount --</option>
                                 {planPrices.map(price => (
-                                    <option key={price} value={price}>{price.toFixed(2)}</option>
+                                    <option key={price} value={price}>{formatCurrency(price, currentUser.currency)}</option>
                                 ))}
                             </select>
                         </div>
                         {planPrices.length === 0 && (
-                            <p className="text-xs text-red-500 mt-1">No active investment plans found.</p>
+                            <p className="text-xs text-red-500 mt-1">No active investment plans found for your currency ({currentUser.currency}).</p>
                         )}
                     </div>
 
@@ -178,7 +183,7 @@ const DepositFunds: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="text-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-                                    <p className="text-gray-500 dark:text-gray-400">No payment methods available for this amount.</p>
+                                    <p className="text-gray-500 dark:text-gray-400">No payment methods available for this amount in your currency ({currentUser.currency}).</p>
                                 </div>
                             )}
                         </div>
@@ -281,7 +286,7 @@ const DepositFunds: React.FC = () => {
 
                                 <div className="pt-2">
                                     <Button type="submit" className="w-full" disabled={isSubmitting}>
-                                        {isSubmitting ? 'Submitting...' : `Submit Deposit of $${amount}`}
+                                        {isSubmitting ? 'Submitting...' : `Submit Deposit of ${formatCurrency(parseFloat(amount), currentUser.currency)}`}
                                     </Button>
                                 </div>
                             </div>
@@ -299,7 +304,7 @@ const DepositFunds: React.FC = () => {
                             <tr key={deposit._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{deposit.method}</td>
-                                <td className="px-4 py-3 font-semibold text-green-600">${deposit.amount.toFixed(2)}</td>
+                                <td className="px-4 py-3 font-semibold text-green-600">{formatCurrency(deposit.amount, deposit.currency)}</td>
                                 <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
                                 <td className="px-4 py-3"><Badge status={deposit.status} /></td>
                             </tr>
