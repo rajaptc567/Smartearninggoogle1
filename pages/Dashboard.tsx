@@ -24,9 +24,13 @@ const Dashboard: React.FC = () => {
         const pendingPasswordResets = passwordResetRequests.filter(r => r.status === 'Pending');
         const pendingTransfers = transfers.filter(t => t.status === Status.Pending);
         
+        // Enhanced Financial Calculations
         const grossRevenue = deposits.filter(d => d.status === Status.Approved && d.currency?.toUpperCase() === currencyFilter).reduce((sum, d) => sum + d.amount, 0);
         const totalPaidOut = withdrawals.filter(w => w.status === Status.Paid && w.currency?.toUpperCase() === currencyFilter).reduce((sum, w) => sum + w.finalAmount, 0);
-        const netProfit = grossRevenue - totalPaidOut;
+        const totalTransferFees = transfers.filter(t => t.status === Status.Approved && t.currency?.toUpperCase() === currencyFilter).reduce((sum, t) => sum + (t.fee || 0), 0);
+        const totalCommissionsPaid = transactions.filter(t => t.type === 'Commission' && t.status === Status.Approved && t.currency?.toUpperCase() === currencyFilter).reduce((sum, t) => sum + t.amount, 0);
+        
+        const netOperatingProfit = (grossRevenue + totalTransferFees) - (totalPaidOut + totalCommissionsPaid);
 
         const userStatusCounts = users.reduce((acc, user) => {
             acc[user.status] = (acc[user.status] || 0) + 1;
@@ -56,7 +60,27 @@ const Dashboard: React.FC = () => {
                 .filter(w => w.status === Status.Paid && w.date.startsWith(dateStr) && w.currency?.toUpperCase() === currencyFilter)
                 .reduce((sum, w) => sum + w.amount, 0);
 
-            return { date: dateStr, deposit: dayDeposits, withdrawal: dayWithdrawals, net: dayDeposits - dayWithdrawals };
+            const dayCommissions = transactions
+                .filter(t => t.type === 'Commission' && t.status === Status.Approved && t.date.startsWith(dateStr) && t.currency?.toUpperCase() === currencyFilter)
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            const dayTransferFees = transfers
+                .filter(t => t.status === Status.Approved && t.date.startsWith(dateStr) && t.currency?.toUpperCase() === currencyFilter)
+                .reduce((sum, t) => sum + (t.fee || 0), 0);
+
+            const dayRevenue = dayDeposits + dayTransferFees;
+            const dayPayouts = dayWithdrawals + dayCommissions;
+
+            return { 
+                date: dateStr, 
+                dayRevenue,
+                dayPayouts,
+                dayDeposits,
+                dayWithdrawals,
+                dayCommissions,
+                dayTransferFees,
+                net: dayRevenue - dayPayouts 
+            };
         });
 
         return {
@@ -69,11 +93,11 @@ const Dashboard: React.FC = () => {
             pendingTransfers,
             grossRevenue,
             totalPaidOut,
-            netProfit,
+            netOperatingProfit,
             chartData,
             pieChartData,
         };
-    }, [users, deposits, withdrawals, disputes, passwordResetRequests, transfers, timeframe, currencyFilter]);
+    }, [users, deposits, withdrawals, disputes, passwordResetRequests, transfers, transactions, timeframe, currencyFilter]);
 
     const recentActivity = useMemo(() => {
         const userActivities = users.map(user => ({
@@ -134,8 +158,8 @@ const Dashboard: React.FC = () => {
         </div>
     );
 
-    const FinancialChart = ({ data, currency }: { data: { date: string, deposit: number, withdrawal: number, net: number }[], currency: Currency }) => {
-        const maxBarValue = Math.max(...data.map(d => Math.max(d.deposit, d.withdrawal)), 100);
+    const FinancialChart = ({ data, currency }: { data: { date: string, dayRevenue: number, dayPayouts: number, dayDeposits: number, dayWithdrawals: number, dayCommissions: number, dayTransferFees: number, net: number }[], currency: Currency }) => {
+        const maxBarValue = Math.max(...data.map(d => Math.max(d.dayRevenue, d.dayPayouts)), 100);
         const maxNetValue = Math.max(...data.map(d => Math.abs(d.net)), maxBarValue * 0.5);
         
         return (
@@ -147,19 +171,27 @@ const Dashboard: React.FC = () => {
                     </div>
                     {data.map((d, i) => {
                         const dateLabel = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                        const depHeight = (d.deposit / maxBarValue) * 100;
-                        const withHeight = (d.withdrawal / maxBarValue) * 100;
+                        const revenueHeight = (d.dayRevenue / maxBarValue) * 100;
+                        const payoutHeight = (d.dayPayouts / maxBarValue) * 100;
                         return (
                             <div key={i} className="flex-1 flex flex-col items-center group relative h-full">
                                 <div className="w-full flex gap-1.5 items-end h-full">
-                                    <div style={{ height: `${depHeight}%` }} className="flex-1 bg-green-500/60 dark:bg-green-500/40 rounded-t-md hover:bg-green-500 transition-all"></div>
-                                    <div style={{ height: `${withHeight}%` }} className="flex-1 bg-red-500/60 dark:bg-red-500/40 rounded-t-md hover:bg-red-500 transition-all"></div>
+                                    <div style={{ height: `${revenueHeight}%` }} className="flex-1 bg-green-500/60 dark:bg-green-500/40 rounded-t-md hover:bg-green-500 transition-all"></div>
+                                    <div style={{ height: `${payoutHeight}%` }} className="flex-1 bg-red-500/60 dark:bg-red-500/40 rounded-t-md hover:bg-red-500 transition-all"></div>
                                 </div>
                                 <span className="text-xs text-gray-500 mt-2 absolute -bottom-5">{dateLabel}</span>
                                 <div className="absolute bottom-full mb-3 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg py-2 px-3 z-10 whitespace-nowrap shadow-xl transition-opacity">
                                     <p className="font-bold">{dateLabel}</p>
-                                    <div className="text-green-300 mt-1">Deposits: {formatCurrency(d.deposit, currency)}</div>
-                                    <div className="text-red-300">Withdrawals: {formatCurrency(d.withdrawal, currency)}</div>
+                                    <div className="mt-2">
+                                        <p className="font-semibold text-green-300">Revenue: {formatCurrency(d.dayRevenue, currency)}</p>
+                                        <p className="pl-2">Deposits: {formatCurrency(d.dayDeposits, currency)}</p>
+                                        <p className="pl-2">Fees: {formatCurrency(d.dayTransferFees, currency)}</p>
+                                    </div>
+                                    <div className="mt-1">
+                                        <p className="font-semibold text-red-300">Payouts: {formatCurrency(d.dayPayouts, currency)}</p>
+                                        <p className="pl-2">Withdrawals: {formatCurrency(d.dayWithdrawals, currency)}</p>
+                                        <p className="pl-2">Commissions: {formatCurrency(d.dayCommissions, currency)}</p>
+                                    </div>
                                     <div className="text-blue-300 font-semibold mt-1 pt-1 border-t border-gray-700">Net: {formatCurrency(d.net, currency)}</div>
                                 </div>
                             </div>
@@ -258,7 +290,7 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">
                 <StatCard title="Total Users" value={stats.totalUsers} icon={<UsersIcon />} colorClass="bg-blue-500" onClick={() => navigate('/admin/users')} />
-                <StatCard title="Net Profit" value={formatCurrency(stats.netProfit, currencyFilter)} icon={<WalletIcon />} colorClass="bg-teal-500" />
+                <StatCard title="Net Operating Profit" value={formatCurrency(stats.netOperatingProfit, currencyFilter)} icon={<WalletIcon />} colorClass="bg-teal-500" />
                 <StatCard title="Pending Deposits" value={stats.pendingDeposits.length} icon={<DepositIcon />} colorClass="bg-green-500" onClick={() => navigate('/admin/deposits')} />
                 <StatCard title="Pending Withdrawals" value={stats.pendingWithdrawals.length} icon={<WithdrawalIcon />} colorClass="bg-orange-500" onClick={() => navigate('/admin/withdrawals')} />
                 <StatCard title="Open Disputes" value={stats.pendingDisputes.length} icon={<DisputeIcon />} colorClass="bg-red-500" onClick={() => navigate('/admin/disputes')} />
@@ -271,7 +303,7 @@ const Dashboard: React.FC = () => {
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-800 dark:text-white">Financial Flow ({currencyFilter})</h3>
-                                <p className="text-xs text-gray-500">Deposits vs. Withdrawals & Net Daily Profit/Loss</p>
+                                <p className="text-xs text-gray-500">Revenue vs. Payouts & Net Daily Profit/Loss</p>
                             </div>
                             <div className="flex mt-3 sm:mt-0 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
                                 <button onClick={() => setTimeframe('7d')} className={`px-3 py-1 text-xs rounded-md ${timeframe === '7d' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Last 7 Days</button>
@@ -280,8 +312,8 @@ const Dashboard: React.FC = () => {
                         </div>
                         <FinancialChart data={stats.chartData} currency={currencyFilter} />
                          <div className="flex space-x-4 text-xs justify-center mt-6 border-t dark:border-gray-700 pt-3">
-                            <span className="flex items-center"><span className="w-3 h-3 bg-green-500/80 rounded-full mr-2"></span>Deposits</span>
-                            <span className="flex items-center"><span className="w-3 h-3 bg-red-500/80 rounded-full mr-2"></span>Withdrawals</span>
+                            <span className="flex items-center"><span className="w-3 h-3 bg-green-500/80 rounded-full mr-2"></span>Total Revenue</span>
+                            <span className="flex items-center"><span className="w-3 h-3 bg-red-500/80 rounded-full mr-2"></span>Total Payouts</span>
                             <span className="flex items-center"><span className="w-2 h-0.5 bg-blue-500 mr-2"></span>Net Daily Flow</span>
                         </div>
                     </div>
