@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
-import { User, Status, formatCurrency } from '../../types';
+import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +16,7 @@ interface GenealogyNode {
 
 const Referrals: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, transactions, settings } = state;
+    const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
 
     const uniqueActivePlans = useMemo(() => {
@@ -39,6 +39,85 @@ const Referrals: React.FC = () => {
             setSelectedPlanId(uniqueActivePlans[0].planId);
         }
     }, [uniqueActivePlans, selectedPlanId]);
+
+    interface CommissionInfo {
+        earned: number;
+        pendingReason: string | null;
+    }
+
+    const getCommissionInfoForReferral = (referral: User): CommissionInfo => {
+        if (!currentUser || !selectedPlanId) return { earned: 0, pendingReason: null };
+
+        const equivalentPlanIdsForSelected = new Set<string>([selectedPlanId]);
+        const group = settings.planEquivalencyGroups?.find(g => Object.values(g).includes(selectedPlanId));
+        if (group) {
+            if(group.usdPlanId) equivalentPlanIdsForSelected.add(group.usdPlanId);
+            if(group.pkrPlanId) equivalentPlanIdsForSelected.add(group.pkrPlanId);
+            if(group.eurPlanId) equivalentPlanIdsForSelected.add(group.eurPlanId);
+        }
+        
+        const referralCommissions = transactions.filter(t => 
+            t.userId === currentUser._id &&
+            t.type === 'Commission' &&
+            t.description.includes(referral.username) &&
+            t.relatedPlanId &&
+            equivalentPlanIdsForSelected.has(t.relatedPlanId)
+        );
+
+        const earned = referralCommissions
+            .filter(t => t.status === 'Approved')
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        const pendingCommission = referralCommissions.find(t => t.status === 'Pending');
+
+        let pendingReason: string | null = null;
+        if (pendingCommission) {
+            const uplineUser = currentUser; // The user viewing the page is the sponsor.
+
+            // 1. Check Earning Restriction
+            if (uplineUser.restrictions && uplineUser.restrictions.earning) {
+                pendingReason = `Your earnings are currently paused by the administrator.`;
+            }
+            // 2. Check Plan Match Requirement
+            else if (settings.requirePlanMatchForCommission) {
+                const referralPlanId = pendingCommission.relatedPlanId;
+                if (referralPlanId) {
+                    const group = (settings.planEquivalencyGroups || []).find(g => 
+                        Object.values(g).includes(referralPlanId)
+                    );
+                    
+                    let hasEquivalentPlan = false;
+                    if (group) {
+                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean) as string[];
+                        const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId);
+                        hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
+                    } else {
+                        hasEquivalentPlan = (uplineUser.activePlans || []).some(p => p.planId === referralPlanId);
+                    }
+
+                    if (!hasEquivalentPlan) {
+                        const referralPlan = investmentPlans.find(p => p._id === referralPlanId);
+                        const planName = referralPlan ? `the ${referralPlan.name}` : 'the required plan';
+                        pendingReason = `Purchase ${planName} or an equivalent plan to earn from ${referral.username}.`;
+                    }
+                }
+            }
+            // 3. Check General Active Plan Requirement
+            else if (settings.requireActivePlanForCommission) {
+                const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
+                if (!hasAnyPlan) {
+                    pendingReason = `Purchase any investment plan to activate your earnings from ${referral.username}.`;
+                }
+            }
+            // Fallback
+            if (!pendingReason) {
+                pendingReason = "Commission is pending for review.";
+            }
+        }
+
+        return { earned, pendingReason };
+    }
+
 
     const toggleNode = (userId: string) => {
         setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
@@ -134,7 +213,8 @@ const Referrals: React.FC = () => {
         const totalEarnings = transactions
             .filter(t => 
                 t.userId === currentUser._id && 
-                t.type === 'Commission' && 
+                t.type === 'Commission' &&
+                t.status === 'Approved' &&
                 t.relatedPlanId &&
                 equivalentPlanIdsForSelected.has(t.relatedPlanId)
             )
@@ -151,30 +231,6 @@ const Referrals: React.FC = () => {
 
     }, [currentUser, users, selectedPlanId, transactions, settings]);
     
-     const getCommissionFromReferralForPlan = (referralId: string): number => {
-        if (!currentUser || !selectedPlanId) return 0;
-        const referralUsername = users.find(u => u._id === referralId)?.username || 'Unknown';
-        
-        // Use the same equivalency logic as the main calculation
-        const equivalentPlanIdsForSelected = new Set<string>([selectedPlanId]);
-        const group = settings.planEquivalencyGroups?.find(g => Object.values(g).includes(selectedPlanId));
-        if (group) {
-            if(group.usdPlanId) equivalentPlanIdsForSelected.add(group.usdPlanId);
-            if(group.pkrPlanId) equivalentPlanIdsForSelected.add(group.pkrPlanId);
-            if(group.eurPlanId) equivalentPlanIdsForSelected.add(group.eurPlanId);
-        }
-
-        return transactions
-            .filter(t => 
-                t.userId === currentUser._id &&
-                t.type === 'Commission' &&
-                t.description.includes(referralUsername) &&
-                t.relatedPlanId &&
-                equivalentPlanIdsForSelected.has(t.relatedPlanId)
-            )
-            .reduce((sum, t) => sum + t.amount, 0);
-    };
-
     const getReferralInvestment = (user: User): { price: number, currency: string } => {
         const equivalentPlanIdsForSelected = new Set<string>([selectedPlanId]);
         const group = settings.planEquivalencyGroups?.find(g => Object.values(g).includes(selectedPlanId));
@@ -192,7 +248,7 @@ const Referrals: React.FC = () => {
     const renderTreeNode = (node: GenealogyNode) => {
         const isCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
-        const commission = getCommissionFromReferralForPlan(node.user._id);
+        const { earned: commission, pendingReason } = getCommissionInfoForReferral(node.user);
         const { price: investment, currency: investmentCurrency } = getReferralInvestment(node.user);
         const joinDate = node.user.activePlans?.find(p => p.planId === selectedPlanId)?.purchaseDate;
 
@@ -213,7 +269,22 @@ const Referrals: React.FC = () => {
                     </div>
                     <div className="mt-4 md:mt-0 flex items-center justify-between md:justify-end space-x-6 pl-16 md:pl-0 border-t md:border-t-0 border-gray-100 dark:border-gray-700 pt-3 md:pt-0">
                         <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plan Value</p><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(investment, investmentCurrency as any)}</p></div>
-                        <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p><p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>+{formatCurrency(commission, currentUser.currency)}</p></div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p>
+                            <p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                +{formatCurrency(commission, currentUser.currency)}
+                            </p>
+                            {pendingReason && (
+                                <div className="mt-1" title={pendingReason}>
+                                    <p className="text-[11px] font-semibold text-yellow-600 dark:text-yellow-500 leading-tight cursor-help">
+                                        Commission Held!
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-tight max-w-[150px]">
+                                        (Hover for details)
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
                 {hasChildren && !isCollapsed && <ul className="mt-2 ml-2 border-l-2 border-gray-200/50 dark:border-gray-700/50 pl-2 space-y-2 animate-fade-in-down">{node.children.map(child => renderTreeNode(child))}</ul>}
@@ -230,8 +301,7 @@ const Referrals: React.FC = () => {
                 {levels.map(level => {
                     const members = levelViewData[level] || [];
                     const isSectionCollapsed = !collapsedSections.has(level.toString());
-                    const earnings = members.reduce((sum, u) => sum + getCommissionFromReferralForPlan(u._id), 0);
-                    const volume = members.reduce((sum, u) => sum + getReferralInvestment(u).price, 0);
+                    const earnings = members.reduce((sum, u) => sum + getCommissionInfoForReferral(u).earned, 0);
 
                     return (
                         <div key={level} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -241,7 +311,6 @@ const Referrals: React.FC = () => {
                                     <div className="text-left text-sm text-gray-600 dark:text-gray-400 hidden sm:flex gap-4">
                                         <span><span className="font-bold">{members.length}</span> Active Members</span>
                                         <span className="text-green-600"><span className="font-bold">{formatCurrency(earnings, currentUser.currency)}</span> Earnings</span>
-                                        {/* Volume in level view will be mixed currency, so it's less meaningful. Could show count instead. */}
                                     </div>
                                 </div>
                                 <svg className={`w-5 h-5 text-gray-500 transform transition-transform ${isSectionCollapsed ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -250,7 +319,7 @@ const Referrals: React.FC = () => {
                                 <div className="p-4 border-t dark:border-gray-700 animate-fade-in-down">
                                     <div className="space-y-2">
                                         {members.map(member => {
-                                            const commission = getCommissionFromReferralForPlan(member._id);
+                                            const { earned: commission, pendingReason } = getCommissionInfoForReferral(member);
                                             const { price: investment, currency: investmentCurrency } = getReferralInvestment(member);
                                             const joinDate = member.activePlans?.find(p => p.planId === selectedPlanId)?.purchaseDate;
 
@@ -260,7 +329,14 @@ const Referrals: React.FC = () => {
                                                     <div className="col-span-2"><Badge status={member.status}/></div>
                                                     <div className="col-span-2 text-gray-500">{new Date(joinDate || Date.now()).toLocaleDateString()}</div>
                                                     <div className="col-span-2 text-right">{formatCurrency(investment, investmentCurrency as any)}</div>
-                                                    <div className="col-span-2 text-right font-bold text-green-600">+{formatCurrency(commission, currentUser.currency)}</div>
+                                                    <div className="col-span-2 text-right">
+                                                        <p className="font-bold text-green-600">+{formatCurrency(commission, currentUser.currency)}</p>
+                                                        {pendingReason && (
+                                                            <div className="text-[10px] text-yellow-600 dark:text-yellow-500" title={pendingReason}>
+                                                                (Held)
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )
                                         })}
