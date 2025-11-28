@@ -28,6 +28,14 @@ const DemoActivityTemplateSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: true },
 });
 
+const PlanEquivalencyGroupSchema = new mongoose.Schema({
+    _id: { type: String, required: true },
+    usdPlanId: { type: String },
+    pkrPlanId: { type: String },
+    eurPlanId: { type: String },
+});
+
+
 const SettingSchema = new mongoose.Schema({
     isUserTransferEnabled: {
         type: Boolean,
@@ -65,6 +73,7 @@ const SettingSchema = new mongoose.Schema({
     },
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
+    planEquivalencyGroups: [PlanEquivalencyGroupSchema],
 }, {
     // Use a capped collection of size 1 to ensure only one settings document exists
     capped: { size: 1024, max: 1 }
@@ -113,6 +122,7 @@ SettingSchema.statics.getSettings = async function() {
                 { _id: 't4', template: '{name} upgraded to the {plan} plan', type: 'plan', enabled: true },
                 { _id: 't5', template: '{name} sent funds to another member', type: 'transfer', enabled: false },
             ],
+            planEquivalencyGroups: [],
         });
     }
     return settings;
