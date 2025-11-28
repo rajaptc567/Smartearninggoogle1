@@ -12,6 +12,9 @@ const CheckIcon = () => <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-
 const SecureIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
 const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
 const GrowthIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+const UsdIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /><path d="M12 12a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" /></svg>;
+const EurIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.121 15.536A9.004 9.004 0 0112 16.5c-2.43 0-4.63-.92-6.287-2.464m12.574-3.072a9.004 9.004 0 00-12.574 0M14.121 8.464A9.004 9.004 0 0112 7.5c-2.43 0-4.63.92-6.287 2.464" /></svg>;
+const PkrIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 8h6m-5 4h4m5 6H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2z" /></svg>;
 
 // --- MLM Diagram Component ---
 const MLMDiagram = () => (
@@ -151,8 +154,36 @@ const HomePage: React.FC = () => {
                     </div>
                 </section>
 
-                {/* MLM Explanation Section */}
+                {/* Multi-Currency Section */}
                 <section className="py-16 bg-white dark:bg-gray-800">
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="text-center mb-12">
+                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Global Reach, Local Convenience</h2>
+                            <p className="mt-3 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="bg-gray-50 dark:bg-gray-900/50 p-8 rounded-lg text-center border border-gray-200 dark:border-gray-700">
+                                <div className="p-4 bg-green-100 dark:bg-green-900/30 rounded-full inline-block mb-4"><UsdIcon/></div>
+                                <h4 className="text-xl font-bold mb-2">US Dollar (USD)</h4>
+                                <p className="text-gray-600 dark:text-gray-300">Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods.</p>
+                            </div>
+                             <div className="bg-gray-50 dark:bg-gray-900/50 p-8 rounded-lg text-center border border-gray-200 dark:border-gray-700">
+                                <div className="p-4 bg-indigo-100 dark:bg-indigo-900/30 rounded-full inline-block mb-4"><EurIcon/></div>
+                                <h4 className="text-xl font-bold mb-2">Euro (EUR)</h4>
+                                <p className="text-gray-600 dark:text-gray-300">For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal.</p>
+                            </div>
+                             <div className="bg-gray-50 dark:bg-gray-900/50 p-8 rounded-lg text-center border border-gray-200 dark:border-gray-700">
+                                <div className="p-4 bg-teal-100 dark:bg-teal-900/30 rounded-full inline-block mb-4"><PkrIcon/></div>
+                                <h4 className="text-xl font-bold mb-2">Pakistani Rupee (PKR)</h4>
+                                <p className="text-gray-600 dark:text-gray-300">We offer dedicated plans and local payment methods for our members in Pakistan. Invest and withdraw in PKR, while still earning from referrals using any currency on the platform.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+                {/* MLM Explanation Section */}
+                <section className="py-16">
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="text-center mb-12">
                             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Understanding Our Earning System</h2>
@@ -196,12 +227,12 @@ const HomePage: React.FC = () => {
 
                 {/* Investment Plans Section */}
                 {featuredPlans.length > 0 && (
-                    <section className="py-16">
+                    <section className="py-16 bg-white dark:bg-gray-800">
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             <h3 className="text-3xl font-bold text-center mb-10">Our Top Investment Plans</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {featuredPlans.map(plan => (
-                                    <div key={plan._id} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-8 shadow-lg flex flex-col hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                                    <div key={plan._id} className="border dark:border-gray-700 rounded-xl p-8 shadow-lg flex flex-col hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                                         <h4 className="text-2xl font-bold mb-2">{plan.name}</h4>
                                         <p className="text-5xl font-extrabold text-blue-600 dark:text-blue-400 mb-4">{formatCurrency(plan.price, plan.currency)}</p>
                                         <p className="text-gray-500 dark:text-gray-400 mb-6 flex-grow">{plan.description}</p>
@@ -217,48 +248,6 @@ const HomePage: React.FC = () => {
                         </div>
                     </section>
                 )}
-
-                {/* Testimonials Section */}
-                 <section className="py-16 bg-white dark:bg-gray-800">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <h3 className="text-3xl font-bold text-center mb-10">What Our Members Say</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {/* Testimonial 1 */}
-                            <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-lg border dark:border-gray-700/50">
-                                <p className="text-gray-600 dark:text-gray-300">"SmartEarning has been a game-changer for my finances. The platform is intuitive, and the MLM system genuinely rewards your hard work."</p>
-                                <div className="flex items-center mt-4">
-                                    <img className="h-12 w-12 rounded-full object-cover" src="https://picsum.photos/100/100?random=1" alt="User 1"/>
-                                    <div className="ml-4">
-                                        <p className="font-semibold text-gray-900 dark:text-white">Jane Doe</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Gold Plan Member</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Testimonial 2 */}
-                             <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-lg border dark:border-gray-700/50">
-                                <p className="text-gray-600 dark:text-gray-300">"I was new to network marketing, but SmartEarning made it easy to get started. My network is growing, and so are my earnings!"</p>
-                                <div className="flex items-center mt-4">
-                                    <img className="h-12 w-12 rounded-full object-cover" src="https://picsum.photos/100/100?random=2" alt="User 2"/>
-                                    <div className="ml-4">
-                                        <p className="font-semibold text-gray-900 dark:text-white">John Smith</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Silver Plan Member</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Testimonial 3 */}
-                             <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-lg border dark:border-gray-700/50">
-                                <p className="text-gray-600 dark:text-gray-300">"The transparency and real-time tracking are what I love most. I always know where I stand with my investments and commissions."</p>
-                                <div className="flex items-center mt-4">
-                                    <img className="h-12 w-12 rounded-full object-cover" src="https://picsum.photos/100/100?random=3" alt="User 3"/>
-                                    <div className="ml-4">
-                                        <p className="font-semibold text-gray-900 dark:text-white">Carlos Garcia</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Platinum Plan Member</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                 </section>
 
                 {/* Final CTA */}
                 <section className="py-20">
