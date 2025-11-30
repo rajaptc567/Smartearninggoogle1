@@ -16,6 +16,7 @@ const PlanEquivalency: React.FC = () => {
 
     useEffect(() => {
         setLocalGroups(settings.planEquivalencyGroups || []);
+        setIsDirty(false); // Reset dirty state when global settings change
     }, [settings.planEquivalencyGroups]);
 
     const activePlans = useMemo(() => investmentPlans.filter(p => p.status === 'Active'), [investmentPlans]);
@@ -48,10 +49,21 @@ const PlanEquivalency: React.FC = () => {
         setIsDirty(true);
     };
 
-    const handleDeleteGroup = (id: string) => {
+    const handleDeleteGroup = async (groupId: string) => {
         if (window.confirm('Are you sure you want to delete this equivalency group?')) {
-            setLocalGroups(prev => prev.filter(g => g._id !== id));
-            setIsDirty(true);
+            setIsSaving(true);
+            const updatedGroups = (settings.planEquivalencyGroups || []).filter(g => g._id !== groupId);
+            try {
+                const updatedSettingsData = { ...settings, planEquivalencyGroups: updatedGroups };
+                const savedSettings = await updateSettings(updatedSettingsData);
+                dispatch({ type: 'UPDATE_SETTINGS', payload: savedSettings });
+                // The UI will update reactively from the global state change
+            } catch (error) {
+                console.error('Failed to delete group:', error);
+                alert('Error deleting group.');
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
 
@@ -133,7 +145,7 @@ const PlanEquivalency: React.FC = () => {
                                         <div className="bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600/50 text-center text-sm">{eurPlan ? `${eurPlan.name} (${formatCurrency(eurPlan.price, 'EUR')})` : <span className="text-gray-400">Not Set</span>}</div>
                                     </div>
                                     <div className="col-span-1 text-right">
-                                        <Button size="sm" variant="danger" onClick={() => handleDeleteGroup(group._id)}>Delete</Button>
+                                        <Button size="sm" variant="danger" onClick={() => handleDeleteGroup(group._id)} disabled={isSaving}>Delete</Button>
                                     </div>
                                 </div>
                             );

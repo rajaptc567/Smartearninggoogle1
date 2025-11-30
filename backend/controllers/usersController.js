@@ -578,30 +578,33 @@ export const purchasePlan = async (req, res) => {
                 // 2. Check Plan Match Requirement
                 if (settings.requirePlanMatchForCommission) {
                     const referralPlanId = purchasePlanId.toString();
-
-                    // Find the equivalency group this plan belongs to
                     const group = (settings.planEquivalencyGroups || []).find(g => 
-                        g.usdPlanId === referralPlanId || 
-                        g.pkrPlanId === referralPlanId || 
-                        g.eurPlanId === referralPlanId
+                        g.usdPlanId === referralPlanId || g.pkrPlanId === referralPlanId || g.eurPlanId === referralPlanId
                     );
                     
                     let hasEquivalentPlan = false;
-
                     if (group) {
-                        // User owns any plan in the group
-                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean); // Get all IDs from the group
+                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
                         const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
                         hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
                     } else {
-                        // Fallback: If no group, require exact same plan
                         hasEquivalentPlan = (uplineUser.activePlans || []).some(p => p.planId.toString() === referralPlanId);
                     }
 
                     if (!hasEquivalentPlan) {
-                        const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
-                        const planName = referralPlan ? referralPlan.name : 'the required plan';
-                        return { status: 'Pending', message: `Commission Held! Purchase the ${planName} or an equivalent plan to earn from ${user.username}.` };
+                        let requiredPlansString = '';
+                        if (group) {
+                            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
+                            const requiredPlans = allPlans.filter(p => groupPlanIds.includes(p._id.toString()));
+                            requiredPlansString = requiredPlans.map(p => `${p.name} (${p.currency})`).join(' or ');
+                        } else {
+                            const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
+                            requiredPlansString = referralPlan ? `${referralPlan.name} (${referralPlan.currency})` : 'the required plan';
+                        }
+                        return { 
+                            status: 'Pending', 
+                            message: `Commission Held! Purchase ${requiredPlansString} to earn from ${user.username}.` 
+                        };
                     }
                 }
                 // 3. Check General Active Plan Requirement (if plan match is not required or passed)

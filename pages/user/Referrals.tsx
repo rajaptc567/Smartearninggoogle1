@@ -72,13 +72,11 @@ const Referrals: React.FC = () => {
 
         let pendingReason: string | null = null;
         if (pendingCommission) {
-            const uplineUser = currentUser; // The user viewing the page is the sponsor.
+            const uplineUser = currentUser;
 
-            // 1. Check Earning Restriction
             if (uplineUser.restrictions && uplineUser.restrictions.earning) {
                 pendingReason = `Your earnings are currently paused by the administrator.`;
             }
-            // 2. Check Plan Match Requirement
             else if (settings.requirePlanMatchForCommission) {
                 const referralPlanId = pendingCommission.relatedPlanId;
                 if (referralPlanId) {
@@ -96,20 +94,24 @@ const Referrals: React.FC = () => {
                     }
 
                     if (!hasEquivalentPlan) {
-                        const referralPlan = investmentPlans.find(p => p._id === referralPlanId);
-                        const planName = referralPlan ? `the ${referralPlan.name}` : 'the required plan';
-                        pendingReason = `Purchase ${planName} or an equivalent plan to earn from ${referral.username}.`;
+                        let requiredPlansString = '';
+                        if (group) {
+                            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean) as string[];
+                            const requiredPlans = investmentPlans.filter(p => groupPlanIds.includes(p._id));
+                            requiredPlansString = requiredPlans.map(p => `the ${p.name} (${p.currency})`).join(' or ');
+                        } else {
+                            const referralPlan = investmentPlans.find(p => p._id === referralPlanId);
+                            requiredPlansString = referralPlan ? `the ${referralPlan.name} (${referralPlan.currency})` : 'the required plan';
+                        }
+                        pendingReason = `Purchase ${requiredPlansString} to earn from ${referral.username}.`;
                     }
                 }
             }
-            // 3. Check General Active Plan Requirement
             else if (settings.requireActivePlanForCommission) {
-                const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
-                if (!hasAnyPlan) {
+                if (!uplineUser.activePlans || uplineUser.activePlans.length === 0) {
                     pendingReason = `Purchase any investment plan to activate your earnings from ${referral.username}.`;
                 }
             }
-            // Fallback
             if (!pendingReason) {
                 pendingReason = "Commission is pending for review.";
             }
@@ -275,13 +277,13 @@ const Referrals: React.FC = () => {
                                 +{formatCurrency(commission, currentUser.currency)}
                             </p>
                             {pendingReason && (
-                                <div className="mt-1" title={pendingReason}>
+                                <div className="mt-1 group/tooltip relative">
                                     <p className="text-[11px] font-semibold text-yellow-600 dark:text-yellow-500 leading-tight cursor-help">
                                         Commission Held!
                                     </p>
-                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-tight max-w-[150px]">
-                                        (Hover for details)
-                                    </p>
+                                    <div className="absolute bottom-full mb-2 -left-1/2 translate-x-1/2 w-64 p-2 text-xs text-white bg-gray-900 rounded-md opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-10 text-left">
+                                        {pendingReason}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -386,7 +388,7 @@ const Referrals: React.FC = () => {
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
                     <div className="flex justify-between items-start">
                         <div><p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Active Members</p><h3 className="text-4xl font-extrabold">{networkStats.activeMembers}</h3><p className="text-sm text-blue-200 mt-2 font-medium">in {currentPlanName}</p></div>
-                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
                     </div>
                 </div>
                 <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
