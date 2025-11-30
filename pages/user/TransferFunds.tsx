@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
-import { formatCurrency } from '../../types';
+import { formatCurrency, User } from '../../types';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -18,11 +18,32 @@ const TransferFunds: React.FC = () => {
     const [totalDeduction, setTotalDeduction] = useState(0);
     const [feeError, setFeeError] = useState<string | null>(null);
 
-    // Get all users except current user for the dropdown list
+    // Get the user's downline (direct and indirect referrals) for the dropdown list
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
-        return users.filter(u => u._id !== currentUser._id);
+
+        const downline: User[] = [];
+        const processedUsernames = new Set<string>();
+
+        const buildDownline = (sponsorUsername: string) => {
+            if (processedUsernames.has(sponsorUsername.toLowerCase())) {
+                return;
+            }
+            processedUsernames.add(sponsorUsername.toLowerCase());
+
+            const directRefs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
+            
+            directRefs.forEach(ref => {
+                downline.push(ref);
+                buildDownline(ref.username);
+            });
+        };
+        
+        buildDownline(currentUser.username);
+        
+        return downline;
     }, [currentUser, users]);
+
 
     // Calculate Fee Logic
     useEffect(() => {
@@ -156,7 +177,7 @@ const TransferFunds: React.FC = () => {
                             value={recipientIdentifier}
                             onChange={(e) => setRecipientIdentifier(e.target.value)}
                             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="Type to search username..."
+                            placeholder="Type to search your network..."
                             required
                         />
                         <datalist id="recipient-list">

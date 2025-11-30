@@ -482,6 +482,9 @@ export const purchasePlan = async (req, res) => {
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
+        // Check if this is the user's first plan purchase BEFORE modifying the user object
+        const isFirstPurchase = !user.activePlans || user.activePlans.length === 0;
+
         // Currency Check
         if (user.currency !== plan.currency) {
             return res.status(400).json({ success: false, error: `This plan is in ${plan.currency}, but your account is in ${user.currency}.` });
@@ -547,23 +550,23 @@ export const purchasePlan = async (req, res) => {
             }
         }
 
-        // --- COMMISSION DISTRIBUTION LOGIC ---
-        const convertCurrency = (amount, from, to) => {
-            if (from === to) return Number(amount.toFixed(2));
-            const amountInUSD = amount / exchangeRates[from];
-            const convertedAmount = amountInUSD * exchangeRates[to];
-            return Number(convertedAmount.toFixed(2));
-        };
-        
-        const calculateAmount = (commissionConfig, planPrice) => {
-            if (!commissionConfig) return 0;
-            const value = parseFloat(commissionConfig.value);
-            if (isNaN(value)) return 0;
-            return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
-        };
+        // --- COMMISSION DISTRIBUTION LOGIC (ONLY for first purchase) ---
+        if (isFirstPurchase && user.sponsor) {
+            const convertCurrency = (amount, from, to) => {
+                if (from === to) return Number(amount.toFixed(2));
+                const amountInUSD = amount / exchangeRates[from];
+                const convertedAmount = amountInUSD * exchangeRates[to];
+                return Number(convertedAmount.toFixed(2));
+            };
+            
+            const calculateAmount = (commissionConfig, planPrice) => {
+                if (!commissionConfig) return 0;
+                const value = parseFloat(commissionConfig.value);
+                if (isNaN(value)) return 0;
+                return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
+            };
 
-        if (user.sponsor) {
-             const checkEligibility = (uplineUser, purchasePlanId) => {
+            const checkEligibility = (uplineUser, purchasePlanId) => {
                 let status = 'Approved', message = '';
                 const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
                 
