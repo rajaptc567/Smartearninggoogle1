@@ -152,6 +152,7 @@ export const updateTransfer = async (req, res) => {
                 type: 'Transfer Received',
                 amount: transfer.amount,
                 description: `Received from ${sender.username}`,
+                sourceUserId: sender._id,
                 status: 'Approved'
             });
 

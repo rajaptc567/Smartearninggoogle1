@@ -665,6 +665,7 @@ export const purchasePlan = async (req, res) => {
                     type: 'Commission',
                     amount: finalCommissionAmount,
                     level: level + 1,
+                    sourceUserId: user._id,
                     description: `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
                     status: eligibility.status,
                     relatedPlanId: plan._id,

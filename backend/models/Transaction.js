@@ -1,4 +1,5 @@
 
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -31,6 +32,10 @@ const TransactionSchema = new mongoose.Schema({
     },
     level: {
         type: Number,
+    },
+    sourceUserId: { // The user who triggered the transaction (e.g., plan purchaser)
+        type: mongoose.Schema.ObjectId,
+        ref: 'User'
     },
     status: {
         type: String,

@@ -59,7 +59,7 @@ const Referrals: React.FC = () => {
         const referralCommissions = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
-            t.description.includes(referral.username) &&
+            t.sourceUserId === referral._id &&
             t.relatedPlanId &&
             equivalentPlanIdsForSelected.has(t.relatedPlanId)
         );
@@ -243,7 +243,12 @@ const Referrals: React.FC = () => {
         }
 
         const purchasedPlanDetails = user.activePlans?.find(p => equivalentPlanIdsForSelected.has(p.planId));
-        return { price: purchasedPlanDetails?.price || 0, currency: user.currency };
+        const purchasedPlan = investmentPlans.find(p => p._id === purchasedPlanDetails?.planId);
+
+        return { 
+            price: purchasedPlanDetails?.price || 0, 
+            currency: purchasedPlan?.currency || user.currency 
+        };
     };
 
 

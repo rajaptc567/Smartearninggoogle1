@@ -199,6 +199,7 @@ export interface Transaction {
     date: string;
     description: string;
     level?: number;
+    sourceUserId?: string;
     status?: 'Pending' | 'Approved' | 'Rejected';
     relatedPlanId?: string;
     // Fields for multi-currency commissions
