@@ -376,11 +376,19 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                     {formData.directReferralLimit === 0 ? 'Direct Commission (Standard)' : `Direct Ref #${index + 1}`}
                                 </label>
                                 <div className="flex gap-2 mt-1">
-                                    <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                    <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-[100px] rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
                                         <option value="percentage">%</option>
                                         <option value="fixed">Fixed</option>
                                     </select>
-                                    <input type="number" step="0.01" value={comm.value} onChange={(e) => handleDirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                                    <input type="number" step="0.01" value={comm.value} onChange={(e) => handleDirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                                    <span className="flex items-center justify-center w-24 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md">
+                                        = {formatCurrency(
+                                            comm.type === 'percentage'
+                                                ? ((formData.price || 0) * comm.value) / 100
+                                                : comm.value,
+                                            formData.currency || 'USD'
+                                        )}
+                                    </span>
                                 </div>
                             </div>
                         ))}
@@ -389,16 +397,26 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
 
                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
                     <legend className="px-2 font-semibold">Indirect Commissions</legend>
-                    <div className="mt-2">
+                    <div className="mt-2 space-y-2">
                         {formData.indirectCommissions?.map((comm, index) => (
-                            <div key={index} className="flex gap-2 items-end mt-2">
-                                <span className="text-sm pt-2 w-16">Lvl {index+1}:</span>
-                                <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="w-1/3 rounded-md dark:bg-gray-700 dark:border-gray-600">
+                            <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                                <span className="col-span-2 text-sm font-medium">Level {index + 2}:</span>
+                                <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5">
                                     <option value="percentage">%</option>
                                     <option value="fixed">Fixed</option>
                                 </select>
-                                <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="w-1/3 rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                                <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)}>X</Button>
+                                <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5" />
+                                <span className="col-span-3 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md py-1.5">
+                                = {formatCurrency(
+                                    comm.type === 'percentage'
+                                        ? ((formData.price || 0) * comm.value) / 100
+                                        : comm.value,
+                                    formData.currency || 'USD'
+                                )}
+                                </span>
+                                <div className="col-span-1 text-right">
+                                    <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)} className="py-1 px-2">X</Button>
+                                </div>
                             </div>
                         ))}
                         <Button type="button" variant="secondary" size="sm" onClick={addIndirectLevel} className="mt-2">+ Add Level</Button>
