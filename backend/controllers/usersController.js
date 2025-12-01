@@ -482,9 +482,6 @@ export const purchasePlan = async (req, res) => {
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
-        // Check if this is the user's first plan purchase BEFORE modifying the user object
-        const isFirstPurchase = !user.activePlans || user.activePlans.length === 0;
-
         // Currency Check
         if (user.currency !== plan.currency) {
             return res.status(400).json({ success: false, error: `This plan is in ${plan.currency}, but your account is in ${user.currency}.` });
@@ -550,8 +547,9 @@ export const purchasePlan = async (req, res) => {
             }
         }
 
-        // --- COMMISSION DISTRIBUTION LOGIC (ONLY for first purchase) ---
-        if (isFirstPurchase && user.sponsor) {
+        // --- COMMISSION DISTRIBUTION LOGIC ---
+        // This logic runs for every new plan purchase a user makes, if they have a sponsor.
+        if (user.sponsor) {
             const convertCurrency = (amount, from, to) => {
                 if (from === to) return Number(amount.toFixed(2));
                 const amountInUSD = amount / exchangeRates[from];
@@ -618,9 +616,10 @@ export const purchasePlan = async (req, res) => {
             };
 
             let currentUplineUsername = user.sponsor;
-            const commissionLevels = [plan.directCommissions, ...(plan.indirectCommissions || [])];
+            const indirectCommissionLevels = plan.indirectCommissions || [];
+            const totalCommissionLevels = 1 + indirectCommissionLevels.length; // 1 for direct level
 
-            for (let level = 0; level < commissionLevels.length; level++) {
+            for (let level = 0; level < totalCommissionLevels; level++) {
                 if (!currentUplineUsername) break;
                 const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
                 if (!uplineUser || uplineUser.status === 'Blocked') break;
@@ -637,7 +636,7 @@ export const purchasePlan = async (req, res) => {
                         commissionConfig = plan.directCommissions?.[0];
                     }
                 } else { // Indirect Commission
-                     commissionConfig = plan.indirectCommissions?.[level - 1];
+                     commissionConfig = indirectCommissionLevels[level - 1];
                 }
 
                 if (!commissionConfig) continue;
