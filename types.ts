@@ -264,6 +264,8 @@ export interface Settings {
     restrictWithdrawalAmount: boolean; // Restrict to own active plan prices
     requirePlanMatchForCommission: boolean; 
     requireActivePlanForCommission: boolean;
+    oneTimeCommissionPerGroup: boolean;
+    requireUplineEligibility: boolean;
     withdrawalFrequency: {
         enabled: boolean;
         value: number;

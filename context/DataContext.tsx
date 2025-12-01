@@ -47,6 +47,9 @@ const initialState: AppState = {
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,
+        // FIX: Add missing properties to satisfy the Settings type.
+        oneTimeCommissionPerGroup: false,
+        requireUplineEligibility: false,
         withdrawalFrequency: {
             enabled: false,
             value: 1,
@@ -241,6 +244,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 restrictWithdrawalAmount: false,
                 requirePlanMatchForCommission: false,
                 requireActivePlanForCommission: false,
+                // FIX: Add missing properties to satisfy the Settings type.
+                oneTimeCommissionPerGroup: false,
+                requireUplineEligibility: false,
                 withdrawalFrequency: { enabled: false, value: 1, unit: 'days' }
             };
 

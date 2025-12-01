@@ -1,5 +1,6 @@
 
 
+
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -12,6 +13,7 @@ import InvestmentPlans from './pages/InvestmentPlans';
 import PlanEquivalency from './pages/PlanEquivalency';
 import Wallet from './pages/Wallet';
 import Rules from './pages/Rules';
+import SponsorCommissionRules from './pages/SponsorCommissionRules';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
@@ -69,6 +71,7 @@ const App: React.FC = () => {
           <Route path="plan-equivalency" element={<PlanEquivalency />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
+          <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
           <Route path="ticker-settings" element={<TickerSettings />} />
