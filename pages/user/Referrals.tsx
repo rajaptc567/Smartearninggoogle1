@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
@@ -146,7 +147,7 @@ const Referrals: React.FC = () => {
                 level
             }));
         };
-        const genealogyTree = buildFullTree(currentUser.username, 1);
+        const fullGenealogyTree = buildFullTree(currentUser.username, 1);
 
         const fullDownline: User[] = [];
         const traverseTreeForStats = (nodes: GenealogyNode[]) => {
@@ -155,7 +156,7 @@ const Referrals: React.FC = () => {
                 traverseTreeForStats(node.children);
             });
         };
-        traverseTreeForStats(genealogyTree);
+        traverseTreeForStats(fullGenealogyTree);
 
         const activeMembersInPlan = fullDownline.filter(u => u.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
         const volume = activeMembersInPlan.reduce((sum, u) => sum + getReferralInvestmentAndConvertToSponsorCurrency(u), 0);
@@ -163,8 +164,37 @@ const Referrals: React.FC = () => {
             .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Approved' && t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId))
             .reduce((sum, t) => sum + t.amount, 0);
 
+        // --- NEW FILTERING LOGIC ---
+        const sponsorHasRecurringRights = (currentUser.activePlans || []).some(p => 
+            (settings.recurringCommissionPlanIds || []).includes(p.planId)
+        );
+        const isOneTimeRuleApplicable = settings.oneTimeCommissionPerGroup && !sponsorHasRecurringRights;
+        let finalGenealogyTree = fullGenealogyTree;
+
+        if (isOneTimeRuleApplicable) {
+            finalGenealogyTree = fullGenealogyTree.filter(node => {
+                const referral = node.user;
+                const commissionTransaction = transactions.find(t => 
+                    t.userId === currentUser._id &&
+                    t.sourceUserId === referral._id &&
+                    t.type === 'Commission' &&
+                    t.status === 'Approved'
+                );
+        
+                if (commissionTransaction) {
+                    const commissionPlanId = commissionTransaction.relatedPlanId;
+                    if (!commissionPlanId) {
+                        return true; // Fallback if plan ID is missing
+                    }
+                    return equivalentPlanIdsForSelected.has(commissionPlanId);
+                } else {
+                    return true;
+                }
+            });
+        }
+
         return {
-            genealogyTree,
+            genealogyTree: finalGenealogyTree,
             networkStats: { totalReferrals: fullDownline.length, activeMembers: activeMembersInPlan.length, earnings: totalEarnings, volume }
         };
     }, [currentUser, users, selectedPlanId, transactions, settings, equivalentPlanIdsForSelected, state.settings.exchangeRates]);
@@ -289,7 +319,7 @@ const Referrals: React.FC = () => {
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
                     <div className="flex justify-between items-start">
                         <div><p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Active Members</p><h3 className="text-4xl font-extrabold">{networkStats.activeMembers}</h3><p className="text-sm text-blue-200 mt-2 font-medium">in {currentPlanName}</p></div>
-                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl"><svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
                     </div>
                 </div>
                 <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
@@ -314,14 +344,19 @@ const Referrals: React.FC = () => {
                 </div>
                 
                 <div className="p-4 md:p-6">
-                    {networkStats.totalReferrals > 0 ? (
+                    {genealogyTree.length > 0 ? (
                         <div className="space-y-4">
                             {genealogyTree.map(node => (
                                 <DirectReferralAccordion key={node.user._id} node={node} />
                             ))}
                         </div>
                     ) : (
-                        renderEmptyState(currentPlanName)
+                        networkStats.totalReferrals > 0 ?
+                            <div className="text-center text-sm text-gray-500 py-8">
+                                No referrals to display in this plan tab. Your referrals may be active in other plans.
+                            </div>
+                            :
+                            renderEmptyState(currentPlanName)
                     )}
                 </div>
             </div>
