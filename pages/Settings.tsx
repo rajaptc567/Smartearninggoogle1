@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols } from '../types';
+import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan } from '../types';
 import { updateSettings } from '../services/api';
 
 const Settings: React.FC = () => {
   const { state, dispatch } = useData();
-  const { settings } = state;
+  const { settings, investmentPlans } = state;
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -22,7 +22,8 @@ const Settings: React.FC = () => {
         transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
         exchangeRates: settings.exchangeRates || { USD: 278.50, EUR: 256.22, PKR: 1 },
         homepageVideoUrl: settings.homepageVideoUrl || '',
-        homepageContent: settings.homepageContent || { heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '' }
+        homepageContent: settings.homepageContent || { heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '' },
+        featuredPlanIds: settings.featuredPlanIds || []
     }));
     setIsDirty(false);
   }, [settings]);
@@ -81,6 +82,18 @@ const Settings: React.FC = () => {
                 [currency]: parseFloat(value) || 0
             }
         }));
+        setIsDirty(true);
+    };
+
+    const handleFeaturedPlanChange = (planId: string) => {
+        const currentIds = localSettings.featuredPlanIds || [];
+        let newIds;
+        if (currentIds.includes(planId)) {
+            newIds = currentIds.filter(id => id !== planId);
+        } else {
+            newIds = [...currentIds, planId];
+        }
+        setLocalSettings(prev => ({ ...prev, featuredPlanIds: newIds }));
         setIsDirty(true);
     };
 
@@ -218,6 +231,39 @@ const Settings: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Homepage Content</h3>
                 <p className="text-sm text-gray-500">Edit the content of the main landing page. You can also edit this directly on the page by adding `?edit=true` to the URL.</p>
                 
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Featured Investment Plans</h4>
+                    <p className="text-xs text-gray-500">Select plans to display on the homepage. The current design shows a maximum of 3.</p>
+                    
+                    <div className="space-y-4">
+                        {(['USD', 'EUR', 'PKR'] as const).map(currency => {
+                            const plansForCurrency = investmentPlans.filter(p => p.currency === currency && p.status === 'Active');
+                            return (
+                                <div key={currency}>
+                                    <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
+                                    {plansForCurrency.length === 0 ? (
+                                        <p className="text-xs text-gray-400 italic mt-1">No active plans found for this currency.</p>
+                                    ) : (
+                                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                            {plansForCurrency.map(plan => (
+                                                <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="rounded text-blue-500 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500"
+                                                        checked={(localSettings.featuredPlanIds || []).includes(plan._id)}
+                                                        onChange={() => handleFeaturedPlanChange(plan._id)}
+                                                    />
+                                                    <span className="text-sm">{plan.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Videos</h4>
                     <div>

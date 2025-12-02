@@ -296,6 +296,7 @@ export interface Settings {
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
+    featuredPlanIds?: string[];
 }
 
 export interface Notification {

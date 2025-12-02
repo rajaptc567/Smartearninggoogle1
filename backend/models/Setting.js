@@ -112,7 +112,11 @@ const SettingSchema = new mongoose.Schema({
     homepageContent: {
         type: HomepageContentSchema,
         default: () => ({})
-    }
+    },
+    featuredPlanIds: {
+        type: [String],
+        default: [],
+    },
 }, {
     // Use a capped collection of size 1 to ensure only one settings document exists
     capped: { size: 1024, max: 1 }
@@ -184,6 +188,7 @@ SettingSchema.statics.getSettings = async function() {
                 ctaTitle: "Ready to Start Your Journey?",
                 ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
             },
+            featuredPlanIds: [],
         });
     }
     return settings;

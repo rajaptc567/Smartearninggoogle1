@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { Settings as SettingsType, InvestmentPlan } from '../types';
 import { updateSettings } from '../services/api';
+import { Link } from 'react-router-dom';
 
 const SponsorCommissionRules: React.FC = () => {
     const { state, dispatch } = useData();
@@ -104,28 +105,38 @@ const SponsorCommissionRules: React.FC = () => {
                          {localSettings.oneTimeCommissionPerGroup && (
                             <div className="mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20">
                                 <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Plans</h4>
-                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-4">
+                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-2">
                                     Select plans that grant recurring commissions. If a sponsor owns any of these plans, they will bypass the 'one-time' rule and earn a commission every time one of their referrals buys or upgrades ANY plan.
                                 </p>
-                                <div className="space-y-3">
-                                    {(['USD', 'EUR', 'PKR'] as const).map(currency => (
-                                        <div key={currency}>
-                                            <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
-                                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                                {investmentPlans.filter(p => p.currency === currency).map(plan => (
-                                                    <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="rounded"
-                                                            checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
-                                                            onChange={() => handleRecurringPlanChange(plan._id)}
-                                                        />
-                                                        <span className="text-sm">{plan.name}</span>
-                                                    </label>
-                                                ))}
+                                <p className="text-xs text-gray-500 mb-4">
+                                    Missing a plan? <Link to="/admin/investment-plans" className="text-blue-600 hover:underline">Click here to add or manage investment plans.</Link>
+                                </p>
+                                <div className="space-y-4">
+                                    {(['USD', 'EUR', 'PKR'] as const).map(currency => {
+                                        const plansForCurrency = investmentPlans.filter(p => p.currency === currency && p.status === 'Active');
+                                        return (
+                                            <div key={currency}>
+                                                <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
+                                                {plansForCurrency.length === 0 ? (
+                                                     <p className="text-xs text-gray-400 italic mt-1">No active plans found for this currency.</p>
+                                                ) : (
+                                                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                        {plansForCurrency.map(plan => (
+                                                            <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="rounded text-blue-500 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500"
+                                                                    checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
+                                                                    onChange={() => handleRecurringPlanChange(plan._id)}
+                                                                />
+                                                                <span className="text-sm">{plan.name}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </div>
                         )}

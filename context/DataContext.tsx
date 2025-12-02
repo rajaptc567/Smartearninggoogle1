@@ -74,6 +74,7 @@ const initialState: AppState = {
         },
         homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
+        featuredPlanIds: [],
     },
     notifications: [],
     logs: [],
@@ -267,6 +268,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
                 homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
                 homepageContent: defaultHomepageContent,
+                featuredPlanIds: [],
             };
 
             // Helper to safely fetch individual data points without crashing the entire app

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -11,7 +11,8 @@ interface EditableTextProps {
   editMode: boolean;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  tag?: keyof JSX.IntrinsicElements;
+  // FIX: Qualify JSX with React to fix "Cannot find namespace 'JSX'" error.
+  tag?: keyof React.JSX.IntrinsicElements;
   className?: string;
   multiline?: boolean;
 }
@@ -60,7 +61,7 @@ const EditBar: React.FC<EditBarProps> = ({ onSave, onExit, isSaving, isDirty }) 
 // --- SVG Icon Components for this page ---
 const CheckIcon = () => <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
 const SecureIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
-const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
 const GrowthIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
 const UsdIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /><path d="M12 12a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" /></svg>;
 const EurIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.121 15.536A9.004 9.004 0 0112 16.5c-2.43 0-4.63-.92-6.287-2.464m12.574-3.072a9.004 9.004 0 00-12.574 0M14.121 8.464A9.004 9.004 0 0112 7.5c-2.43 0-4.63.92-6.287 2.464" /></svg>;
@@ -124,8 +125,36 @@ const HomePage: React.FC = () => {
         window.history.replaceState({}, '', newUrl);
     };
 
+    const featuredPlans = useMemo(() => {
+        const featuredIds = settings.featuredPlanIds;
+        if (featuredIds && featuredIds.length > 0) {
+            // Create a map for quick lookup
+            const planMap = new Map(investmentPlans.map(p => [p._id, p]));
+            
+            // Map IDs to plan objects, filtering for active ones and preserving order
+            return featuredIds
+                .map(id => planMap.get(id))
+                .filter((p): p is InvestmentPlan => !!(p && p.status === 'Active'));
+        }
+        
+        // Fallback: Pick one active plan from each currency if possible, up to 3 total.
+        const fallbackPlans: InvestmentPlan[] = [];
+        const usdPlan = investmentPlans.find(p => p.currency === 'USD' && p.status === 'Active');
+        if (usdPlan) fallbackPlans.push(usdPlan);
+        
+        const eurPlan = investmentPlans.find(p => p.currency === 'EUR' && p.status === 'Active');
+        if (eurPlan && fallbackPlans.length < 3) fallbackPlans.push(eurPlan);
+        
+        const pkrPlan = investmentPlans.find(p => p.currency === 'PKR' && p.status === 'Active');
+        if (pkrPlan && fallbackPlans.length < 3) fallbackPlans.push(pkrPlan);
 
-    const featuredPlans = investmentPlans.filter(p => p.status === 'Active').slice(0, 3);
+        // If we still don't have any/enough plans, fall back to just the first 3 active plans globally
+        if (fallbackPlans.length === 0) {
+            return investmentPlans.filter(p => p.status === 'Active').slice(0, 3);
+        }
+
+        return fallbackPlans;
+    }, [investmentPlans, settings.featuredPlanIds]);
 
     const renderDirectCommission = (plan: InvestmentPlan) => {
       const comms = plan.directCommissions;
@@ -270,19 +299,6 @@ const HomePage: React.FC = () => {
                                 </ul>
                             </div>
                              <MLMDiagram />
-                        </div>
-                        <div className="mt-16 text-center">
-                            <h3 className="text-2xl font-semibold mb-4">Learn More From Our Video Guide</h3>
-                            <div className="aspect-w-16 aspect-h-9 max-w-4xl mx-auto rounded-lg overflow-hidden shadow-2xl border-4 border-gray-200 dark:border-gray-700">
-                               <iframe 
-                                   className="w-full h-full"
-                                   src="https://www.youtube.com/embed/8OBfr46Yp_U" 
-                                   title="What is Network Marketing?" 
-                                   frameBorder="0" 
-                                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                   allowFullScreen>
-                               </iframe>
-                            </div>
                         </div>
                     </div>
                 </section>
