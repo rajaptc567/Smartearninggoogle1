@@ -1,5 +1,4 @@
 
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export const currencySymbols: Record<Currency, string> = {
@@ -265,6 +264,7 @@ export interface Settings {
     requirePlanMatchForCommission: boolean; 
     requireActivePlanForCommission: boolean;
     oneTimeCommissionPerGroup: boolean;
+    recurringCommissionPlanIds?: string[]; // Plans exempt from one-time rule
     requireUplineEligibility: boolean;
     withdrawalFrequency: {
         enabled: boolean;

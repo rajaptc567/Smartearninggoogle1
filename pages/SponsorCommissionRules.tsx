@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType } from '../types';
+import { Settings as SettingsType, InvestmentPlan } from '../types';
 import { updateSettings } from '../services/api';
 
 const SponsorCommissionRules: React.FC = () => {
     const { state, dispatch } = useData();
-    const { settings } = state;
+    const { settings, investmentPlans } = state;
 
     const [localSettings, setLocalSettings] = useState<Partial<SettingsType>>(settings);
     const [isSaving, setIsSaving] = useState(false);
@@ -20,6 +21,18 @@ const SponsorCommissionRules: React.FC = () => {
     const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, checked } = e.target;
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
+        setIsDirty(true);
+    };
+    
+    const handleRecurringPlanChange = (planId: string) => {
+        const currentIds = localSettings.recurringCommissionPlanIds || [];
+        let newIds;
+        if (currentIds.includes(planId)) {
+            newIds = currentIds.filter(id => id !== planId);
+        } else {
+            newIds = [...currentIds, planId];
+        }
+        setLocalSettings(prev => ({ ...prev, recurringCommissionPlanIds: newIds }));
         setIsDirty(true);
     };
 
@@ -80,13 +93,44 @@ const SponsorCommissionRules: React.FC = () => {
                 </div>
 
                 <div className="space-y-6">
-                    <Toggle
-                        name="oneTimeCommissionPerGroup"
-                        label="One-Time Commission Per Equivalency Group"
-                        description="If enabled, a sponsor will only earn a commission ONCE from a specific referral for any plan within the same equivalency group. This prevents sponsors from earning multiple times if a referral buys equivalent plans in different currencies (e.g., USD Starter and PKR Starter)."
-                        checked={localSettings.oneTimeCommissionPerGroup ?? false}
-                        onChange={handleCheckboxChange}
-                    />
+                    <div>
+                        <Toggle
+                            name="oneTimeCommissionPerGroup"
+                            label="One-Time Commission Per Referral"
+                            description="If enabled, a sponsor will only earn commission ONCE from any specific referral, regardless of how many plans they purchase or upgrade to over time. This enforces a strict 'one commission per referred user' policy."
+                            checked={localSettings.oneTimeCommissionPerGroup ?? false}
+                            onChange={handleCheckboxChange}
+                        />
+                         {localSettings.oneTimeCommissionPerGroup && (
+                            <div className="mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20">
+                                <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Exceptions</h4>
+                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-4">
+                                    Select plans below that should be EXEMPT from the one-time rule. Sponsors will earn a commission every time a referral buys one of these selected plans.
+                                </p>
+                                <div className="space-y-3">
+                                    {(['USD', 'EUR', 'PKR'] as const).map(currency => (
+                                        <div key={currency}>
+                                            <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
+                                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                {investmentPlans.filter(p => p.currency === currency).map(plan => (
+                                                    <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="rounded"
+                                                            checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
+                                                            onChange={() => handleRecurringPlanChange(plan._id)}
+                                                        />
+                                                        <span className="text-sm">{plan.name}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <Toggle
                         name="requireUplineEligibility"
                         label="Require Upline Eligibility Chain (Pass-Through)"

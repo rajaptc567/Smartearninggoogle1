@@ -638,26 +638,22 @@ export const purchasePlan = async (req, res) => {
                     continue;
                 }
                 
-                // Rule: One-Time Commission Per Equivalency Group
+                // Rule: One-Time Commission Per Referral, with exceptions
                 if (settings.oneTimeCommissionPerGroup) {
-                    const group = (settings.planEquivalencyGroups || []).find(g => 
-                        g.usdPlanId === plan._id.toString() ||
-                        g.pkrPlanId === plan._id.toString() ||
-                        g.eurPlanId === plan._id.toString()
-                    );
-                    const planIdsToCheck = group ? [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean) : [plan._id.toString()];
+                    const isRecurringPlan = (settings.recurringCommissionPlanIds || []).includes(plan._id.toString());
+                    
+                    if (!isRecurringPlan) { // Only check for existing commission if it's NOT a recurring plan
+                        const existingCommission = await Transaction.findOne({
+                            userId: uplineUser._id,
+                            sourceUserId: user._id,
+                            type: 'Commission',
+                            status: 'Approved'
+                        });
 
-                    const existingCommission = await Transaction.findOne({
-                        userId: uplineUser._id,
-                        sourceUserId: user._id,
-                        type: 'Commission',
-                        status: 'Approved',
-                        relatedPlanId: { $in: planIdsToCheck }
-                    });
-
-                    if (existingCommission) {
-                        currentUplineUsername = uplineUser.sponsor;
-                        continue; // Already earned from this user for this group, skip to next upline
+                        if (existingCommission) {
+                            currentUplineUsername = uplineUser.sponsor;
+                            continue; // Already earned from this user, skip to next upline
+                        }
                     }
                 }
 

@@ -102,12 +102,32 @@ const UserDashboard: React.FC = () => {
         };
     }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser._id, currentUser.activePlans]);
     
-    const countAllReferrals = useCallback((username: string, allUsers: User[]): number => {
-        const directReferrals = allUsers.filter(u => u.sponsor === username);
-        return directReferrals.length + directReferrals.reduce((sum, ref) => sum + countAllReferrals(ref.username, allUsers), 0);
-    }, []);
-    
-    const totalReferrals = useMemo(() => countAllReferrals(currentUser.username, users), [currentUser.username, users, countAllReferrals]);
+    const networkBreakdown = useMemo(() => {
+        const breakdown: { active: { [key: number]: number }, inactive: { [key: number]: number }, total: number } = {
+            active: {},
+            inactive: {},
+            total: 0
+        };
+
+        const traverse = (sponsorUsername: string, level: number) => {
+            const referrals = users.filter(u => u.sponsor === sponsorUsername);
+            if (referrals.length === 0) return;
+
+            referrals.forEach(ref => {
+                breakdown.total++;
+                const isActive = ref.activePlans && ref.activePlans.length > 0;
+                if (isActive) {
+                    breakdown.active[level] = (breakdown.active[level] || 0) + 1;
+                } else {
+                    breakdown.inactive[level] = (breakdown.inactive[level] || 0) + 1;
+                }
+                traverse(ref.username, level + 1);
+            });
+        };
+
+        traverse(currentUser.username, 1);
+        return breakdown;
+    }, [currentUser.username, users]);
 
     const recentTransactions = userTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
@@ -122,6 +142,50 @@ const UserDashboard: React.FC = () => {
             <div className={`text-white p-3 rounded-full ${color}`}>{icon}</div>
         </div>
     );
+    
+     const NetworkSummaryCard = () => {
+        // FIX: Explicitly type the accumulator and current value to 'number' in the reduce function.
+        // This resolves a TypeScript error where the types were being inferred as 'unknown'.
+        const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
+        const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
+
+        return (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Network Overview</p>
+                        <p className="text-2xl font-semibold text-gray-800 dark:text-white">{networkBreakdown.total} Total Referrals</p>
+                    </div>
+                    <div className="text-white p-3 rounded-full bg-purple-500"><UsersIcon /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm mt-4 border-t dark:border-gray-700 pt-4">
+                    <div>
+                        <h4 className="font-semibold text-green-600 dark:text-green-400 mb-2">Active Referrals ({totalActive})</h4>
+                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
+                            {Object.keys(networkBreakdown.active).map(level => (
+                                <li key={`active-${level}`} className="flex justify-between">
+                                    <span>Level {level}:</span>
+                                    <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 className="font-semibold text-red-500 dark:text-red-400 mb-2">Inactive Referrals ({totalInactive})</h4>
+                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
+                            {Object.keys(networkBreakdown.inactive).map(level => (
+                                <li key={`inactive-${level}`} className="flex justify-between">
+                                    <span>Level {level}:</span>
+                                    <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
 
     return (
         <div className="space-y-8">
@@ -156,7 +220,7 @@ const UserDashboard: React.FC = () => {
                     {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
                     {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
                     {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
-                    {visibleWidgets.referrals && <StatCard title="Total Referrals" value={totalReferrals} icon={<UsersIcon />} color="bg-purple-500" />}
+                    {visibleWidgets.referrals && <NetworkSummaryCard />}
                     {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
                     {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
                     {visibleWidgets.plan && <StatCard title="Active Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-pink-500" />}

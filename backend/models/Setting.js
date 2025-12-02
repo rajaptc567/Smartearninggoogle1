@@ -1,5 +1,4 @@
 
-
 import mongoose from 'mongoose';
 
 const TransferTierSchema = new mongoose.Schema({
@@ -67,6 +66,10 @@ const SettingSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    recurringCommissionPlanIds: {
+        type: [String],
+        default: [],
+    },
     requireUplineEligibility: {
         type: Boolean,
         default: false,
@@ -112,6 +115,7 @@ SettingSchema.statics.getSettings = async function() {
             requirePlanMatchForCommission: false,
             requireActivePlanForCommission: false,
             oneTimeCommissionPerGroup: false,
+            recurringCommissionPlanIds: [],
             requireUplineEligibility: false,
             withdrawalFrequency: {
                 enabled: false,
