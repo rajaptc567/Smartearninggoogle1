@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
 import Badge from '../../components/ui/Badge';
@@ -28,17 +28,33 @@ const Referrals: React.FC = () => {
     }, [currentUser]);
 
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-    const [viewMode, setViewMode] = useState<'tree' | 'level'>('tree');
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['inactive']));
 
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
         }
     }, [uniqueActivePlans, selectedPlanId]);
+    
+    const equivalentPlanIdsForSelected = useMemo(() => {
+        const ids = new Set<string>();
+        if (selectedPlanId) {
+            ids.add(selectedPlanId);
+            const group = settings.planEquivalencyGroups?.find(g =>
+                g.usdPlanId === selectedPlanId ||
+                g.pkrPlanId === selectedPlanId ||
+                g.eurPlanId === selectedPlanId
+            );
+            if (group) {
+                if (group.usdPlanId) ids.add(group.usdPlanId);
+                if (group.pkrPlanId) ids.add(group.pkrPlanId);
+                if (group.eurPlanId) ids.add(group.eurPlanId);
+            }
+        }
+        return ids;
+    }, [selectedPlanId, settings.planEquivalencyGroups]);
 
-    const getCommissionInfoForReferral = (referral: User): { earned: number; pendingReason: string | null } => {
+    const getCommissionInfoForReferral = useCallback((referral: User): { earned: number; pendingReason: string | null } => {
         if (!currentUser) return { earned: 0, pendingReason: null };
 
         const referralCommissions = transactions.filter(t => 
@@ -61,7 +77,6 @@ const Referrals: React.FC = () => {
             } else if (settings.requirePlanMatchForCommission) {
                 const referralPlanId = pendingCommission.relatedPlanId;
                 if (referralPlanId) {
-                    // FIX: Avoid Object.values() to prevent including `_id` in checks and fix typing issues.
                     const group = (settings.planEquivalencyGroups || []).find(g => 
                         g.usdPlanId === referralPlanId ||
                         g.pkrPlanId === referralPlanId ||
@@ -99,37 +114,14 @@ const Referrals: React.FC = () => {
             }
         }
         return { earned, pendingReason };
-    };
+    }, [currentUser, transactions, settings, investmentPlans]);
 
     const toggleNode = (userId: string) => {
         setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
     };
 
-    const toggleSection = (section: string) => {
-        setCollapsedSections(prev => { const newSet = new Set(prev); if (newSet.has(section)) newSet.delete(section); else newSet.add(section); return newSet; });
-    };
-
-    const equivalentPlanIdsForSelected = useMemo(() => {
-        const ids = new Set<string>();
-        if (selectedPlanId) {
-            ids.add(selectedPlanId);
-            // FIX: Avoid Object.values() to prevent including `_id` in checks and fix typing issues.
-            const group = settings.planEquivalencyGroups?.find(g =>
-                g.usdPlanId === selectedPlanId ||
-                g.pkrPlanId === selectedPlanId ||
-                g.eurPlanId === selectedPlanId
-            );
-            if (group) {
-                if (group.usdPlanId) ids.add(group.usdPlanId);
-                if (group.pkrPlanId) ids.add(group.pkrPlanId);
-                if (group.eurPlanId) ids.add(group.eurPlanId);
-            }
-        }
-        return ids;
-    }, [selectedPlanId, settings.planEquivalencyGroups]);
-
-    const { genealogyTree, levelViewData, networkStats } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], levelViewData: {}, networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, volume: 0 } };
+    const { genealogyTree, networkStats } = useMemo(() => {
+        if (!currentUser) return { genealogyTree: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, volume: 0 } };
 
         const getReferralInvestmentAndConvertToSponsorCurrency = (referral: User): number => {
             if (!referral.activePlans || !currentUser) return 0;
@@ -157,12 +149,9 @@ const Referrals: React.FC = () => {
         const genealogyTree = buildFullTree(currentUser.username, 1);
 
         const fullDownline: User[] = [];
-        const levels: { [key: number]: User[] } = {};
         const traverseTreeForStats = (nodes: GenealogyNode[]) => {
             nodes.forEach(node => {
                 fullDownline.push(node.user);
-                if (!levels[node.level]) levels[node.level] = [];
-                levels[node.level].push(node.user);
                 traverseTreeForStats(node.children);
             });
         };
@@ -176,65 +165,62 @@ const Referrals: React.FC = () => {
 
         return {
             genealogyTree,
-            levelViewData: levels,
             networkStats: { totalReferrals: fullDownline.length, activeMembers: activeMembersInPlan.length, earnings: totalEarnings, volume }
         };
-    }, [currentUser, users, selectedPlanId, transactions, settings, equivalentPlanIdsForSelected]);
+    }, [currentUser, users, selectedPlanId, transactions, settings, equivalentPlanIdsForSelected, state.settings.exchangeRates]);
+    
+    const getBranchStats = useCallback((startNode: GenealogyNode): { total: number; active: number; earnings: number } => {
+        let total = 0;
+        let active = 0;
+        let earnings = 0;
+
+        const recurse = (n: GenealogyNode) => {
+            total++;
+            if (n.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId))) {
+                active++;
+            }
+            earnings += getCommissionInfoForReferral(n.user).earned;
+            n.children.forEach(recurse);
+        };
+        
+        recurse(startNode);
+        return { total, active, earnings };
+    }, [equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
     const renderTreeNode = (node: GenealogyNode) => {
         const isCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
 
         const isUserActiveInPlan = node.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId));
-        const purchasedPlanInNetwork = isUserActiveInPlan ? node.user.activePlans?.find(p => equivalentPlanIdsForSelected.has(p.planId)) : null;
-        
-        // We get commission info for every user, active or not, because they might generate a pending commission.
         const { earned: commission, pendingReason } = getCommissionInfoForReferral(node.user);
 
         return (
-            <li key={node.user._id} className="relative pl-6 py-2">
-                <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-700 -ml-3"></div>
-                <div className="absolute left-0 top-10 w-4 h-px bg-gray-300 dark:bg-gray-700 -ml-3"></div>
-                
-                <div className={`relative flex flex-col md:flex-row md:items-center border-2 rounded-xl p-4 shadow-sm transition-all duration-200 group ${
-                    isUserActiveInPlan ? 'bg-white dark:bg-gray-800 border-blue-400 dark:border-blue-600' : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 opacity-80'
-                }`}>
-                    <div className="flex items-center flex-grow space-x-4">
-                        <div className="relative">
-                            <div className="flex-shrink-0 h-16 w-16 rounded-full flex flex-col items-center justify-center text-sm font-bold border-4 bg-gray-100 dark:bg-gray-900 border-white dark:border-gray-800 shadow-sm">
-                                <span className="text-xl">L{node.level}</span>
-                                <Badge status={node.user.status} />
-                            </div>
-                            {hasChildren && <button onClick={() => toggleNode(node.user._id)} className="absolute -bottom-1 -right-1 h-6 w-6 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-blue-500 hover:text-white transition-colors shadow-sm z-10"><span className="text-sm font-bold leading-none">{isCollapsed ? '+' : '-'}</span></button>}
-                        </div>
+            <li key={node.user._id} style={{ paddingLeft: `${(node.level > 1 ? node.level-1 : 0) * 1.5}rem` }} className="mt-2">
+                <div className={`flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg transition-colors duration-200 ${isUserActiveInPlan ? 'bg-white dark:bg-gray-700/70' : 'bg-gray-100 dark:bg-gray-700/30'}`}>
+                    <div className="flex items-center space-x-3 flex-grow">
+                        {hasChildren ? (
+                            <button onClick={() => toggleNode(node.user._id)} className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-xs font-bold hover:bg-blue-500 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                {isCollapsed ? '+' : '-'}
+                            </button>
+                        ) : (
+                            <div className="flex-shrink-0 w-6 h-6"></div> // Placeholder for alignment
+                        )}
                         <div>
-                            <h4 className="text-base font-bold text-gray-900 dark:text-white">{node.user.fullName}</h4>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">@{node.user.username} • Joined {new Date(node.user.registrationDate).toLocaleDateString()}</p>
-                            {isUserActiveInPlan && purchasedPlanInNetwork && <div className="mt-1 text-xs font-semibold text-blue-600 dark:text-blue-400">{purchasedPlanInNetwork.planName} Active</div>}
+                            <p className="font-semibold text-sm text-gray-800 dark:text-gray-100">{node.user.fullName} <span className="text-xs font-normal text-gray-500">(@{node.user.username})</span></p>
+                            <p className="text-xs text-gray-500">Level {node.level} • {isUserActiveInPlan ? 'Active' : 'Inactive'}</p>
                         </div>
                     </div>
-                    
-                    <div className="mt-4 md:mt-0 flex items-center justify-between md:justify-end space-x-6 pl-20 md:pl-0">
-                        {isUserActiveInPlan && purchasedPlanInNetwork ? (
-                            <>
-                                <div className="text-right"><p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plan Value</p><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(purchasedPlanInNetwork.price, node.user.currency)}</p></div>
-                                <div className="text-right">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Your Earnings</p>
-                                    <p className={`text-sm font-bold ${commission > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                                        +{formatCurrency(commission, currentUser.currency)}
-                                    </p>
-                                </div>
-                            </>
-                        ) : (
-                             <div className="text-sm text-gray-400 dark:text-gray-500 text-center md:text-right w-full">Inactive in this network</div>
-                        )}
+                    <div className="flex items-center justify-end space-x-4 mt-2 md:mt-0 flex-shrink-0 pl-9 md:pl-0">
+                        <div className="text-right">
+                            <p className={`text-sm font-bold ${commission > 0 ? 'text-green-500' : 'text-gray-400'}`}>
+                                {formatCurrency(commission, currentUser.currency)}
+                            </p>
+                            <p className="text-xs text-gray-400">Earned</p>
+                        </div>
                         {pendingReason && (
-                            <div className="group/tooltip relative">
-                                <span className="text-yellow-500 cursor-help flex items-center gap-1">
-                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                                    <span className="text-xs font-bold hidden md:block">HELD</span>
-                                </span>
-                                <div className="absolute bottom-full mb-2 -left-1/2 translate-x-1/2 w-64 p-3 text-xs text-white bg-gray-900 rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-10 text-left shadow-xl">
+                             <div className="group/tooltip relative">
+                                <span className="text-yellow-500 cursor-help"><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg></span>
+                                <div className="absolute bottom-full mb-2 -right-1/2 translate-x-1/2 w-64 p-3 text-xs text-white bg-gray-900 rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-10 text-left shadow-xl">
                                     <p className="font-bold mb-1">Commission Held!</p>
                                     {pendingReason}
                                 </div>
@@ -242,52 +228,45 @@ const Referrals: React.FC = () => {
                         )}
                     </div>
                 </div>
-                {hasChildren && !isCollapsed && <ul className="mt-2 ml-2 border-l-2 border-gray-200/50 dark:border-gray-700/50 pl-2 space-y-2 animate-fade-in-down">{node.children.map(child => renderTreeNode(child))}</ul>}
+                {hasChildren && !isCollapsed && (
+                    <ul className="mt-1 animate-fade-in-down">{node.children.map(child => renderTreeNode(child))}</ul>
+                )}
             </li>
         );
     };
 
-    const renderLevelView = () => {
-        const levels = Object.keys(levelViewData).map(Number).sort((a,b) => a-b);
-        if (levels.length === 0) return renderEmptyState(currentPlanName);
-
+    const DirectReferralAccordion: React.FC<{ node: GenealogyNode }> = ({ node }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const branchStats = getBranchStats(node);
+    
         return (
-            <div className="space-y-4">
-                {levels.map(level => {
-                    const members = levelViewData[level] || [];
-                    const activeMembers = members.filter(m => m.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
-                    const earnings = activeMembers.reduce((sum, u) => sum + getCommissionInfoForReferral(u).earned, 0);
-                    return (
-                        <div key={level} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <div className="p-4 flex justify-between items-center rounded-t-lg">
-                                <div className="flex items-center space-x-4">
-                                    <span className="px-3 py-1.5 rounded-md text-sm font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">Level {level}</span>
-                                    <div className="text-left text-sm text-gray-600 dark:text-gray-400 flex flex-col sm:flex-row sm:gap-4">
-                                        <span><span className="font-bold">{members.length}</span> Total Members</span>
-                                        <span><span className="font-bold text-blue-600">{activeMembers.length}</span> Active in Plan</span>
-                                        <span className="text-green-600"><span className="font-bold">{formatCurrency(earnings, currentUser.currency)}</span> Earnings</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 border-t dark:border-gray-700">
-                                <div className="space-y-2">
-                                    {members.map(member => {
-                                        const isUserActiveInPlan = member.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId));
-                                        const { earned: commission } = getCommissionInfoForReferral(member);
-                                        return (
-                                            <div key={member._id} className={`grid grid-cols-12 gap-2 items-center p-2 rounded-md text-xs ${isUserActiveInPlan ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                                                <div className="col-span-4 font-semibold">{member.fullName} <span className="text-gray-400 font-normal">@{member.username}</span></div>
-                                                <div className="col-span-2"><Badge status={member.status}/></div>
-                                                <div className="col-span-4 text-gray-500">{isUserActiveInPlan ? 'Active in this plan' : 'Inactive in this plan'}</div>
-                                                <div className="col-span-2 text-right font-bold text-green-600">+{formatCurrency(commission, currentUser.currency)}</div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 transition-shadow hover:shadow-lg">
+                <button onClick={() => setIsOpen(!isOpen)} className="w-full p-4 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-xl">
+                    <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-300">
+                            {node.user.fullName.charAt(0)}
                         </div>
-                    )
-                })}
+                        <div>
+                            <p className="font-bold text-gray-900 dark:text-white">{node.user.fullName}</p>
+                            <p className="text-xs text-gray-500">@{node.user.username}</p>
+                        </div>
+                    </div>
+                    <div className="hidden md:flex items-center space-x-6 text-sm">
+                        <div className="text-center"><p className="text-xs text-gray-400">Team Size</p><p className="font-semibold text-lg">{branchStats.total}</p></div>
+                        <div className="text-center"><p className="text-xs text-gray-400">Active</p><p className="font-semibold text-lg text-blue-500">{branchStats.active}</p></div>
+                        <div className="text-center"><p className="text-xs text-gray-400">Earnings</p><p className="font-semibold text-lg text-green-500">{formatCurrency(branchStats.earnings, currentUser.currency)}</p></div>
+                    </div>
+                    <svg className={`w-6 h-6 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {isOpen && (
+                    <div className="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 animate-fade-in-down rounded-b-xl">
+                         {node.children.length > 0 ? (
+                            <ul>{node.children.map(child => renderTreeNode(child))}</ul>
+                         ) : (
+                            <p className="text-center text-sm text-gray-500 py-4">This user has not referred anyone yet.</p>
+                         )}
+                    </div>
+                )}
             </div>
         );
     }
@@ -329,22 +308,18 @@ const Referrals: React.FC = () => {
             </div>
 
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-between items-center">
-                    <div>
-                        <h2 className="font-bold text-gray-800 dark:text-white text-lg">Network Structure</h2>
-                        <p className="text-xs text-gray-500">Viewing team for the <strong>{currentPlanName}</strong> plan</p>
-                    </div>
-                     <div className="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-md">
-                        <button onClick={() => setViewMode('tree')} className={`px-3 py-1 text-xs rounded ${viewMode === 'tree' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Tree View</button>
-                        <button onClick={() => setViewMode('level')} className={`px-3 py-1 text-xs rounded ${viewMode === 'level' ? 'bg-white dark:bg-gray-800 shadow-sm' : ''}`}>Level View</button>
-                    </div>
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <h2 className="font-bold text-gray-800 dark:text-white text-lg">Network Structure</h2>
+                    <p className="text-xs text-gray-500">Viewing team for the <strong>{currentPlanName}</strong> plan</p>
                 </div>
                 
                 <div className="p-4 md:p-6">
                     {networkStats.totalReferrals > 0 ? (
-                        viewMode === 'tree' 
-                            ? <ul className="space-y-4 min-w-[600px]">{genealogyTree.map(node => renderTreeNode(node))}</ul> 
-                            : renderLevelView()
+                        <div className="space-y-4">
+                            {genealogyTree.map(node => (
+                                <DirectReferralAccordion key={node.user._id} node={node} />
+                            ))}
+                        </div>
                     ) : (
                         renderEmptyState(currentPlanName)
                     )}
