@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
-import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
+import { User, Status, formatCurrency, InvestmentPlan, Commission, Currency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -54,6 +54,24 @@ const Referrals: React.FC = () => {
         }
         return ids;
     }, [selectedPlanId, settings.planEquivalencyGroups]);
+    
+    const selectedPlanDetails = useMemo(() => {
+        if (!selectedPlanId) return null;
+        return investmentPlans.find(p => p._id === selectedPlanId);
+    }, [selectedPlanId, investmentPlans]);
+
+    const renderCommissionSummary = (commissions: Commission[] | undefined, planPrice: number, currency: Currency) => {
+        if (!commissions || commissions.length === 0) return 'N/A';
+        const firstComm = commissions[0];
+        const valueStr = firstComm.type === 'percentage'
+            ? `${firstComm.value}%`
+            : formatCurrency(firstComm.value, currency);
+
+        if (commissions.length > 1) {
+            return `${valueStr} (Tier 1)`;
+        }
+        return valueStr;
+    };
 
     const getCommissionInfoForReferral = useCallback((referral: User): { earned: number; pendingReason: string | null } => {
         if (!currentUser) return { earned: 0, pendingReason: null };
@@ -334,10 +352,45 @@ const Referrals: React.FC = () => {
     
     return (
         <div className="space-y-8 max-w-6xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div><h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">My Network</h1><p className="text-gray-500 dark:text-gray-400 mt-1">Manage your team structure and performance.</p></div>
-                {uniqueActivePlans.length > 0 && <div className="flex p-1 bg-gray-200/75 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 backdrop-blur-sm">{uniqueActivePlans.map(plan => (<button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all duration-300 ease-in-out ${selectedPlanId === plan.planId ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-md' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'}`}>{plan.planName}</button>))}</div>}
             </div>
+
+            {uniqueActivePlans.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Select a Plan to View Network</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {uniqueActivePlans.map(plan => {
+                            const planDetails = investmentPlans.find(p => p._id === plan.planId);
+                            const isActive = selectedPlanId === plan.planId;
+                            return (
+                                <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)}
+                                    className={`p-4 rounded-xl text-left border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-600'}`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold text-gray-900 dark:text-white">{plan.planName}</span>
+                                        {isActive && <div className="w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-blue-900/30"></div>}
+                                    </div>
+                                    <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{formatCurrency(planDetails?.price || 0, planDetails?.currency || currentUser.currency)}</p>
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    {selectedPlanDetails && (
+                        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border dark:border-gray-200 dark:border-gray-700 animate-fade-in-down">
+                            <h3 className="font-bold text-gray-800 dark:text-white mb-3">Plan Details: {selectedPlanDetails.name}</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div><p className="text-xs text-gray-500">Duration</p><p className="font-semibold">{selectedPlanDetails.durationDays === 0 ? 'Unlimited' : `${selectedPlanDetails.durationDays} Days`}</p></div>
+                                <div><p className="text-xs text-gray-500">Min. Withdraw</p><p className="font-semibold">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p></div>
+                                <div><p className="text-xs text-gray-500">Direct Commission</p><p className="font-semibold">{renderCommissionSummary(selectedPlanDetails.directCommissions, selectedPlanDetails.price, selectedPlanDetails.currency)}</p></div>
+                                <div><p className="text-xs text-gray-500">Indirect Levels</p><p className="font-semibold">{selectedPlanDetails.indirectCommissions.length}</p></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20">
                     <div className="flex justify-between items-start">
