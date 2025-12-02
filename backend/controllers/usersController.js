@@ -229,8 +229,8 @@ export const updateUser = async (req, res) => {
         if (oldCurrency !== newCurrency) {
             const settings = await Setting.getSettings();
             const rates = settings.exchangeRates;
-            const balanceInUSD = oldBalance / (rates[oldCurrency] || 1);
-            const newBalance = balanceInUSD * (rates[newCurrency] || 1);
+            const balanceInPKR = oldBalance * (rates[oldCurrency] || 1);
+            const newBalance = balanceInPKR / (rates[newCurrency] || 1);
             userToUpdate.walletBalance = Number(newBalance.toFixed(2));
         }
 
@@ -241,7 +241,7 @@ export const updateUser = async (req, res) => {
         if (oldCurrency !== newCurrency) {
             const settings = await Setting.getSettings();
             const rates = settings.exchangeRates;
-            const conversionRate = (rates[newCurrency] || 1) / (rates[oldCurrency] || 1);
+            const conversionRate = (rates[oldCurrency] || 1) / (rates[newCurrency] || 1);
 
             // Use updateMany for efficiency
             await Deposit.updateMany({ userId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate }, $set: { currency: newCurrency } });
@@ -551,8 +551,8 @@ export const purchasePlan = async (req, res) => {
         if (user.sponsor) {
             const convertCurrency = (amount, from, to) => {
                 if (from === to) return Number(amount.toFixed(2));
-                const amountInUSD = amount / exchangeRates[from];
-                const convertedAmount = amountInUSD * exchangeRates[to];
+                const amountInPKR = amount * exchangeRates[from];
+                const convertedAmount = amountInPKR / exchangeRates[to];
                 return Number(convertedAmount.toFixed(2));
             };
             

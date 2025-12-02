@@ -151,10 +151,14 @@ const Referrals: React.FC = () => {
             const fromCurrency = referral.currency;
             const toCurrency = currentUser.currency;
             const rates = state.settings.exchangeRates;
-            if (!rates || !rates[fromCurrency] || !rates[toCurrency] || fromCurrency === toCurrency) return price;
 
-            const priceInUSD = price / rates[fromCurrency];
-            return priceInUSD * rates[toCurrency];
+            if (!rates || !rates[fromCurrency] || !rates[toCurrency] || fromCurrency === toCurrency) {
+                return price;
+            }
+
+            // Convert amount to base currency (PKR), then to target currency
+            const priceInPKR = price * (rates[fromCurrency] || 1);
+            return priceInPKR / (rates[toCurrency] || 1);
         };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
