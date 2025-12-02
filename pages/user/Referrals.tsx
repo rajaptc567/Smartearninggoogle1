@@ -149,22 +149,7 @@ const Referrals: React.FC = () => {
         };
         const fullGenealogyTree = buildFullTree(currentUser.username, 1);
 
-        const fullDownline: User[] = [];
-        const traverseTreeForStats = (nodes: GenealogyNode[]) => {
-            nodes.forEach(node => {
-                fullDownline.push(node.user);
-                traverseTreeForStats(node.children);
-            });
-        };
-        traverseTreeForStats(fullGenealogyTree);
-
-        const activeMembersInPlan = fullDownline.filter(u => u.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
-        const volume = activeMembersInPlan.reduce((sum, u) => sum + getReferralInvestmentAndConvertToSponsorCurrency(u), 0);
-        const totalEarnings = transactions
-            .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Approved' && t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-        // --- NEW FILTERING LOGIC ---
+        // --- FILTERING LOGIC ---
         const sponsorHasRecurringRights = (currentUser.activePlans || []).some(p => 
             (settings.recurringCommissionPlanIds || []).includes(p.planId)
         );
@@ -183,19 +168,47 @@ const Referrals: React.FC = () => {
         
                 if (commissionTransaction) {
                     const commissionPlanId = commissionTransaction.relatedPlanId;
-                    if (!commissionPlanId) {
-                        return true; // Fallback if plan ID is missing
-                    }
+                    if (!commissionPlanId) return true;
                     return equivalentPlanIdsForSelected.has(commissionPlanId);
-                } else {
-                    return true;
                 }
+                return true;
             });
         }
 
+        // --- RECALCULATE STATS BASED ON FILTERED TREE ---
+        const finalDownline: User[] = [];
+        const traverseFinalTreeForStats = (nodes: GenealogyNode[]) => {
+            nodes.forEach(node => {
+                finalDownline.push(node.user);
+                traverseFinalTreeForStats(node.children);
+            });
+        };
+        traverseFinalTreeForStats(finalGenealogyTree);
+
+        const activeMembersInPlan = finalDownline.filter(u => u.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
+        const volume = activeMembersInPlan.reduce((sum, u) => sum + getReferralInvestmentAndConvertToSponsorCurrency(u), 0);
+        
+        const finalDownlineUserIds = new Set(finalDownline.map(u => u._id));
+        const totalEarnings = transactions
+            .filter(t => 
+                t.userId === currentUser._id && 
+                t.type === 'Commission' && 
+                t.status === 'Approved' && 
+                t.relatedPlanId && 
+                equivalentPlanIdsForSelected.has(t.relatedPlanId) &&
+                t.sourceUserId &&
+                finalDownlineUserIds.has(t.sourceUserId)
+            )
+            .reduce((sum, t) => sum + t.amount, 0);
+
         return {
             genealogyTree: finalGenealogyTree,
-            networkStats: { totalReferrals: fullDownline.length, activeMembers: activeMembersInPlan.length, earnings: totalEarnings, volume }
+            networkStats: { 
+                totalReferrals: finalDownline.length,
+                activeMembers: activeMembersInPlan.length,
+                earnings: totalEarnings, 
+                volume 
+            }
         };
     }, [currentUser, users, selectedPlanId, transactions, settings, equivalentPlanIdsForSelected, state.settings.exchangeRates]);
     
@@ -221,7 +234,8 @@ const Referrals: React.FC = () => {
         const isCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
 
-        const isUserActiveInPlan = node.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId));
+        const activePlanForView = node.user.activePlans?.find(p => equivalentPlanIdsForSelected.has(p.planId));
+        const isUserActiveInPlan = !!activePlanForView;
         const { earned: commission, pendingReason } = getCommissionInfoForReferral(node.user);
 
         return (
@@ -237,7 +251,16 @@ const Referrals: React.FC = () => {
                         )}
                         <div>
                             <p className="font-semibold text-sm text-gray-800 dark:text-gray-100">{node.user.fullName} <span className="text-xs font-normal text-gray-500">(@{node.user.username})</span></p>
-                            <p className="text-xs text-gray-500">Level {node.level} • {isUserActiveInPlan ? 'Active' : 'Inactive'}</p>
+                            <p className="text-xs text-gray-500">
+                                Level {node.level} • {' '}
+                                {isUserActiveInPlan && activePlanForView ? (
+                                    <span className="font-medium text-green-600 dark:text-green-400">
+                                        Active: {activePlanForView.planName} ({formatCurrency(activePlanForView.price, node.user.currency)})
+                                    </span>
+                                ) : (
+                                    <span className="text-gray-500">Inactive</span>
+                                )}
+                            </p>
                         </div>
                     </div>
                     <div className="flex items-center justify-end space-x-4 mt-2 md:mt-0 flex-shrink-0 pl-9 md:pl-0">
