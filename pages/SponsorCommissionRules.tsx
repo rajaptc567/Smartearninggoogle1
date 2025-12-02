@@ -103,9 +103,9 @@ const SponsorCommissionRules: React.FC = () => {
                         />
                          {localSettings.oneTimeCommissionPerGroup && (
                             <div className="mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20">
-                                <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Exceptions</h4>
+                                <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Plans</h4>
                                 <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-4">
-                                    Select plans below that should be EXEMPT from the one-time rule. Sponsors will earn a commission every time a referral buys one of these selected plans.
+                                    Select plans that grant recurring commissions. If a sponsor owns any of these plans, they will bypass the 'one-time' rule and earn a commission every time one of their referrals buys or upgrades ANY plan.
                                 </p>
                                 <div className="space-y-3">
                                     {(['USD', 'EUR', 'PKR'] as const).map(currency => (

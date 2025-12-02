@@ -638,11 +638,16 @@ export const purchasePlan = async (req, res) => {
                     continue;
                 }
                 
-                // Rule: One-Time Commission Per Referral, with exceptions
+                // Rule: One-Time Commission Per Referral, with exceptions based on SPONSOR's plans
                 if (settings.oneTimeCommissionPerGroup) {
-                    const isRecurringPlan = (settings.recurringCommissionPlanIds || []).includes(plan._id.toString());
+                    const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
+                    const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
                     
-                    if (!isRecurringPlan) { // Only check for existing commission if it's NOT a recurring plan
+                    // Check if the SPONSOR owns any of the special recurring plans
+                    const sponsorHasRecurringRights = sponsorActivePlanIds.some(id => exceptionPlanIds.includes(id));
+
+                    // Only apply the one-time commission check if the sponsor does NOT have recurring rights
+                    if (!sponsorHasRecurringRights) {
                         const existingCommission = await Transaction.findOne({
                             userId: uplineUser._id,
                             sourceUserId: user._id,
