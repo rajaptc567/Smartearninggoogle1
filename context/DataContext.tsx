@@ -23,6 +23,25 @@ interface AppState {
     currentUser: User | null;
 }
 
+const defaultHomepageContent = {
+    heroTitle: "Invest in Your Future, Grow Your Network",
+    heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
+    feature1Title: "Secure Investments",
+    feature1Desc: "Your funds and data are protected with industry-standard security measures.",
+    feature2Title: "Powerful MLM System",
+    feature2Desc: "Earn commissions not just from your referrals, but from their referrals too.",
+    feature3Title: "Real-Time Tracking",
+    feature3Desc: "Monitor your earnings, network growth, and transactions with our intuitive dashboard.",
+    videoTitle: "See How It Works",
+    videoDesc: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals.",
+    multiCurrencyTitle: "Global Reach, Local Convenience",
+    multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
+    mlmTitle: "Understanding Our Earning System",
+    mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
+    ctaTitle: "Ready to Start Your Journey?",
+    ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
+};
+
 const initialState: AppState = {
     users: [],
     deposits: [],
@@ -52,7 +71,9 @@ const initialState: AppState = {
             enabled: false,
             value: 1,
             unit: 'days'
-        }
+        },
+        homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
+        homepageContent: defaultHomepageContent,
     },
     notifications: [],
     logs: [],
@@ -243,7 +264,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 requireActivePlanForCommission: false,
                 oneTimeCommissionPerGroup: false,
                 requireUplineEligibility: false,
-                withdrawalFrequency: { enabled: false, value: 1, unit: 'days' }
+                withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
+                homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
+                homepageContent: defaultHomepageContent,
             };
 
             // Helper to safely fetch individual data points without crashing the entire app
@@ -288,7 +311,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     paymentMethods: paymentMethods,
                     investmentPlans: investmentPlans,
                     rules: rules,
-                    settings: settings,
+                    settings: { ...defaultSettings, ...settings }, // Merge fetched settings with defaults
                     transfers: transfers,
                     logs: logs,
                     passwordResetRequests: passwordResetRequests,

@@ -245,6 +245,25 @@ export interface PlanEquivalencyGroup {
     eurPlanId?: string;
 }
 
+export interface HomepageContent {
+    heroTitle: string;
+    heroSubtitle: string;
+    feature1Title: string;
+    feature1Desc: string;
+    feature2Title: string;
+    feature2Desc: string;
+    feature3Title: string;
+    feature3Desc: string;
+    videoTitle: string;
+    videoDesc: string;
+    multiCurrencyTitle: string;
+    multiCurrencyDesc: string;
+    mlmTitle: string;
+    mlmDesc: string;
+    ctaTitle: string;
+    ctaDesc: string;
+}
+
 export interface Settings {
     // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
     isUserTransferEnabled: boolean; 
@@ -275,6 +294,8 @@ export interface Settings {
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
     planEquivalencyGroups?: PlanEquivalencyGroup[];
+    homepageVideoUrl?: string;
+    homepageContent?: HomepageContent;
 }
 
 export interface Notification {

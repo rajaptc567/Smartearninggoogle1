@@ -35,6 +35,25 @@ const PlanEquivalencyGroupSchema = new mongoose.Schema({
     eurPlanId: { type: String },
 });
 
+const HomepageContentSchema = new mongoose.Schema({
+    heroTitle: { type: String, default: "Invest in Your Future, Grow Your Network" },
+    heroSubtitle: { type: String, default: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential." },
+    feature1Title: { type: String, default: "Secure Investments" },
+    feature1Desc: { type: String, default: "Your funds and data are protected with industry-standard security measures." },
+    feature2Title: { type: String, default: "Powerful MLM System" },
+    feature2Desc: { type: String, default: "Earn commissions not just from your referrals, but from their referrals too." },
+    feature3Title: { type: String, default: "Real-Time Tracking" },
+    feature3Desc: { type: String, default: "Monitor your earnings, network growth, and transactions with our intuitive dashboard." },
+    videoTitle: { type: String, default: "See How It Works" },
+    videoDesc: { type: String, default: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals." },
+    multiCurrencyTitle: { type: String, default: "Global Reach, Local Convenience" },
+    multiCurrencyDesc: { type: String, default: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you." },
+    mlmTitle: { type: String, default: "Understanding Our Earning System" },
+    mlmDesc: { type: String, default: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network." },
+    ctaTitle: { type: String, default: "Ready to Start Your Journey?" },
+    ctaDesc: { type: String, default: "Join a community of forward-thinkers. Sign up today and unlock your earning potential." }
+}, { _id: false });
+
 
 const SettingSchema = new mongoose.Schema({
     isUserTransferEnabled: {
@@ -86,6 +105,14 @@ const SettingSchema = new mongoose.Schema({
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
     planEquivalencyGroups: [PlanEquivalencyGroupSchema],
+    homepageVideoUrl: {
+        type: String,
+        default: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1'
+    },
+    homepageContent: {
+        type: HomepageContentSchema,
+        default: () => ({})
+    }
 }, {
     // Use a capped collection of size 1 to ensure only one settings document exists
     capped: { size: 1024, max: 1 }
@@ -138,6 +165,25 @@ SettingSchema.statics.getSettings = async function() {
                 { _id: 't5', template: '{name} sent funds to another member', type: 'transfer', enabled: false },
             ],
             planEquivalencyGroups: [],
+            homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
+            homepageContent: {
+                heroTitle: "Invest in Your Future, Grow Your Network",
+                heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
+                feature1Title: "Secure Investments",
+                feature1Desc: "Your funds and data are protected with industry-standard security measures.",
+                feature2Title: "Powerful MLM System",
+                feature2Desc: "Earn commissions not just from your referrals, but from their referrals too.",
+                feature3Title: "Real-Time Tracking",
+                feature3Desc: "Monitor your earnings, network growth, and transactions with our intuitive dashboard.",
+                videoTitle: "See How It Works",
+                videoDesc: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals.",
+                multiCurrencyTitle: "Global Reach, Local Convenience",
+                multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
+                mlmTitle: "Understanding Our Earning System",
+                mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
+                ctaTitle: "Ready to Start Your Journey?",
+                ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
+            },
         });
     }
     return settings;

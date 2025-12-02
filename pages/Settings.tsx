@@ -11,16 +11,32 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
+  const [isDirty, setIsDirty] = useState(false);
+
 
   useEffect(() => {
     setLocalSettings(prev => ({
         ...settings,
         transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
-        exchangeRates: settings.exchangeRates || { USD: 278.50, EUR: 256.22, PKR: 1 }
+        exchangeRates: settings.exchangeRates || { USD: 278.50, EUR: 256.22, PKR: 1 },
+        homepageVideoUrl: settings.homepageVideoUrl || '',
+        homepageContent: settings.homepageContent || { heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '' }
     }));
+    setIsDirty(false);
   }, [settings]);
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    if (name.startsWith('homepageContent.')) {
+        const field = name.split('.')[1];
+        setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value }}));
+    } else {
+        setLocalSettings(prev => ({...prev, [name]: value }));
+    }
+    setIsDirty(true);
+  }
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
@@ -39,6 +55,7 @@ const Settings: React.FC = () => {
     } else {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     }
+    setIsDirty(true);
   };
   
   const handleFrequencyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -51,6 +68,7 @@ const Settings: React.FC = () => {
               [field]: field === 'value' ? parseFloat(value) : value 
           }
       }));
+      setIsDirty(true);
   }
 
     const handleExchangeRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,6 +81,7 @@ const Settings: React.FC = () => {
                 [currency]: parseFloat(value) || 0
             }
         }));
+        setIsDirty(true);
     };
 
   // --- Transfer Tier Handlers ---
@@ -75,6 +94,7 @@ const Settings: React.FC = () => {
               tiers: [...prev.transferConfig.tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0, currency: tierCurrencyFilter, enabled: true }]
           }
       }));
+      setIsDirty(true);
   };
 
   const handleRemoveTier = (index: number) => {
@@ -85,6 +105,7 @@ const Settings: React.FC = () => {
               tiers: prev.transferConfig.tiers.filter((_, i) => i !== index)
           }
       }));
+      setIsDirty(true);
   };
 
   const handleTierChange = (index: number, field: keyof TransferFeeTier, value: string | boolean) => {
@@ -107,6 +128,7 @@ const Settings: React.FC = () => {
               transferConfig: { ...prev.transferConfig, tiers: newTiers }
           };
       });
+      setIsDirty(true);
   };
   
   const handleSave = async (e: React.FormEvent) => {
@@ -116,6 +138,7 @@ const Settings: React.FC = () => {
           const updatedSettings = await updateSettings(localSettings);
           dispatch({ type: 'UPDATE_SETTINGS', payload: updatedSettings });
           alert('Settings saved successfully!');
+          setIsDirty(false);
       } catch (error) {
           console.error("Failed to save settings:", error);
           alert(`Error: ${error instanceof Error ? error.message : 'Could not save settings.'}`);
@@ -147,6 +170,7 @@ const Settings: React.FC = () => {
 
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
           <TabButton id="general" label="General" />
+          <TabButton id="homepage" label="Homepage" />
           <TabButton id="transfers" label="Transfers & Fees" />
           <TabButton id="withdrawals" label="Withdrawals" />
           <TabButton id="commissions" label="Commissions" />
@@ -185,6 +209,77 @@ const Settings: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+        )}
+
+        {/* HOMEPAGE TAB */}
+        {activeTab === 'homepage' && (
+            <div className="space-y-6 animate-fade-in">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Homepage Content</h3>
+                <p className="text-sm text-gray-500">Edit the content of the main landing page. You can also edit this directly on the page by adding `?edit=true` to the URL.</p>
+                
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Videos</h4>
+                    <div>
+                        <label htmlFor="homepageVideoUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Homepage Video URL</label>
+                        <input id="homepageVideoUrl" name="homepageVideoUrl" type="text" value={localSettings.homepageVideoUrl || ''} onChange={handleTextChange} className="mt-1 block w-full rounded-md dark:bg-gray-700" placeholder="https://www.youtube.com/embed/..."/>
+                        <p className="mt-1 text-xs text-gray-500">Paste the 'embed' URL. For a seamless look, add: <code className="text-xs bg-gray-200 dark:bg-gray-600 p-1 rounded">?autoplay=1&mute=1&loop=1&playlist=VIDEO_ID&controls=0</code></p>
+                    </div>
+                </div>
+
+                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                     <h4 className="font-semibold text-gray-800 dark:text-white">Text Content</h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-sm font-medium">Hero Title</label>
+                            <textarea name="homepageContent.heroTitle" value={localSettings.homepageContent?.heroTitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Hero Subtitle</label>
+                            <textarea name="homepageContent.heroSubtitle" value={localSettings.homepageContent?.heroSubtitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Feature 1 Title</label>
+                            <input name="homepageContent.feature1Title" value={localSettings.homepageContent?.feature1Title || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Feature 1 Description</label>
+                            <textarea name="homepageContent.feature1Desc" value={localSettings.homepageContent?.feature1Desc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Feature 2 Title</label>
+                            <input name="homepageContent.feature2Title" value={localSettings.homepageContent?.feature2Title || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Feature 2 Description</label>
+                            <textarea name="homepageContent.feature2Desc" value={localSettings.homepageContent?.feature2Desc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Feature 3 Title</label>
+                            <input name="homepageContent.feature3Title" value={localSettings.homepageContent?.feature3Title || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Feature 3 Description</label>
+                            <textarea name="homepageContent.feature3Desc" value={localSettings.homepageContent?.feature3Desc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Video Section Title</label>
+                            <textarea name="homepageContent.videoTitle" value={localSettings.homepageContent?.videoTitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">Video Section Description</label>
+                            <textarea name="homepageContent.videoDesc" value={localSettings.homepageContent?.videoDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">CTA Section Title</label>
+                            <textarea name="homepageContent.ctaTitle" value={localSettings.homepageContent?.ctaTitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                         <div>
+                            <label className="text-sm font-medium">CTA Section Description</label>
+                            <textarea name="homepageContent.ctaDesc" value={localSettings.homepageContent?.ctaDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                        </div>
+                    </div>
+                 </div>
             </div>
         )}
         
@@ -483,7 +578,7 @@ const Settings: React.FC = () => {
         )}
        
         <div className="pt-6 border-t dark:border-gray-700 flex justify-end">
-           <Button type="submit" disabled={isSaving} size="lg" className="px-8">
+           <Button type="submit" disabled={isSaving || !isDirty} size="lg" className="px-8">
                {isSaving ? 'Saving Settings...' : 'Save All Changes'}
            </Button>
         </div>
