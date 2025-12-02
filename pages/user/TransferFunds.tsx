@@ -9,7 +9,8 @@ const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, users, settings } = state;
     
-    const [recipientIdentifier, setRecipientIdentifier] = useState('');
+    const [selectedRecipient, setSelectedRecipient] = useState(''); // From dropdown
+    const [manualRecipient, setManualRecipient] = useState(''); // From manual input
     const [amount, setAmount] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -95,6 +96,7 @@ const TransferFunds: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const recipientIdentifier = selectedRecipient === 'manual' ? manualRecipient : selectedRecipient;
         const numericAmount = parseFloat(amount);
         
         if (!currentUser) return alert('Error: Current user not found.');
@@ -130,7 +132,8 @@ const TransferFunds: React.FC = () => {
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
 
             setIsSubmitted(true);
-            setRecipientIdentifier('');
+            setSelectedRecipient('');
+            setManualRecipient('');
             setAmount('');
         } catch (error) {
             console.error("Failed to submit transfer:", error);
@@ -168,27 +171,39 @@ const TransferFunds: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                  <div>
-                    <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient (Username, Email, or ID)</label>
-                    <div className="mt-1">
+                    <label htmlFor="recipient-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
+                    <select
+                        id="recipient-select"
+                        value={selectedRecipient}
+                        onChange={(e) => setSelectedRecipient(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        required={selectedRecipient !== 'manual'}
+                    >
+                        <option value="">-- Select from your network --</option>
+                        {availableRecipients.map(user => (
+                            <option key={user._id} value={user.username}>
+                                {user.fullName} (@{user.username})
+                            </option>
+                        ))}
+                        <option value="manual">-- Other (Enter Manually) --</option>
+                    </select>
+                </div>
+                
+                {selectedRecipient === 'manual' && (
+                    <div className="animate-fade-in">
+                        <label htmlFor="manual-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enter Recipient's Username, Email, or ID</label>
                         <input
                             type="text"
-                            id="recipient"
-                            list="recipient-list"
-                            value={recipientIdentifier}
-                            onChange={(e) => setRecipientIdentifier(e.target.value)}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="Type to search your network..."
+                            id="manual-recipient"
+                            value={manualRecipient}
+                            onChange={(e) => setManualRecipient(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            placeholder="e.g., john.doe@example.com"
                             required
                         />
-                        <datalist id="recipient-list">
-                            {availableRecipients.map(user => (
-                                <option key={user._id} value={user.username}>
-                                    {user.fullName} ({user.email})
-                                </option>
-                            ))}
-                        </datalist>
                     </div>
-                </div>
+                )}
+
                 <div>
                     <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
                     <input
