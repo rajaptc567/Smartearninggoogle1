@@ -104,6 +104,12 @@ const SettingSchema = new mongoose.Schema({
     },
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
+    tickerSpeed: { type: Number, default: 6 },
+    tickerContentSource: {
+        type: String,
+        enum: ['hybrid', 'real_only', 'demo_only'],
+        default: 'hybrid',
+    },
     planEquivalencyGroups: [PlanEquivalencyGroupSchema],
     homepageVideoUrl: {
         type: String,
@@ -168,6 +174,8 @@ SettingSchema.statics.getSettings = async function() {
                 { _id: 't4', template: '{name} upgraded to the {plan} plan', type: 'plan', enabled: true },
                 { _id: 't5', template: '{name} sent funds to another member', type: 'transfer', enabled: false },
             ],
+            tickerSpeed: 6,
+            tickerContentSource: 'hybrid',
             planEquivalencyGroups: [],
             homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
             homepageContent: {

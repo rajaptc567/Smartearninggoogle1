@@ -293,6 +293,7 @@ export interface Settings {
     demoProfiles?: DemoProfile[];
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
+    tickerContentSource?: 'hybrid' | 'real_only' | 'demo_only';
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
