@@ -294,6 +294,16 @@ export interface Settings {
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
     tickerContentSource?: 'hybrid' | 'real_only' | 'demo_only';
+    tickerRealActivities?: {
+        deposits: boolean;
+        withdrawals: boolean;
+        registrations: boolean;
+    };
+    tickerDemoAmountRanges?: {
+        USD: { min: number; max: number };
+        EUR: { min: number; max: number };
+        PKR: { min: number; max: number };
+    };
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;

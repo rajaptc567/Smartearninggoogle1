@@ -110,6 +110,16 @@ const SettingSchema = new mongoose.Schema({
         enum: ['hybrid', 'real_only', 'demo_only'],
         default: 'hybrid',
     },
+    tickerRealActivities: {
+        deposits: { type: Boolean, default: true },
+        withdrawals: { type: Boolean, default: true },
+        registrations: { type: Boolean, default: true },
+    },
+    tickerDemoAmountRanges: {
+        USD: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
+        EUR: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
+        PKR: { min: { type: Number, default: 5000 }, max: { type: Number, default: 50000 } },
+    },
     planEquivalencyGroups: [PlanEquivalencyGroupSchema],
     homepageVideoUrl: {
         type: String,
@@ -176,6 +186,12 @@ SettingSchema.statics.getSettings = async function() {
             ],
             tickerSpeed: 6,
             tickerContentSource: 'hybrid',
+            tickerRealActivities: { deposits: true, withdrawals: true, registrations: true },
+            tickerDemoAmountRanges: {
+                USD: { min: 50, max: 500 },
+                EUR: { min: 50, max: 500 },
+                PKR: { min: 5000, max: 50000 },
+            },
             planEquivalencyGroups: [],
             homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
             homepageContent: {

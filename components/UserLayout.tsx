@@ -50,6 +50,7 @@ const UserLayout: React.FC = () => {
     const activities: Activity[] = [];
     const excludedUserIds = new Set(users.filter(u => u.restrictions?.excludeFromTicker).map(u => u._id));
     const contentSource = settings.tickerContentSource || 'hybrid';
+    const realActivitySettings = settings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true };
 
     const timeAgo = (date: Date): string => {
         const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -63,11 +64,18 @@ const UserLayout: React.FC = () => {
 
     // 1. Process Real Activities
     if (contentSource === 'hybrid' || contentSource === 'real_only') {
-        const realActivitiesSource = [
-          ...deposits.filter(d => d.status === 'Approved' && !excludedUserIds.has(d.userId)).slice(0, 3).map(d => ({ type: 'deposit', data: d, date: new Date(d.date) })),
-          ...withdrawals.filter(w => w.status === 'Paid' && !excludedUserIds.has(w.userId)).slice(0, 3).map(w => ({ type: 'withdrawal', data: w, date: new Date(w.date) })),
-          ...users.filter(u => !excludedUserIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) }))
-        ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+        const realSources = [];
+        if (realActivitySettings.deposits) {
+            realSources.push(...deposits.filter(d => d.status === 'Approved' && !excludedUserIds.has(d.userId)).slice(0, 3).map(d => ({ type: 'deposit', data: d, date: new Date(d.date) })));
+        }
+        if (realActivitySettings.withdrawals) {
+            realSources.push(...withdrawals.filter(w => w.status === 'Paid' && !excludedUserIds.has(w.userId)).slice(0, 3).map(w => ({ type: 'withdrawal', data: w, date: new Date(w.date) })));
+        }
+        if (realActivitySettings.registrations) {
+            realSources.push(...users.filter(u => !excludedUserIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
+        }
+
+        const realActivitiesSource = realSources.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
 
         realActivitiesSource.forEach(item => {
           let text = '';
@@ -96,7 +104,9 @@ const UserLayout: React.FC = () => {
                 text = text.replace('{country}', `<strong>${profile.country}</strong>`);
 
                 if (text.includes('{amount}')) {
-                    const randomAmount = Math.floor(Math.random() * 500) + 50; // More realistic amounts
+                    const ranges = settings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
+                    const currencyRange = ranges[profile.currency];
+                    const randomAmount = currencyRange ? Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min : 100;
                     text = text.replace('{amount}', `<strong>${formatCurrency(randomAmount, profile.currency)}</strong>`);
                 }
                 if (text.includes('{currency}')) {
