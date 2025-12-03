@@ -74,7 +74,8 @@ const initialState: AppState = {
         },
         tickerSpeed: 6,
         tickerContentSource: 'hybrid',
-        tickerRealActivities: { deposits: true, withdrawals: true, registrations: true },
+        // FIX: Add missing properties `commissions`, `transfers`, and `planPurchases` to match the type definition.
+        tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
         tickerDemoAmountRanges: {
             USD: { min: 50, max: 500 },
             EUR: { min: 50, max: 500 },

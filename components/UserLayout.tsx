@@ -50,7 +50,7 @@ const UserLayout: React.FC = () => {
     const activities: Activity[] = [];
     const excludedUserIds = new Set(users.filter(u => u.restrictions?.excludeFromTicker).map(u => u._id));
     const contentSource = settings.tickerContentSource || 'hybrid';
-    const realActivitySettings = settings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true };
+    const realActivitySettings = settings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
 
     const timeAgo = (date: Date): string => {
         const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -74,6 +74,15 @@ const UserLayout: React.FC = () => {
         if (realActivitySettings.registrations) {
             realSources.push(...users.filter(u => !excludedUserIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
         }
+        if (realActivitySettings.commissions) {
+            realSources.push(...transactions.filter(t => t.type === 'Commission' && t.status === 'Approved' && !excludedUserIds.has(t.userId)).slice(0, 3).map(t => ({ type: 'commission', data: t, date: new Date(t.date) })));
+        }
+        if (realActivitySettings.transfers) {
+            realSources.push(...transfers.filter(t => t.status === 'Approved' && !excludedUserIds.has(t.senderId)).slice(0, 3).map(t => ({ type: 'transfer', data: t, date: new Date(t.date) })));
+        }
+        if (realActivitySettings.planPurchases) {
+            realSources.push(...transactions.filter(t => t.type === 'Plan Purchase' && t.status === 'Approved' && !excludedUserIds.has(t.userId)).slice(0, 3).map(t => ({ type: 'plan', data: t, date: new Date(t.date) })));
+        }
 
         const realActivitiesSource = realSources.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
 
@@ -83,8 +92,11 @@ const UserLayout: React.FC = () => {
             case 'deposit': const d = item.data as Deposit; text = `<strong class="font-semibold">${d.userName}</strong> from <strong>${users.find(u=>u._id===d.userId)?.country}</strong> made a deposit of <strong>${formatCurrency(d.amount, d.currency)}</strong>`; break;
             case 'withdrawal': const w = item.data as Withdrawal; text = `<strong class="font-semibold">${w.userName}</strong> from <strong>${users.find(u=>u._id===w.userId)?.country}</strong> withdrew <strong>${formatCurrency(w.amount, w.currency)}</strong>`; break;
             case 'joined': const u = item.data as User; text = `<strong class="font-semibold">${u.username}</strong> from <strong>${u.country}</strong> just joined SmartEarning`; break;
+            case 'commission': const c = item.data as Transaction; text = `<strong class="font-semibold">${c.userName}</strong> earned a commission of <strong>${formatCurrency(c.amount, c.currency)}</strong>`; break;
+            case 'transfer': const t = item.data as Transfer; text = `<strong class="font-semibold">${t.senderName}</strong> sent funds to another member`; break;
+            case 'plan': const p = item.data as Transaction; const planName = p.description.replace('Purchased ', '').replace(' plan', ''); text = `<strong class="font-semibold">${p.userName}</strong> purchased the <strong>${planName}</strong> plan`; break;
           }
-          if(text) activities.push({ id: `${item.type}-${item.data._id}`, type: item.type as any, text, time: timeAgo(item.date) });
+          if(text) activities.push({ id: `${item.type}-${item.data._id}`, type: item.type as Activity['type'], text, time: timeAgo(item.date) });
         });
     }
     
@@ -133,7 +145,7 @@ const UserLayout: React.FC = () => {
     
     return activities.sort(() => Math.random() - 0.5);
 
-  }, [users, transactions, deposits, withdrawals, investmentPlans, settings]);
+  }, [users, transactions, deposits, withdrawals, transfers, investmentPlans, settings]);
 
 
   const handleClosePopup = async () => {
@@ -159,7 +171,7 @@ const UserLayout: React.FC = () => {
       <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <UserHeader setSidebarOpen={setSidebarOpen} />
-        <ActivityTicker activities={generatedActivities} speed={settings.tickerSpeed || 6} />
+        {settings.tickerEnabled !== false && <ActivityTicker activities={generatedActivities} speed={settings.tickerSpeed || 6} />}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>

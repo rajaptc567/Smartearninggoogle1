@@ -265,6 +265,7 @@ export interface HomepageContent {
 }
 
 export interface Settings {
+    tickerEnabled?: boolean;
     // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
     isUserTransferEnabled: boolean; 
     
@@ -298,6 +299,9 @@ export interface Settings {
         deposits: boolean;
         withdrawals: boolean;
         registrations: boolean;
+        commissions: boolean;
+        transfers: boolean;
+        planPurchases: boolean;
     };
     tickerDemoAmountRanges?: {
         USD: { min: number; max: number };

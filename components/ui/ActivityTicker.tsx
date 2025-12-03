@@ -11,12 +11,13 @@ const icons: { [key: string]: React.ReactNode } = {
   transfer: <TransferIcon />,
   joined: <JoinIcon />,
   deposit: <JoinIcon />,
-  plan: <JoinIcon />
+  plan: <JoinIcon />,
+  commission: <JoinIcon />,
 };
 
 export interface Activity {
     id: string;
-    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan';
+    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan' | 'commission';
     text: string;
     time: string;
 }
