@@ -110,6 +110,7 @@ const TransferFunds: React.FC = () => {
                 return;
             }
 
+            // Correct Conversion Logic:
             // Step 1: Convert amount from sender's currency to base currency (PKR).
             const amountInPkr = parseFloat(amount) * fromRateToBase;
 

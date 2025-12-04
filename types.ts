@@ -8,14 +8,19 @@ export const currencySymbols: Record<Currency, string> = {
 };
 
 export const formatCurrency = (amount: number, currency: Currency) => {
-    if (typeof amount !== 'number') {
+    if (typeof amount !== 'number' || isNaN(amount)) {
         amount = 0;
     }
     const symbol = currencySymbols[currency] || '$';
-    // PKR has symbol before, no space.
+
     if (currency === 'PKR') {
-      return `${symbol}${amount.toFixed(0)}`;
+        // Show integers for whole numbers, but 2 decimal places for fractional amounts
+        if (Number.isInteger(amount)) {
+             return `${symbol}${amount.toFixed(0)}`;
+        }
+        return `${symbol}${amount.toFixed(2)}`;
     }
+    
     return `${symbol}${amount.toFixed(2)}`;
 };
 
