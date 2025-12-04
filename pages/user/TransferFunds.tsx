@@ -19,6 +19,11 @@ const TransferFunds: React.FC = () => {
     const [totalDeduction, setTotalDeduction] = useState(0);
     const [feeError, setFeeError] = useState<string | null>(null);
 
+    // Cross-currency calculation state
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+    const [receivedAmount, setReceivedAmount] = useState<number | null>(null);
+
+
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
 
@@ -47,7 +52,7 @@ const TransferFunds: React.FC = () => {
         return users.find(u => u.username.toLowerCase() === term || u.email.toLowerCase() === term || u._id === recipientIdentifier);
     }, [recipientIdentifier, users]);
 
-
+    // Fee calculation
     useEffect(() => {
         if (!currentUser) return;
         const val = parseFloat(amount);
@@ -87,6 +92,39 @@ const TransferFunds: React.FC = () => {
         }
 
     }, [amount, settings, currentUser]);
+    
+    // Cross-currency calculation
+    useEffect(() => {
+        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.exchangeRates && parseFloat(amount) > 0) {
+            const fromCurrency = currentUser.currency;
+            const toCurrency = recipientUser.currency;
+            const rates = settings.exchangeRates;
+
+            // rates['USD'] = 278 means 1 USD = 278 PKR.
+            const fromRateToBase = rates[fromCurrency] || 1;
+            const toRateToBase = rates[toCurrency] || 1;
+
+            if (toRateToBase === 0) {
+                setExchangeRate(null);
+                setReceivedAmount(null);
+                return;
+            }
+
+            // Step 1: Convert amount from sender's currency to base currency (PKR).
+            const amountInPkr = parseFloat(amount) * fromRateToBase;
+
+            // Step 2: Convert amount from PKR to the recipient's currency.
+            const finalAmount = amountInPkr / toRateToBase;
+            setReceivedAmount(finalAmount);
+
+            // Calculate the display rate for 1 unit of the sender's currency.
+            const displayRate = fromRateToBase / toRateToBase;
+            setExchangeRate(displayRate);
+        } else {
+            setExchangeRate(null);
+            setReceivedAmount(null);
+        }
+    }, [amount, currentUser, recipientUser, settings.exchangeRates]);
     
     const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
@@ -256,18 +294,15 @@ const TransferFunds: React.FC = () => {
                                     <span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span>
                                 </div>
 
-                                {recipientUser && recipientUser.currency !== currentUser.currency && (
+                                {recipientUser && recipientUser.currency !== currentUser.currency && exchangeRate !== null && receivedAmount !== null && (
                                     <>
                                         <div className="flex justify-between pt-2 border-t dark:border-gray-600">
                                             <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
-                                            <span className="font-medium text-xs">1 {currentUser.currency} ≈ {((settings.exchangeRates[currentUser.currency] || 1) / (settings.exchangeRates[recipientUser.currency] || 1)).toFixed(4)} {recipientUser.currency}</span>
+                                            <span className="font-medium text-xs">1 {currentUser.currency} ≈ {exchangeRate.toFixed(4)} {recipientUser.currency}</span>
                                         </div>
                                         <div className="flex justify-between font-bold text-lg">
                                             <span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span>
-                                            <span className="text-green-600 dark:text-green-400">≈ {formatCurrency(
-                                                (parseFloat(amount) * (settings.exchangeRates[currentUser.currency] || 1)) / (settings.exchangeRates[recipientUser.currency] || 1),
-                                                recipientUser.currency
-                                            )}</span>
+                                            <span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span>
                                         </div>
                                     </>
                                 )}

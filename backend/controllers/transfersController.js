@@ -1,3 +1,4 @@
+
 import Transfer from '../models/Transfer.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -125,8 +126,13 @@ export const updateTransfer = async (req, res) => {
 
             // Handle currency conversion if necessary
             if (sender.currency !== recipient.currency) {
+                // Step 1: Convert sender's amount to base currency (PKR).
+                // rates[currency] stores how many PKR is 1 unit of that currency.
                 const amountInPKR = transfer.amount * (rates[sender.currency] || 1);
+                
+                // Step 2: Convert from PKR to recipient's currency.
                 receivedAmount = Number((amountInPKR / (rates[recipient.currency] || 1)).toFixed(2));
+                
                 originalAmountForTx = transfer.amount;
                 originalCurrencyForTx = sender.currency;
             }
