@@ -110,6 +110,11 @@ const TransferFunds: React.FC = () => {
         if (!recipientUser) return alert('Validation Error: Recipient user not found.');
         if (recipientUser._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
 
+        const isRecipientInDownline = availableRecipients.some(downlineUser => downlineUser._id === recipientUser._id);
+        if (!isRecipientInDownline) {
+            return alert('Validation Error: You can only transfer funds to users within your own network/downline.');
+        }
+
         if (totalDeduction > currentUser.walletBalance) {
             alert(`Validation Error: Total deduction (${formatCurrency(totalDeduction, currentUser.currency)}) exceeds your wallet balance.`);
             return;
