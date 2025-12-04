@@ -7,6 +7,14 @@ import { PaymentMethod, Currency, formatCurrency } from '../types';
 import Modal from '../components/ui/Modal';
 import { createPaymentMethod, updatePaymentMethod, deletePaymentMethod } from '../services/api';
 
+const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
+    <label className="inline-flex items-center cursor-pointer">
+        <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only peer" />
+        <div className={`relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}></div>
+    </label>
+);
+
+
 const PaymentMethods: React.FC = () => {
     const { state, dispatch } = useData();
     const { paymentMethods } = state;
@@ -14,6 +22,8 @@ const PaymentMethods: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+    const [typeFilter, setTypeFilter] = useState<'Deposit' | 'Withdrawal' | ''>('');
+    const [togglingId, setTogglingId] = useState<string | null>(null);
 
     const handleOpenModal = (method: PaymentMethod | null = null) => {
         setEditingMethod(method);
@@ -54,16 +64,31 @@ const PaymentMethods: React.FC = () => {
         }
     };
     
+    const handleToggleStatus = async (method: PaymentMethod) => {
+        setTogglingId(method._id);
+        const newStatus = method.status === 'Enabled' ? 'Disabled' : 'Enabled';
+        try {
+            const updatedMethod = await updatePaymentMethod(method._id, { status: newStatus });
+            dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
+        } catch (error) {
+            console.error("Failed to update status:", error);
+            alert('Failed to update status.');
+        } finally {
+            setTogglingId(null);
+        }
+    };
+    
     const filteredMethods = paymentMethods.filter(method => {
-        if (!currencyFilter) return true;
-        return method.currency?.toUpperCase() === currencyFilter;
+        const matchesCurrency = !currencyFilter || method.currency?.toUpperCase() === currencyFilter;
+        const matchesType = !typeFilter || method.type === typeFilter;
+        return matchesCurrency && matchesType;
     });
 
     return (
         <div>
           <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Payment Methods</h2>
+                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white shrink-0">Payment Methods</h2>
                      <select
                         value={currencyFilter}
                         onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
@@ -73,6 +98,15 @@ const PaymentMethods: React.FC = () => {
                         <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
                         <option value="PKR">PKR</option>
+                    </select>
+                     <select
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value as 'Deposit' | 'Withdrawal' | '')}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Types</option>
+                        <option value="Deposit">Deposit</option>
+                        <option value="Withdrawal">Withdrawal</option>
                     </select>
                 </div>
                 <Button onClick={() => handleOpenModal()}>Add New Method</Button>
@@ -85,7 +119,11 @@ const PaymentMethods: React.FC = () => {
                                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name} <span className="text-sm font-normal text-gray-400">({method.currency})</span></h3>
                                 <p className={`text-sm font-medium ${method.type === 'Deposit' ? 'text-green-500' : 'text-blue-500'}`}>{method.type}</p>
                             </div>
-                            <Badge status={method.status as 'Enabled' | 'Disabled'} />
+                             <ToggleSwitch 
+                                checked={method.status === 'Enabled'}
+                                onChange={() => handleToggleStatus(method)}
+                                disabled={togglingId === method._id}
+                            />
                         </div>
                         <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
                             <p><span className="font-semibold">Account:</span> {method.accountTitle} ({method.accountNumber})</p>

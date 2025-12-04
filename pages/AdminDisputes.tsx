@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../hooks/useData';
-import { Dispute, Status } from '../types';
+import { Dispute, Status, User } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -10,7 +10,7 @@ import { updateDispute, updateDeposit, markDisputeAsRead } from '../services/api
 
 const AdminDisputes: React.FC = () => {
     const { state, dispatch } = useData();
-    const { disputes, deposits, withdrawals, transfers } = state;
+    const { disputes, deposits, withdrawals, transfers, users } = state;
 
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,6 +23,9 @@ const AdminDisputes: React.FC = () => {
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    
+    // Selection State
+    const [selectedDisputeIds, setSelectedDisputeIds] = useState<string[]>([]);
 
     const handleView = async (dispute: Dispute) => {
         setSelectedDispute(dispute);
@@ -65,6 +68,28 @@ const AdminDisputes: React.FC = () => {
         return matchesSearch && matchesStatus;
     }), [disputes, searchTerm, statusFilter]);
 
+    // Selection Logic
+    const handleToggleSelect = (id: string) => {
+        setSelectedDisputeIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return Array.from(newSet);
+        });
+    };
+
+    const areAllFilteredSelected = useMemo(() => {
+        return filteredDisputes.length > 0 && filteredDisputes.every(d => selectedDisputeIds.includes(d._id));
+    }, [filteredDisputes, selectedDisputeIds]);
+
+    const handleSelectAllFiltered = () => {
+        if (areAllFilteredSelected) {
+            setSelectedDisputeIds(prev => prev.filter(id => !filteredDisputes.some(d => d._id === id)));
+        } else {
+            setSelectedDisputeIds(prev => Array.from(new Set([...prev, ...filteredDisputes.map(d => d._id)])));
+        }
+    };
+    
     // Find the actual transaction object related to this dispute
     const linkedTransaction = useMemo(() => {
         if (!selectedDispute) return null;
@@ -145,6 +170,51 @@ const AdminDisputes: React.FC = () => {
             setIsSubmitting(false);
         }
     }
+    
+    // DOWNLOAD LOGIC
+    const handleDownload = (idsToDownload: string[]) => {
+        const disputesToExport = disputes.filter(d => idsToDownload.includes(d._id));
+        if (disputesToExport.length === 0) return;
+
+        const csvEscape = (field: any): string => {
+            const str = String(field ?? '');
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return `"${str}"`;
+        };
+        
+        const headers = ['Dispute ID', 'User Name', 'User Email', 'Type', 'Reference ID', 'Status', 'Date Opened', 'User Description', 'Initial Proof URL', 'Full Chat History'];
+        
+        const rows = disputesToExport.map(d => {
+            const user = users.find(u => u._id === d.userId);
+            const chatHistory = (d.messages || [])
+                .map(msg => `[${new Date(msg.date).toLocaleString()} | ${msg.sender}]: ${msg.message || ''} ${msg.attachmentUrl ? `(Attachment: ${msg.attachmentUrl})` : ''}`)
+                .join('\n'); // Newline separator for chat history
+
+            return [
+                csvEscape(d._id),
+                csvEscape(d.userName),
+                csvEscape(user?.email || 'N/A'),
+                csvEscape(d.type),
+                csvEscape(d.referenceId),
+                csvEscape(d.status),
+                csvEscape(new Date(d.date).toLocaleString()),
+                csvEscape(d.description),
+                csvEscape(d.proofUrl),
+                csvEscape(chatHistory)
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Disputes_Export_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
@@ -171,11 +241,23 @@ const AdminDisputes: React.FC = () => {
                     />
                 </div>
             </div>
+            
+             {selectedDisputeIds.length > 0 && (
+                <div className="p-2 mb-4 border dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center rounded-md">
+                    <span className="text-sm font-semibold px-2">{selectedDisputeIds.length} selected</span>
+                    <div className="space-x-2">
+                        <Button size="sm" variant="secondary" onClick={() => handleDownload(selectedDisputeIds)}>Download Selected</Button>
+                    </div>
+                </div>
+            )}
+            
             {filteredDisputes.length > 0 ? (
-                <Table headers={['ID', 'User', 'Type', 'Ref ID', 'Date', 'Status', 'Action']}>
+                <Table headers={['', 'User', 'Type', 'Ref ID', 'Date', 'Status', 'Action']}>
                     {filteredDisputes.map(dispute => (
                         <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-xs font-mono">{dispute._id}</td>
+                            <td className="px-4 py-3">
+                                <input type="checkbox" className="rounded" checked={selectedDisputeIds.includes(dispute._id)} onChange={() => handleToggleSelect(dispute._id)} />
+                            </td>
                             <td className="px-4 py-3">{dispute.userName}</td>
                             <td className="px-4 py-3">{dispute.type}</td>
                             <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
@@ -206,6 +288,7 @@ const AdminDisputes: React.FC = () => {
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Badge status={selectedDispute.status as Status} />
+                                <Button variant="secondary" size="sm" onClick={() => handleDownload([selectedDispute._id])}>Download Dossier</Button>
                                 <Button variant="secondary" size="sm" onClick={handleClose}>Close</Button>
                             </div>
                         </div>

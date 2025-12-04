@@ -383,6 +383,7 @@ type Action =
     | { type: 'UPDATE_NOTIFICATION'; payload: Notification }
     | { type: 'UPDATE_NOTIFICATIONS'; payload: Notification[] } // Batch update
     | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: Notification[] }
+    | { type: 'DELETE_NOTIFICATIONS'; payload: string[] }
     | { type: 'SET_PASSWORD_RESET_REQUESTS'; payload: PasswordResetRequest[] }
     | { type: 'DELETE_PASSWORD_RESET_REQUEST'; payload: string }
     | { type: 'SET_DISPUTES'; payload: Dispute[] }
@@ -475,6 +476,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_NOTIFICATIONS': // Handles bulk creation response
             return { ...state, notifications: [...action.payload, ...state.notifications] };
         case 'MARK_NOTIFICATIONS_AS_READ': return { ...state, notifications: action.payload };
+        case 'DELETE_NOTIFICATIONS':
+            return { ...state, notifications: state.notifications.filter(n => !action.payload.includes(n._id)) };
+
 
         // PASSWORD RESETS
         case 'SET_PASSWORD_RESET_REQUESTS':
