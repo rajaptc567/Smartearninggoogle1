@@ -661,8 +661,6 @@ const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDele
                 buildDownline(ref.username, level + 1);
             });
         };
-        // FIX: The 'buildDownline' function was called with three arguments, but it is defined to only accept two.
-        // The third argument, 'downline', is already available in the function's closure scope, so it doesn't need to be passed.
         buildDownline(user.username, 1);
 
         csvRows.push('');
@@ -714,11 +712,39 @@ const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDele
 
 const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
-    const [targetType, setTargetType] = useState<'all' | 'plan'>('all');
+    const [targetType, setTargetType] = useState<'all' | 'plan' | 'manual'>('all');
     const [targetIds, setTargetIds] = useState<string[]>([]);
     const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({});
     const [action, setAction] = useState<'enable' | 'disable'>('enable');
+    const [sendNotification, setSendNotification] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [manualUserSearch, setManualUserSearch] = useState('');
+    
+    const filteredManualUsers = useMemo(() => {
+        if (!manualUserSearch) return allUsers;
+        const term = manualUserSearch.toLowerCase();
+        return allUsers.filter(u =>
+            u.username.toLowerCase().includes(term) ||
+            u.fullName.toLowerCase().includes(term) ||
+            u.email.toLowerCase().includes(term)
+        );
+    }, [allUsers, manualUserSearch]);
+
+    const handleManualUserSelect = (userId: string) => {
+        setTargetIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(userId)) { newSet.delete(userId); } else { newSet.add(userId); }
+            return Array.from(newSet);
+        });
+    };
+    
+    const handleSelectAllFilteredManual = () => {
+        const allFilteredIds = filteredManualUsers.map(u => u._id);
+        setTargetIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+    };
+
+    const handleDeselectAllManual = () => setTargetIds([]);
 
     const restrictionOptions: { key: keyof UserRestrictions; label: string }[] = [
         { key: 'deposit', label: 'Deposits' }, { key: 'withdrawal', label: 'Withdrawals' },
@@ -733,10 +759,12 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
     const handleSubmit = async () => {
         if (Object.keys(restrictions).length === 0) return alert('Please select at least one restriction to apply.');
         if (targetType === 'plan' && targetIds.length === 0) return alert('Please select at least one plan to target.');
+        if (targetType === 'manual' && targetIds.length === 0) return alert('Please select at least one user.');
 
         setIsSubmitting(true);
         try {
-            await bulkUpdateUserRestrictions({ targetType, targetIds, restrictions, action });
+            const apiTargetType = targetType === 'manual' ? 'single' : targetType;
+            await bulkUpdateUserRestrictions({ targetType: apiTargetType, targetIds, restrictions, action, sendNotification });
             const updatedUsers = await getUsers();
             dispatch({ type: 'SET_USERS', payload: updatedUsers });
             alert('Restrictions updated successfully for the targeted users.');
@@ -756,10 +784,11 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                 <div className="space-y-4">
                     <div>
                         <label className="text-sm font-medium">Target Users</label>
-                        {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLSelectElement> to resolve this. */}
-                        <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetType(e.target.value as 'all' | 'plan')} className="w-full rounded-md dark:bg-gray-700 mt-1">
+                        {/* FIX: Correctly type the event target's value to align with the state's type definition. */}
+                        <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
                             <option value="all">All Users ({allUsers.length})</option>
                             <option value="plan">Users with Specific Plan(s)</option>
+                            <option value="manual">Manually Select Users</option>
                         </select>
                     </div>
                     {targetType === 'plan' && (
@@ -768,6 +797,29 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                             <select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
                                 {investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}
                             </select>
+                        </div>
+                    )}
+                    {targetType === 'manual' && (
+                        <div className="space-y-2">
+                             <div className="flex justify-between items-end">
+                                <div><label className="text-sm font-medium">Select Users ({targetIds.length})</label></div>
+                                <div className="flex gap-2">
+                                    <Button type="button" size="sm" variant="secondary" onClick={handleSelectAllFilteredManual}>Select Filtered</Button>
+                                    <Button type="button" size="sm" variant="secondary" onClick={handleDeselectAllManual}>Deselect All</Button>
+                                </div>
+                            </div>
+                            <input type="text" value={manualUserSearch} onChange={e => setManualUserSearch(e.target.value)} placeholder="Filter users..." className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            <div className="border dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
+                                {filteredManualUsers.map(u => (
+                                    <label key={u._id} className="flex items-center space-x-3 p-2 border-b dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                        <input type="checkbox" checked={targetIds.includes(u._id)} onChange={() => handleManualUserSelect(u._id)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500" />
+                                        <div>
+                                            <div className="font-medium text-gray-900 dark:text-white">{u.fullName}</div>
+                                            <div className="text-xs text-gray-500">@{u.username}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
                     )}
                     <div>
@@ -781,11 +833,15 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                      <div>
                         <label className="text-sm font-medium">Action</label>
                         <div className="flex gap-4 mt-1">
-                            {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLInputElement> to resolve this. */}
                             <label><input type="radio" value="enable" checked={action === 'enable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Enable Restriction (Block)</label>
-                            {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLInputElement> to resolve this. */}
                             <label><input type="radio" value="disable" checked={action === 'disable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Disable Restriction (Allow)</label>
                         </div>
+                    </div>
+                     <div>
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500" /> 
+                            <span className="text-sm font-medium">Send notification to affected users</span>
+                        </label>
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end gap-3">
@@ -805,20 +861,60 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Bulk targeting state
-    const [targetType, setTargetType] = useState<'all' | 'plan' | 'inactive' | 'single'>(user ? 'single' : 'all');
+    const [targetType, setTargetType] = useState<'all' | 'plan' | 'inactive' | 'single' | 'manual'>(user ? 'single' : 'all');
     const [targetIds, setTargetIds] = useState<string[]>([]);
     const [randomCount, setRandomCount] = useState('');
+
+    // Manual selection state
+    const [manualUserSearch, setManualUserSearch] = useState('');
+
+    const filteredManualUsers = useMemo(() => {
+        if (!manualUserSearch) return allUsers;
+        const term = manualUserSearch.toLowerCase();
+        return allUsers.filter(u =>
+            u.username.toLowerCase().includes(term) ||
+            u.fullName.toLowerCase().includes(term) ||
+            u.email.toLowerCase().includes(term)
+        );
+    }, [allUsers, manualUserSearch]);
+
+    const handleManualUserSelect = (userId: string) => {
+        setTargetIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(userId)) {
+                newSet.delete(userId);
+            } else {
+                newSet.add(userId);
+            }
+            return Array.from(newSet);
+        });
+    };
+
+    const handleSelectAllFilteredManual = () => {
+        const allFilteredIds = filteredManualUsers.map(u => u._id);
+        setTargetIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+    };
+
+    const handleDeselectAllManual = () => {
+        setTargetIds([]);
+    };
 
     const handleSubmit = async () => {
         if (!message) return alert("Message cannot be empty.");
         if (targetType === 'plan' && targetIds.length === 0) return alert('Please select at least one plan to target.');
+        if (targetType === 'manual' && targetIds.length === 0) return alert('Please select at least one user to send a message to.');
 
         setIsSubmitting(true);
         try {
             const payload: any = { subject, message, isPopup, targetType };
             if (user) {
                 payload.userId = user._id;
+                payload.targetType = 'single';
+                payload.targetIds = [user._id];
             } else {
+                 if (targetType === 'manual') {
+                    payload.targetType = 'single'; // API uses 'single' for array of IDs
+                }
                 payload.targetIds = targetIds;
                 if (targetType === 'inactive' && randomCount) {
                     payload.randomCount = parseInt(randomCount);
@@ -846,20 +942,80 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-sm font-medium">Target Audience</label>
-                                {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLSelectElement> to resolve this. */}
-                                <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetType(e.target.value as 'all' | 'plan' | 'inactive' | 'single')} className="w-full rounded-md dark:bg-gray-700 mt-1">
+                                <select 
+                                    value={targetType} 
+                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                        // FIX: Correctly type the event target's value to align with the state's type definition.
+                                        setTargetType(e.target.value as 'all' | 'plan' | 'inactive' | 'manual');
+                                        setTargetIds([]); // Reset selections on type change
+                                    }} 
+                                    className="w-full rounded-md dark:bg-gray-700 mt-1"
+                                >
                                     <option value="all">All Users ({allUsers.length})</option>
                                     <option value="plan">Users with Specific Plan(s)</option>
                                     <option value="inactive">Inactive Users (No Plan)</option>
+                                    <option value="manual">Manually Select Users</option>
                                 </select>
                             </div>
                             {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
                             {targetType === 'inactive' && <div><label className="text-sm font-medium">Random Sample (Optional)</label><input type="number" value={randomCount} onChange={e => setRandomCount(e.target.value)} placeholder="e.g., 50" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>}
+                             {targetType === 'manual' && (
+                                <div className="md:col-span-2 space-y-2">
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <label className="text-sm font-medium">Select Users</label>
+                                            <p className="text-xs text-gray-500">{targetIds.length} user(s) selected.</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button type="button" size="sm" variant="secondary" onClick={handleSelectAllFilteredManual}>Select All Filtered</Button>
+                                            <Button type="button" size="sm" variant="secondary" onClick={handleDeselectAllManual}>Deselect All</Button>
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={manualUserSearch}
+                                        onChange={e => setManualUserSearch(e.target.value)}
+                                        placeholder="Filter users..."
+                                        className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <div className="border dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
+                                        {filteredManualUsers.map(u => (
+                                            <label key={u._id} className="flex items-center space-x-3 p-2 border-b dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={targetIds.includes(u._id)}
+                                                    onChange={() => handleManualUserSelect(u._id)}
+                                                    className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500"
+                                                />
+                                                <div>
+                                                    <div className="font-medium text-gray-900 dark:text-white">{u.fullName}</div>
+                                                    <div className="text-xs text-gray-500">@{u.username}</div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     <div><label className="text-sm font-medium">Subject</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
                     <div><label className="text-sm font-medium">Message</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full rounded-md dark:bg-gray-700 mt-1" required /></div>
-                    <div><label className="flex items-center space-x-2"><input type="checkbox" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} /> <span>Show as a popup on user's dashboard?</span></label></div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
+                        <div>
+                            <label htmlFor="isPopupToggle" className="text-sm font-medium text-gray-900 dark:text-gray-200">Popup Notification</label>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Show this as a high-priority popup when the user logs in.</p>
+                        </div>
+                        <label htmlFor="isPopupToggle" className="inline-flex items-center cursor-pointer">
+                            <input 
+                                id="isPopupToggle"
+                                type="checkbox" 
+                                checked={isPopup}
+                                onChange={e => setIsPopup(e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
                 </div>
                  <div className="mt-6 flex justify-end gap-3">
                     <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>

@@ -290,7 +290,7 @@ export const updateUser = async (req, res) => {
 // @route   PUT /api/v1/users/bulk-restrictions
 export const bulkUpdateRestrictions = async (req, res) => {
     try {
-        const { targetType, targetIds, restrictions, action } = req.body;
+        const { targetType, targetIds, restrictions, action, sendNotification } = req.body;
         
         let query = {};
         if (targetType === 'all') {
@@ -359,20 +359,24 @@ export const bulkUpdateRestrictions = async (req, res) => {
 
                     if (releasedAmount > 0) {
                         user.walletBalance = Number((user.walletBalance + releasedAmount).toFixed(2));
-                        notifications.push({
-                            userId: user._id,
-                            message: `Restrictions removed! ${user.currency}${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
-                        });
+                        if (sendNotification) {
+                            notifications.push({
+                                userId: user._id,
+                                message: `Restrictions removed! ${user.currency}${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
+                            });
+                        }
                     }
                 }
                 // --- RELEASE LOGIC END ---
 
                 await user.save();
                 updatedCount++;
-                notifications.push({
-                    userId: user._id,
-                    message: `Your account permissions have been updated by the administrator. Please check your profile settings.`
-                });
+                if (sendNotification && !shouldReleaseCommissions) {
+                    notifications.push({
+                        userId: user._id,
+                        message: `Your account permissions have been updated by the administrator. Please check your profile settings.`
+                    });
+                }
             }
         }
 

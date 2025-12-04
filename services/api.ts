@@ -73,6 +73,7 @@ export const bulkUpdateUserRestrictions = async (payload: {
     targetIds: string[];
     restrictions: Partial<UserRestrictions>;
     action: 'enable' | 'disable' | 'toggle';
+    sendNotification: boolean;
 }): Promise<{ message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
         method: 'PUT',
