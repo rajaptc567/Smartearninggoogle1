@@ -6,7 +6,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers } from '../services/api';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -230,10 +230,8 @@ const Users: React.FC = () => {
     );
 };
 
-// ... (Other Modals: DeleteUserModal, BulkRestrictionsModal, MessageUserModal) ...
-// NOTE: For brevity, these modals are not repeated as they are unchanged.
 
-// --- Main UserManagementModal ---
+// --- UserManagementModal ---
 
 interface UserManagementModalProps {
     user: User | null;
@@ -390,8 +388,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     </div>
                     <p className="text-xs text-gray-500">Joined: {new Date(node.user.registrationDate).toLocaleDateString()}</p>
                     <div className="mt-1 text-xs">
-                        <strong>Plans:</strong> {node.user.activePlans && node.user.activePlans.length > 0
-                            ? node.user.activePlans.map(p => `${p.planName} (${formatCurrency(p.price, node.user.currency)})`).join(', ')
+                        <strong>Plans:</strong> {node.user.activePlans && node.user.activePlans.length > 0 
+                            ? node.user.activePlans.map(p => `${p.planName} (${formatCurrency(p.price, node.user.currency)})`).join(', ') 
                             : 'None'}
                     </div>
                     {node.children.length > 0 && <div className="mt-2">{renderTree(node.children)}</div>}
@@ -550,11 +548,326 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     );
 };
 
+// --- Other Modals ---
 
-// Unchanged Modals
-const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDelete: (userId: string) => Promise<void>; }> = ({ user, onClose, onConfirmDelete }) => { /* ... existing code ... */ return null; };
-const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ allUsers, investmentPlans, onClose }) => { /* ... existing code ... */ return null; };
-const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ user, allUsers, investmentPlans, onClose }) => { /* ... existing code ... */ return null; };
+const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDelete: (userId: string) => Promise<void>; }> = ({ user, onClose, onConfirmDelete }) => {
+    const { state } = useData();
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        await onConfirmDelete(user._id);
+    };
+
+    const handleDownloadDossier = () => {
+        setIsDownloading(true);
+
+        const { users, transactions, deposits, withdrawals, transfers } = state;
+        
+        // --- Helper Functions ---
+        const csvEscape = (field: any): string => {
+            if (field === null || field === undefined) return '""';
+            const str = String(field);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+        const toCsvRow = (arr: any[]): string => arr.map(csvEscape).join(',');
+        
+        let csvRows: string[] = [];
+
+        // --- 1. Profile ---
+        csvRows.push(toCsvRow(['USER DOSSIER', `Generated on: ${new Date().toLocaleString()}`]));
+        csvRows.push(toCsvRow(['User ID', user._id]));
+        csvRows.push(toCsvRow(['Username', user.username]));
+        csvRows.push(toCsvRow(['Full Name', user.fullName]));
+        csvRows.push(toCsvRow(['Email', user.email]));
+        csvRows.push(toCsvRow(['Phone', user.phone]));
+        csvRows.push(toCsvRow(['WhatsApp', user.whatsapp || 'N/A']));
+        csvRows.push(toCsvRow(['Country', user.country]));
+        csvRows.push(toCsvRow(['Currency', user.currency]));
+        csvRows.push(toCsvRow(['Status', user.status]));
+        csvRows.push(toCsvRow(['Sponsor', user.sponsor || 'N/A']));
+        csvRows.push(toCsvRow(['Registration Date', new Date(user.registrationDate).toLocaleString()]));
+        
+        // --- 2. Financial Summary ---
+        const userDeposits = deposits.filter(d => d.userId === user._id && d.status === 'Approved');
+        const userWithdrawals = withdrawals.filter(w => w.userId === user._id && w.status === 'Paid');
+        const userCommissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission' && t.status === 'Approved');
+        const userTransfersSent = transfers.filter(t => t.senderId === user._id && t.status === 'Approved');
+        const userTransfersReceived = transfers.filter(t => t.recipientId === user._id && t.status === 'Approved');
+        
+        csvRows.push('');
+        csvRows.push('FINANCIAL SUMMARY');
+        csvRows.push(toCsvRow(['Metric', 'Value']));
+        csvRows.push(toCsvRow(['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)]));
+        csvRows.push(toCsvRow(['Total Approved Deposits', formatCurrency(userDeposits.reduce((s, i) => s + i.amount, 0), user.currency)]));
+        csvRows.push(toCsvRow(['Total Paid Withdrawals', formatCurrency(userWithdrawals.reduce((s, i) => s + i.finalAmount, 0), user.currency)]));
+        csvRows.push(toCsvRow(['Total Commissions Earned', formatCurrency(userCommissions.reduce((s, i) => s + i.amount, 0), user.currency)]));
+        csvRows.push(toCsvRow(['Total Transfers Sent', formatCurrency(userTransfersSent.reduce((s, i) => s + i.amount, 0), user.currency)]));
+        csvRows.push(toCsvRow(['Total Transfers Received', formatCurrency(userTransfersReceived.reduce((s, i) => s + i.amount, 0), user.currency)]));
+
+        // --- 3. Active Plans ---
+        csvRows.push('');
+        csvRows.push('ACTIVE PLANS');
+        csvRows.push(toCsvRow(['Plan Name', 'Price', 'Purchase Date']));
+        (user.activePlans || []).forEach(plan => {
+            csvRows.push(toCsvRow([plan.planName, formatCurrency(plan.price, user.currency), new Date(plan.purchaseDate).toLocaleString()]));
+        });
+
+        // --- 4. Full Transaction History ---
+        const userTransactions = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        csvRows.push('');
+        csvRows.push('FULL TRANSACTION HISTORY');
+        csvRows.push(toCsvRow(['Date', 'Type', 'Amount', 'Status', 'Description']));
+        userTransactions.forEach(tx => {
+            csvRows.push(toCsvRow([ new Date(tx.date).toLocaleString(), tx.type, formatCurrency(tx.amount, tx.currency), tx.status || 'N/A', tx.description ]));
+        });
+
+        // --- 5. Deposit History ---
+        csvRows.push('');
+        csvRows.push('DEPOSIT HISTORY');
+        csvRows.push(toCsvRow(['Date', 'Method', 'Amount', 'Tx ID', 'Status']));
+        deposits.filter(d => d.userId === user._id).sort((a,b)=>new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(d => {
+            csvRows.push(toCsvRow([new Date(d.date).toLocaleString(), d.method, formatCurrency(d.amount, d.currency), d.transactionId, d.status]));
+        });
+
+        // --- 6. Withdrawal History ---
+        csvRows.push('');
+        csvRows.push('WITHDRAWAL HISTORY');
+        csvRows.push(toCsvRow(['Date', 'Method', 'Amount', 'Fee', 'Final Amount', 'Status']));
+        withdrawals.filter(w => w.userId === user._id).sort((a,b)=>new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(w => {
+            csvRows.push(toCsvRow([new Date(w.date).toLocaleString(), w.method, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.status]));
+        });
+        
+        // --- 7. Transfer History ---
+        csvRows.push('');
+        csvRows.push('TRANSFER HISTORY');
+        csvRows.push(toCsvRow(['Date', 'Direction', 'Counterparty', 'Amount', 'Status']));
+        transfers.filter(t => t.senderId === user._id || t.recipientId === user._id).sort((a,b)=>new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(t => {
+            const direction = t.senderId === user._id ? 'Sent' : 'Received';
+            const counterparty = direction === 'Sent' ? t.recipientName : t.senderName;
+            csvRows.push(toCsvRow([new Date(t.date).toLocaleString(), direction, counterparty, formatCurrency(t.amount, t.currency), t.status]));
+        });
+
+        // --- 8. Network (Downline) ---
+        const downline: (User & { level: number })[] = [];
+        const buildDownline = (sponsorUsername: string, level: number) => {
+            const directRefs = users.filter(u => u.sponsor === sponsorUsername);
+            directRefs.forEach(ref => {
+                downline.push({ ...ref, level });
+                buildDownline(ref.username, level + 1);
+            });
+        };
+        // FIX: The 'buildDownline' function was called with three arguments, but it is defined to only accept two.
+        // The third argument, 'downline', is already available in the function's closure scope, so it doesn't need to be passed.
+        buildDownline(user.username, 1);
+
+        csvRows.push('');
+        csvRows.push('NETWORK (DOWNLINE)');
+        csvRows.push(toCsvRow(['Level', 'Username', 'Full Name', 'Status', 'Active Plans']));
+        downline.forEach(ref => {
+            csvRows.push(toCsvRow([ref.level, ref.username, ref.fullName, ref.status, ref.activePlans?.length || 0]));
+        });
+
+        // --- Finalize and Download ---
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setIsDownloading(false);
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-[90vw] max-w-lg">
+                <h3 className="text-lg font-bold text-red-600 mb-4">Confirm Deletion</h3>
+                <p>Are you sure you want to permanently delete user <strong>{user.fullName} (@{user.username})</strong>?</p>
+                <p className="mt-2 text-sm text-yellow-600 bg-yellow-50 dark:bg-yellow-900/50 p-2 rounded-md">
+                    <strong>Recommendation:</strong> Download a complete dossier of the user's data before proceeding.
+                </p>
+                <p className="mt-2 text-sm text-red-500 bg-red-50 dark:bg-red-900/50 p-2 rounded-md">
+                    This action is irreversible and will delete all associated data including financial history and network structure.
+                </p>
+                <div className="mt-6 flex justify-between items-center">
+                    <Button variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={handleDownloadDossier} disabled={isDownloading}>
+                            {isDownloading ? 'Generating...' : 'Download Dossier'}
+                        </Button>
+                        <Button variant="danger" onClick={handleDelete} disabled={isDeleting}>
+                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ allUsers, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
+    const [targetType, setTargetType] = useState<'all' | 'plan'>('all');
+    const [targetIds, setTargetIds] = useState<string[]>([]);
+    const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({});
+    const [action, setAction] = useState<'enable' | 'disable'>('enable');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const restrictionOptions: { key: keyof UserRestrictions; label: string }[] = [
+        { key: 'deposit', label: 'Deposits' }, { key: 'withdrawal', label: 'Withdrawals' },
+        { key: 'transfer', label: 'Transfers' }, { key: 'earning', label: 'Earning Commissions' },
+        { key: 'dispute', label: 'Raising Disputes' }, { key: 'excludeFromTicker', label: 'Ticker Visibility' },
+    ];
+
+    const handleRestrictionToggle = (key: keyof UserRestrictions) => {
+        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const handleSubmit = async () => {
+        if (Object.keys(restrictions).length === 0) return alert('Please select at least one restriction to apply.');
+        if (targetType === 'plan' && targetIds.length === 0) return alert('Please select at least one plan to target.');
+
+        setIsSubmitting(true);
+        try {
+            await bulkUpdateUserRestrictions({ targetType, targetIds, restrictions, action });
+            const updatedUsers = await getUsers();
+            dispatch({ type: 'SET_USERS', payload: updatedUsers });
+            alert('Restrictions updated successfully for the targeted users.');
+            onClose();
+        } catch (error) {
+            console.error(error);
+            alert('Failed to update restrictions.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-[90vw] max-w-lg">
+                <h3 className="text-lg font-bold mb-4">Bulk User Restrictions</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-sm font-medium">Target Users</label>
+                        {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLSelectElement> to resolve this. */}
+                        <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetType(e.target.value as 'all' | 'plan')} className="w-full rounded-md dark:bg-gray-700 mt-1">
+                            <option value="all">All Users ({allUsers.length})</option>
+                            <option value="plan">Users with Specific Plan(s)</option>
+                        </select>
+                    </div>
+                    {targetType === 'plan' && (
+                        <div>
+                            <label className="text-sm font-medium">Select Plans</label>
+                            <select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
+                                {investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div>
+                        <label className="text-sm font-medium">Restrictions to Modify</label>
+                        <div className="mt-2 grid grid-cols-2 gap-2 border p-2 rounded-md dark:border-gray-600">
+                            {restrictionOptions.map(({key, label}) => (
+                                <label key={key} className="flex items-center space-x-2"><input type="checkbox" checked={!!restrictions[key]} onChange={() => handleRestrictionToggle(key)} /> <span>{label}</span></label>
+                            ))}
+                        </div>
+                    </div>
+                     <div>
+                        <label className="text-sm font-medium">Action</label>
+                        <div className="flex gap-4 mt-1">
+                            {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLInputElement> to resolve this. */}
+                            <label><input type="radio" value="enable" checked={action === 'enable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Enable Restriction (Block)</label>
+                            {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLInputElement> to resolve this. */}
+                            <label><input type="radio" value="disable" checked={action === 'disable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Disable Restriction (Allow)</label>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? 'Applying...' : 'Apply Restrictions'}</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investmentPlans: InvestmentPlan[]; onClose: () => void }> = ({ user, allUsers, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isPopup, setIsPopup] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Bulk targeting state
+    const [targetType, setTargetType] = useState<'all' | 'plan' | 'inactive' | 'single'>(user ? 'single' : 'all');
+    const [targetIds, setTargetIds] = useState<string[]>([]);
+    const [randomCount, setRandomCount] = useState('');
+
+    const handleSubmit = async () => {
+        if (!message) return alert("Message cannot be empty.");
+        if (targetType === 'plan' && targetIds.length === 0) return alert('Please select at least one plan to target.');
+
+        setIsSubmitting(true);
+        try {
+            const payload: any = { subject, message, isPopup, targetType };
+            if (user) {
+                payload.userId = user._id;
+            } else {
+                payload.targetIds = targetIds;
+                if (targetType === 'inactive' && randomCount) {
+                    payload.randomCount = parseInt(randomCount);
+                }
+            }
+            
+            const result = await sendAdminNotification(payload);
+            dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
+            alert(`Message sent successfully to ${result.count} user(s).`);
+            onClose();
+        } catch (error) {
+            console.error(error);
+            alert('Failed to send message.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    return (
+         <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-[90vw] max-w-2xl">
+                <h3 className="text-lg font-bold mb-4">{user ? `Send Message to ${user.username}` : 'Send Bulk Message'}</h3>
+                <div className="space-y-4">
+                    {!user && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-sm font-medium">Target Audience</label>
+                                {/* FIX: The event handler's 'e' parameter was untyped, causing a TypeScript error when accessing 'e.target.value'. I've explicitly typed it as React.ChangeEvent<HTMLSelectElement> to resolve this. */}
+                                <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetType(e.target.value as 'all' | 'plan' | 'inactive' | 'single')} className="w-full rounded-md dark:bg-gray-700 mt-1">
+                                    <option value="all">All Users ({allUsers.length})</option>
+                                    <option value="plan">Users with Specific Plan(s)</option>
+                                    <option value="inactive">Inactive Users (No Plan)</option>
+                                </select>
+                            </div>
+                            {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
+                            {targetType === 'inactive' && <div><label className="text-sm font-medium">Random Sample (Optional)</label><input type="number" value={randomCount} onChange={e => setRandomCount(e.target.value)} placeholder="e.g., 50" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>}
+                        </div>
+                    )}
+                    <div><label className="text-sm font-medium">Subject</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                    <div><label className="text-sm font-medium">Message</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full rounded-md dark:bg-gray-700 mt-1" required /></div>
+                    <div><label className="flex items-center space-x-2"><input type="checkbox" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} /> <span>Show as a popup on user's dashboard?</span></label></div>
+                </div>
+                 <div className="mt-6 flex justify-end gap-3">
+                    <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+                    <Button onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? 'Sending...' : 'Send Message'}</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 export default Users;
