@@ -34,6 +34,9 @@ const Users: React.FC = () => {
     const [planFilter, setPlanFilter] = useState('');
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
+    // Selection State
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+
     const handleOpenUserManagementModal = (user: User | null = null) => {
         setManagingUser(user);
         setIsUserManagementModalOpen(true);
@@ -106,7 +109,71 @@ const Users: React.FC = () => {
         });
     }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
 
+    const handleSelectUser = (userId: string) => {
+        setSelectedUserIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(userId)) {
+                newSet.delete(userId);
+            } else {
+                newSet.add(userId);
+            }
+            return Array.from(newSet);
+        });
+    };
+
+    const handleSelectAll = () => {
+        const allFilteredIds = new Set(filteredUsers.map(u => u._id));
+        const currentSelectedIds = new Set(selectedUserIds);
+        const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
+
+        if (areAllFilteredSelected) {
+            allFilteredIds.forEach(id => currentSelectedIds.delete(id));
+        } else {
+            allFilteredIds.forEach(id => currentSelectedIds.add(id));
+        }
+        setSelectedUserIds(Array.from(currentSelectedIds));
+    };
+
+    const handleDownloadSelected = () => {
+        if (selectedUserIds.length === 0) return;
+        const usersToExport = users.filter(u => selectedUserIds.includes(u._id));
+        
+        const csvEscape = (field: any): string => {
+            if (field === null || field === undefined) return '""';
+            const str = String(field);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return `"${str}"`;
+        };
+
+        const csvHeaders = ['Username', 'Full Name', 'Email', 'Phone', 'WhatsApp', 'Country'];
+        const csvRows = [
+            csvHeaders.join(','),
+            ...usersToExport.map(user => [
+                csvEscape(user.username),
+                csvEscape(user.fullName),
+                csvEscape(user.email),
+                csvEscape(user.phone),
+                csvEscape(user.whatsapp),
+                csvEscape(user.country)
+            ].join(','))
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `selected_users_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
+
+    const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
@@ -158,45 +225,77 @@ const Users: React.FC = () => {
                 </div>
             </div>
              <div className="flex justify-end gap-2 mb-4">
+                 {selectedUserIds.length > 0 && (
+                    <Button variant="secondary" onClick={handleDownloadSelected}>Download Selected ({selectedUserIds.length})</Button>
+                 )}
                 <Button variant="secondary" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
                 <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
                 <Button onClick={() => handleOpenUserManagementModal(null)}>Add User</Button>
             </div>
              {isLoading ? <p>Loading users...</p> : (
-                 <Table headers={tableHeaders}>
-                    {filteredUsers.map((user: User) => (
-                        <tr key={user._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3">
-                                <div className="flex items-center text-sm">
-                                    <div>
-                                        <p className="font-semibold">{user.fullName}</p>
-                                        <p className="text-xs text-gray-600 dark:text-gray-400">@{user.username} (ID: {user._id.substring(user._id.length - 6)})</p>
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                                {user.email}<br/>
-                                <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
-                            </td>
-                            <td className="px-4 py-3 text-sm">{formatCurrency(user.walletBalance, user.currency)}</td>
-                            <td className="px-4 py-3 text-sm">
-                                {user.activePlans && user.activePlans.length > 0 
-                                    ? user.activePlans.map(p => p.planName).join(', ') 
-                                    : 'None'}
-                            </td>
-                            <td className="px-4 py-3 text-xs">
-                               <Badge status={user.status} />
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                                <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-                                    <Button size="sm" variant="secondary" onClick={() => handleOpenUserManagementModal(user)}>Manage</Button>
-                                    <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(user)}>Message</Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleOpenDeleteModal(user)}>Delete</Button>
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </Table>
+                 <div className="w-full overflow-hidden rounded-lg shadow-md">
+                    <div className="w-full overflow-x-auto">
+                        <table className="w-full whitespace-no-wrap">
+                            <thead>
+                                <tr className="text-xs font-semibold tracking-wide text-left text-gray-500 uppercase border-b dark:border-gray-700 bg-gray-50 dark:text-gray-400 dark:bg-gray-800">
+                                    <th className="px-4 py-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={areAllFilteredSelected}
+                                            onChange={handleSelectAll}
+                                            className="rounded"
+                                        />
+                                    </th>
+                                    {tableHeaders.map((header) => (
+                                        <th key={header} className="px-4 py-3">{header}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y dark:divide-gray-700 dark:bg-gray-800">
+                                {filteredUsers.map((user: User) => (
+                                    <tr key={user._id} className="text-gray-700 dark:text-gray-400">
+                                        <td className="px-4 py-3">
+                                             <input
+                                                type="checkbox"
+                                                checked={selectedUserIds.includes(user._id)}
+                                                onChange={() => handleSelectUser(user._id)}
+                                                className="rounded"
+                                            />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center text-sm">
+                                                <div>
+                                                    <p className="font-semibold">{user.fullName}</p>
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400">@{user.username} (ID: {user._id.substring(user._id.length - 6)})</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                            {user.email}<br/>
+                                            <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">{formatCurrency(user.walletBalance, user.currency)}</td>
+                                        <td className="px-4 py-3 text-sm">
+                                            {user.activePlans && user.activePlans.length > 0 
+                                                ? user.activePlans.map(p => p.planName).join(', ') 
+                                                : 'None'}
+                                        </td>
+                                        <td className="px-4 py-3 text-xs">
+                                           <Badge status={user.status} />
+                                        </td>
+                                        <td className="px-4 py-3 text-sm">
+                                            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+                                                <Button size="sm" variant="secondary" onClick={() => handleOpenUserManagementModal(user)}>Manage</Button>
+                                                <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(user)}>Message</Button>
+                                                <Button size="sm" variant="danger" onClick={() => handleOpenDeleteModal(user)}>Delete</Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
              )}
             {isUserManagementModalOpen && (
                 <UserManagementModal 
@@ -244,7 +343,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
     const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'network' | 'history'>('profile');
     const [formData, setFormData] = useState<Partial<User>>(
-        user || { fullName: '', username: '', email: '', phone: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false } }
+        user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false } }
     );
     const [isSaving, setIsSaving] = useState(false);
 
@@ -420,7 +519,16 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                <input name="fullName" value={formData.fullName || ''} onChange={handleFormChange} placeholder="Full Name" className="w-full rounded-md dark:bg-gray-700" />
                                <input name="username" value={formData.username || ''} onChange={handleFormChange} placeholder="Username" className="w-full rounded-md dark:bg-gray-700" />
                                <input name="email" value={formData.email || ''} onChange={handleFormChange} placeholder="Email" className="w-full rounded-md dark:bg-gray-700" />
-                               <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-gray-500">Phone</label>
+                                        <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500">WhatsApp</label>
+                                        <input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} placeholder="WhatsApp Number" className="w-full rounded-md dark:bg-gray-700" />
+                                    </div>
+                                </div>
                                 <select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
                                     <option value="">-- Select country --</option>
                                     {countries.map(c => <option key={c} value={c}>{c}</option>)}
@@ -784,7 +892,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                 <div className="space-y-4">
                     <div>
                         <label className="text-sm font-medium">Target Users</label>
-                        {/* FIX: Correctly type the event target's value to align with the state's type definition. */}
+                        {/* FIX: Use e.target.value to correctly access the value from the event. */}
                         <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
                             <option value="all">All Users ({allUsers.length})</option>
                             <option value="plan">Users with Specific Plan(s)</option>
@@ -833,6 +941,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                      <div>
                         <label className="text-sm font-medium">Action</label>
                         <div className="flex gap-4 mt-1">
+                            {/* FIX: Changed e.currentTarget to e.target to correctly access the input value. */}
                             <label><input type="radio" value="enable" checked={action === 'enable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Enable Restriction (Block)</label>
                             <label><input type="radio" value="disable" checked={action === 'disable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Disable Restriction (Allow)</label>
                         </div>
