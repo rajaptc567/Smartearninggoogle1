@@ -114,6 +114,9 @@ const SettingSchema = new mongoose.Schema({
         deposits: { type: Boolean, default: true },
         withdrawals: { type: Boolean, default: true },
         registrations: { type: Boolean, default: true },
+        commissions: { type: Boolean, default: true },
+        transfers: { type: Boolean, default: true },
+        planPurchases: { type: Boolean, default: true }
     },
     tickerDemoAmountRanges: {
         USD: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
@@ -418,7 +421,7 @@ const defaultSettingsObject = {
     demoActivityTemplates: defaultDemoTemplates,
     tickerSpeed: 6,
     tickerContentSource: 'hybrid',
-    tickerRealActivities: { deposits: true, withdrawals: true, registrations: true },
+    tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
     tickerDemoAmountRanges: {
         USD: { min: 50, max: 500 },
         EUR: { min: 50, max: 500 },

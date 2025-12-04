@@ -3,14 +3,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
-import { formatCurrency, User } from '../../types';
+import { formatCurrency, User, currencySymbols } from '../../types';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, users, settings } = state;
     
-    const [selectedRecipient, setSelectedRecipient] = useState(''); // From dropdown
-    const [manualRecipient, setManualRecipient] = useState(''); // From manual input
+    const [recipientIdentifier, setRecipientIdentifier] = useState(''); // Stores username from dropdown or manual input
+    const [isManualEntry, setIsManualEntry] = useState(false);
     const [amount, setAmount] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -19,7 +19,6 @@ const TransferFunds: React.FC = () => {
     const [totalDeduction, setTotalDeduction] = useState(0);
     const [feeError, setFeeError] = useState<string | null>(null);
 
-    // Get the user's downline (direct and indirect referrals) for the dropdown list
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
 
@@ -27,9 +26,7 @@ const TransferFunds: React.FC = () => {
         const processedUsernames = new Set<string>();
 
         const buildDownline = (sponsorUsername: string) => {
-            if (processedUsernames.has(sponsorUsername.toLowerCase())) {
-                return;
-            }
+            if (processedUsernames.has(sponsorUsername.toLowerCase())) return;
             processedUsernames.add(sponsorUsername.toLowerCase());
 
             const directRefs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
@@ -41,17 +38,20 @@ const TransferFunds: React.FC = () => {
         };
         
         buildDownline(currentUser.username);
-        
         return downline;
     }, [currentUser, users]);
+    
+    const recipientUser = useMemo(() => {
+        if (!recipientIdentifier) return null;
+        const term = recipientIdentifier.toLowerCase();
+        return users.find(u => u.username.toLowerCase() === term || u.email.toLowerCase() === term || u._id === recipientIdentifier);
+    }, [recipientIdentifier, users]);
 
 
-    // Calculate Fee Logic
     useEffect(() => {
         if (!currentUser) return;
         const val = parseFloat(amount);
         
-        // Handle Global Config
         const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] };
 
         if (!config.enabled) {
@@ -68,7 +68,6 @@ const TransferFunds: React.FC = () => {
             return;
         }
 
-        // Find Tier, now also matching currency
         const tier = config.tiers?.find(t => 
             t.currency === currentUser.currency &&
             val >= t.minAmount && 
@@ -81,36 +80,35 @@ const TransferFunds: React.FC = () => {
             setFee(0);
             setTotalDeduction(0);
         } else {
-            let calculatedFee = 0;
-            if (tier.feeType === 'percentage') {
-                calculatedFee = (val * tier.feeValue) / 100;
-            } else {
-                calculatedFee = tier.feeValue;
-            }
+            let calculatedFee = tier.feeType === 'percentage' ? (val * tier.feeValue) / 100 : tier.feeValue;
             setFee(calculatedFee);
             setTotalDeduction(val + calculatedFee);
             setFeeError(null);
         }
 
     }, [amount, settings, currentUser]);
+    
+    const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        if (value === 'manual') {
+            setIsManualEntry(true);
+            setRecipientIdentifier('');
+        } else {
+            setIsManualEntry(false);
+            setRecipientIdentifier(value);
+        }
+    };
+
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const recipientIdentifier = selectedRecipient === 'manual' ? manualRecipient : selectedRecipient;
         const numericAmount = parseFloat(amount);
         
         if (!currentUser) return alert('Error: Current user not found.');
         if (feeError) return alert(feeError);
         if (!recipientIdentifier || isNaN(numericAmount) || numericAmount <= 0) return alert('Please enter a valid recipient and amount.');
-
-        const recipient = users.find(u =>
-            u._id.toString() === recipientIdentifier ||
-            u.username.toLowerCase() === recipientIdentifier.toLowerCase() ||
-            u.email.toLowerCase() === recipientIdentifier.toLowerCase()
-        );
-
-        if (!recipient) return alert('Validation Error: Recipient user not found.');
-        if (recipient._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
+        if (!recipientUser) return alert('Validation Error: Recipient user not found.');
+        if (recipientUser._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
 
         if (totalDeduction > currentUser.walletBalance) {
             alert(`Validation Error: Total deduction (${formatCurrency(totalDeduction, currentUser.currency)}) exceeds your wallet balance.`);
@@ -122,8 +120,8 @@ const TransferFunds: React.FC = () => {
             const result = await createTransfer({
                 senderId: currentUser._id,
                 senderName: currentUser.username,
-                recipientId: recipient._id,
-                recipientName: recipient.username,
+                recipientId: recipientUser._id,
+                recipientName: recipientUser.username,
                 amount: numericAmount,
             });
 
@@ -132,8 +130,8 @@ const TransferFunds: React.FC = () => {
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
 
             setIsSubmitted(true);
-            setSelectedRecipient('');
-            setManualRecipient('');
+            setRecipientIdentifier('');
+            setIsManualEntry(false);
             setAmount('');
         } catch (error) {
             console.error("Failed to submit transfer:", error);
@@ -174,52 +172,66 @@ const TransferFunds: React.FC = () => {
                     <label htmlFor="recipient-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
                     <select
                         id="recipient-select"
-                        value={selectedRecipient}
-                        onChange={(e) => setSelectedRecipient(e.target.value)}
+                        value={isManualEntry ? 'manual' : recipientIdentifier}
+                        onChange={handleDropdownChange}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        required={selectedRecipient !== 'manual'}
+                        required={!isManualEntry}
                     >
                         <option value="">-- Select from your network --</option>
                         {availableRecipients.map(user => (
                             <option key={user._id} value={user.username}>
-                                {user.fullName} (@{user.username})
+                                {user.fullName} (@{user.username}) - {user.currency}
                             </option>
                         ))}
                         <option value="manual">-- Other (Enter Manually) --</option>
                     </select>
                 </div>
                 
-                {selectedRecipient === 'manual' && (
+                {isManualEntry && (
                     <div className="animate-fade-in">
-                        <label htmlFor="manual-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enter Recipient's Username, Email, or ID</label>
+                        <label htmlFor="manual-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enter Recipient's Username or Email</label>
                         <input
                             type="text"
                             id="manual-recipient"
-                            value={manualRecipient}
-                            onChange={(e) => setManualRecipient(e.target.value)}
+                            value={recipientIdentifier}
+                            onChange={(e) => setRecipientIdentifier(e.target.value)}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., john.doe@example.com"
+                            placeholder="e.g., jane.doe or jane.doe@example.com"
                             required
                         />
                     </div>
                 )}
 
+                {recipientUser && recipientUser.currency !== currentUser.currency && (
+                    <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
+                        Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
+                    </div>
+                )}
+
+
                 <div>
                     <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
-                    <input
-                        type="number"
-                        id="amount"
-                        step="0.01"
-                        min="0.01"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        required
-                    />
+                    <div className="relative mt-1">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
+                        </div>
+                        <input
+                            type="number"
+                            id="amount"
+                            step="0.01"
+                            min="0.01"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
+                        />
+                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                            <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currentUser.currency}</span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Calculation Details */}
                 {amount && currentUser && (
                     <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
                         {feeError ? (
@@ -228,7 +240,7 @@ const TransferFunds: React.FC = () => {
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span>
-                                    <span className="font-medium">{formatCurrency(parseFloat(amount), currentUser.currency)}</span>
+                                    <span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600 dark:text-gray-400">Processing Fee:</span>
@@ -238,6 +250,22 @@ const TransferFunds: React.FC = () => {
                                     <span className="text-gray-800 dark:text-gray-200">Total Deducted:</span>
                                     <span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span>
                                 </div>
+
+                                {recipientUser && recipientUser.currency !== currentUser.currency && (
+                                    <>
+                                        <div className="flex justify-between pt-2 border-t dark:border-gray-600">
+                                            <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
+                                            <span className="font-medium text-xs">1 {currentUser.currency} ≈ {((settings.exchangeRates[currentUser.currency] || 1) / (settings.exchangeRates[recipientUser.currency] || 1)).toFixed(4)} {recipientUser.currency}</span>
+                                        </div>
+                                        <div className="flex justify-between font-bold text-lg">
+                                            <span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span>
+                                            <span className="text-green-600 dark:text-green-400">≈ {formatCurrency(
+                                                (parseFloat(amount) * (settings.exchangeRates[currentUser.currency] || 1)) / (settings.exchangeRates[recipientUser.currency] || 1),
+                                                recipientUser.currency
+                                            )}</span>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>

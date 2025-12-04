@@ -426,7 +426,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                 const updatedUser = await apiUpdateUser(user._id, updateData);
                 dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             } else {
-                const newUser = await apiCreateUser({ ...updateData, password: 'password123' }); // default password for new users
+                // FIX: Cast to 'any' to allow passing the 'password' property, which is not in the frontend User type, to the creation API.
+                const newUser = await apiCreateUser({ ...updateData, password: 'password123' } as any);
                 dispatch({ type: 'ADD_USER', payload: newUser });
             }
             alert('User details saved successfully!');

@@ -6,10 +6,12 @@ import { useData } from '../../hooks/useData';
 import { createWithdrawal } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
+import { useNavigate } from 'react-router-dom';
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, paymentMethods, withdrawals, settings: { restrictWithdrawalAmount, withdrawalFrequency } } = state;
+    const navigate = useNavigate();
 
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
@@ -137,7 +139,6 @@ const WithdrawFunds: React.FC = () => {
             };
 
             const result = await createWithdrawal(withdrawalData);
-            // FIX: The createWithdrawal API returns a complex object. Dispatch separate actions for withdrawal, user, and transaction.
             dispatch({ type: 'ADD_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
@@ -210,7 +211,14 @@ const WithdrawFunds: React.FC = () => {
                                             <option value="">-- Select plan amount --</option>
                                             {userActivePlanPrices.map(price => <option key={price} value={price}>{formatCurrency(price, currentUser.currency)}</option>)}
                                         </select>
-                                        {userActivePlanPrices.length === 0 && <p className="text-xs text-red-500 mt-1">You do not have any active plans to withdraw from.</p>}
+                                        {userActivePlanPrices.length === 0 && (
+                                            <div className="mt-2 text-center p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded-md">
+                                                <p className="text-sm text-yellow-800 dark:text-yellow-200">You have to buy any plan to withdraw your funds.</p>
+                                                <Button size="sm" onClick={() => navigate('/member/plans')} className="mt-2">
+                                                    Buy a Plan Now
+                                                </Button>
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <input type="number" id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={`Min ${formatCurrency(selectedMethod.minAmount, selectedMethod.currency)}, Max ${formatCurrency(selectedMethod.maxAmount, selectedMethod.currency)}`} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600" required />

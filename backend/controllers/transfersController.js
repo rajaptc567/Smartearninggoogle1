@@ -31,11 +31,6 @@ export const createTransfer = async (req, res) => {
             return res.status(403).json({ success: false, error: `Transfers are currently disabled for your account.` });
         }
 
-        // ** MULTI-CURRENCY CHECK **
-        if (sender.currency !== recipient.currency) {
-            return res.status(400).json({ success: false, error: `Cross-currency transfers are not allowed. Both users must have the same currency.` });
-        }
-
         // 2. Check Global Transfer Settings
         const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] };
         
@@ -43,13 +38,12 @@ export const createTransfer = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Transfers are currently disabled by the administrator.' });
         }
 
-        // 3. Determine Fee based on Tiers
-        // Find a tier where the amount falls within minAmount and maxAmount AND is enabled
+        // 3. Determine Fee based on Tiers (always based on sender's currency)
         const tier = config.tiers.find(t => 
             t.currency === sender.currency &&
             amount >= t.minAmount && 
             amount <= t.maxAmount && 
-            (t.enabled === undefined || t.enabled === true) // Default to true if missing
+            (t.enabled === undefined || t.enabled === true)
         );
 
         if (!tier) {
@@ -59,14 +53,7 @@ export const createTransfer = async (req, res) => {
             });
         }
 
-        let fee = 0;
-        if (tier.feeType === 'percentage') {
-            fee = (amount * tier.feeValue) / 100;
-        } else {
-            fee = tier.feeValue;
-        }
-
-        // Precision Rounding
+        let fee = tier.feeType === 'percentage' ? (amount * tier.feeValue) / 100 : tier.feeValue;
         fee = Number(fee.toFixed(2));
         const totalDeduction = Number((amount + fee).toFixed(2));
 
@@ -77,15 +64,13 @@ export const createTransfer = async (req, res) => {
 
         // 5. Process Transfer
         sender.walletBalance = Number((sender.walletBalance - totalDeduction).toFixed(2));
-        // Recipient balance will be updated on approval
-        // recipient.walletBalance = Number((recipient.walletBalance + amount).toFixed(2));
         
         const transfer = await Transfer.create({
             ...req.body,
-            currency: sender.currency,
+            currency: sender.currency, // Transfer is always recorded in sender's currency
             fee: fee,
             totalDeducted: totalDeduction,
-            status: 'Pending' // Default to Pending for admin review
+            status: 'Pending'
         });
 
         // 6. Logs & Notifications
@@ -94,7 +79,7 @@ export const createTransfer = async (req, res) => {
             userName: sender.username,
             currency: sender.currency,
             type: 'Transfer Request',
-            amount: -totalDeduction, // Deduct total
+            amount: -totalDeduction,
             description: `Transfer Request #${transfer._id} to ${recipient.username}. Fee: ${sender.currency}${fee.toFixed(2)}`,
             status: 'Pending'
         });
@@ -124,7 +109,6 @@ export const updateTransfer = async (req, res) => {
         const sender = await User.findById(transfer.senderId);
         const recipient = await User.findById(transfer.recipientId);
         
-        // Fetch original transaction to update status
         const originalTransaction = await Transaction.findOne({
             userId: sender._id,
             type: 'Transfer Request',
@@ -133,9 +117,24 @@ export const updateTransfer = async (req, res) => {
 
         if (status === 'Approved') {
             if (!recipient) return res.status(404).json({success: false, error: "Recipient not found"});
+            
+            const settings = await Setting.getSettings();
+            const rates = settings.exchangeRates;
 
-            // Add funds to recipient
-            recipient.walletBalance = Number((recipient.walletBalance + transfer.amount).toFixed(2));
+            let receivedAmount = transfer.amount;
+            let originalAmountForTx = null;
+            let originalCurrencyForTx = null;
+
+            // Handle currency conversion if necessary
+            if (sender.currency !== recipient.currency) {
+                const amountInPKR = transfer.amount * (rates[sender.currency] || 1);
+                receivedAmount = Number((amountInPKR / (rates[recipient.currency] || 1)).toFixed(2));
+                originalAmountForTx = transfer.amount;
+                originalCurrencyForTx = sender.currency;
+            }
+
+            // Add converted funds to recipient
+            recipient.walletBalance = Number((recipient.walletBalance + receivedAmount).toFixed(2));
             await recipient.save();
 
             if (originalTransaction) {
@@ -144,16 +143,19 @@ export const updateTransfer = async (req, res) => {
                 await originalTransaction.save();
             }
 
-            // Create Receipt Transaction for Recipient
-            const recipientTx = await Transaction.create({
+            // Create Receipt Transaction for Recipient with converted amount
+            await Transaction.create({
                 userId: recipient._id,
                 userName: recipient.username,
                 currency: recipient.currency,
                 type: 'Transfer Received',
-                amount: transfer.amount,
+                amount: receivedAmount,
                 description: `Received from ${sender.username}`,
                 sourceUserId: sender._id,
-                status: 'Approved'
+                status: 'Approved',
+                originalAmount: originalAmountForTx,
+                originalCurrency: originalCurrencyForTx,
+                exchangeRate: rates[sender.currency]
             });
 
             await Notification.create({ 
@@ -161,16 +163,11 @@ export const updateTransfer = async (req, res) => {
                 message: `Your transfer of ${sender.currency}${transfer.amount.toFixed(2)} to ${recipient.username} was approved. (Fee deducted: ${sender.currency}${(transfer.fee || 0).toFixed(2)})` 
             });
             
-            await Notification.create({ userId: recipient._id, message: `You received ${recipient.currency}${transfer.amount.toFixed(2)} from ${sender.username}.` });
-            
-            // Return recipient tx for frontend state update if needed
-            // (For now we just return basic objects)
+            await Notification.create({ userId: recipient._id, message: `You received ${recipient.currency}${receivedAmount.toFixed(2)} from ${sender.username}.` });
 
         } else if (status === 'Rejected') {
             if (!sender) return res.status(404).json({success: false, error: "Sender not found"});
 
-            // Refund Sender (Total Deducted amount which includes fee)
-            // Fallback to Amount + Fee if totalDeducted missing (legacy data)
             const refundAmount = transfer.totalDeducted || (transfer.amount + (transfer.fee || 0));
             
             sender.walletBalance = Number((sender.walletBalance + refundAmount).toFixed(2));
@@ -182,7 +179,6 @@ export const updateTransfer = async (req, res) => {
                 await originalTransaction.save();
             }
             
-            // Create Refund Record
             await Transaction.create({
                 userId: sender._id,
                 userName: sender.username,
@@ -200,7 +196,7 @@ export const updateTransfer = async (req, res) => {
         transfer.adminNotes = adminNotes;
         await transfer.save();
         
-        res.status(200).json({ success: true, data: { transfer, sender, recipient }}); // simplified return
+        res.status(200).json({ success: true, data: { transfer, sender, recipient }});
 
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
