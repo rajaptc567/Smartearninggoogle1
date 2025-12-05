@@ -148,7 +148,7 @@ export const updateTransfer = async (req, res) => {
             }
 
             // Create Receipt Transaction for Recipient with converted amount
-            await Transaction.create({
+            const transactionPayload = {
                 userId: recipient._id,
                 userName: recipient.username,
                 currency: recipient.currency,
@@ -157,10 +157,16 @@ export const updateTransfer = async (req, res) => {
                 description: `Received from ${sender.username}`,
                 sourceUserId: sender._id,
                 status: 'Approved',
-                originalAmount: originalAmountForTx,
-                originalCurrency: originalCurrencyForTx,
                 exchangeRate: rates[sender.currency]
-            });
+            };
+
+            if (originalAmountForTx != null && originalCurrencyForTx != null) {
+                transactionPayload.originalAmount = originalAmountForTx;
+                transactionPayload.originalCurrency = originalCurrencyForTx;
+            }
+
+            await Transaction.create(transactionPayload);
+
 
             await Notification.create({ 
                 userId: sender._id, 

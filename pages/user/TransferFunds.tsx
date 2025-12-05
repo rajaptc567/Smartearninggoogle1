@@ -27,22 +27,31 @@ const TransferFunds: React.FC = () => {
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
 
-        const downline: User[] = [];
+        const downline: { user: User; level: number }[] = [];
         const processedUsernames = new Set<string>();
 
-        const buildDownline = (sponsorUsername: string) => {
+        const buildDownline = (sponsorUsername: string, level: number) => {
             if (processedUsernames.has(sponsorUsername.toLowerCase())) return;
             processedUsernames.add(sponsorUsername.toLowerCase());
 
             const directRefs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
             
             directRefs.forEach(ref => {
-                downline.push(ref);
-                buildDownline(ref.username);
+                downline.push({ user: ref, level });
+                buildDownline(ref.username, level + 1);
             });
         };
         
-        buildDownline(currentUser.username);
+        buildDownline(currentUser.username, 1);
+
+        // Sort by level, then by name for a structured list
+        downline.sort((a, b) => {
+            if (a.level !== b.level) {
+                return a.level - b.level;
+            }
+            return a.user.fullName.localeCompare(b.user.fullName);
+        });
+
         return downline;
     }, [currentUser, users]);
     
@@ -149,7 +158,7 @@ const TransferFunds: React.FC = () => {
         if (!recipientUser) return alert('Validation Error: Recipient user not found.');
         if (recipientUser._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
 
-        const isRecipientInDownline = availableRecipients.some(downlineUser => downlineUser._id === recipientUser._id);
+        const isRecipientInDownline = availableRecipients.some(({ user: downlineUser }) => downlineUser._id === recipientUser._id);
         if (!isRecipientInDownline) {
             return alert('Validation Error: You can only transfer funds to users within your own network/downline.');
         }
@@ -222,9 +231,9 @@ const TransferFunds: React.FC = () => {
                         required={!isManualEntry}
                     >
                         <option value="">-- Select from your network --</option>
-                        {availableRecipients.map(user => (
+                        {availableRecipients.map(({ user, level }) => (
                             <option key={user._id} value={user.username}>
-                                {user.fullName} (@{user.username}) - {user.currency}
+                                {user.fullName} (@{user.username}) - {user.currency} (Level {level})
                             </option>
                         ))}
                         <option value="manual">-- Other (Enter Manually) --</option>
@@ -321,3 +330,4 @@ const TransferFunds: React.FC = () => {
 }
 
 export default TransferFunds;
+    
