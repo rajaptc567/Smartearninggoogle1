@@ -1,4 +1,5 @@
 
+
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export const currencySymbols: Record<Currency, string> = {

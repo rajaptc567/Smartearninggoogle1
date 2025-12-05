@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
 import Table from '../components/ui/Table';
@@ -182,7 +184,8 @@ const Users: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                      <select
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        // FIX: Explicitly typed the event object to resolve 'unknown' type error.
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Statuses</option>
@@ -194,7 +197,8 @@ const Users: React.FC = () => {
 
                      <select
                         value={planFilter}
-                        onChange={(e) => setPlanFilter(e.target.value)}
+                        // FIX: Explicitly typed the event object to resolve 'unknown' type error.
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlanFilter(e.target.value)}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Plans</option>
@@ -206,7 +210,8 @@ const Users: React.FC = () => {
                     
                      <select
                         value={currencyFilter}
-                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
+                        // FIX: Explicitly typed the event object to resolve 'unknown' type error.
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCurrencyFilter(e.target.value as Currency | '')}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Currencies</option>
@@ -215,11 +220,12 @@ const Users: React.FC = () => {
                         <option value="PKR">PKR</option>
                     </select>
 
+                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                     <input 
                         type="text" 
                         placeholder="Search name, email, ID..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                         className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                 </div>
@@ -544,11 +550,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                 <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'USD')}</p>
                                 <div>
                                     <label className="text-xs">Adjustment Amount</label>
-                                    <input type="number" value={walletAdjAmount} onChange={e => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
+                                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                    <input type="number" value={walletAdjAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
                                 </div>
                                  <div>
                                     <label className="text-xs">Reason / Description</label>
-                                    <input type="text" value={walletAdjReason} onChange={e => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
+                                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                    <input type="text" value={walletAdjReason} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button size="sm" variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit (+)</Button>
@@ -611,10 +619,14 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         <div className="space-y-4">
                             <h3 className="font-semibold">Financial History</h3>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                                <div><select value={historyTypeFilter} onChange={e => setHistoryTypeFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                <div><select value={historyStatusFilter} onChange={e => setHistoryStatusFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Statuses</option>{Object.values(Status).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                                <div><input type="date" value={historyDateFrom} onChange={e => setHistoryDateFrom(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
-                                <div><input type="date" value={historyDateTo} onChange={e => setHistoryDateTo(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
+                                {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                <div><select value={historyTypeFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setHistoryTypeFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                <div><select value={historyStatusFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setHistoryStatusFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Statuses</option>{Object.values(Status).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+                                {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                <div><input type="date" value={historyDateFrom} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHistoryDateFrom(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
+                                {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                                <div><input type="date" value={historyDateTo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHistoryDateTo(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
                             </div>
                             <div className="max-h-[50vh] overflow-y-auto border dark:border-gray-700 rounded-lg">
                                 <table className="w-full text-sm text-left">
@@ -893,7 +905,6 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                 <div className="space-y-4">
                     <div>
                         <label className="text-sm font-medium">Target Users</label>
-                        {/*// FIX: Explicitly type the event object to resolve 'unknown' type error.*/}
                         {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                         <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
                             <option value="all">All Users ({allUsers.length})</option>
@@ -904,7 +915,8 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                     {targetType === 'plan' && (
                         <div>
                             <label className="text-sm font-medium">Select Plans</label>
-                            <select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                            <select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
                                 {investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}
                             </select>
                         </div>
@@ -918,7 +930,8 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                                     <Button type="button" size="sm" variant="secondary" onClick={handleDeselectAllManual}>Deselect All</Button>
                                 </div>
                             </div>
-                            <input type="text" value={manualUserSearch} onChange={e => setManualUserSearch(e.target.value)} placeholder="Filter users..." className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                            <input type="text" value={manualUserSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualUserSearch(e.target.value)} placeholder="Filter users..." className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                             <div className="border dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
                                 {filteredManualUsers.map(u => (
                                     <label key={u._id} className="flex items-center space-x-3 p-2 border-b dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
@@ -943,17 +956,16 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                      <div>
                         <label className="text-sm font-medium">Action</label>
                         <div className="flex gap-4 mt-1">
-                            {/*// FIX: Add type to event object to resolve 'unknown' type error.*/}
                             {/* FIX: Add type to event object to resolve 'unknown' type error. */}
                             <label><input type="radio" value="enable" checked={action === 'enable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Enable Restriction (Block)</label>
-                            {/*// FIX: Add type to event object to resolve 'unknown' type error.*/}
                             {/* FIX: Add type to event object to resolve 'unknown' type error. */}
                             <label><input type="radio" value="disable" checked={action === 'disable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Disable Restriction (Allow)</label>
                         </div>
                     </div>
                      <div>
                         <label className="flex items-center space-x-2">
-                            <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500" /> 
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                            <input type="checkbox" checked={sendNotification} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSendNotification(e.target.checked)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:ring-blue-500" /> 
                             <span className="text-sm font-medium">Send notification to affected users</span>
                         </label>
                     </div>
@@ -1056,7 +1068,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="text-sm font-medium">Target Audience</label>
-                                {/* FIX: Explicitly type the event object to resolve 'unknown' type error. */}
                                 {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                                 <select 
                                     value={targetType} 
@@ -1072,8 +1083,10 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                                     <option value="manual">Manually Select Users</option>
                                 </select>
                             </div>
-                            {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
-                            {targetType === 'inactive' && <div><label className="text-sm font-medium">Random Sample (Optional)</label><input type="number" value={randomCount} onChange={e => setRandomCount(e.target.value)} placeholder="e.g., 50" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>}
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                            {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                            {targetType === 'inactive' && <div><label className="text-sm font-medium">Random Sample (Optional)</label><input type="number" value={randomCount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRandomCount(e.target.value)} placeholder="e.g., 50" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>}
                              {targetType === 'manual' && (
                                 <div className="md:col-span-2 space-y-2">
                                     <div className="flex justify-between items-end">
@@ -1086,10 +1099,11 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                                             <Button type="button" size="sm" variant="secondary" onClick={handleDeselectAllManual}>Deselect All</Button>
                                         </div>
                                     </div>
+                                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                                     <input
                                         type="text"
                                         value={manualUserSearch}
-                                        onChange={e => setManualUserSearch(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualUserSearch(e.target.value)}
                                         placeholder="Filter users..."
                                         className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
                                     />
@@ -1113,19 +1127,22 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                             )}
                         </div>
                     )}
-                    <div><label className="text-sm font-medium">Subject</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
-                    <div><label className="text-sm font-medium">Message</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full rounded-md dark:bg-gray-700 mt-1" required /></div>
+                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                    <div><label className="text-sm font-medium">Subject</label><input value={subject} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubject(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                    {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
+                    <div><label className="text-sm font-medium">Message</label><textarea value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} rows={5} className="w-full rounded-md dark:bg-gray-700 mt-1" required /></div>
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
                         <div>
                             <label htmlFor="isPopupToggle" className="text-sm font-medium text-gray-900 dark:text-gray-200">Popup Notification</label>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Show this as a high-priority popup when the user logs in.</p>
                         </div>
                         <label htmlFor="isPopupToggle" className="inline-flex items-center cursor-pointer">
+                            {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                             <input 
                                 id="isPopupToggle"
                                 type="checkbox" 
                                 checked={isPopup}
-                                onChange={e => setIsPopup(e.target.checked)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIsPopup(e.target.checked)}
                                 className="sr-only peer"
                             />
                             <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>

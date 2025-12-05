@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { Status, Withdrawal, formatCurrency, Currency } from '../types';
+import { Status, Withdrawal, formatCurrency, Currency, Deposit } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateWithdrawal, getUploadsBaseUrl } from '../services/api';
+import { updateWithdrawal, updateDeposit, getUploadsBaseUrl } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
@@ -30,6 +30,10 @@ const Withdrawals: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
 
+  // Matched Deposit status editing state
+  const [matchedDepositStatus, setMatchedDepositStatus] = useState<Record<string, Deposit['status']>>({});
+  const [savingDepositId, setSavingDepositId] = useState<string | null>(null);
+
   const UPLOADS_URL = getUploadsBaseUrl();
 
   useEffect(() => {
@@ -37,26 +41,28 @@ const Withdrawals: React.FC = () => {
       setAdminNotes(selectedWithdrawal.adminNotes || '');
       setCurrentStatus(selectedWithdrawal.status);
       
-      // Pre-fill P2P details
-      // Check if there is already a P2P payment method associated with this withdrawal
       const existingMethod = paymentMethods.find(pm => pm.p2pWithdrawalId === selectedWithdrawal._id);
-
       if (existingMethod) {
           setP2pName(existingMethod.name);
           setP2pAccountTitle(existingMethod.accountTitle);
           setP2pAccountNumber(existingMethod.accountNumber);
           setP2pInstructions(existingMethod.instructions || '');
       } else {
-          // Default pre-fill with user's withdrawal info
           setP2pName(`P2P - ${selectedWithdrawal.method}`);
           setP2pAccountTitle(selectedWithdrawal.accountTitle);
           setP2pAccountNumber(selectedWithdrawal.accountNumber);
           setP2pInstructions('');
       }
+
+      // Initialize statuses for matched deposits
+      const initialStatuses: Record<string, Deposit['status']> = {};
+      (selectedWithdrawal.matchedDepositIds || []).forEach(dep => {
+          initialStatuses[dep._id] = dep.status;
+      });
+      setMatchedDepositStatus(initialStatuses);
     }
   }, [selectedWithdrawal, paymentMethods]);
 
-  // Filter Logic
   const filteredWithdrawals = withdrawals.filter(w => {
       const matchesSearch = 
         w._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -64,7 +70,6 @@ const Withdrawals: React.FC = () => {
         w.amount.toString().includes(searchTerm);
       
       const matchesStatus = statusFilter ? w.status === statusFilter : true;
-
       const matchesCurrency = currencyFilter ? w.currency?.toUpperCase() === currencyFilter : true;
 
       return matchesSearch && matchesStatus && matchesCurrency;
@@ -84,24 +89,16 @@ const Withdrawals: React.FC = () => {
     if (selectedWithdrawal) {
         setIsSaving(true);
         try {
-            const payload: any = {
-                status: currentStatus,
-                adminNotes: adminNotes,
-            };
-
-            // Include P2P details if status is Matching
+            const payload: any = { status: currentStatus, adminNotes: adminNotes };
             if (currentStatus === Status.Matching) {
                 payload.p2pName = p2pName;
                 payload.p2pAccountTitle = p2pAccountTitle;
                 payload.p2pAccountNumber = p2pAccountNumber;
                 payload.p2pInstructions = p2pInstructions;
             }
-
             const result = await updateWithdrawal(selectedWithdrawal._id, payload);
-            // FIX: The API returns a complex object. Dispatch separate actions for withdrawal and user updates.
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
-            
             handleCloseModal();
         } catch (error) {
             console.error("Failed to update withdrawal:", error);
@@ -112,12 +109,76 @@ const Withdrawals: React.FC = () => {
     }
   };
 
-  // Helper to determine correct image source (Base64 vs File Path)
+  const handleUpdateMatchedDeposit = async (depositId: string, newStatus: Deposit['status']) => {
+    if (!selectedWithdrawal) return;
+    setSavingDepositId(depositId);
+    
+    // Generate a more user-friendly reason for the admin notes, which may be shown to the user.
+    let notesForUpdate = `Status updated to ${newStatus} by admin via P2P review.`;
+    if (newStatus === Status.Rejected) {
+        notesForUpdate = 'Payment could not be verified. Please contact support if this is an error.';
+    } else if (newStatus === Status.Approved) {
+        notesForUpdate = 'Payment verified and approved.';
+    }
+
+    try {
+        const result = await updateDeposit(depositId, { 
+            status: newStatus, 
+            adminNotes: notesForUpdate
+        });
+
+        dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
+        if(result.user) dispatch({ type: 'UPDATE_USER', payload: result.user });
+
+        setSelectedWithdrawal(prev => {
+            if (!prev) return null;
+            const updatedMatchedDeposits = (prev.matchedDepositIds || []).map(d => 
+                d._id === depositId ? { ...d, status: newStatus } : d
+            );
+            
+            let newRemainingAmount = prev.matchRemainingAmount ?? prev.finalAmount;
+            const originalDeposit = prev.matchedDepositIds?.find(d => d._id === depositId);
+
+            if (originalDeposit) {
+                const originalStatus = originalDeposit.status;
+                const depositAmount = originalDeposit.amount;
+
+                const wasProcessed = originalStatus === 'Approved' || originalStatus === 'Pending';
+                const isNowRejected = newStatus === 'Rejected';
+                const wasRejected = originalStatus === 'Rejected';
+                const isNowProcessed = newStatus === 'Approved' || newStatus === 'Pending';
+
+                // If a processed (approved/pending) deposit is rejected, refund the withdrawal
+                if (wasProcessed && isNowRejected) {
+                    newRemainingAmount += depositAmount;
+                } 
+                // If a rejected deposit is re-activated (approved/pending), reclaim the funds for the withdrawal
+                else if (wasRejected && isNowProcessed) {
+                    newRemainingAmount -= depositAmount;
+                }
+            }
+
+            return { 
+                ...prev, 
+                matchedDepositIds: updatedMatchedDeposits, 
+                matchRemainingAmount: Math.max(0, Math.min(prev.finalAmount, newRemainingAmount))
+            };
+        });
+
+        setMatchedDepositStatus(prev => ({ ...prev, [depositId]: newStatus }));
+        
+    } catch (error) {
+        console.error("Failed to update matched deposit:", error);
+        alert(`Error: ${error instanceof Error ? error.message : 'Could not update status.'}`);
+    } finally {
+        setSavingDepositId(null);
+    }
+  };
+
   const getReceiptSrc = (url: string) => {
         if (url.startsWith('data:')) return url;
         return `${UPLOADS_URL}${url}`;
   }
-
 
   const tableHeaders = ['ID', 'User', 'Amount', 'Final Amount', 'Method', 'Status', 'Match Rem.', 'Date'];
 
@@ -205,46 +266,69 @@ const Withdrawals: React.FC = () => {
                 </div>
               )}
 
-              {/* Matched Deposits Section */}
               {selectedWithdrawal.matchedDepositIds && selectedWithdrawal.matchedDepositIds.length > 0 && (
                   <div className="mt-6 pt-4 border-t dark:border-gray-700">
                       <h4 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">Matched Payments Log (P2P)</h4>
-                      <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                              <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase">
-                                  <tr>
-                                      <th className="px-3 py-2">Depositor</th>
-                                      <th className="px-3 py-2">Amount</th>
-                                      <th className="px-3 py-2">Date</th>
-                                      <th className="px-3 py-2">Receipt</th>
-                                      <th className="px-3 py-2">Status</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {selectedWithdrawal.matchedDepositIds.map((deposit: any) => (
-                                      <tr key={deposit._id} className="border-b dark:border-gray-700">
-                                          <td className="px-3 py-2">{deposit.userName}</td>
-                                          <td className="px-3 py-2 font-bold text-green-600">{formatCurrency(deposit.amount, selectedWithdrawal.currency)}</td>
-                                          <td className="px-3 py-2">{new Date(deposit.date).toLocaleDateString()}</td>
-                                          <td className="px-3 py-2">
-                                              {deposit.receiptUrl ? (
-                                                  <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">View</a>
-                                              ) : 'N/A'}
-                                          </td>
-                                          <td className="px-3 py-2"><Badge status={deposit.status} /></td>
-                                      </tr>
-                                  ))}
-                              </tbody>
-                          </table>
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
+                          {selectedWithdrawal.matchedDepositIds.map((deposit: Deposit) => (
+                              <div key={deposit._id} className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600">
+                                  <div className="flex justify-between items-start">
+                                      <div>
+                                          <p className="font-bold text-gray-800 dark:text-gray-100">{deposit.userName}</p>
+                                          <p className="text-xl font-bold text-green-600">{formatCurrency(deposit.amount, selectedWithdrawal.currency)}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                          <select
+                                              value={matchedDepositStatus[deposit._id] || deposit.status}
+                                              onChange={(e) => setMatchedDepositStatus(prev => ({ ...prev, [deposit._id]: e.target.value as Deposit['status'] }))}
+                                              className="text-xs rounded-md dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                                              disabled={savingDepositId === deposit._id}
+                                          >
+                                              <option value={Status.Pending}>Pending</option>
+                                              <option value={Status.Approved}>Approved</option>
+                                              <option value={Status.Rejected}>Rejected</option>
+                                          </select>
+                                          <Button
+                                              size="sm"
+                                              onClick={() => handleUpdateMatchedDeposit(deposit._id, matchedDepositStatus[deposit._id])}
+                                              disabled={savingDepositId === deposit._id || matchedDepositStatus[deposit._id] === deposit.status}
+                                          >
+                                              {savingDepositId === deposit._id ? '...' : 'Save'}
+                                          </Button>
+                                      </div>
+                                  </div>
+
+                                  <div className="mt-3 pt-3 border-t dark:border-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+                                      <div><strong>Date:</strong> {new Date(deposit.date).toLocaleString()}</div>
+                                      <div><strong>Method:</strong> {deposit.method}</div>
+                                      <div><strong>Sender:</strong> {deposit.senderAccountTitle || 'N/A'}</div>
+                                      <div><strong>Tx ID:</strong> <span className="font-mono">{deposit.transactionId}</span></div>
+                                  </div>
+                                  
+                                  {deposit.userNotes && (
+                                      <div className="mt-2 pt-2 border-t dark:border-gray-600 text-xs">
+                                          <p className="font-semibold text-gray-500">Depositor Notes:</p>
+                                          <p className="italic text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{deposit.userNotes}</p>
+                                      </div>
+                                  )}
+
+                                  {deposit.receiptUrl && (
+                                      <div className="mt-2 text-center">
+                                          <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm font-medium">
+                                              View Receipt
+                                          </a>
+                                      </div>
+                                  )}
+                              </div>
+                          ))}
                       </div>
                       <div className="mt-2 text-right text-sm font-semibold">
-                          Total Matched: <span className="text-green-600">{formatCurrency(selectedWithdrawal.matchedDepositIds.reduce((sum: number, d: any) => sum + d.amount, 0), selectedWithdrawal.currency)}</span>
+                          Total Matched: <span className="text-green-600">{formatCurrency(selectedWithdrawal.matchedDepositIds.filter(d=>d.status === 'Approved').reduce((sum, d) => sum + d.amount, 0), selectedWithdrawal.currency)}</span>
                           <span className="mx-2">/</span>
                           Pending: <span className="text-red-600">{formatCurrency((selectedWithdrawal.matchRemainingAmount ?? selectedWithdrawal.finalAmount), selectedWithdrawal.currency)}</span>
                       </div>
                   </div>
               )}
-
 
               <div className="mt-6">
                   <label htmlFor="status" className="block text-sm font-semibold mb-2">Status</label>
@@ -254,11 +338,8 @@ const Withdrawals: React.FC = () => {
                       onChange={(e) => setCurrentStatus(e.target.value as Withdrawal['status'])}
                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   >
-                      <option value={Status.Pending}>Pending</option>
-                      <option value={Status.Matching}>Matching (P2P)</option>
-                      <option value={Status.Approved}>Approved</option>
-                      <option value={Status.Paid}>Paid</option>
-                      <option value={Status.Rejected}>Rejected</option>
+                      <option value={Status.Pending}>Pending</option><option value={Status.Matching}>Matching (P2P)</option>
+                      <option value={Status.Approved}>Approved</option><option value={Status.Paid}>Paid</option><option value={Status.Rejected}>Rejected</option>
                   </select>
               </div>
 

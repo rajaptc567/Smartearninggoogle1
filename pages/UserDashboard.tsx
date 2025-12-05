@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
@@ -144,8 +145,6 @@ const UserDashboard: React.FC = () => {
     );
     
      const NetworkSummaryCard = () => {
-        // FIX: Explicitly type the accumulator and current value to 'number' in the reduce function.
-        // This resolves a TypeScript error where the types were being inferred as 'unknown'.
         // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
         // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
