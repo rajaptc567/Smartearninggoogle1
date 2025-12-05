@@ -893,7 +893,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                 <div className="space-y-4">
                     <div>
                         <label className="text-sm font-medium">Target Users</label>
-                        {/* FIX: Explicitly type the event object to resolve 'unknown' type error. */}
+                        {/*// FIX: Explicitly type the event object to resolve 'unknown' type error.*/}
                         <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
                             <option value="all">All Users ({allUsers.length})</option>
                             <option value="plan">Users with Specific Plan(s)</option>
@@ -942,9 +942,9 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                      <div>
                         <label className="text-sm font-medium">Action</label>
                         <div className="flex gap-4 mt-1">
-                            {/* FIX: Add type to event object to resolve 'unknown' type error. */}
+                            {/*// FIX: Add type to event object to resolve 'unknown' type error.*/}
                             <label><input type="radio" value="enable" checked={action === 'enable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Enable Restriction (Block)</label>
-                            {/* FIX: Add type to event object to resolve 'unknown' type error. */}
+                            {/*// FIX: Add type to event object to resolve 'unknown' type error.*/}
                             <label><input type="radio" value="disable" checked={action === 'disable'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAction(e.target.value as 'enable' | 'disable')} /> Disable Restriction (Allow)</label>
                         </div>
                     </div>

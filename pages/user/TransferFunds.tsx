@@ -9,7 +9,7 @@ const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, users, settings } = state;
     
-    const [recipientIdentifier, setRecipientIdentifier] = useState(''); // Stores username from dropdown or manual input
+    const [recipientIdentifier, setRecipientIdentifier] = useState('');
     const [isManualEntry, setIsManualEntry] = useState(false);
     const [amount, setAmount] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,6 +22,9 @@ const TransferFunds: React.FC = () => {
     // Cross-currency calculation state
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [receivedAmount, setReceivedAmount] = useState<number | null>(null);
+    
+    // Manual entry validation state
+    const [manualRecipientState, setManualRecipientState] = useState<{ status: 'idle' | 'loading' | 'valid' | 'invalid'; message: string | null }>({ status: 'idle', message: null });
 
 
     const availableRecipients = useMemo(() => {
@@ -44,11 +47,8 @@ const TransferFunds: React.FC = () => {
         
         buildDownline(currentUser.username, 1);
 
-        // Sort by level, then by name for a structured list
         downline.sort((a, b) => {
-            if (a.level !== b.level) {
-                return a.level - b.level;
-            }
+            if (a.level !== b.level) return a.level - b.level;
             return a.user.fullName.localeCompare(b.user.fullName);
         });
 
@@ -60,6 +60,35 @@ const TransferFunds: React.FC = () => {
         const term = recipientIdentifier.toLowerCase();
         return users.find(u => u.username.toLowerCase() === term || u.email.toLowerCase() === term || u._id === recipientIdentifier);
     }, [recipientIdentifier, users]);
+    
+    // Debounced validation for manual recipient entry
+    useEffect(() => {
+        if (!isManualEntry || !recipientIdentifier.trim()) {
+            setManualRecipientState({ status: 'idle', message: null });
+            return;
+        }
+
+        setManualRecipientState({ status: 'loading', message: 'Verifying user...' });
+
+        const handler = setTimeout(() => {
+            const term = recipientIdentifier.toLowerCase().trim();
+            const foundUser = users.find(u => u.username.toLowerCase() === term || u.email.toLowerCase() === term);
+
+            if (foundUser) {
+                if (foundUser._id === currentUser?._id) {
+                     setManualRecipientState({ status: 'invalid', message: 'You cannot transfer funds to yourself.' });
+                } else {
+                    setManualRecipientState({ status: 'valid', message: `User Found: ${foundUser.fullName} (@${foundUser.username})` });
+                }
+            } else {
+                setManualRecipientState({ status: 'invalid', message: 'User not found. Please check the username or email.' });
+            }
+        }, 500);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [recipientIdentifier, isManualEntry, users, currentUser]);
 
     // Fee calculation
     useEffect(() => {
@@ -108,8 +137,7 @@ const TransferFunds: React.FC = () => {
             const fromCurrency = currentUser.currency;
             const toCurrency = recipientUser.currency;
             const rates = settings.exchangeRates;
-
-            // rates['USD'] = 278 means 1 USD = 278 PKR.
+            
             const fromRateToBase = rates[fromCurrency] || 1;
             const toRateToBase = rates[toCurrency] || 1;
 
@@ -119,15 +147,10 @@ const TransferFunds: React.FC = () => {
                 return;
             }
 
-            // Correct Conversion Logic:
-            // Step 1: Convert amount from sender's currency to base currency (PKR).
             const amountInPkr = parseFloat(amount) * fromRateToBase;
-
-            // Step 2: Convert amount from PKR to the recipient's currency.
             const finalAmount = amountInPkr / toRateToBase;
             setReceivedAmount(finalAmount);
 
-            // Calculate the display rate for 1 unit of the sender's currency.
             const displayRate = fromRateToBase / toRateToBase;
             setExchangeRate(displayRate);
         } else {
@@ -141,9 +164,11 @@ const TransferFunds: React.FC = () => {
         if (value === 'manual') {
             setIsManualEntry(true);
             setRecipientIdentifier('');
+            setManualRecipientState({ status: 'idle', message: null });
         } else {
             setIsManualEntry(false);
             setRecipientIdentifier(value);
+            setManualRecipientState({ status: 'idle', message: null });
         }
     };
 
@@ -157,11 +182,6 @@ const TransferFunds: React.FC = () => {
         if (!recipientIdentifier || isNaN(numericAmount) || numericAmount <= 0) return alert('Please enter a valid recipient and amount.');
         if (!recipientUser) return alert('Validation Error: Recipient user not found.');
         if (recipientUser._id === currentUser._id) return alert('Validation Error: You cannot transfer funds to yourself.');
-
-        const isRecipientInDownline = availableRecipients.some(({ user: downlineUser }) => downlineUser._id === recipientUser._id);
-        if (!isRecipientInDownline) {
-            return alert('Validation Error: You can only transfer funds to users within your own network/downline.');
-        }
 
         if (totalDeduction > currentUser.walletBalance) {
             alert(`Validation Error: Total deduction (${formatCurrency(totalDeduction, currentUser.currency)}) exceeds your wallet balance.`);
@@ -211,6 +231,8 @@ const TransferFunds: React.FC = () => {
         );
     }
 
+    const showAmountForm = (!isManualEntry && recipientUser) || (isManualEntry && manualRecipientState.status === 'valid');
+
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-2xl mx-auto">
             <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
@@ -228,7 +250,6 @@ const TransferFunds: React.FC = () => {
                         value={isManualEntry ? 'manual' : recipientIdentifier}
                         onChange={handleDropdownChange}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        required={!isManualEntry}
                     >
                         <option value="">-- Select from your network --</option>
                         {availableRecipients.map(({ user, level }) => (
@@ -250,84 +271,72 @@ const TransferFunds: React.FC = () => {
                             onChange={(e) => setRecipientIdentifier(e.target.value)}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             placeholder="e.g., jane.doe or jane.doe@example.com"
-                            required
+                            autoComplete="off"
                         />
-                    </div>
-                )}
-
-                {recipientUser && recipientUser.currency !== currentUser.currency && (
-                    <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
-                        Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
-                    </div>
-                )}
-
-
-                <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
-                    <div className="relative mt-1">
-                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
-                        </div>
-                        <input
-                            type="number"
-                            id="amount"
-                            step="0.01"
-                            min="0.01"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
-                        />
-                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                            <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currentUser.currency}</span>
+                        <div className="mt-2 text-xs h-4">
+                            {manualRecipientState.status === 'loading' && <p className="text-gray-500">{manualRecipientState.message}</p>}
+                            {manualRecipientState.status === 'invalid' && <p className="text-red-500 font-semibold">{manualRecipientState.message}</p>}
+                            {manualRecipientState.status === 'valid' && <p className="text-green-600 font-semibold">{manualRecipientState.message}</p>}
                         </div>
                     </div>
-                </div>
+                )}
+                
+                {showAmountForm && (
+                    <div className="space-y-4 mt-4 pt-4 border-t dark:border-gray-700 animate-fade-in">
+                        {recipientUser && recipientUser.currency !== currentUser.currency && (
+                            <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
+                                Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
+                            </div>
+                        )}
+                        <div>
+                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
+                            <div className="relative mt-1">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    id="amount"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    required
+                                />
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currentUser.currency}</span>
+                                </div>
+                            </div>
+                        </div>
 
-                {amount && currentUser && (
-                    <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
-                        {feeError ? (
-                            <p className="text-sm text-red-600 dark:text-red-400">{feeError}</p>
-                        ) : (
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span>
-                                    <span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Processing Fee:</span>
-                                    <span className="font-medium text-red-500">+{formatCurrency(fee, currentUser.currency)}</span>
-                                </div>
-                                <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold">
-                                    <span className="text-gray-800 dark:text-gray-200">Total Deducted:</span>
-                                    <span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span>
-                                </div>
-
-                                {recipientUser && recipientUser.currency !== currentUser.currency && exchangeRate !== null && receivedAmount !== null && (
-                                    <>
-                                        <div className="flex justify-between pt-2 border-t dark:border-gray-600">
-                                            <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
-                                            <span className="font-medium text-xs">1 {currentUser.currency} ≈ {exchangeRate.toFixed(4)} {recipientUser.currency}</span>
-                                        </div>
-                                        <div className="flex justify-between font-bold text-lg">
-                                            <span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span>
-                                            <span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span>
-                                        </div>
-                                    </>
+                        {amount && currentUser && (
+                            <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
+                                {feeError ? ( <p className="text-sm text-red-600 dark:text-red-400">{feeError}</p> ) : (
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span><span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span></div>
+                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Processing Fee:</span><span className="font-medium text-red-500">+{formatCurrency(fee, currentUser.currency)}</span></div>
+                                        <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold"><span className="text-gray-800 dark:text-gray-200">Total Deducted:</span><span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span></div>
+                                        {recipientUser && recipientUser.currency !== currentUser.currency && exchangeRate !== null && receivedAmount !== null && (
+                                            <>
+                                                <div className="flex justify-between pt-2 border-t dark:border-gray-600"><span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span><span className="font-medium text-xs">1 {currentUser.currency} ≈ {exchangeRate.toFixed(4)} {recipientUser.currency}</span></div>
+                                                <div className="flex justify-between font-bold text-lg"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>
+                                            </>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         )}
+                        <div className="pt-4 flex justify-end">
+                            <Button type="submit" disabled={isSubmitting || !!feeError || !amount}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
+                        </div>
                     </div>
                 )}
 
-                <div className="pt-4 flex justify-end">
-                    <Button type="submit" disabled={isSubmitting || !!feeError}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
-                </div>
             </form>
         </div>
     );
 }
 
 export default TransferFunds;
-    
