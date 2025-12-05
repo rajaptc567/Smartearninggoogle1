@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute } from '../types';
 import { 
@@ -508,76 +509,4 @@ const initializer = (initialState: AppState) => {
             return { ...initialState, currentUser: JSON.parse(savedUser) as User };
         }
     } catch (error) {
-        console.error("Could not parse user from localStorage", error);
-        localStorage.removeItem('currentUser');
-    }
-    return initialState;
-};
-
-export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
-
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            const defaultSettings: Settings = initialState.settings;
-
-            // Helper to safely fetch individual data points without crashing the entire app
-            async function safeFetch<T>(fn: () => Promise<T>, fallbackValue: T): Promise<T> {
-                try {
-                    return await fn();
-                } catch (error: any) {
-                    console.warn(`Failed to fetch data (using fallback):`, error);
-                    return fallbackValue;
-                }
-            }
-
-            // Fetch core data in parallel, handling individual failures gracefully
-            const [
-                users, deposits, withdrawals, transactions, notifications, 
-                paymentMethods, investmentPlans, rules, settings, transfers, logs,
-                passwordResetRequests, disputes
-            ] = await Promise.all([
-                safeFetch(getUsers, []),
-                safeFetch(getDeposits, []),
-                safeFetch(getWithdrawals, []),
-                safeFetch(getTransactions, []),
-                safeFetch(getNotifications, []),
-                safeFetch(getPaymentMethods, []),
-                safeFetch(getInvestmentPlans, []),
-                safeFetch(getRules, []),
-                safeFetch(getSettings, defaultSettings),
-                safeFetch(getTransfers, []),
-                safeFetch(getLogs, []),
-                safeFetch(getPasswordResetRequests, []),
-                safeFetch(getDisputes, [])
-            ]);
-
-            dispatch({ 
-                type: 'SET_ALL_DATA', 
-                payload: {
-                    users: users,
-                    deposits: deposits,
-                    withdrawals: withdrawals,
-                    transactions: transactions,
-                    notifications: notifications,
-                    paymentMethods: paymentMethods,
-                    investmentPlans: investmentPlans,
-                    rules: rules,
-                    settings: { ...defaultSettings, ...settings }, // Merge fetched settings with defaults
-                    transfers: transfers,
-                    logs: logs,
-                    passwordResetRequests: passwordResetRequests,
-                    disputes: disputes
-                }
-            });
-        };
-
-        fetchInitialData();
-    }, []);
-
-    return (
-        <DataContext.Provider value={{ state, dispatch }}>
-            {children}
-        </DataContext.Provider>
-    );
-};
+        console.error("Could not parse user from localStorage", error
