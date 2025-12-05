@@ -124,14 +124,14 @@ export const updateTransfer = async (req, res) => {
             let originalAmountForTx = null;
             let originalCurrencyForTx = null;
 
-            // Correct Conversion Logic:
+            // Correct Conversion Logic (USD is base)
             if (sender.currency !== recipient.currency) {
-                // Step 1: Convert sender's amount to base currency (PKR).
-                // The 'rates' object stores how many PKR equals 1 unit of a given currency (e.g., rates['USD'] = 278).
-                const amountInPKR = transfer.amount * (rates[sender.currency] || 1);
+                // Step 1: Convert sender's amount to base currency (USD).
+                // The 'rates' object stores how many of a currency equals 1 USD (e.g., rates['PKR'] = 278).
+                const amountInUSD = transfer.amount / (rates[sender.currency] || 1);
                 
-                // Step 2: Convert from PKR to the recipient's currency.
-                receivedAmount = Number((amountInPKR / (rates[recipient.currency] || 1)).toFixed(2));
+                // Step 2: Convert from USD to the recipient's currency.
+                receivedAmount = Number((amountInUSD * (rates[recipient.currency] || 1)).toFixed(2));
                 
                 originalAmountForTx = transfer.amount;
                 originalCurrencyForTx = sender.currency;

@@ -58,9 +58,9 @@ const initialState: AppState = {
             tiers: []
         },
         exchangeRates: {
-            USD: 278.50,
-            EUR: 256.22,
-            PKR: 1,
+            USD: 1,
+            EUR: 0.92,
+            PKR: 278.50,
         },
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,

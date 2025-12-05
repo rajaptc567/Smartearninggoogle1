@@ -65,9 +65,9 @@ const SettingSchema = new mongoose.Schema({
         tiers: [TransferTierSchema]
     },
     exchangeRates: {
-        USD: { type: Number, default: 278.50 },
-        EUR: { type: Number, default: 256.22 },
-        PKR: { type: Number, default: 1 }
+        USD: { type: Number, default: 1 },
+        EUR: { type: Number, default: 0.92 },
+        PKR: { type: Number, default: 278.50 }
     },
     restrictWithdrawalAmount: {
         type: Boolean,
@@ -409,7 +409,7 @@ const defaultSettingsObject = {
             { minAmount: 100, maxAmount: 50000, feeType: 'fixed', feeValue: 150, currency: 'PKR', enabled: true }
         ]
     },
-    exchangeRates: { USD: 278.50, EUR: 256.22, PKR: 1 },
+    exchangeRates: { USD: 1, EUR: 0.92, PKR: 278.50 },
     restrictWithdrawalAmount: false,
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,

@@ -138,20 +138,20 @@ const TransferFunds: React.FC = () => {
             const toCurrency = recipientUser.currency;
             const rates = settings.exchangeRates;
             
-            const fromRateToBase = rates[fromCurrency] || 1;
-            const toRateToBase = rates[toCurrency] || 1;
+            // rates['PKR'] = 278.5 means 1 USD = 278.5 PKR.
+            const fromRateToBase = rates[fromCurrency] || 1; // e.g., 278.5 for PKR
+            const toRateToBase = rates[toCurrency] || 1;   // e.g., 0.92 for EUR
 
-            if (toRateToBase === 0) {
-                setExchangeRate(null);
-                setReceivedAmount(null);
-                return;
-            }
+            // Step 1: Convert amount from sender's currency to base currency (USD).
+            const amountInUsd = parseFloat(amount) / fromRateToBase;
 
-            const amountInPkr = parseFloat(amount) * fromRateToBase;
-            const finalAmount = amountInPkr / toRateToBase;
+            // Step 2: Convert amount from USD to the recipient's currency.
+            const finalAmount = amountInUsd * toRateToBase;
             setReceivedAmount(finalAmount);
 
-            const displayRate = fromRateToBase / toRateToBase;
+            // Calculate the display rate for 1 unit of the sender's currency.
+            // 1 [FROM] = (1 / fromRateToBase) USD = (1 / fromRateToBase) * toRateToBase [TO]
+            const displayRate = toRateToBase / fromRateToBase;
             setExchangeRate(displayRate);
         } else {
             setExchangeRate(null);
