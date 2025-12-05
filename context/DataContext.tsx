@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute } from '../types';
 import { 
@@ -75,7 +74,6 @@ const initialState: AppState = {
         },
         tickerSpeed: 6,
         tickerContentSource: 'hybrid',
-        // FIX: Add missing properties `commissions`, `transfers`, and `planPurchases` to match the type definition.
         tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
         tickerDemoAmountRanges: {
             USD: { min: 50, max: 500 },
@@ -509,4 +507,47 @@ const initializer = (initialState: AppState) => {
             return { ...initialState, currentUser: JSON.parse(savedUser) as User };
         }
     } catch (error) {
-        console.error("Could not parse user from localStorage", error
+        console.error("Could not parse user from localStorage", error);
+    }
+    return initialState;
+};
+
+interface DataProviderProps {
+  children: ReactNode;
+}
+
+export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
+    const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [
+                    users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes
+                ] = await Promise.all([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes()
+                ]);
+                
+                dispatch({ 
+                    type: 'SET_ALL_DATA', 
+                    payload: { 
+                        users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes 
+                    } 
+                });
+            } catch (error) {
+                console.error("Failed to fetch initial data:", error);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    return (
+        <DataContext.Provider value={{ state, dispatch }}>
+            {children}
+        </DataContext.Provider>
+    );
+};
