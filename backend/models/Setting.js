@@ -62,7 +62,8 @@ const SettingSchema = new mongoose.Schema({
     },
     transferConfig: {
         enabled: { type: Boolean, default: true },
-        tiers: [TransferTierSchema]
+        tiers: [TransferTierSchema],
+        allowCrossCurrency: { type: Boolean, default: false }
     },
     exchangeRates: {
         USD: { type: Number, default: 1 },
@@ -407,7 +408,8 @@ const defaultSettingsObject = {
             { minAmount: 101, maxAmount: 10000, feeType: 'percentage', feeValue: 2, currency: 'USD', enabled: true },
             { minAmount: 1, maxAmount: 10000, feeType: 'percentage', feeValue: 1.5, currency: 'EUR', enabled: true },
             { minAmount: 100, maxAmount: 50000, feeType: 'fixed', feeValue: 150, currency: 'PKR', enabled: true }
-        ]
+        ],
+        allowCrossCurrency: false,
     },
     exchangeRates: { USD: 1, EUR: 0.92, PKR: 278.50 },
     restrictWithdrawalAmount: false,

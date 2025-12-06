@@ -31,13 +31,18 @@ export const createTransfer = async (req, res) => {
         }
 
         // 2. Check Global Transfer Settings
-        const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] };
+        const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [], allowCrossCurrency: false };
         
         if (!config.enabled) {
             return res.status(403).json({ success: false, error: 'Transfers are currently disabled by the administrator.' });
         }
+        
+        // 3. Check Cross-Currency Setting
+        if (sender.currency !== recipient.currency && !config.allowCrossCurrency) {
+            return res.status(403).json({ success: false, error: 'Cross-currency transfers are currently disabled by the administrator.' });
+        }
 
-        // 3. Determine Fee based on Tiers (always based on sender's currency)
+        // 4. Determine Fee based on Tiers (always based on sender's currency)
         const tier = config.tiers.find(t => 
             t.currency === sender.currency &&
             amount >= t.minAmount && 
@@ -56,12 +61,12 @@ export const createTransfer = async (req, res) => {
         fee = Number(fee.toFixed(2));
         const totalDeduction = Number((amount + fee).toFixed(2));
 
-        // 4. Check Balance
+        // 5. Check Balance
         if (sender.walletBalance < totalDeduction) {
             return res.status(400).json({ success: false, error: `Insufficient funds. You need ${sender.currency}${totalDeduction.toFixed(2)} (Amount + Fee) but have ${sender.currency}${sender.walletBalance.toFixed(2)}.` });
         }
 
-        // 5. Process Transfer
+        // 6. Process Transfer
         sender.walletBalance = Number((sender.walletBalance - totalDeduction).toFixed(2));
         
         const transfer = await Transfer.create({
@@ -72,7 +77,7 @@ export const createTransfer = async (req, res) => {
             status: 'Pending'
         });
 
-        // 6. Logs & Notifications
+        // 7. Logs & Notifications
         const transaction = await Transaction.create({
             userId: sender._id,
             userName: sender.username,

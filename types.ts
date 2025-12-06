@@ -278,6 +278,7 @@ export interface Settings {
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
+        allowCrossCurrency?: boolean;
     };
 
     exchangeRates: {
