@@ -131,12 +131,19 @@ export const updateTransfer = async (req, res) => {
 
             // Correct Conversion Logic (USD is base)
             if (sender.currency !== recipient.currency) {
+                // Ensure uppercase keys when accessing rates
+                const fromCurrency = sender.currency.toUpperCase();
+                const toCurrency = recipient.currency.toUpperCase();
+
                 // Step 1: Convert sender's amount to base currency (USD).
                 // The 'rates' object stores how many of a currency equals 1 USD (e.g., rates['PKR'] = 278).
-                const amountInUSD = transfer.amount / (rates[sender.currency] || 1);
+                const fromRate = rates[fromCurrency] || 1;
+                const toRate = rates[toCurrency] || 1;
+
+                const amountInUSD = transfer.amount / fromRate;
                 
                 // Step 2: Convert from USD to the recipient's currency.
-                receivedAmount = Number((amountInUSD * (rates[recipient.currency] || 1)).toFixed(2));
+                receivedAmount = Number((amountInUSD * toRate).toFixed(2));
                 
                 originalAmountForTx = transfer.amount;
                 originalCurrencyForTx = sender.currency;
@@ -162,7 +169,7 @@ export const updateTransfer = async (req, res) => {
                 description: `Received from ${sender.username}`,
                 sourceUserId: sender._id,
                 status: 'Approved',
-                exchangeRate: rates[sender.currency]
+                exchangeRate: rates[sender.currency.toUpperCase()] || 1
             };
 
             if (originalAmountForTx != null && originalCurrencyForTx != null) {

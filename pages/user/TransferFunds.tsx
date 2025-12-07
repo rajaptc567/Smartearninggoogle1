@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
-import { formatCurrency, User, currencySymbols } from '../../types';
+import { formatCurrency, User, currencySymbols, Currency } from '../../types';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
@@ -140,13 +140,16 @@ const TransferFunds: React.FC = () => {
     // Cross-currency calculation
     useEffect(() => {
         if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && settings.exchangeRates && parseFloat(amount) > 0) {
-            const fromCurrency = currentUser.currency;
-            const toCurrency = recipientUser.currency;
+            // Force uppercase to ensure key match in settings.exchangeRates
+            const fromCurrency = currentUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
+            const toCurrency = recipientUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
+            
             const rates = settings.exchangeRates;
             
             // rates['PKR'] = 278.5 means 1 USD = 278.5 PKR.
-            const fromRateToBase = rates[fromCurrency] || 1; // e.g., 278.5 for PKR
-            const toRateToBase = rates[toCurrency] || 1;   // e.g., 0.92 for EUR
+            // Using explicit type casting and uppercase keys ensures we don't get undefined and fall back to 1 erroneously.
+            const fromRateToBase = rates[fromCurrency] || 1; 
+            const toRateToBase = rates[toCurrency] || 1;
 
             // Step 1: Convert amount from sender's currency to base currency (USD).
             const amountInUsd = parseFloat(amount) / fromRateToBase;
