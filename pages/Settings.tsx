@@ -25,12 +25,15 @@ const Settings: React.FC = () => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
     // UPDATED DEFAULTS: PKR 278, EUR 0.92
     const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
-    
-    // If settings.exchangeRates exists but has 0/missing values, overwrite with defaults for better UX.
-    const mergedRates = { ...defaultRates, ...(settings.exchangeRates || {}) };
-    if (!mergedRates.PKR || mergedRates.PKR === 0) mergedRates.PKR = defaultRates.PKR;
-    if (!mergedRates.EUR || mergedRates.EUR === 0) mergedRates.EUR = defaultRates.EUR;
-    if (!mergedRates.USD || mergedRates.USD === 0) mergedRates.USD = defaultRates.USD;
+    const incomingRates = settings.exchangeRates || {};
+
+    // Fix for PKR defaulting to 1: If DB has 1, override with 278 for UI until saved.
+    // This solves the "1 USD = 1 PKR" issue if the database wasn't seeded correctly.
+    const mergedRates = {
+        USD: incomingRates.USD || defaultRates.USD,
+        EUR: incomingRates.EUR || defaultRates.EUR,
+        PKR: (incomingRates.PKR && incomingRates.PKR !== 1) ? incomingRates.PKR : defaultRates.PKR
+    };
 
     setLocalSettings(prev => ({
         ...settings,
@@ -179,7 +182,11 @@ const Settings: React.FC = () => {
       if (from === to) return amount;
       
       // Safety check: ensure rates object exists, defaults to standard if missing
-      const safeRates = rates || { USD: 1, EUR: 0.92, PKR: 278 };
+      // Default PKR to 278 if it's missing or 0/1 in the passed object to prevent 1:1 error
+      const safeRates = { ...rates };
+      if (!safeRates.PKR || safeRates.PKR === 1) safeRates.PKR = 278.00;
+      if (!safeRates.EUR || safeRates.EUR === 0) safeRates.EUR = 0.92;
+      if (!safeRates.USD || safeRates.USD === 0) safeRates.USD = 1;
       
       const rateFrom = safeRates[from] || 1;
       const rateTo = safeRates[to] || 1;
