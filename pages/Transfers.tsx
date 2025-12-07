@@ -104,7 +104,6 @@ const Transfers: React.FC = () => {
                     >
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
-                        <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
                     </select>
                     <input 

@@ -78,7 +78,6 @@ const Rules: React.FC = () => {
                             <label htmlFor="currency" className="block text-sm font-medium">Currency</label>
                             <select id="currency" value={formCurrency} onChange={e => setFormCurrency(e.target.value as Currency)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                 <option value="PKR">PKR</option>
-                                <option value="USD">USD</option>
                                 <option value="EUR">EUR</option>
                             </select>
                         </div>
@@ -115,7 +114,6 @@ const Rules: React.FC = () => {
                         >
                             <option value="">All Currencies</option>
                             <option value="PKR">PKR</option>
-                            <option value="USD">USD</option>
                             <option value="EUR">EUR</option>
                         </select>
                     </div>

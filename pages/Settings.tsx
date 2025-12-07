@@ -20,22 +20,19 @@ const Settings: React.FC = () => {
   const [simFrom, setSimFrom] = useState<Currency>('PKR');
   const [simTo, setSimTo] = useState<Currency>('EUR');
 
-  // Fake fetching state for UX
+  // Fake fetching state for each UX
   const [isFetchingRates, setIsFetchingRates] = useState(false);
 
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
-    // UPDATED DEFAULTS: PKR 278, EUR 0.92
     const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
     const incomingRates = settings.exchangeRates || {};
 
-    // Fix for PKR defaulting to 1: If DB has 1, override with 278 for UI until saved.
-    // This solves the "1 USD = 1 PKR" issue if the database wasn't seeded correctly.
     const mergedRates = {
         USD: incomingRates.USD || defaultRates.USD,
         EUR: incomingRates.EUR || defaultRates.EUR,
-        PKR: (incomingRates.PKR && incomingRates.PKR !== 1) ? incomingRates.PKR : defaultRates.PKR
+        PKR: incomingRates.PKR || defaultRates.PKR
     };
 
     setLocalSettings(prev => ({
@@ -126,8 +123,8 @@ const Settings: React.FC = () => {
                 ...prev,
                 exchangeRates: {
                     USD: 1,
-                    EUR: 0.915, // Mock live rate
-                    PKR: 278.45 // Mock live rate
+                    PKR: 278.50,
+                    EUR: 0.92
                 }
             }));
             setIsFetchingRates(false);
@@ -203,16 +200,17 @@ const Settings: React.FC = () => {
       if (from === to) return amount;
       
       const safeRates = { ...rates };
-      if (!safeRates.PKR || safeRates.PKR === 1) safeRates.PKR = 278.00;
-      if (!safeRates.EUR || safeRates.EUR === 0) safeRates.EUR = 0.92;
-      if (!safeRates.USD || safeRates.USD === 0) safeRates.USD = 1;
+      // Logic with USD as Base (1):
+      // Rate[Currency] = Value in Currency per 1 USD.
       
       const rateFrom = safeRates[from] || 1;
       const rateTo = safeRates[to] || 1;
       
-      // Logic: Amount / FromRate (to Base USD) * ToRate (to Target)
-      const inUsd = amount / rateFrom;
-      return inUsd * rateTo;
+      // Convert 'From' to Base(USD): Amount / RateFrom
+      const inBase = amount / rateFrom;
+      
+      // Convert Base to 'To': inBase * RateTo
+      return inBase * rateTo;
   };
 
   const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon?: React.ReactNode }) => (
@@ -309,7 +307,7 @@ const Settings: React.FC = () => {
                     <p className="text-xs text-gray-500">Select plans to display on the homepage. The current design shows a maximum of 3.</p>
                     
                     <div className="space-y-4">
-                        {(['PKR', 'EUR'] as const).map(currency => {
+                        {(['USD', 'PKR', 'EUR'] as const).map(currency => {
                             const plansForCurrency = investmentPlans.filter(p => p.currency === currency && p.status === 'Active');
                             return (
                                 <div key={currency}>
@@ -354,14 +352,14 @@ const Settings: React.FC = () => {
         {activeTab === 'exchange_rates' && (
             <div className="space-y-8 animate-fade-in">
                 
-                <div className="flex flex-col sm:flex-row justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex flex-col sm:flex-row justify-between items-center bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
                      <div className="mb-3 sm:mb-0">
-                        <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">System Base Currency</h4>
-                        <div className="text-2xl font-extrabold text-blue-900 dark:text-white mt-1">1.00 USD <span className="text-base font-normal opacity-70">($)</span></div>
+                        <h4 className="text-sm font-bold text-green-800 dark:text-green-300 uppercase tracking-wider">System Base Currency</h4>
+                        <div className="text-2xl font-extrabold text-green-900 dark:text-white mt-1">USD <span className="text-base font-normal opacity-70">(US Dollar)</span></div>
                     </div>
-                     <div className="text-sm text-blue-700 dark:text-blue-200 max-w-md text-right">
-                        All calculations in the system are anchored to the US Dollar. <br/>
-                        Modify the rates below to change how EUR and PKR are valued against 1 USD.
+                     <div className="text-sm text-green-700 dark:text-green-200 max-w-md text-right">
+                        The system uses USD as the primary base for calculations (1.0). <br/>
+                        Set the rates below to define how many units of other currencies equal 1 USD.
                     </div>
                 </div>
 
@@ -415,13 +413,12 @@ const Settings: React.FC = () => {
                                         <span className="text-gray-500 sm:text-sm">EUR</span>
                                     </div>
                                 </div>
-                                <p className="mt-2 text-xs text-gray-500">Lower value means EUR is stronger than USD.</p>
                             </div>
                         </div>
 
                         {/* PKR CARD */}
                         <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
-                             <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
+                            <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
                                 <div className="flex items-center space-x-3">
                                     <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-xl">🇵🇰</div>
                                     <div>
@@ -453,7 +450,6 @@ const Settings: React.FC = () => {
                                         <span className="text-gray-500 sm:text-sm">PKR</span>
                                     </div>
                                 </div>
-                                 <p className="mt-2 text-xs text-gray-500">Higher value means PKR is weaker than USD.</p>
                             </div>
                         </div>
                     </div>
@@ -463,7 +459,7 @@ const Settings: React.FC = () => {
                         
                          {/* Calculator */}
                         <div className="bg-gray-900 text-white p-6 rounded-xl shadow-lg border border-gray-700 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500 rounded-full opacity-20 blur-xl"></div>
+                            <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-green-500 rounded-full opacity-20 blur-xl"></div>
                             <h4 className="font-bold text-lg mb-4 flex items-center relative z-10">
                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                                 Conversion Check
@@ -478,13 +474,13 @@ const Settings: React.FC = () => {
                                     <div>
                                         <label className="text-xs text-gray-400 uppercase font-bold">From</label>
                                         <select value={simFrom} onChange={e => setSimFrom(e.target.value as Currency)} className="w-full mt-1 bg-gray-800 border-gray-600 rounded-md text-white px-2 py-2">
-                                            <option value="EUR">EUR</option><option value="PKR">PKR</option>
+                                            <option value="USD">USD</option><option value="EUR">EUR</option><option value="PKR">PKR</option>
                                         </select>
                                     </div>
                                     <div>
                                         <label className="text-xs text-gray-400 uppercase font-bold">To</label>
                                         <select value={simTo} onChange={e => setSimTo(e.target.value as Currency)} className="w-full mt-1 bg-gray-800 border-gray-600 rounded-md text-white px-2 py-2">
-                                            <option value="PKR">PKR</option><option value="EUR">EUR</option>
+                                            <option value="PKR">PKR</option><option value="EUR">EUR</option><option value="USD">USD</option>
                                         </select>
                                     </div>
                                 </div>
@@ -502,20 +498,20 @@ const Settings: React.FC = () => {
                             <h4 className="font-bold text-gray-800 dark:text-white mb-3 text-sm uppercase tracking-wide">Cross-Rate Reference</h4>
                             <div className="space-y-3 text-sm">
                                 <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded">
+                                    <span className="text-gray-600 dark:text-gray-400">1 USD =</span>
+                                    <span className="font-mono font-bold text-gray-900 dark:text-white">
+                                        {localSettings.exchangeRates?.PKR} PKR
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded">
                                     <span className="text-gray-600 dark:text-gray-400">1 EUR =</span>
                                     <span className="font-mono font-bold text-gray-900 dark:text-white">
                                         {((localSettings.exchangeRates?.PKR || 278) / (localSettings.exchangeRates?.EUR || 0.92)).toFixed(2)} PKR
                                     </span>
                                 </div>
-                                <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded">
-                                    <span className="text-gray-600 dark:text-gray-400">1000 PKR =</span>
-                                    <span className="font-mono font-bold text-gray-900 dark:text-white">
-                                        {(1000 / ((localSettings.exchangeRates?.PKR || 278) / (localSettings.exchangeRates?.EUR || 0.92))).toFixed(2)} EUR
-                                    </span>
-                                </div>
                             </div>
                              <p className="mt-3 text-xs text-gray-500 italic">
-                                * These values are calculated automatically from the USD base rates you entered on the left.
+                                * Calculated automatically based on the rates provided.
                             </p>
                         </div>
                     </div>
@@ -538,6 +534,7 @@ const Settings: React.FC = () => {
                             <option value="">Show All</option>
                             <option value="EUR">EUR</option>
                             <option value="PKR">PKR</option>
+                            <option value="USD">USD</option>
                         </select>
                     </div>
                     {/* ... Rest of Transfer Tab ... */}

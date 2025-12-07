@@ -96,7 +96,6 @@ const PaymentMethods: React.FC = () => {
                     >
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
-                        <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
                     </select>
                      <select
@@ -188,7 +187,6 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         required
                     >
                         <option value="PKR">PKR (Rs)</option>
-                        <option value="USD">USD ($)</option>
                         <option value="EUR">EUR (€)</option>
                     </select>
                     <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">

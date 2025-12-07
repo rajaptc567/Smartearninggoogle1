@@ -58,7 +58,6 @@ const TickerSettings: React.FC = () => {
             tickerContentSource: 'hybrid',
             tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
             tickerDemoAmountRanges: {
-                USD: { min: 50, max: 500 },
                 EUR: { min: 50, max: 500 },
                 PKR: { min: 5000, max: 50000 },
             },
@@ -119,7 +118,7 @@ const TickerSettings: React.FC = () => {
     
     // --- Profile Modal Handlers ---
     const handleOpenProfileModal = (profile: DemoProfile | null) => {
-        setCurrentProfile(profile ? { ...profile } : { name: '', country: countries[0], currency: 'USD' });
+        setCurrentProfile(profile ? { ...profile } : { name: '', country: countries[0], currency: 'PKR' });
         setIsProfileModalOpen(true);
     };
 
@@ -135,7 +134,7 @@ const TickerSettings: React.FC = () => {
             _id: currentProfile._id || new Date().getTime().toString(),
             name: currentProfile.name,
             country: currentProfile.country,
-            currency: currentProfile.currency || 'USD',
+            currency: currentProfile.currency || 'PKR',
         };
 
         setLocalSettings(prev => {
@@ -178,7 +177,7 @@ const TickerSettings: React.FC = () => {
         const newProfiles: DemoProfile[] = [];
         let skippedCount = 0;
 
-        const validCurrencies: Currency[] = ['USD', 'EUR', 'PKR'];
+        const validCurrencies: Currency[] = ['EUR', 'PKR'];
         const validCountries = new Set(countries.map(c => c.toLowerCase()));
 
         for (const line of lines) {
@@ -519,7 +518,7 @@ const TickerSettings: React.FC = () => {
                             randomAmount = randomPlan.price;
                         } else {
                             // Fallback to ranges if no plans exist for the currency
-                            const ranges = localSettings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
+                            const ranges = localSettings.tickerDemoAmountRanges || { EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                             const currencyRange = ranges[profile.currency];
                             if(currencyRange) {
                                 randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
@@ -527,7 +526,7 @@ const TickerSettings: React.FC = () => {
                         }
                     } else {
                          // Original logic for other types
-                        const ranges = localSettings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
+                        const ranges = localSettings.tickerDemoAmountRanges || { EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                         const currencyRange = ranges[profile.currency];
                         if(currencyRange) {
                            randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
@@ -576,7 +575,7 @@ const TickerSettings: React.FC = () => {
                     randomAmount = randomPlan.price;
                 } else {
                      // Fallback to ranges if no plans exist for the currency
-                    const ranges = localSettings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
+                    const ranges = localSettings.tickerDemoAmountRanges || { EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                     const currencyRange = ranges[profile.currency];
                     if (currencyRange) {
                         randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
@@ -584,7 +583,7 @@ const TickerSettings: React.FC = () => {
                 }
             } else {
                 // Original logic for other template types
-                const ranges = localSettings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
+                const ranges = localSettings.tickerDemoAmountRanges || { EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                 const currencyRange = ranges[profile.currency];
                 if (currencyRange) {
                     randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
@@ -674,315 +673,9 @@ const TickerSettings: React.FC = () => {
                             <label className="text-sm font-medium">Show Real Withdrawals</label>
                             <ToggleSwitch checked={localSettings.tickerRealActivities?.withdrawals ?? true} onChange={() => handleRealActivityChange('withdrawals')} />
                         </div>
-                        <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Show New Registrations</label>
-                            <ToggleSwitch checked={localSettings.tickerRealActivities?.registrations ?? true} onChange={() => handleRealActivityChange('registrations')} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Show Real Commissions</label>
-                            <ToggleSwitch checked={localSettings.tickerRealActivities?.commissions ?? true} onChange={() => handleRealActivityChange('commissions')} />
-                        </div>
-                         <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Show Real Transfers</label>
-                            <ToggleSwitch checked={localSettings.tickerRealActivities?.transfers ?? true} onChange={() => handleRealActivityChange('transfers')} />
-                        </div>
-                         <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">Show Real Plan Purchases</label>
-                            <ToggleSwitch checked={localSettings.tickerRealActivities?.planPurchases ?? true} onChange={() => handleRealActivityChange('planPurchases')} />
-                        </div>
-                     </div>
+                    </div>
                 </div>
             </div>
-
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md space-y-4">
-                <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
-                    <h2 className="text-lg font-semibold">Demo Profiles ({localSettings.demoProfiles?.length || 0})</h2>
-                    {selectedProfileIds.length > 0 ? (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">{selectedProfileIds.length} selected</span>
-                            <Button size="sm" variant="danger" onClick={() => handleBulkProfileAction('delete')}>Delete</Button>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" onClick={handleOpenBulkProfileModal}>Bulk Add</Button>
-                            <Button size="sm" onClick={() => handleOpenProfileModal(null)}>Add Profile</Button>
-                        </div>
-                    )}
-                </div>
-                <div className="space-y-2">
-                     <div className="grid grid-cols-12 gap-4 items-center px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        <div className="col-span-1 flex items-center">
-                            <input type="checkbox" onChange={handleToggleSelectAllProfiles} checked={areAllProfilesOnPageSelected} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-offset-0 focus:ring-blue-200 focus:ring-opacity-50" />
-                        </div>
-                        <div className="col-span-3">Name</div>
-                        <div className="col-span-4">Country</div>
-                        <div className="col-span-1">Currency</div>
-                        <div className="col-span-3 text-right">Actions</div>
-                    </div>
-                    {paginatedProfiles.map((profile) => (
-                        <div key={profile._id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                             <div className="col-span-1 flex items-center">
-                                <input type="checkbox" checked={selectedProfileIds.includes(profile._id)} onChange={() => handleSelectProfile(profile._id)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-offset-0 focus:ring-blue-200 focus:ring-opacity-50" />
-                            </div>
-                            <div className="col-span-3 text-sm font-medium">{profile.name}</div>
-                            <div className="col-span-4 text-sm text-gray-600 dark:text-gray-400">{profile.country}</div>
-                            <div className="col-span-1"><span className="px-2 py-1 text-xs font-semibold rounded bg-gray-200 dark:bg-gray-700">{profile.currency}</span></div>
-                            <div className="col-span-3 flex gap-2 justify-end">
-                                <Button size="sm" variant="secondary" onClick={() => handleOpenProfileModal(profile)}>Edit</Button>
-                                <Button size="sm" variant="danger" onClick={() => handleDeleteProfile(profile._id)}>Delete</Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                {totalProfilePages > 0 && (
-                    <div className="flex justify-between items-center mt-4 border-t dark:border-gray-700 pt-4">
-                         <div>
-                            <label htmlFor="profiles-per-page" className="text-sm font-medium text-gray-700 dark:text-gray-300">Per Page: </label>
-                            <select
-                                id="profiles-per-page"
-                                value={profilesPerPage}
-                                onChange={(e) => setProfilesPerPage(Number(e.target.value))}
-                                className="ml-2 rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600"
-                            >
-                                <option value={10}>10</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" onClick={() => setProfilesCurrentPage(p => Math.max(1, p - 1))} disabled={profilesCurrentPage === 1}>Previous</Button>
-                            <Button size="sm" variant="secondary" onClick={() => setProfilesCurrentPage(p => Math.min(totalProfilePages, p + 1))} disabled={profilesCurrentPage === totalProfilePages}>Next</Button>
-                        </div>
-                        <span className="text-sm text-gray-500">Page {profilesCurrentPage} of {totalProfilePages}</span>
-                    </div>
-                )}
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                 <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3 mb-4">
-                    <h2 className="text-lg font-semibold">Activity Templates ({filteredTemplates.length} / {localSettings.demoActivityTemplates?.length || 0})</h2>
-                    {selectedTemplateIds.length > 0 ? (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">{selectedTemplateIds.length} selected</span>
-                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('enable')}>Enable</Button>
-                            <Button size="sm" variant="secondary" onClick={() => handleBulkAction('disable')}>Disable</Button>
-                            <Button size="sm" variant="danger" onClick={() => handleBulkAction('delete')}>Delete</Button>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" onClick={() => setIsBulkTemplateModalOpen(true)}>Bulk Add</Button>
-                            <select
-                                value={templateStatusFilter}
-                                onChange={e => setTemplateStatusFilter(e.target.value as any)}
-                                className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            >
-                                <option value="all">All Statuses</option>
-                                <option value="enabled">Enabled</option>
-                                <option value="disabled">Disabled</option>
-                            </select>
-                            <select
-                                value={templateTypeFilter}
-                                onChange={e => setTemplateTypeFilter(e.target.value as any)}
-                                className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            >
-                                <option value="all">All Types</option>
-                                <option value="joined">Joined</option>
-                                <option value="deposit">Deposit</option>
-                                <option value="withdrawal">Withdrawal</option>
-                                <option value="transfer">Transfer</option>
-                                <option value="plan">Plan Purchase</option>
-                            </select>
-                            <Button size="sm" onClick={() => handleOpenTemplateModal(null)}>Add Template</Button>
-                        </div>
-                    )}
-                </div>
-                <div className="space-y-2">
-                    {/* Header */}
-                     <div className="grid grid-cols-12 gap-4 items-center px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        <div className="col-span-1 flex items-center">
-                            <input type="checkbox" onChange={handleToggleSelectAll} checked={areAllOnPageSelected} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-offset-0 focus:ring-blue-200 focus:ring-opacity-50" />
-                        </div>
-                        <div className="col-span-5">Template</div>
-                        <div className="col-span-2">Type</div>
-                        <div className="col-span-1 text-center">Enabled</div>
-                        <div className="col-span-3 text-right">Actions</div>
-                    </div>
-                    {paginatedTemplates.map((template) => (
-                        <div key={template._id} className="grid grid-cols-12 gap-4 items-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                           <div className="col-span-1 flex items-center">
-                                <input type="checkbox" checked={selectedTemplateIds.includes(template._id)} onChange={() => handleSelectTemplate(template._id)} className="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-600 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-offset-0 focus:ring-blue-200 focus:ring-opacity-50" />
-                            </div>
-                           <div className="col-span-5 text-sm truncate">{template.template}</div>
-                           <div className="col-span-2"><span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700">{template.type}</span></div>
-                           <div className="col-span-1 flex justify-center">
-                                <ToggleSwitch checked={template.enabled} onChange={() => handleToggleTemplateEnabled(template._id)} />
-                           </div>
-                           <div className="col-span-3 flex gap-2 justify-end">
-                               <Button size="sm" variant="secondary" onClick={() => handleOpenTemplateModal(template)}>Edit</Button>
-                               <Button size="sm" variant="danger" onClick={() => handleDeleteTemplate(template._id)}>Delete</Button>
-                           </div>
-                        </div>
-                    ))}
-                    {filteredTemplates.length === 0 && (
-                        <p className="text-center text-gray-500 py-6">No templates match the current filters.</p>
-                    )}
-                </div>
-                 {totalTemplatePages > 0 && (
-                     <div className="flex justify-between items-center mt-4 border-t dark:border-gray-700 pt-4">
-                        <div>
-                            <label htmlFor="templates-per-page" className="text-sm font-medium text-gray-700 dark:text-gray-300">Per Page: </label>
-                            <select
-                                id="templates-per-page"
-                                value={templatesPerPage}
-                                onChange={(e) => setTemplatesPerPage(Number(e.target.value))}
-                                className="ml-2 rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600"
-                            >
-                                <option value={10}>10</option>
-                                <option value={25}>25</option>
-                                <option value={50}>50</option>
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button size="sm" variant="secondary" onClick={() => setTemplatesCurrentPage(p => Math.max(1, p - 1))} disabled={templatesCurrentPage === 1}>Previous</Button>
-                            <Button size="sm" variant="secondary" onClick={() => setTemplatesCurrentPage(p => Math.min(totalTemplatePages, p + 1))} disabled={templatesCurrentPage === totalTemplatePages}>Next</Button>
-                        </div>
-                        <span className="text-sm text-gray-500">Page {templatesCurrentPage} of {totalTemplatePages}</span>
-                    </div>
-                )}
-            </div>
-
-            {/* Profile Modal */}
-            {isProfileModalOpen && currentProfile && (
-                <Modal isOpen={isProfileModalOpen} onClose={handleCloseProfileModal}>
-                    <div className="p-4 w-[90vw] max-w-md">
-                        <h3 className="text-lg font-bold mb-4">{currentProfile._id ? 'Edit Demo Profile' : 'Add New Demo Profile'}</h3>
-                        <div className="space-y-4">
-                            <div><label className="text-sm font-medium">Name</label><input value={currentProfile.name || ''} onChange={e => setCurrentProfile(p => p ? {...p, name: e.target.value} : null)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
-                            <div><label className="text-sm font-medium">Country</label><select value={currentProfile.country} onChange={e => setCurrentProfile(p => p ? {...p, country: e.target.value} : null)} className="w-full rounded-md dark:bg-gray-700 mt-1">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                            <div><label className="text-sm font-medium">Currency</label><select value={currentProfile.currency} onChange={e => setCurrentProfile(p => p ? {...p, currency: e.target.value as Currency} : null)} className="w-full rounded-md dark:bg-gray-700 mt-1"><option value="USD">USD</option><option value="EUR">EUR</option><option value="PKR">PKR</option></select></div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3"><Button variant="secondary" onClick={handleCloseProfileModal}>Cancel</Button><Button onClick={handleSaveProfile}>Save Profile</Button></div>
-                    </div>
-                </Modal>
-            )}
-            
-            {/* Bulk Profile Modal */}
-            {isBulkProfileModalOpen && (
-                 <Modal isOpen={isBulkProfileModalOpen} onClose={() => setIsBulkProfileModalOpen(false)}>
-                    <div className="p-4 w-[90vw] max-w-lg">
-                        <h3 className="text-lg font-bold mb-4">Bulk Add Demo Profiles</h3>
-                        <p className="text-sm text-gray-500 mb-2">Paste profiles below, one per line, in the format: <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">Name, Country, Currency</code>.</p>
-                        <p className="text-xs text-gray-500 mb-4">Example: <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">John Doe, United States, USD</code>. Invalid lines will be skipped.</p>
-                        <textarea 
-                            value={bulkProfileText} 
-                            onChange={e => setBulkProfileText(e.target.value)} 
-                            rows={10} 
-                            className="w-full rounded-md dark:bg-gray-700 mt-1" 
-                            placeholder={`Jane Smith, Canada, USD\nAli Khan, Pakistan, PKR\nMaria Garcia, Spain, EUR`}
-                        />
-                        <div className="mt-6 flex justify-end gap-3">
-                            <Button variant="secondary" onClick={() => setIsBulkProfileModalOpen(false)}>Cancel</Button>
-                            <Button onClick={handleSaveBulkProfiles}>Save Profiles</Button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            {/* Template Modal */}
-            {isTemplateModalOpen && currentTemplate && (
-                 <Modal isOpen={isTemplateModalOpen} onClose={handleCloseTemplateModal}>
-                    <div className="p-4 w-[90vw] max-w-lg">
-                        <h3 className="text-lg font-bold mb-4">{currentTemplate._id ? 'Edit Template' : 'Template Builder'}</h3>
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex items-center">
-                                    <label className="text-sm font-medium">Template String</label>
-                                    <button type="button" onClick={() => setCurrentTemplate(p => p ? {...p, template: ''} : null)} className="ml-2 text-xs text-blue-500 hover:underline">(Clear for manual message)</button>
-                                </div>
-                                <p className="text-xs text-gray-500 mb-2">Select a type to auto-fill a template, use placeholders, or write your own custom message.</p>
-                                <textarea 
-                                    ref={templateTextareaRef}
-                                    value={currentTemplate.template || ''} 
-                                    onChange={e => setCurrentTemplate(p => p ? {...p, template: e.target.value} : null)} 
-                                    rows={3} 
-                                    className="w-full rounded-md dark:bg-gray-700 mt-1" 
-                                />
-                                <div className="mt-2 space-y-2">
-                                    <label className="text-xs font-medium text-gray-500">Insert Placeholder:</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button type="button" size="sm" variant="secondary" onClick={() => handleInsertPlaceholder('{name}')}>{'{name}'}</Button>
-                                        <Button type="button" size="sm" variant="secondary" onClick={() => handleInsertPlaceholder('{country}')}>{'{country}'}</Button>
-                                        <Button type="button" size="sm" variant="secondary" onClick={() => handleInsertPlaceholder('{amount}')}>{'{amount}'}</Button>
-                                        <Button type="button" size="sm" variant="secondary" onClick={() => handleInsertPlaceholder('{plan}')}>{'{plan}'}</Button>
-                                    </div>
-                                </div>
-                            </div>
-                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Live Preview</label>
-                                <div className="grid grid-cols-3 gap-2 items-center">
-                                    <div className="col-span-2">
-                                        <select 
-                                            value={previewProfileId}
-                                            onChange={e => setPreviewProfileId(e.target.value)}
-                                            className="w-full rounded-md dark:bg-gray-700 text-sm py-1.5"
-                                            aria-label="Select profile for preview"
-                                        >
-                                            {(localSettings.demoProfiles || []).map(p => (
-                                                <option key={p._id} value={p._id}>{p.name} ({p.country})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    {(localSettings.demoProfiles || []).length === 0 && <span className="text-xs text-red-500">Add profiles to enable preview.</span>}
-                                </div>
-                                <div className="p-3 bg-gray-100 dark:bg-gray-900 rounded-md border dark:border-gray-700 min-h-[50px] flex items-center">
-                                    <span className="text-sm text-gray-800 dark:text-gray-200" dangerouslySetInnerHTML={{ __html: templatePreview }}></span>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium">Activity Type</label>
-                                <p className="text-xs text-gray-500 mb-2">This determines the icon and auto-fills a template for new messages.</p>
-                                <select value={currentTemplate.type} onChange={e => handleTemplateTypeChange(e.target.value as any)} className="w-full rounded-md dark:bg-gray-700 mt-1">
-                                    <option value="joined">Joined</option>
-                                    <option value="deposit">Deposit</option>
-                                    <option value="withdrawal">Withdrawal</option>
-                                    <option value="transfer">Transfer</option>
-                                    <option value="plan">Plan Purchase</option>
-                                </select>
-                            </div>
-                             <div>
-                                <label className="flex items-center gap-2 text-sm font-medium">
-                                    <input type="checkbox" checked={currentTemplate.enabled !== false} onChange={e => setCurrentTemplate(p => p ? {...p, enabled: e.target.checked} : null)} /> 
-                                    Enabled
-                                </label>
-                                <p className="text-xs text-gray-500 ml-6">If unchecked, this template will not be used in the ticker.</p>
-                             </div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3"><Button variant="secondary" onClick={handleCloseTemplateModal}>Cancel</Button><Button onClick={handleSaveTemplate}>Save Template</Button></div>
-                    </div>
-                </Modal>
-            )}
-
-             {/* Bulk Template Modal */}
-            {isBulkTemplateModalOpen && (
-                 <Modal isOpen={isBulkTemplateModalOpen} onClose={() => setIsBulkTemplateModalOpen(false)}>
-                    <div className="p-4 w-[90vw] max-w-lg">
-                        <h3 className="text-lg font-bold mb-4">Bulk Add Activity Templates</h3>
-                        <p className="text-sm text-gray-500 mb-2">Paste templates below, one per line, in the format: <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">TYPE: Template string</code>.</p>
-                        <p className="text-xs text-gray-500 mb-4">Example: <code className="bg-gray-200 dark:bg-gray-700 p-1 rounded">deposit: {`{name}`} just funded their account with {`{amount}`}.</code>. Invalid lines will be skipped.</p>
-                        <textarea 
-                            value={bulkTemplateText} 
-                            onChange={e => setBulkTemplateText(e.target.value)} 
-                            rows={10} 
-                            className="w-full rounded-md dark:bg-gray-700 mt-1" 
-                            placeholder={`joined: {name} from {country} has joined!\nwithdrawal: Congratulations! {name} has withdrawn {amount}.`}
-                        />
-                        <div className="mt-6 flex justify-end gap-3">
-                            <Button variant="secondary" onClick={() => setIsBulkTemplateModalOpen(false)}>Cancel</Button>
-                            <Button onClick={handleSaveBulkTemplates}>Save Templates</Button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
         </div>
     );
 };

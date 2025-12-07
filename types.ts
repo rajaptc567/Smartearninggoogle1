@@ -11,11 +11,9 @@ export const formatCurrency = (amount: number, currency: Currency | string) => {
     if (typeof amount !== 'number' || isNaN(amount)) {
         amount = 0;
     }
-    // Fallback symbol if currency string is not in the strictly typed map (e.g. legacy data)
-    const symbol = (currencySymbols as any)[currency] || (currency === 'USD' ? '$' : '');
+    const symbol = (currencySymbols as any)[currency] || '';
 
     if (currency === 'PKR') {
-        // Show integers for whole numbers, but 2 decimal places for fractional amounts
         if (Number.isInteger(amount)) {
              return `${symbol}${amount.toFixed(0)}`;
         }
@@ -68,8 +66,8 @@ export interface User {
   country: string;
   currency: Currency;
   walletBalance: number;
-  activePlan: string; // Primary/Latest plan string for legacy display
-  activePlans?: ActivePlan[]; // Array of all purchased plans
+  activePlan: string;
+  activePlans?: ActivePlan[];
   registrationDate: string;
   status: Status;
   sponsor?: string;
@@ -84,7 +82,7 @@ export interface Deposit {
   amount: number;
   currency: Currency;
   transactionId: string;
-  senderAccountTitle?: string; // Name on the sender's account
+  senderAccountTitle?: string;
   receiptUrl?: string;
   status: Status.Pending | Status.Approved | Status.Rejected;
   date: string;
@@ -109,7 +107,7 @@ export interface Withdrawal {
     adminNotes?: string;
     userNotes?: string;
     matchRemainingAmount?: number;
-    matchedDepositIds?: Deposit[]; // Populated full objects
+    matchedDepositIds?: Deposit[];
 }
 
 export interface Transfer {
@@ -140,10 +138,9 @@ export interface PaymentMethod {
     feePercent: number;
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
-    p2pWithdrawalId?: string; // Optional ID linking to a withdrawal
+    p2pWithdrawalId?: string;
 }
 
-// New types for InvestmentPlan
 export type CommissionType = 'percentage' | 'fixed';
 
 export interface Commission {
@@ -156,14 +153,14 @@ export interface InvestmentPlan {
     name: string;
     currency: Currency;
     price: number;
-    durationDays: number; // 0 for unlimited
+    durationDays: number;
     minWithdraw: number;
     description: string;
     status: Status.Active | Status.Disabled;
     
-    directReferralLimit: number; // 0 for unlimited
-    directCommissions: Commission[]; // Array for tiered commissions
-    indirectCommissions: Commission[]; // Array for multi-level
+    directReferralLimit: number;
+    directCommissions: Commission[];
+    indirectCommissions: Commission[];
 
     commissionDeductions: {
         afterMaxPayout: Commission;
@@ -173,15 +170,14 @@ export interface InvestmentPlan {
     
     autoUpgrade: {
         enabled: boolean;
-        toPlanId?: string; // ID of the plan to upgrade to
+        toPlanId?: string;
     };
 
     holdPosition: {
         enabled: boolean;
-        slots: number[]; // e.g., [5, 6] for holding 5th and 6th referral commissions
+        slots: number[];
     };
     
-    // Legacy field kept for type compatibility if needed, but main logic uses global settings
     transferConfig?: {
         enabled: boolean;
         feeType: CommissionType;
@@ -189,7 +185,6 @@ export interface InvestmentPlan {
         minAmount: number;
         maxAmount: number;
     };
-    // FIX: Add missing 'equivalentPlanIds' property to match its usage in the application and backend model.
     equivalentPlanIds?: string[];
 }
 
@@ -207,7 +202,6 @@ export interface Transaction {
     sourceUserId?: string;
     status?: 'Pending' | 'Approved' | 'Rejected';
     relatedPlanId?: string;
-    // Fields for multi-currency commissions
     originalAmount?: number;
     originalCurrency?: Currency;
     exchangeRate?: number;
@@ -227,7 +221,7 @@ export interface TransferFeeTier {
     feeType: 'percentage' | 'fixed';
     feeValue: number;
     currency: Currency;
-    enabled?: boolean; // New flag to enable/disable specific tiers
+    enabled?: boolean;
 }
 
 export interface DemoProfile {
@@ -245,10 +239,10 @@ export interface DemoActivityTemplate {
 }
 
 export interface PlanEquivalencyGroup {
-    _id: string; // Client-side unique ID for mapping
-    usdPlanId?: string; // Kept for legacy/data compatibility but not used in UI
+    _id: string;
     pkrPlanId?: string;
     eurPlanId?: string;
+    usdPlanId?: string;
 }
 
 export interface HomepageContent {
@@ -272,7 +266,6 @@ export interface HomepageContent {
 
 export interface Settings {
     tickerEnabled?: boolean;
-    // Legacy boolean kept for backward compat if needed, but UI uses transferConfig.enabled
     isUserTransferEnabled: boolean; 
     
     transferConfig: {
@@ -282,16 +275,16 @@ export interface Settings {
     };
 
     exchangeRates: {
-        USD: number; // Kept as base for calculations
         EUR: number;
         PKR: number;
+        USD: number;
     };
 
-    restrictWithdrawalAmount: boolean; // Restrict to own active plan prices
+    restrictWithdrawalAmount: boolean;
     requirePlanMatchForCommission: boolean; 
     requireActivePlanForCommission: boolean;
     oneTimeCommissionPerGroup: boolean;
-    recurringCommissionPlanIds?: string[]; // Plans exempt from one-time rule
+    recurringCommissionPlanIds?: string[];
     requireUplineEligibility: boolean;
     withdrawalFrequency: {
         enabled: boolean;
@@ -311,9 +304,9 @@ export interface Settings {
         planPurchases: boolean;
     };
     tickerDemoAmountRanges?: {
-        USD: { min: number; max: number };
         EUR: { min: number; max: number };
         PKR: { min: number; max: number };
+        USD?: { min: number; max: number };
     };
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
@@ -323,12 +316,12 @@ export interface Settings {
 
 export interface Notification {
   _id: string;
-  userId: string; // User who receives the notification
-  senderType?: 'Admin' | 'System'; // Who sent it
-  subject?: string; // Optional subject
+  userId: string;
+  senderType?: 'Admin' | 'System';
+  subject?: string;
   message: string;
-  isPopup?: boolean; // Should this show as a modal?
-  popupShown?: boolean; // Has the modal been shown/closed?
+  isPopup?: boolean;
+  popupShown?: boolean;
   read: boolean;
   date: string;
 }
@@ -363,11 +356,11 @@ export interface Dispute {
     userId: string;
     userName: string;
     type: 'Deposit' | 'Withdrawal' | 'Transfer';
-    referenceId: string; // The ID of the rejected/failed item
+    referenceId: string;
     description: string;
-    proofUrl?: string; // New proof if re-submitting
+    proofUrl?: string;
     status: Status.Open | Status.Processing | Status.Resolved | Status.Closed;
-    adminResponse?: string; // Kept for legacy/summary, actual chat is in messages
+    adminResponse?: string;
     messages?: DisputeMessage[];
     date: string;
     adminUnread?: boolean;
