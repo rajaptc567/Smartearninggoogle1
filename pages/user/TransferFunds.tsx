@@ -144,15 +144,15 @@ const TransferFunds: React.FC = () => {
             const toCurrency = recipientUser.currency.toUpperCase();
             
             // Standard Defaults
-            const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+            const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
             const rates = settings.exchangeRates || {};
             
             const getRate = (curr: string) => {
-                // Cast to any to allow access by string key
                 const r = (rates as any)[curr];
-                // Check if rate exists and is valid number
+                // Treat 1 as invalid for PKR specifically, as it's the DB default but unrealistic
+                if (curr === 'PKR' && (r === 1 || !r)) return defaultRates.PKR;
+                if (curr === 'EUR' && (r === 0 || !r)) return defaultRates.EUR; // 0 check for EUR
                 if (r !== undefined && r !== null && r !== 0) return r;
-                // Fallback to default
                 return (defaultRates as any)[curr] || 1;
             };
 

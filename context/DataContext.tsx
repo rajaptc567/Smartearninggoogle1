@@ -60,7 +60,7 @@ const initialState: AppState = {
         exchangeRates: {
             USD: 1,
             EUR: 0.92,
-            PKR: 278.50,
+            PKR: 278.00,
         },
         restrictWithdrawalAmount: false,
         requirePlanMatchForCommission: false,
@@ -182,158 +182,6 @@ const initialState: AppState = {
             {"_id":"99","name":"Adnan H.","country":"Pakistan","currency":"PKR"},
             {"_id":"100","name":"Ella J.","country":"Australia","currency":"USD"}
         ],
-        demoActivityTemplates: [
-            {"_id":"t1","template":"{name} from {country} is now part of the community!","type":"joined","enabled":true},
-            {"_id":"t2","template":"A warm welcome to our newest member, {name}!","type":"joined","enabled":true},
-            {"_id":"t3","template":"Say hello to {name} from {country}!","type":"joined","enabled":true},
-            {"_id":"t4","template":"Welcome aboard, {name}! Great to have you.","type":"joined","enabled":true},
-            {"_id":"t5","template":"The community just got bigger! Welcome, {name}.","type":"joined","enabled":true},
-            {"_id":"t6","template":"{name} just started their journey with us.","type":"joined","enabled":true},
-            {"_id":"t7","template":"Let's give a big shoutout to {name} for joining!","type":"joined","enabled":true},
-            {"_id":"t8","template":"New member alert: {name} from {country} is here.","type":"joined","enabled":true},
-            {"_id":"t9","template":"Another success story begins! Welcome, {name}.","type":"joined","enabled":true},
-            {"_id":"t10","template":"We're thrilled to welcome {name} to the family.","type":"joined","enabled":true},
-            {"_id":"t11","template":"{name} has officially joined the platform.","type":"joined","enabled":true},
-            {"_id":"t12","template":"A new member, {name}, has just registered.","type":"joined","enabled":true},
-            {"_id":"t13","template":"Our network grows stronger with {name} from {country}.","type":"joined","enabled":true},
-            {"_id":"t14","template":"Welcome to the team, {name}! Let's achieve great things.","type":"joined","enabled":true},
-            {"_id":"t15","template":"The latest to join our ranks: {name}.","type":"joined","enabled":true},
-            {"_id":"t16","template":"Excited to have {name} on board!","type":"joined","enabled":true},
-            {"_id":"t17","template":"{name} from {country} is ready to start earning.","type":"joined","enabled":true},
-            {"_id":"t18","template":"A big welcome to {name}! The journey starts now.","type":"joined","enabled":true},
-            {"_id":"t19","template":"New registration: {name} is now a member.","type":"joined","enabled":true},
-            {"_id":"t20","template":"The community is buzzing! Welcome, {name}.","type":"joined","enabled":true},
-            {"_id":"t21","template":"Here's to new beginnings! Welcome, {name}.","type":"joined","enabled":true},
-            {"_id":"t22","template":"{name} from {country} just signed up!","type":"joined","enabled":true},
-            {"_id":"t23","template":"Let's all welcome our new member, {name}.","type":"joined","enabled":true},
-            {"_id":"t24","template":"So glad you're here, {name}!","type":"joined","enabled":true},
-            {"_id":"t25","template":"The SmartEarning family welcomes {name}.","type":"joined","enabled":true},
-            {"_id":"t26","template":"Newest member on the block: {name} from {country}.","type":"joined","enabled":true},
-            {"_id":"t27","template":"It's official! {name} is one of us now.","type":"joined","enabled":true},
-            {"_id":"t28","template":"We're growing! A big welcome to {name}.","type":"joined","enabled":true},
-            {"_id":"t29","template":"{name} just took the first step towards success.","type":"joined","enabled":true},
-            {"_id":"t30","template":"Happy to announce {name} has joined us!","type":"joined","enabled":true},
-            {"_id":"t31","template":"A new investor, {name}, has joined the platform.","type":"joined","enabled":true},
-            {"_id":"t32","template":"The more the merrier! Welcome, {name}.","type":"joined","enabled":true},
-            {"_id":"t33","template":"Say hi to {name} from {country}, our newest member!","type":"joined","enabled":true},
-            {"_id":"t34","template":"Let's go! {name} has joined the community.","type":"joined","enabled":true},
-            {"_id":"t35","template":"Another visionary joins! Welcome {name}.","type":"joined","enabled":true},
-            {"_id":"t36","template":"A new deposit of {amount} was made by {name}.","type":"deposit","enabled":true},
-            {"_id":"t37","template":"{name} from {country} added {amount} to their wallet.","type":"deposit","enabled":true},
-            {"_id":"t38","template":"{name} just funded their account with {amount}.","type":"deposit","enabled":true},
-            {"_id":"t39","template":"Funds incoming! {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t40","template":"Wallet topped up: {name} added {amount}.","type":"deposit","enabled":true},
-            {"_id":"t41","template":"{amount} successfully deposited by {name}.","type":"deposit","enabled":true},
-            {"_id":"t42","template":"{name} is ready to invest after depositing {amount}.","type":"deposit","enabled":true},
-            {"_id":"t43","template":"Account funding successful for {name} ({amount}).","type":"deposit","enabled":true},
-            {"_id":"t44","template":"New activity: {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t45","template":"{name} just made a deposit of {amount}.","type":"deposit","enabled":true},
-            {"_id":"t46","template":"Funds secured! {name} from {country} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t47","template":"{amount} has been added to {name}'s account.","type":"deposit","enabled":true},
-            {"_id":"t48","template":"Investment power-up! {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t49","template":"{name} is all set after a {amount} deposit.","type":"deposit","enabled":true},
-            {"_id":"t50","template":"Deposit alert: {name} added {amount}.","type":"deposit","enabled":true},
-            {"_id":"t51","template":"Transaction approved: {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t52","template":"{name} from {country} just powered up their wallet with {amount}.","type":"deposit","enabled":true},
-            {"_id":"t53","template":"Ready for action! {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t54","template":"Another successful deposit: {amount} from {name}.","type":"deposit","enabled":true},
-            {"_id":"t55","template":"{name}'s wallet is now {amount} richer.","type":"deposit","enabled":true},
-            {"_id":"t56","template":"Funding complete for {name} with {amount}.","type":"deposit","enabled":true},
-            {"_id":"t57","template":"{name} just increased their balance by {amount}.","type":"deposit","enabled":true},
-            {"_id":"t58","template":"Deposit received: {amount} from {name} in {country}.","type":"deposit","enabled":true},
-            {"_id":"t59","template":"Smart move! {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t60","template":"{name} has successfully added {amount} to their balance.","type":"deposit","enabled":true},
-            {"_id":"t61","template":"New funds alert! {name} deposited {amount}.","type":"deposit","enabled":true},
-            {"_id":"t62","template":"Account balance updated for {name} with a {amount} deposit.","type":"deposit","enabled":true},
-            {"_id":"t63","template":"{name} is gearing up with a {amount} deposit.","type":"deposit","enabled":true},
-            {"_id":"t64","template":"The latest deposit: {amount} from {name}.","type":"deposit","enabled":true},
-            {"_id":"t65","template":"Way to go, {name}! {amount} deposited.","type":"deposit","enabled":true},
-            {"_id":"t66","template":"{name} just added {amount} to start investing.","type":"deposit","enabled":true},
-            {"_id":"t67","template":"Funds in! {name} from {country} made a deposit.","type":"deposit","enabled":true},
-            {"_id":"t68","template":"Another member funding their future: {name} with {amount}.","type":"deposit","enabled":true},
-            {"_id":"t69","template":"Deposit confirmed for {name}: {amount}.","type":"deposit","enabled":true},
-            {"_id":"t70","template":"Account loaded! {name} added {amount}.","type":"deposit","enabled":true},
-            {"_id":"t71","template":"{name} just cashed out {amount}!","type":"withdrawal","enabled":true},
-            {"_id":"t72","template":"Successful withdrawal of {amount} for {name}.","type":"withdrawal","enabled":true},
-            {"_id":"t73","template":"{name} from {country} received a payment of {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t74","template":"Payout successful! {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t75","template":"Earnings in the bank! {name} cashed out {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t76","template":"{amount} on its way to {name}. Congrats!","type":"withdrawal","enabled":true},
-            {"_id":"t77","template":"{name} just made a successful withdrawal of {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t78","template":"Another happy member! {name} from {country} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t79","template":"Cash out alert: {amount} for {name}.","type":"withdrawal","enabled":true},
-            {"_id":"t80","template":"Enjoy your earnings, {name}! ({amount})","type":"withdrawal","enabled":true},
-            {"_id":"t81","template":"{name} just received their payment of {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t82","template":"Withdrawal approved for {name}: {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t83","template":"It pays to be with us! {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t84","template":"{name}'s hard work paid off: {amount} withdrawn.","type":"withdrawal","enabled":true},
-            {"_id":"t85","template":"Another successful payout: {amount} to {name} from {country}.","type":"withdrawal","enabled":true},
-            {"_id":"t86","template":"Funds transferred! {name} received {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t87","template":"Profit taking! {name} just withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t88","template":"{name} is enjoying the fruits of their labor with a {amount} withdrawal.","type":"withdrawal","enabled":true},
-            {"_id":"t89","template":"Withdrawal alert: {name} cashed out.","type":"withdrawal","enabled":true},
-            {"_id":"t90","template":"Another member seeing results: {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t91","template":"From wallet to bank: {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t92","template":"Great news! {name} from {country} has been paid {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t93","template":"It's payday for {name}! {amount} withdrawn.","type":"withdrawal","enabled":true},
-            {"_id":"t94","template":"{name}'s withdrawal request of {amount} has been processed.","type":"withdrawal","enabled":true},
-            {"_id":"t95","template":"Real earnings, real results. {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t96","template":"Payout alert for {name} of {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t97","template":"Success! {name} just received their earnings.","type":"withdrawal","enabled":true},
-            {"_id":"t98","template":"{name} from {country} is happy with their {amount} withdrawal.","type":"withdrawal","enabled":true},
-            {"_id":"t99","template":"Funds sent to {name} for {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t100","template":"The latest withdrawal: {amount} by {name}.","type":"withdrawal","enabled":true},
-            {"_id":"t101","template":"Congratulations, {name}, on your successful withdrawal!","type":"withdrawal","enabled":true},
-            {"_id":"t102","template":"{name} just secured their profit of {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t103","template":"Another payout processed: {name} from {country}.","type":"withdrawal","enabled":true},
-            {"_id":"t104","template":"Ka-ching! {name} withdrew {amount}.","type":"withdrawal","enabled":true},
-            {"_id":"t105","template":"Enjoy the rewards, {name}! {amount} cashed out.","type":"withdrawal","enabled":true},
-            {"_id":"t106","template":"{name} just upgraded to the {plan} plan!","type":"plan","enabled":true},
-            {"_id":"t107","template":"Welcome to the {plan} plan, {name}!","type":"plan","enabled":true},
-            {"_id":"t108","template":"{name} from {country} has joined the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t109","template":"Big moves! {name} is now on the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t110","template":"{name} has unlocked new potential with the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t111","template":"Upgraded! {name} is now a {plan} member.","type":"plan","enabled":true},
-            {"_id":"t112","template":"Congratulations, {name}, on upgrading to {plan}!","type":"plan","enabled":true},
-            {"_id":"t113","template":"{name} from {country} just invested in the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t114","template":"New plan purchase: {name} chose the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t115","template":"{name} is leveling up with the {plan} plan!","type":"plan","enabled":true},
-            {"_id":"t116","template":"Smart choice, {name}! Welcome to the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t117","template":"The {plan} plan just got a new member: {name}.","type":"plan","enabled":true},
-            {"_id":"t118","template":"{name} has expanded their portfolio with the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t119","template":"Success journey continues for {name} with the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t120","template":"{name} is now on a higher tier: {plan}.","type":"plan","enabled":true},
-            {"_id":"t121","template":"Plan activation: {plan} for {name} from {country}.","type":"plan","enabled":true},
-            {"_id":"t122","template":"Another member upgrading for success: {name} to {plan}.","type":"plan","enabled":true},
-            {"_id":"t123","template":"{name} just took their investment to the next level with {plan}.","type":"plan","enabled":true},
-            {"_id":"t124","template":"Welcome, {name}, to the exclusive {plan} plan!","type":"plan","enabled":true},
-            {"_id":"t125","template":"{name}'s new plan: {plan}. Great choice!","type":"plan","enabled":true},
-            {"_id":"t126","template":"Plan purchase alert: {name} bought the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t127","template":"Let's congratulate {name} on their new {plan} plan!","type":"plan","enabled":true},
-            {"_id":"t128","template":"{name} from {country} is now enjoying the benefits of the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t129","template":"New {plan} plan member: {name}!","type":"plan","enabled":true},
-            {"_id":"t130","template":"{name} is aiming higher with the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t131","template":"The community welcomes {name} to the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t132","template":"Investment plan purchased: {plan} by {name}.","type":"plan","enabled":true},
-            {"_id":"t133","template":"{name} just joined the ranks of our {plan} members.","type":"plan","enabled":true},
-            {"_id":"t134","template":"A strategic upgrade by {name} to the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t135","template":"Well done, {name}, on choosing the {plan} plan!","type":"plan","enabled":true},
-            {"_id":"t136","template":"New upgrade alert: {name} is now on {plan}.","type":"plan","enabled":true},
-            {"_id":"t137","template":"Another step up! {name} from {country} upgraded.","type":"plan","enabled":true},
-            {"_id":"t138","template":"Congratulations {name} on the {plan} plan purchase!","type":"plan","enabled":true},
-            {"_id":"t139","template":"{name} is now a proud member of the {plan} plan.","type":"plan","enabled":true},
-            {"_id":"t140","template":"Let's go! {name} upgraded their plan.","type":"plan","enabled":true},
-            {"_id":"t141","template":"{name} sent funds to another member.","type":"transfer","enabled":false},
-            {"_id":"t142","template":"Peer-to-peer transfer initiated by {name}.","type":"transfer","enabled":false},
-            {"_id":"t143","template":"{name} just helped out a team member with a transfer.","type":"transfer","enabled":false},
-            {"_id":"t144","template":"Funds transferred between members by {name}.","type":"transfer","enabled":false},
-            {"_id":"t145","template":"{name} from {country} sent a P2P transfer.","type":"transfer","enabled":false},
-            {"_id":"t146","template":"Internal transfer successful for {name}.","type":"transfer","enabled":false},
-            {"_id":"t147","template":"Member-to-member transfer alert from {name}.","type":"transfer","enabled":false},
-            {"_id":"t148","template":"{name} just transferred funds within the network.","type":"transfer","enabled":false},
-            {"_id":"t149","template":"A quick transfer was made by {name}.","type":"transfer","enabled":false},
-            {"_id":"t150","template":"Network support! {name} sent funds to a fellow member.","type":"transfer","enabled":false}
-        ],
         homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
@@ -392,9 +240,27 @@ type Action =
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
+    // Sanitization helper
+    const sanitizeSettings = (settings: Settings) => {
+        const newSettings = { ...settings };
+        // FORCE PKR rate to 278 if it's currently 1 (default/uninitialized state)
+        if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
+            newSettings.exchangeRates.PKR = 278.00;
+        }
+        // Ensure defaults for others if missing
+        if (newSettings.exchangeRates && !newSettings.exchangeRates.EUR) newSettings.exchangeRates.EUR = 0.92;
+        if (newSettings.exchangeRates && !newSettings.exchangeRates.USD) newSettings.exchangeRates.USD = 1;
+        
+        return newSettings;
+    };
+
     switch (action.type) {
         case 'SET_ALL_DATA':
-            return { ...state, ...action.payload };
+            const sanitizedPayload = { ...action.payload };
+            if (sanitizedPayload.settings) {
+                sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
+            }
+            return { ...state, ...sanitizedPayload };
 
         // AUTH
         case 'SET_CURRENT_USER':
@@ -460,8 +326,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TRANSACTION': return { ...state, transactions: [action.payload, ...state.transactions] };
 
         // SETTINGS
-        case 'SET_SETTINGS': return { ...state, settings: action.payload };
-        case 'UPDATE_SETTINGS': return { ...state, settings: action.payload };
+        case 'SET_SETTINGS': return { ...state, settings: sanitizeSettings(action.payload) };
+        case 'UPDATE_SETTINGS': return { ...state, settings: sanitizeSettings(action.payload) };
 
         // LOGS
         case 'SET_LOGS': return { ...state, logs: action.payload };
