@@ -140,15 +140,25 @@ const TransferFunds: React.FC = () => {
     // Cross-currency calculation
     useEffect(() => {
         if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && parseFloat(amount) > 0) {
-            // Force uppercase to ensure key match in settings.exchangeRates
-            const fromCurrency = currentUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
-            const toCurrency = recipientUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
+            // FIX: Removed cast to keyof typeof settings.exchangeRates to avoid TS error: Argument of type 'string | number | symbol' is not assignable to parameter of type 'string'.
+            const fromCurrency = currentUser.currency.toUpperCase();
+            const toCurrency = recipientUser.currency.toUpperCase();
             
-            const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.50 }; // Default fallback if undefined
+            // Standard Defaults
+            const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+            const rates = settings.exchangeRates || {};
             
-            // Safe access using bracket notation with defaults
-            const fromRateToBase = (rates && rates[fromCurrency]) ? rates[fromCurrency] : 1; 
-            const toRateToBase = (rates && rates[toCurrency]) ? rates[toCurrency] : 1;
+            const getRate = (curr: string) => {
+                // Cast to any to allow access by string key
+                const r = (rates as any)[curr];
+                // Check if rate exists and is valid number
+                if (r !== undefined && r !== null && r !== 0) return r;
+                // Fallback to default
+                return (defaultRates as any)[curr] || 1;
+            };
+
+            const fromRateToBase = getRate(fromCurrency);
+            const toRateToBase = getRate(toCurrency);
 
             if (fromRateToBase === 0) {
                 setExchangeRate(0);
@@ -164,7 +174,6 @@ const TransferFunds: React.FC = () => {
             setReceivedAmount(finalAmount);
 
             // Calculate the display rate for 1 unit of the sender's currency.
-            // 1 [FROM] = (1 / fromRateToBase) USD = (1 / fromRateToBase) * toRateToBase [TO]
             const displayRate = toRateToBase / fromRateToBase;
             setExchangeRate(displayRate);
         } else {

@@ -482,8 +482,14 @@ export const purchasePlan = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(planId);
-        const settings = await Setting.getSettings(); // Fetch settings for commission logic
-        const { exchangeRates } = settings;
+        
+        const settingsDoc = await Setting.getSettings(); // Fetch settings for commission logic
+        // Use toObject() if available to ensure it's a plain object for safe access
+        const settings = settingsDoc.toObject ? settingsDoc.toObject() : settingsDoc; 
+        // Force uppercase keys and defaults for backend safety
+        const exchangeRates = settings.exchangeRates || {};
+        const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+
         const allPlans = await InvestmentPlan.find(); // Fetch all plans for equivalency check
 
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
@@ -563,9 +569,15 @@ export const purchasePlan = async (req, res) => {
                 
                 if (fromKey === toKey) return Number(amount.toFixed(2));
                 
-                // Safe access with fallbacks to avoid NaN division
-                const fromRate = (exchangeRates && exchangeRates[fromKey]) ? exchangeRates[fromKey] : 1;
-                const toRate = (exchangeRates && exchangeRates[toKey]) ? exchangeRates[toKey] : 1;
+                // Use robust check for missing keys in DB
+                const getRate = (curr) => {
+                    const r = exchangeRates[curr];
+                    if (r !== undefined && r !== null && r !== 0) return r;
+                    return defaultRates[curr] || 1;
+                };
+
+                const fromRate = getRate(fromKey);
+                const toRate = getRate(toKey);
                 
                 // Prevent division by zero
                 if (fromRate === 0) return 0;
@@ -700,10 +712,9 @@ export const purchasePlan = async (req, res) => {
                     await Notification.create({ userId: uplineUser._id, message: eligibility.message });
                 }
 
-                // Safe access for exchangeRate logging
                 const currentExchangeRate = (exchangeRates && user.currency && exchangeRates[user.currency.toUpperCase()]) 
                     ? exchangeRates[user.currency.toUpperCase()] 
-                    : 1;
+                    : defaultRates[user.currency.toUpperCase()] || 1;
 
                 await Transaction.create({
                     userId: uplineUser._id,

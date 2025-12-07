@@ -17,10 +17,19 @@ const Settings: React.FC = () => {
 
 
   useEffect(() => {
+    // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
+    const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+    // If settings.exchangeRates exists but has 0/missing values, overwrite with defaults for better UX.
+    // This allows the admin to just hit 'Save' to fix broken rates in DB.
+    const mergedRates = { ...defaultRates, ...(settings.exchangeRates || {}) };
+    if (!mergedRates.PKR || mergedRates.PKR === 0) mergedRates.PKR = defaultRates.PKR;
+    if (!mergedRates.EUR || mergedRates.EUR === 0) mergedRates.EUR = defaultRates.EUR;
+    if (!mergedRates.USD || mergedRates.USD === 0) mergedRates.USD = defaultRates.USD;
+
     setLocalSettings(prev => ({
         ...settings,
         transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
-        exchangeRates: settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.50 },
+        exchangeRates: mergedRates,
         homepageVideoUrl: settings.homepageVideoUrl || '',
         homepageContent: settings.homepageContent || { heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '' },
         featuredPlanIds: settings.featuredPlanIds || []

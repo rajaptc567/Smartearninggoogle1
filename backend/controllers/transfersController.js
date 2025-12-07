@@ -122,8 +122,17 @@ export const updateTransfer = async (req, res) => {
         if (status === 'Approved') {
             if (!recipient) return res.status(404).json({success: false, error: "Recipient not found"});
             
-            const settings = await Setting.getSettings();
-            const rates = settings.exchangeRates;
+            const settingsDoc = await Setting.getSettings();
+            const settings = settingsDoc.toObject ? settingsDoc.toObject() : settingsDoc;
+            
+            const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+            const rates = settings.exchangeRates || {};
+
+            const getRate = (curr) => {
+                const r = rates[curr];
+                if (r !== undefined && r !== null && r !== 0) return r;
+                return defaultRates[curr] || 1;
+            };
 
             let receivedAmount = transfer.amount;
             let originalAmountForTx = null;
@@ -131,14 +140,12 @@ export const updateTransfer = async (req, res) => {
 
             // Correct Conversion Logic (USD is base)
             if (sender.currency !== recipient.currency) {
-                // Ensure uppercase keys when accessing rates
                 const fromCurrency = sender.currency.toUpperCase();
                 const toCurrency = recipient.currency.toUpperCase();
 
                 // Step 1: Convert sender's amount to base currency (USD).
-                // The 'rates' object stores how many of a currency equals 1 USD (e.g., rates['PKR'] = 278).
-                const fromRate = rates[fromCurrency] || 1;
-                const toRate = rates[toCurrency] || 1;
+                const fromRate = getRate(fromCurrency);
+                const toRate = getRate(toCurrency);
 
                 const amountInUSD = transfer.amount / fromRate;
                 
