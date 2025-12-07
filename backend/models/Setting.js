@@ -68,7 +68,7 @@ const SettingSchema = new mongoose.Schema({
     exchangeRates: {
         USD: { type: Number, default: 1 },
         EUR: { type: Number, default: 0.92 },
-        PKR: { type: Number, default: 278.50 }
+        PKR: { type: Number, default: 278.00 }
     },
     restrictWithdrawalAmount: {
         type: Boolean,
@@ -411,7 +411,7 @@ const defaultSettingsObject = {
         ],
         allowCrossCurrency: false,
     },
-    exchangeRates: { USD: 1, EUR: 0.92, PKR: 278.50 },
+    exchangeRates: { USD: 1, EUR: 0.92, PKR: 278.00 },
     restrictWithdrawalAmount: false,
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,

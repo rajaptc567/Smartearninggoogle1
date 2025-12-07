@@ -23,9 +23,10 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
-    const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.50 };
+    // UPDATED DEFAULTS: PKR 278, EUR 0.92
+    const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
+    
     // If settings.exchangeRates exists but has 0/missing values, overwrite with defaults for better UX.
-    // This allows the admin to just hit 'Save' to fix broken rates in DB.
     const mergedRates = { ...defaultRates, ...(settings.exchangeRates || {}) };
     if (!mergedRates.PKR || mergedRates.PKR === 0) mergedRates.PKR = defaultRates.PKR;
     if (!mergedRates.EUR || mergedRates.EUR === 0) mergedRates.EUR = defaultRates.EUR;
@@ -176,9 +177,15 @@ const Settings: React.FC = () => {
 
   const calculateConversion = (amount: number, from: Currency, to: Currency, rates: any) => {
       if (from === to) return amount;
-      const rateFrom = rates[from] || 1;
-      const rateTo = rates[to] || 1;
-      // Convert to Base (USD) then to Target
+      
+      // Safety check: ensure rates object exists, defaults to standard if missing
+      const safeRates = rates || { USD: 1, EUR: 0.92, PKR: 278 };
+      
+      const rateFrom = safeRates[from] || 1;
+      const rateTo = safeRates[to] || 1;
+      
+      // Logic: Amount / FromRate (to Base USD) * ToRate (to Target)
+      // Example: 100 USD -> PKR. 100 / 1 * 278 = 27800.
       const inUsd = amount / rateFrom;
       return inUsd * rateTo;
   };
@@ -430,9 +437,9 @@ const Settings: React.FC = () => {
                         <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-700">
                             <h4 className="font-semibold text-gray-700 dark:text-gray-300">Calculated Reference Rates</h4>
                             <div className="text-sm space-y-2 font-mono text-gray-600 dark:text-gray-400">
-                                <p>1 USD = <strong>{(localSettings.exchangeRates?.PKR || 0).toFixed(2)}</strong> PKR</p>
-                                <p>1 EUR = <strong>{((localSettings.exchangeRates?.PKR || 1) / (localSettings.exchangeRates?.EUR || 1)).toFixed(2)}</strong> PKR</p>
-                                <p>1 EUR = <strong>{(1 / (localSettings.exchangeRates?.EUR || 1)).toFixed(4)}</strong> USD</p>
+                                <p>1 USD = <strong>{(localSettings.exchangeRates?.PKR || 278).toFixed(2)}</strong> PKR</p>
+                                <p>1 EUR = <strong>{((localSettings.exchangeRates?.PKR || 278) / (localSettings.exchangeRates?.EUR || 0.92)).toFixed(2)}</strong> PKR</p>
+                                <p>1 EUR = <strong>{(1 / (localSettings.exchangeRates?.EUR || 0.92)).toFixed(4)}</strong> USD</p>
                             </div>
                         </div>
 
