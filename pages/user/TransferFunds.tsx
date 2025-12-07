@@ -46,14 +46,18 @@ const TransferFunds: React.FC = () => {
         };
         
         buildDownline(currentUser.username, 1);
+        
+        const filteredDownline = downline.filter(item => 
+            settings.transferConfig?.allowCrossCurrency || item.user.currency === currentUser.currency
+        );
 
-        downline.sort((a, b) => {
+        filteredDownline.sort((a, b) => {
             if (a.level !== b.level) return a.level - b.level;
             return a.user.fullName.localeCompare(b.user.fullName);
         });
 
-        return downline;
-    }, [currentUser, users]);
+        return filteredDownline;
+    }, [currentUser, users, settings.transferConfig]);
     
     const recipientUser = useMemo(() => {
         if (!recipientIdentifier) return null;
@@ -77,6 +81,8 @@ const TransferFunds: React.FC = () => {
             if (foundUser) {
                 if (foundUser._id === currentUser?._id) {
                      setManualRecipientState({ status: 'invalid', message: 'You cannot transfer funds to yourself.' });
+                } else if (!settings.transferConfig?.allowCrossCurrency && foundUser.currency !== currentUser?.currency) {
+                    setManualRecipientState({ status: 'invalid', message: `Cross-currency transfers are disabled. This user's currency is ${foundUser.currency}.` });
                 } else {
                     setManualRecipientState({ status: 'valid', message: `User Found: ${foundUser.fullName} (@${foundUser.username})` });
                 }
@@ -88,7 +94,7 @@ const TransferFunds: React.FC = () => {
         return () => {
             clearTimeout(handler);
         };
-    }, [recipientIdentifier, isManualEntry, users, currentUser]);
+    }, [recipientIdentifier, isManualEntry, users, currentUser, settings.transferConfig]);
 
     // Fee calculation
     useEffect(() => {
@@ -133,7 +139,7 @@ const TransferFunds: React.FC = () => {
     
     // Cross-currency calculation
     useEffect(() => {
-        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.exchangeRates && parseFloat(amount) > 0) {
+        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && settings.exchangeRates && parseFloat(amount) > 0) {
             const fromCurrency = currentUser.currency;
             const toCurrency = recipientUser.currency;
             const rates = settings.exchangeRates;
@@ -157,7 +163,7 @@ const TransferFunds: React.FC = () => {
             setExchangeRate(null);
             setReceivedAmount(null);
         }
-    }, [amount, currentUser, recipientUser, settings.exchangeRates]);
+    }, [amount, currentUser, recipientUser, settings.exchangeRates, settings.transferConfig]);
     
     const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
@@ -283,7 +289,7 @@ const TransferFunds: React.FC = () => {
                 
                 {showAmountForm && (
                     <div className="space-y-4 mt-4 pt-4 border-t dark:border-gray-700 animate-fade-in">
-                        {recipientUser && recipientUser.currency !== currentUser.currency && (
+                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && (
                             <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
                                 Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
                             </div>
@@ -318,7 +324,7 @@ const TransferFunds: React.FC = () => {
                                         <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span><span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span></div>
                                         <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Processing Fee:</span><span className="font-medium text-red-500">+{formatCurrency(fee, currentUser.currency)}</span></div>
                                         <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold"><span className="text-gray-800 dark:text-gray-200">Total Deducted:</span><span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span></div>
-                                        {recipientUser && recipientUser.currency !== currentUser.currency && exchangeRate !== null && receivedAmount !== null && (
+                                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && exchangeRate !== null && receivedAmount !== null && (
                                             <>
                                                 <div className="flex justify-between pt-2 border-t dark:border-gray-600"><span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span><span className="font-medium text-xs">1 {currentUser.currency} ≈ {exchangeRate.toFixed(4)} {recipientUser.currency}</span></div>
                                                 <div className="flex justify-between font-bold text-lg"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>

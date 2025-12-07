@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
 import Table from '../components/ui/Table';
@@ -919,7 +913,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                         <div>
                             <label className="text-sm font-medium">Select Plans</label>
                             {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
-                            <select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
+                            <select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
                                 {investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}
                             </select>
                         </div>
@@ -1087,7 +1081,7 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                                 </select>
                             </div>
                             {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
-                            {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, option => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
+                            {targetType === 'plan' && <div><label className="text-sm font-medium">Select Plans</label><select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-24"><option value="">All Plans</option>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}</select></div>}
                             {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
                             {targetType === 'inactive' && <div><label className="text-sm font-medium">Random Sample (Optional)</label><input type="number" value={randomCount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRandomCount(e.target.value)} placeholder="e.g., 50" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>}
                              {targetType === 'manual' && (

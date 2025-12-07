@@ -195,13 +195,6 @@ const Settings: React.FC = () => {
         {/* GENERAL TAB */}
         {activeTab === 'general' && (
             <div className="space-y-6 animate-fade-in">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
-                    <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">Platform Configuration</h3>
-                    <p className="text-sm text-blue-600 dark:text-blue-300">
-                        General platform settings will appear here in future updates (e.g., Site Name, Maintenance Mode).
-                    </p>
-                </div>
-                
                 <div>
                     <h4 className="text-md font-bold text-gray-800 dark:text-white mb-4">Feature Toggles</h4>
                     <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
@@ -221,6 +214,33 @@ const Settings: React.FC = () => {
                             <label htmlFor="transferConfig.enabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.enabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
                         </div>
                     </div>
+                     {localSettings.transferConfig?.enabled && (
+                        <div className="pl-8 mt-2 animate-fade-in">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                                <div>
+                                    <label htmlFor="transferConfig.allowCrossCurrency" className="block text-sm font-medium text-gray-900 dark:text-gray-200">Allow Cross-Currency Transfers</label>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">If enabled, users can send funds to members with a different account currency (e.g., USD to PKR). Exchange rates will apply.</p>
+                                </div>
+                                <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                    <input
+                                        id="transferConfig.allowCrossCurrency"
+                                        name="transferConfig.allowCrossCurrency"
+                                        type="checkbox"
+                                        className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                        checked={localSettings.transferConfig?.allowCrossCurrency ?? false}
+                                        onChange={() => {
+                                            setLocalSettings(prev => ({
+                                                ...prev,
+                                                transferConfig: { ...prev.transferConfig, allowCrossCurrency: !prev.transferConfig?.allowCrossCurrency }
+                                            }));
+                                            setIsDirty(true);
+                                        }}
+                                    />
+                                    <label htmlFor="transferConfig.allowCrossCurrency" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.allowCrossCurrency ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         )}
