@@ -206,12 +206,12 @@ const Withdrawals: React.FC = () => {
               >
                   <option value="">All Currencies</option>
                   <option value="PKR">PKR</option>
-                  <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
               </select>
               <input 
                   type="text" 
-                  placeholder="Search by ID, User..." 
+                  placeholder="Search by ID, User, Amount..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="block w-full sm:w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
@@ -219,178 +219,175 @@ const Withdrawals: React.FC = () => {
           </div>
       </div>
       <Table headers={tableHeaders}>
-        {filteredWithdrawals.map((w: Withdrawal) => (
-          <tr 
-            key={w._id} 
-            className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-            onClick={() => handleRowClick(w)}
-          >
-            <td className="px-4 py-3 text-xs font-mono">{w._id.substring(0, 8)}...</td>
-            <td className="px-4 py-3">{w.userName}</td>
-            <td className="px-4 py-3">{formatCurrency(w.amount, w.currency)}</td>
-            <td className="px-4 py-3 font-semibold">{formatCurrency(w.finalAmount, w.currency)}</td>
-            <td className="px-4 py-3">{w.method}</td>
-            <td className="px-4 py-3"><Badge status={w.status} /></td>
-            <td className="px-4 py-3 text-sm">
-                {w.status === Status.Matching || w.matchRemainingAmount !== undefined ? formatCurrency((w.matchRemainingAmount !== undefined ? w.matchRemainingAmount : w.finalAmount), w.currency) : 'N/A'}
-            </td>
-            <td className="px-4 py-3 text-sm">{new Date(w.date).toLocaleDateString()}</td>
-          </tr>
-        ))}
+          {filteredWithdrawals.map((withdrawal: Withdrawal) => (
+              <tr 
+                key={withdrawal._id} 
+                className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
+                onClick={() => handleRowClick(withdrawal)}
+              >
+                  <td className="px-4 py-3 text-xs font-mono">{withdrawal._id.substring(0, 8)}...</td>
+                  <td className="px-4 py-3">{withdrawal.userName}</td>
+                  <td className="px-4 py-3">{formatCurrency(withdrawal.amount, withdrawal.currency)}</td>
+                  <td className="px-4 py-3 font-semibold">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</td>
+                  <td className="px-4 py-3">{withdrawal.method}</td>
+                  <td className="px-4 py-3"><Badge status={withdrawal.status} /></td>
+                  <td className="px-4 py-3 text-sm">
+                      {withdrawal.status === Status.Matching ? (
+                          withdrawal.matchRemainingAmount !== undefined 
+                              ? formatCurrency(withdrawal.matchRemainingAmount, withdrawal.currency) 
+                              : formatCurrency(withdrawal.finalAmount, withdrawal.currency)
+                      ) : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm">{new Date(withdrawal.date).toLocaleDateString()}</td>
+              </tr>
+          ))}
       </Table>
-      
+
       {selectedWithdrawal && (
-        <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
-           <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
-              <h3 className="text-xl font-bold mb-4">Withdrawal Details - <span className="text-blue-600 dark:text-blue-400">{selectedWithdrawal._id}</span></h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                  <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
-                  <div><span className="font-semibold">Amount:</span> {formatCurrency(selectedWithdrawal.amount, selectedWithdrawal.currency)}</div>
-                  <div><span className="font-semibold">Method:</span> {selectedWithdrawal.method}</div>
-                  <div><span className="font-semibold">Date:</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
-              </div>
+           <Modal isOpen={true} onClose={handleCloseModal}>
+              <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
+                  <h3 className="text-xl font-bold mb-4">Withdrawal Details - <span className="text-blue-600 dark:text-blue-400">{selectedWithdrawal._id}</span></h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                      <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
+                      <div><span className="font-semibold">Amount Requested:</span> {formatCurrency(selectedWithdrawal.amount, selectedWithdrawal.currency)}</div>
+                      <div><span className="font-semibold">Fee:</span> {formatCurrency(selectedWithdrawal.fee, selectedWithdrawal.currency)}</div>
+                      <div><span className="font-semibold">Final Amount:</span> {formatCurrency(selectedWithdrawal.finalAmount, selectedWithdrawal.currency)}</div>
+                      <div><span className="font-semibold">Method:</span> {selectedWithdrawal.method}</div>
+                      <div><span className="font-semibold">Date:</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
+                      <div className="md:col-span-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border dark:border-gray-600">
+                          <div className="font-semibold mb-1">Account Details:</div>
+                          <div>Title: {selectedWithdrawal.accountTitle}</div>
+                          <div>Number: {selectedWithdrawal.accountNumber}</div>
+                      </div>
+                  </div>
 
-              <div className="mt-4 border-t pt-4 dark:border-gray-700">
-                <h4 className="font-semibold mb-2">User Payment Details:</h4>
-                <div className="text-sm space-y-1">
-                    <p><span className="font-semibold">Account Title:</span> {selectedWithdrawal.accountTitle}</p>
-                    <p><span className="font-semibold">Account Number:</span> {selectedWithdrawal.accountNumber}</p>
-                </div>
-              </div>
-              
-              {selectedWithdrawal.userNotes && (
-                <div className="mt-4 pt-4 border-t dark:border-gray-700">
-                    <h4 className="font-semibold mb-2">User Notes:</h4>
-                    <p className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border dark:border-gray-600">{selectedWithdrawal.userNotes}</p>
-                </div>
-              )}
+                   {selectedWithdrawal.userNotes && (
+                       <div className="mt-4">
+                          <h4 className="font-semibold mb-2">User Notes:</h4>
+                          <p className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border dark:border-gray-600">{selectedWithdrawal.userNotes}</p>
+                      </div>
+                   )}
 
-              {selectedWithdrawal.matchedDepositIds && selectedWithdrawal.matchedDepositIds.length > 0 && (
-                  <div className="mt-6 pt-4 border-t dark:border-gray-700">
-                      <h4 className="font-semibold mb-3 text-blue-600 dark:text-blue-400">Matched Payments Log (P2P)</h4>
-                      <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
-                          {selectedWithdrawal.matchedDepositIds.map((deposit: Deposit) => (
-                              <div key={deposit._id} className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600">
-                                  <div className="flex justify-between items-start">
-                                      <div>
-                                          <p className="font-bold text-gray-800 dark:text-gray-100">{deposit.userName}</p>
-                                          <p className="text-xl font-bold text-green-600">{formatCurrency(deposit.amount, selectedWithdrawal.currency)}</p>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                          <select
-                                              value={matchedDepositStatus[deposit._id] || deposit.status}
-                                              onChange={(e) => setMatchedDepositStatus(prev => ({ ...prev, [deposit._id]: e.target.value as Deposit['status'] }))}
-                                              className="text-xs rounded-md dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
-                                              disabled={savingDepositId === deposit._id}
-                                          >
-                                              <option value={Status.Pending}>Pending</option>
-                                              <option value={Status.Approved}>Approved</option>
-                                              <option value={Status.Rejected}>Rejected</option>
-                                          </select>
-                                          <Button
-                                              size="sm"
-                                              onClick={() => handleUpdateMatchedDeposit(deposit._id, matchedDepositStatus[deposit._id])}
-                                              disabled={savingDepositId === deposit._id || matchedDepositStatus[deposit._id] === deposit.status}
-                                          >
-                                              {savingDepositId === deposit._id ? '...' : 'Save'}
-                                          </Button>
-                                      </div>
+                   {/* P2P MATCHING SECTION */}
+                   {selectedWithdrawal.status === Status.Matching && (
+                       <div className="mt-6 p-4 border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 rounded-lg">
+                           <h4 className="font-bold text-blue-800 dark:text-blue-200 mb-2">P2P Matching Status</h4>
+                           <div className="flex justify-between items-center mb-4">
+                               <span className="text-sm">Remaining to Match:</span>
+                               <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
+                                   {formatCurrency(selectedWithdrawal.matchRemainingAmount !== undefined ? selectedWithdrawal.matchRemainingAmount : selectedWithdrawal.finalAmount, selectedWithdrawal.currency)}
+                               </span>
+                           </div>
+                           
+                           {selectedWithdrawal.matchedDepositIds && selectedWithdrawal.matchedDepositIds.length > 0 && (
+                               <div className="space-y-2">
+                                   <h5 className="font-semibold text-sm">Matched Deposits:</h5>
+                                   <div className="max-h-60 overflow-y-auto border dark:border-gray-600 rounded bg-white dark:bg-gray-800">
+                                       <table className="w-full text-xs text-left">
+                                           <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                                               <tr>
+                                                   <th className="p-2">Depositor</th>
+                                                   <th className="p-2">Amount</th>
+                                                   <th className="p-2">Tx ID</th>
+                                                   <th className="p-2">Status</th>
+                                                   <th className="p-2">Proof</th>
+                                                   <th className="p-2">Action</th>
+                                               </tr>
+                                           </thead>
+                                           <tbody className="divide-y dark:divide-gray-700">
+                                               {selectedWithdrawal.matchedDepositIds.map((deposit: Deposit) => (
+                                                   <tr key={deposit._id}>
+                                                       <td className="p-2">{deposit.userName}</td>
+                                                       <td className="p-2 font-mono">{formatCurrency(deposit.amount, deposit.currency)}</td>
+                                                       <td className="p-2 font-mono">{deposit.transactionId}</td>
+                                                       <td className="p-2"><Badge status={matchedDepositStatus[deposit._id] || deposit.status} /></td>
+                                                       <td className="p-2">
+                                                           {deposit.receiptUrl ? <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">View</a> : 'N/A'}
+                                                       </td>
+                                                       <td className="p-2">
+                                                           <div className="flex gap-1">
+                                                               <button 
+                                                                   onClick={() => handleUpdateMatchedDeposit(deposit._id, Status.Approved)} 
+                                                                   className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                                                   disabled={savingDepositId === deposit._id || (matchedDepositStatus[deposit._id] || deposit.status) === Status.Approved}
+                                                                   title="Approve Payment"
+                                                               >
+                                                                   ✓
+                                                               </button>
+                                                               <button 
+                                                                   onClick={() => handleUpdateMatchedDeposit(deposit._id, Status.Rejected)} 
+                                                                   className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                                                                   disabled={savingDepositId === deposit._id || (matchedDepositStatus[deposit._id] || deposit.status) === Status.Rejected}
+                                                                   title="Reject Payment"
+                                                               >
+                                                                   ✗
+                                                               </button>
+                                                           </div>
+                                                       </td>
+                                                   </tr>
+                                               ))}
+                                           </tbody>
+                                       </table>
+                                   </div>
+                               </div>
+                           )}
+                       </div>
+                   )}
+
+                   <div className="mt-6 border-t dark:border-gray-700 pt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                              <label htmlFor="status" className="block text-sm font-semibold mb-2">Request Status</label>
+                              <select 
+                                  id="status" 
+                                  value={currentStatus} 
+                                  onChange={(e) => setCurrentStatus(e.target.value as Withdrawal['status'])}
+                                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              >
+                                  <option value={Status.Pending}>Pending</option>
+                                  <option value={Status.Matching}>Matching (P2P)</option>
+                                  <option value={Status.Approved}>Approved (Processing)</option>
+                                  <option value={Status.Paid}>Paid (Complete)</option>
+                                  <option value={Status.Rejected}>Rejected</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label htmlFor="adminNotes" className="block text-sm font-semibold mb-2">Admin Notes</label>
+                              <textarea
+                                  id="adminNotes"
+                                  rows={1}
+                                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  value={adminNotes}
+                                  onChange={(e) => setAdminNotes(e.target.value)}
+                                  placeholder="Internal remarks..."
+                              />
+                          </div>
+                      </div>
+
+                      {currentStatus === Status.Matching && (
+                          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border dark:border-gray-600">
+                              <h5 className="font-semibold text-sm mb-2">P2P Payment Method Settings</h5>
+                              <div className="grid grid-cols-1 gap-3">
+                                  <input type="text" placeholder="Method Name (e.g. P2P - Easypaisa)" value={p2pName} onChange={e => setP2pName(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <input type="text" placeholder="Account Title" value={p2pAccountTitle} onChange={e => setP2pAccountTitle(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
+                                      <input type="text" placeholder="Account Number" value={p2pAccountNumber} onChange={e => setP2pAccountNumber(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
                                   </div>
-
-                                  <div className="mt-3 pt-3 border-t dark:border-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
-                                      <div><strong>Date:</strong> {new Date(deposit.date).toLocaleString()}</div>
-                                      <div><strong>Method:</strong> {deposit.method}</div>
-                                      <div><strong>Sender:</strong> {deposit.senderAccountTitle || 'N/A'}</div>
-                                      <div><strong>Tx ID:</strong> <span className="font-mono">{deposit.transactionId}</span></div>
-                                  </div>
-                                  
-                                  {deposit.userNotes && (
-                                      <div className="mt-2 pt-2 border-t dark:border-gray-600 text-xs">
-                                          <p className="font-semibold text-gray-500">Depositor Notes:</p>
-                                          <p className="italic text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{deposit.userNotes}</p>
-                                      </div>
-                                  )}
-
-                                  {deposit.receiptUrl && (
-                                      <div className="mt-2 text-center">
-                                          <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-sm font-medium">
-                                              View Receipt
-                                          </a>
-                                      </div>
-                                  )}
+                                  <textarea placeholder="Instructions for depositors..." value={p2pInstructions} onChange={e => setP2pInstructions(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" rows={2} />
                               </div>
-                          ))}
-                      </div>
-                      <div className="mt-2 text-right text-sm font-semibold">
-                          Total Matched: <span className="text-green-600">{formatCurrency(selectedWithdrawal.matchedDepositIds.filter(d=>d.status === 'Approved').reduce((sum, d) => sum + d.amount, 0), selectedWithdrawal.currency)}</span>
-                          <span className="mx-2">/</span>
-                          Pending: <span className="text-red-600">{formatCurrency((selectedWithdrawal.matchRemainingAmount ?? selectedWithdrawal.finalAmount), selectedWithdrawal.currency)}</span>
-                      </div>
+                          </div>
+                      )}
                   </div>
-              )}
 
-              <div className="mt-6">
-                  <label htmlFor="status" className="block text-sm font-semibold mb-2">Status</label>
-                  <select 
-                      id="status" 
-                      value={currentStatus} 
-                      onChange={(e) => setCurrentStatus(e.target.value as Withdrawal['status'])}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  >
-                      <option value={Status.Pending}>Pending</option><option value={Status.Matching}>Matching (P2P)</option>
-                      <option value={Status.Approved}>Approved</option><option value={Status.Paid}>Paid</option><option value={Status.Rejected}>Rejected</option>
-                  </select>
-              </div>
-
-              {currentStatus === Status.Matching && (
-                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-                      <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 text-sm">P2P Public Display Details</h4>
-                      <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
-                          This will automatically enable a Deposit Method for other users to match this withdrawal.
-                          Edit these details if you want to hide sensitive info or provide specific instructions.
-                      </p>
-                      <div className="space-y-3">
-                          <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Display Method Name</label>
-                              <input type="text" value={p2pName} onChange={(e) => setP2pName(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Account Title</label>
-                              <input type="text" value={p2pAccountTitle} onChange={(e) => setP2pAccountTitle(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Account Number</label>
-                              <input type="text" value={p2pAccountNumber} onChange={(e) => setP2pAccountNumber(e.target.value)} className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600"/>
-                          </div>
-                          <div>
-                              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">Public Instructions</label>
-                              <textarea value={p2pInstructions} onChange={(e) => setP2pInstructions(e.target.value)} rows={2} placeholder="e.g., Please send screenshot after payment" className="w-full mt-1 text-sm rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                          </div>
-                      </div>
+                  <div className="mt-8 flex justify-end space-x-3">
+                      <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
+                      <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
+                          {isSaving ? 'Saving...' : 'Save Changes'}
+                      </Button>
                   </div>
-              )}
-
-              <div className="mt-6">
-                  <label htmlFor="adminNotes" className="block text-sm font-semibold mb-2">Admin Notes</label>
-                  <textarea
-                      id="adminNotes"
-                      rows={3}
-                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      value={adminNotes}
-                      onChange={(e) => setAdminNotes(e.target.value)}
-                      placeholder="Add remarks for this transaction..."
-                  />
               </div>
-
-              <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                  <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                  <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-              </div>
-          </div>
-        </Modal>
+          </Modal>
       )}
     </div>
   );

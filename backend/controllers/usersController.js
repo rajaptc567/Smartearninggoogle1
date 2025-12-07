@@ -34,12 +34,11 @@ export const createUser = async (req, res, next) => {
 
         // Auto-assign currency based on country
         let currency;
-        if (country.toLowerCase() === 'pakistan') {
-            currency = 'PKR';
-        } else if (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase())) {
+        if (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase())) {
             currency = 'EUR';
         } else {
-            currency = 'USD';
+            // Default to PKR for Pakistan and rest of world
+            currency = 'PKR';
         }
         req.body.currency = currency;
 
@@ -145,14 +144,13 @@ const canReleaseCommission = (commission, user, settings, allPlans) => {
 
         // Find the equivalency group this plan belongs to
         const group = (settings.planEquivalencyGroups || []).find(g => 
-            g.usdPlanId === referralPlanId || 
             g.pkrPlanId === referralPlanId || 
             g.eurPlanId === referralPlanId
         );
 
         let hasEquivalentPlan = false;
         if (group) {
-            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
+            const groupPlanIds = [group.pkrPlanId, group.eurPlanId].filter(Boolean);
             const sponsorActivePlanIds = (user.activePlans || []).map(p => p.planId.toString());
             hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
         } else {
@@ -217,9 +215,8 @@ export const updateUser = async (req, res) => {
 
         let newCurrency = oldCurrency;
         if (req.body.country && req.body.country !== userBeforeUpdate.country) {
-            if (req.body.country.toLowerCase() === 'pakistan') { newCurrency = 'PKR'; } 
-            else if (europeanCountries.map(c => c.toLowerCase()).includes(req.body.country.toLowerCase())) { newCurrency = 'EUR'; } 
-            else { newCurrency = 'USD'; }
+            if (europeanCountries.map(c => c.toLowerCase()).includes(req.body.country.toLowerCase())) { newCurrency = 'EUR'; } 
+            else { newCurrency = 'PKR'; }
         }
 
         // Apply all updates from the request body to the Mongoose document
@@ -605,12 +602,12 @@ export const purchasePlan = async (req, res) => {
                 if (settings.requirePlanMatchForCommission) {
                     const referralPlanId = purchasePlanId.toString();
                     const group = (settings.planEquivalencyGroups || []).find(g => 
-                        g.usdPlanId === referralPlanId || g.pkrPlanId === referralPlanId || g.eurPlanId === referralPlanId
+                        g.pkrPlanId === referralPlanId || g.eurPlanId === referralPlanId
                     );
                     
                     let hasEquivalentPlan = false;
                     if (group) {
-                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
+                        const groupPlanIds = [group.pkrPlanId, group.eurPlanId].filter(Boolean);
                         const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
                         hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
                     } else {
@@ -620,7 +617,7 @@ export const purchasePlan = async (req, res) => {
                     if (!hasEquivalentPlan) {
                         let requiredPlansString = '';
                         if (group) {
-                            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
+                            const groupPlanIds = [group.pkrPlanId, group.eurPlanId].filter(Boolean);
                             const requiredPlans = allPlans.filter(p => groupPlanIds.includes(p._id.toString()));
                             requiredPlansString = requiredPlans.map(p => `${p.name} (${p.currency})`).join(' or ');
                         } else {

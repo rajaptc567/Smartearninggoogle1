@@ -1,18 +1,18 @@
 
-
-export type Currency = 'USD' | 'EUR' | 'PKR';
+export type Currency = 'EUR' | 'PKR' | 'USD';
 
 export const currencySymbols: Record<Currency, string> = {
-    USD: '$',
     EUR: '€',
     PKR: 'Rs',
+    USD: '$',
 };
 
-export const formatCurrency = (amount: number, currency: Currency) => {
+export const formatCurrency = (amount: number, currency: Currency | string) => {
     if (typeof amount !== 'number' || isNaN(amount)) {
         amount = 0;
     }
-    const symbol = currencySymbols[currency] || '$';
+    // Fallback symbol if currency string is not in the strictly typed map (e.g. legacy data)
+    const symbol = (currencySymbols as any)[currency] || (currency === 'USD' ? '$' : '');
 
     if (currency === 'PKR') {
         // Show integers for whole numbers, but 2 decimal places for fractional amounts
@@ -246,7 +246,7 @@ export interface DemoActivityTemplate {
 
 export interface PlanEquivalencyGroup {
     _id: string; // Client-side unique ID for mapping
-    usdPlanId?: string;
+    usdPlanId?: string; // Kept for legacy/data compatibility but not used in UI
     pkrPlanId?: string;
     eurPlanId?: string;
 }
@@ -282,7 +282,7 @@ export interface Settings {
     };
 
     exchangeRates: {
-        USD: number;
+        USD: number; // Kept as base for calculations
         EUR: number;
         PKR: number;
     };

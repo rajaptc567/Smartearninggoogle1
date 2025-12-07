@@ -284,7 +284,6 @@ const Dashboard: React.FC = () => {
                     className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                     <option value="PKR">Stats in PKR</option>
-                    <option value="USD">Stats in USD</option>
                     <option value="EUR">Stats in EUR</option>
                 </select>
             </div>
