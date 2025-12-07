@@ -556,9 +556,22 @@ export const purchasePlan = async (req, res) => {
         // --- COMMISSION DISTRIBUTION LOGIC ---
         if (user.sponsor) {
             const convertCurrency = (amount, from, to) => {
-                if (from === to) return Number(amount.toFixed(2));
-                const amountInUSD = amount / exchangeRates[from];
-                const convertedAmount = amountInUSD * exchangeRates[to];
+                if (!from || !to) return amount;
+                
+                const fromKey = from.toUpperCase();
+                const toKey = to.toUpperCase();
+                
+                if (fromKey === toKey) return Number(amount.toFixed(2));
+                
+                // Safe access with fallbacks to avoid NaN division
+                const fromRate = (exchangeRates && exchangeRates[fromKey]) ? exchangeRates[fromKey] : 1;
+                const toRate = (exchangeRates && exchangeRates[toKey]) ? exchangeRates[toKey] : 1;
+                
+                // Prevent division by zero
+                if (fromRate === 0) return 0;
+
+                const amountInUSD = amount / fromRate;
+                const convertedAmount = amountInUSD * toRate;
                 return Number(convertedAmount.toFixed(2));
             };
             
@@ -687,6 +700,11 @@ export const purchasePlan = async (req, res) => {
                     await Notification.create({ userId: uplineUser._id, message: eligibility.message });
                 }
 
+                // Safe access for exchangeRate logging
+                const currentExchangeRate = (exchangeRates && user.currency && exchangeRates[user.currency.toUpperCase()]) 
+                    ? exchangeRates[user.currency.toUpperCase()] 
+                    : 1;
+
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -700,7 +718,7 @@ export const purchasePlan = async (req, res) => {
                     relatedPlanId: plan._id,
                     originalAmount: commissionInPurchaserCurrency,
                     originalCurrency: user.currency,
-                    exchangeRate: exchangeRates[user.currency]
+                    exchangeRate: currentExchangeRate
                 });
                 
                 currentUplineUsername = uplineUser.sponsor;

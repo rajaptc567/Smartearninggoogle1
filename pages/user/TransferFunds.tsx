@@ -139,17 +139,22 @@ const TransferFunds: React.FC = () => {
     
     // Cross-currency calculation
     useEffect(() => {
-        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && settings.exchangeRates && parseFloat(amount) > 0) {
+        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && parseFloat(amount) > 0) {
             // Force uppercase to ensure key match in settings.exchangeRates
             const fromCurrency = currentUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
             const toCurrency = recipientUser.currency.toUpperCase() as keyof typeof settings.exchangeRates;
             
-            const rates = settings.exchangeRates;
+            const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.50 }; // Default fallback if undefined
             
-            // rates['PKR'] = 278.5 means 1 USD = 278.5 PKR.
-            // Using explicit type casting and uppercase keys ensures we don't get undefined and fall back to 1 erroneously.
-            const fromRateToBase = rates[fromCurrency] || 1; 
-            const toRateToBase = rates[toCurrency] || 1;
+            // Safe access using bracket notation with defaults
+            const fromRateToBase = (rates && rates[fromCurrency]) ? rates[fromCurrency] : 1; 
+            const toRateToBase = (rates && rates[toCurrency]) ? rates[toCurrency] : 1;
+
+            if (fromRateToBase === 0) {
+                setExchangeRate(0);
+                setReceivedAmount(0);
+                return;
+            }
 
             // Step 1: Convert amount from sender's currency to base currency (USD).
             const amountInUsd = parseFloat(amount) / fromRateToBase;
