@@ -473,7 +473,7 @@ const Settings: React.FC = () => {
                                 <div>
                                     <label className="block text-xs font-medium uppercase text-gray-500 mb-1">To</label>
                                     <select value={simTo} onChange={e => setSimTo(e.target.value as Currency)} className="w-full rounded-md text-sm py-1.5 dark:bg-gray-700 dark:border-gray-600 border-gray-300">
-                                        <option value="USD">USD</option><option value="EUR">EUR</option><option value="PKR">PKR</option>
+                                        <option value="PKR">PKR</option><option value="USD">USD</option><option value="EUR">EUR</option>
                                     </select>
                                 </div>
                             </div>

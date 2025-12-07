@@ -23,7 +23,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: String,
         enum: ['USD', 'EUR', 'PKR'],
         required: true,
-        default: 'USD',
+        default: 'PKR',
     },
     price: {
         type: Number,

@@ -1,5 +1,4 @@
 
-
 import mongoose from 'mongoose';
 
 const PaymentMethodSchema = new mongoose.Schema({
@@ -12,7 +11,7 @@ const PaymentMethodSchema = new mongoose.Schema({
         type: String,
         enum: ['USD', 'EUR', 'PKR'],
         required: true,
-        default: 'USD',
+        default: 'PKR',
     },
     type: {
         type: String,

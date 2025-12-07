@@ -21,7 +21,7 @@ const PaymentMethods: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
-    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
     const [typeFilter, setTypeFilter] = useState<'Deposit' | 'Withdrawal' | ''>('');
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -95,9 +95,9 @@ const PaymentMethods: React.FC = () => {
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Currencies</option>
+                        <option value="PKR">PKR</option>
                         <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
-                        <option value="PKR">PKR</option>
                     </select>
                      <select
                         value={typeFilter}
@@ -157,7 +157,7 @@ interface PaymentMethodFormModalProps {
 
 const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave }) => {
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
-        method || { name: '', currency: 'USD', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
+        method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
     const [isSaving, setIsSaving] = useState(false);
 
@@ -182,14 +182,14 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                     <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <select
                         name="currency"
-                        value={formData.currency || 'USD'}
+                        value={formData.currency || 'PKR'}
                         onChange={handleChange}
                         className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
                         required
                     >
+                        <option value="PKR">PKR (Rs)</option>
                         <option value="USD">USD ($)</option>
                         <option value="EUR">EUR (€)</option>
-                        <option value="PKR">PKR (Rs)</option>
                     </select>
                     <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                         <option value="Deposit">Deposit</option>

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
 import Table from '../components/ui/Table';
@@ -31,7 +32,7 @@ const Users: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [planFilter, setPlanFilter] = useState('');
-    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
 
     // Selection State
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -212,9 +213,9 @@ const Users: React.FC = () => {
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Currencies</option>
+                        <option value="PKR">PKR</option>
                         <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
-                        <option value="PKR">PKR</option>
                     </select>
 
                     {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
@@ -544,7 +545,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             {user && (
                             <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-600">
                                 <h3 className="font-semibold">Wallet Management</h3>
-                                <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'USD')}</p>
+                                <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'PKR')}</p>
                                 <div>
                                     <label className="text-xs">Adjustment Amount</label>
                                     {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}

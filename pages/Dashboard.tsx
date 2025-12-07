@@ -1,5 +1,4 @@
 
-
 import React, { useMemo, useState } from 'react';
 import { Deposit, Status, User, Withdrawal, Transaction, Transfer, Currency, formatCurrency } from '../types';
 import Badge from '../components/ui/Badge';
@@ -13,7 +12,7 @@ const Dashboard: React.FC = () => {
     const navigate = useNavigate();
 
     const [timeframe, setTimeframe] = useState<'7d' | '30d'>('7d');
-    const [currencyFilter, setCurrencyFilter] = useState<Currency>('USD');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency>('PKR');
 
     // --- Statistics Calculation ---
     const stats = useMemo(() => {
@@ -284,9 +283,9 @@ const Dashboard: React.FC = () => {
                     onChange={(e) => setCurrencyFilter(e.target.value as Currency)}
                     className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
+                    <option value="PKR">Stats in PKR</option>
                     <option value="USD">Stats in USD</option>
                     <option value="EUR">Stats in EUR</option>
-                    <option value="PKR">Stats in PKR</option>
                 </select>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">

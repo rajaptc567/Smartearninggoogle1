@@ -13,7 +13,7 @@ const InvestmentPlans: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
-    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
 
     const handleOpenModal = (plan: InvestmentPlan | null = null) => {
         setEditingPlan(plan);
@@ -94,9 +94,9 @@ const InvestmentPlans: React.FC = () => {
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Currencies</option>
+                        <option value="PKR">PKR</option>
                         <option value="USD">USD</option>
                         <option value="EUR">EUR</option>
-                        <option value="PKR">PKR</option>
                     </select>
                 </div>
                 <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
@@ -151,7 +151,7 @@ interface PlanFormModalProps {
 const defaultCommission: Commission = { type: 'percentage', value: 0 };
 const defaultPlan: Partial<InvestmentPlan> = {
     name: '',
-    currency: 'USD',
+    currency: 'PKR',
     price: 0,
     durationDays: 30,
     minWithdraw: 10,
@@ -342,14 +342,14 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
                             <select
                                 name="currency"
-                                value={formData.currency || 'USD'}
+                                value={formData.currency || 'PKR'}
                                 onChange={handleChange}
                                 className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
                                 required
                             >
+                                <option value="PKR">PKR (Rs)</option>
                                 <option value="USD">USD ($)</option>
                                 <option value="EUR">EUR (€)</option>
-                                <option value="PKR">PKR (Rs)</option>
                             </select>
                         </div>
                         <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} placeholder="Price" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
@@ -386,7 +386,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                             comm.type === 'percentage'
                                                 ? ((formData.price || 0) * comm.value) / 100
                                                 : comm.value,
-                                            formData.currency || 'USD'
+                                            formData.currency || 'PKR'
                                         )}
                                     </span>
                                 </div>
@@ -411,7 +411,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                     comm.type === 'percentage'
                                         ? ((formData.price || 0) * comm.value) / 100
                                         : comm.value,
-                                    formData.currency || 'USD'
+                                    formData.currency || 'PKR'
                                 )}
                                 </span>
                                 <div className="col-span-1 text-right">

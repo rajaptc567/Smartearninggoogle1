@@ -14,11 +14,11 @@ const Rules: React.FC = () => {
     const [fromPlan, setFromPlan] = useState('');
     const [toPlan, setToPlan] = useState('');
     const [requiredEarnings, setRequiredEarnings] = useState('');
-    const [formCurrency, setFormCurrency] = useState<Currency>('USD');
+    const [formCurrency, setFormCurrency] = useState<Currency>('PKR');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Filter state for the table
-    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+    const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
 
     // Plans available in the form dropdowns, based on the form's currency selector
     const activePlansForForm = investmentPlans.filter(p => p.status === 'Active' && p.currency === formCurrency);
@@ -77,9 +77,9 @@ const Rules: React.FC = () => {
                         <div>
                             <label htmlFor="currency" className="block text-sm font-medium">Currency</label>
                             <select id="currency" value={formCurrency} onChange={e => setFormCurrency(e.target.value as Currency)} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                <option value="PKR">PKR</option>
                                 <option value="USD">USD</option>
                                 <option value="EUR">EUR</option>
-                                <option value="PKR">PKR</option>
                             </select>
                         </div>
                         <div>
@@ -114,9 +114,9 @@ const Rules: React.FC = () => {
                             className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         >
                             <option value="">All Currencies</option>
+                            <option value="PKR">PKR</option>
                             <option value="USD">USD</option>
                             <option value="EUR">EUR</option>
-                            <option value="PKR">PKR</option>
                         </select>
                     </div>
                      <div className="mt-4">

@@ -86,17 +86,18 @@ const UserSchema = new mongoose.Schema({
 UserSchema.pre('save', async function(next) {
     // Data Migration for country if it's missing (for very old docs)
     if (!this.country) {
-        this.country = 'United States'; // Assign a sensible default
+        this.country = 'Pakistan'; // Assign a sensible default to Pakistan
     }
 
     // Auto-update currency IF country is modified OR if currency is missing.
     if (this.isModified('country') || !this.currency) {
-        if (this.country.toLowerCase() === 'pakistan') {
-            this.currency = 'PKR';
+        if (this.country.toLowerCase() === 'united states') {
+            this.currency = 'USD';
         } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
             this.currency = 'EUR';
         } else {
-            this.currency = 'USD';
+            // Default to PKR for Pakistan and rest of world
+            this.currency = 'PKR';
         }
     }
     

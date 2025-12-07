@@ -28,7 +28,7 @@ const Withdrawals: React.FC = () => {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('');
+  const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
 
   // Matched Deposit status editing state
   const [matchedDepositStatus, setMatchedDepositStatus] = useState<Record<string, Deposit['status']>>({});
@@ -205,9 +205,9 @@ const Withdrawals: React.FC = () => {
                   className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
               >
                   <option value="">All Currencies</option>
+                  <option value="PKR">PKR</option>
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
-                  <option value="PKR">PKR</option>
               </select>
               <input 
                   type="text" 
