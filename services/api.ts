@@ -1,4 +1,5 @@
 
+// ... (imports remain same)
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Status } from '../types';
 import { 
     mockUsers, mockDeposits, mockWithdrawals, mockTransactions, mockNotifications, 
@@ -85,7 +86,7 @@ export const getUsers = async (): Promise<User[]> => {
 export const createUser = async (userData: Partial<User>): Promise<User> => {
     await delay(300);
     const newUser: User = {
-        _id: `u${Date.now()}`,
+        _id: `u${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         activePlans: [],
         activePlan: 'None',
         walletBalance: 0,
@@ -165,18 +166,22 @@ export const adjustUserWallet = async (id: string, data: { amount: number; descr
     const index = users.findIndex(u => u._id === id);
     if (index === -1) throw new Error('User not found');
 
+    const amount = Number(data.amount); // Ensure strict number conversion
+    if (isNaN(amount)) throw new Error('Invalid amount');
+
     const user = users[index];
-    const newBalance = user.walletBalance + data.amount;
+    const newBalance = user.walletBalance + amount;
+    
     users[index] = { ...user, walletBalance: newBalance };
     saveData(STORAGE_KEYS.USERS, users);
 
     const tx: Transaction = {
-        _id: `tx${Date.now()}`,
+        _id: `tx${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Added random suffix to prevent ID collision
         userId: user._id,
         userName: user.username,
         currency: user.currency,
-        type: data.amount > 0 ? 'Manual Credit' : 'Manual Debit',
-        amount: data.amount,
+        type: amount > 0 ? 'Manual Credit' : 'Manual Debit',
+        amount: amount,
         description: data.description,
         status: 'Approved',
         date: new Date().toISOString()
@@ -187,6 +192,7 @@ export const adjustUserWallet = async (id: string, data: { amount: number; descr
     return { user: users[index], transaction: tx };
 };
 
+// ... (rest of the file remains unchanged, omitted for brevity but presumed to follow standard implementations)
 export const purchasePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
     await delay(500);
     const userIndex = users.findIndex(u => u._id === userId);
@@ -237,7 +243,7 @@ export const createDeposit = async (formData: FormData): Promise<{deposit: Depos
     if (!user) throw new Error('User not found');
 
     const newDeposit: Deposit = {
-        _id: `d${Date.now()}`,
+        _id: `d${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         userId,
         userName: user.username,
         amount,
@@ -253,7 +259,7 @@ export const createDeposit = async (formData: FormData): Promise<{deposit: Depos
     saveData(STORAGE_KEYS.DEPOSITS, deposits);
 
     const tx: Transaction = {
-        _id: `tx${Date.now()}`,
+        _id: `tx${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         userId,
         userName: user.username,
         currency: user.currency,
@@ -311,7 +317,7 @@ export const createWithdrawal = async (data: Partial<Withdrawal>): Promise<any> 
     saveData(STORAGE_KEYS.USERS, users);
 
     const newWithdrawal: Withdrawal = {
-        _id: `w${Date.now()}`,
+        _id: `w${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         ...data as any,
         status: Status.Pending,
         date: new Date().toISOString()
@@ -320,7 +326,7 @@ export const createWithdrawal = async (data: Partial<Withdrawal>): Promise<any> 
     saveData(STORAGE_KEYS.WITHDRAWALS, withdrawals);
 
     const tx: Transaction = {
-        _id: `tx${Date.now()}`,
+        _id: `tx${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         userId: user._id,
         userName: user.username,
         currency: user.currency,
@@ -492,7 +498,7 @@ export const createTransfer = async (data: any) => {
     const newItem = { 
         ...data, 
         currency: sender.currency, // Ensure source currency is saved
-        _id: `tr${Date.now()}`, 
+        _id: `tr${Date.now()}-${Math.floor(Math.random() * 1000)}`, // Random suffix
         status: 'Pending', 
         fee, 
         totalDeducted: total, 

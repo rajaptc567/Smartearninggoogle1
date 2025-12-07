@@ -58,17 +58,15 @@ const Wallet: React.FC = () => {
         const value = e.target.value;
         setIdentifier(value);
         setIsDropdownOpen(true);
-        // If user clears the input, clear the selected user and their currency
-        if (value === '') {
-            setSelectedUser(null);
-        }
+        // CRITICAL FIX: Clear the selected user immediately when typing to prevent "stuck" selection
+        setSelectedUser(null);
     };
 
     const handleAdjustment = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         
-        // Use the selectedUser if available, otherwise find by identifier
+        // Use the selectedUser if explicitly clicked, otherwise try to find an exact match by the typed identifier
         const targetUser = selectedUser || users.find(u => 
             u._id.toString() === identifier ||
             u.username.toLowerCase() === identifier.toLowerCase() ||
@@ -77,7 +75,7 @@ const Wallet: React.FC = () => {
         );
 
         if (!targetUser) {
-            alert('User not found. Please select a user from the list.');
+            alert('User not found. Please select a user from the dropdown list to ensure accuracy.');
             setIsSubmitting(false);
             return;
         }
@@ -216,7 +214,7 @@ const Wallet: React.FC = () => {
                 <Table headers={tableHeaders}>
                     {sortedTransactions.map((tx: Transaction) => (
                         <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm font-mono text-xs">{tx._id.substring(0, 8)}...</td>
+                            <td className="px-4 py-3 text-sm font-mono text-xs">{tx._id.substring(0, 16)}...</td>
                             <td className="px-4 py-3 text-sm">{tx.userName}</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>

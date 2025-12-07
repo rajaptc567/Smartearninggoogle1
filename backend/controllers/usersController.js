@@ -440,10 +440,16 @@ export const deleteUser = async (req, res) => {
 // @desc    Admin manually adjusts user wallet
 // @route   POST /api/v1/users/:id/adjust-wallet
 export const adjustWallet = async (req, res) => {
-    const { amount, description } = req.body;
+    let { amount, description } = req.body;
+    amount = Number(amount); // STRICT CONVERSION to prevent string concatenation
+    
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        if (isNaN(amount)) {
+             return res.status(400).json({ success: false, error: 'Invalid amount provided.' });
+        }
 
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         const updatedUser = await user.save(); // Capture the saved document which includes hook modifications
