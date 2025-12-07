@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan } from '../types';
+import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency } from '../types';
 import { updateSettings } from '../services/api';
 
 const Settings: React.FC = () => {
@@ -14,6 +14,11 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
+
+  // Rate Simulator State
+  const [simAmount, setSimAmount] = useState<number>(100);
+  const [simFrom, setSimFrom] = useState<Currency>('USD');
+  const [simTo, setSimTo] = useState<Currency>('PKR');
 
 
   useEffect(() => {
@@ -169,6 +174,15 @@ const Settings: React.FC = () => {
       }
   };
 
+  const calculateConversion = (amount: number, from: Currency, to: Currency, rates: any) => {
+      if (from === to) return amount;
+      const rateFrom = rates[from] || 1;
+      const rateTo = rates[to] || 1;
+      // Convert to Base (USD) then to Target
+      const inUsd = amount / rateFrom;
+      return inUsd * rateTo;
+  };
+
   const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon?: React.ReactNode }) => (
       <button
           type="button"
@@ -196,7 +210,7 @@ const Settings: React.FC = () => {
           <TabButton id="transfers" label="Transfers & Fees" />
           <TabButton id="withdrawals" label="Withdrawals" />
           <TabButton id="commissions" label="Commissions" />
-          <TabButton id="exchange_rates" label="Exchange Rates (USD Base)" />
+          <TabButton id="exchange_rates" label="Exchange Rates" />
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 min-h-[400px]">
@@ -361,25 +375,27 @@ const Settings: React.FC = () => {
         {/* EXCHANGE RATES TAB */}
         {activeTab === 'exchange_rates' && (
             <div className="space-y-6 animate-fade-in">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Currency Exchange Rates</h3>
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md text-sm text-green-800 dark:text-green-200 mb-4">
-                    Define how other currencies convert to the base currency (USD). This is crucial for calculating cross-currency commissions.
+                <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Currency Exchange Rates</h3>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md text-sm text-green-800 dark:text-green-200 mb-4 border border-green-200 dark:border-green-800">
+                    <span className="font-bold">Info:</span> Define how other currencies convert to the base currency (USD). These rates are used for cross-currency transfers, commission calculations, and plan equivalencies.
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">
-                        <h4 className="font-semibold">Rates relative to USD</h4>
+                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Rates relative to USD (Base)</h4>
                         <div>
                             <label htmlFor="rate-usd" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Base Currency (USD)</label>
                             <div className="mt-1 flex items-center gap-2">
-                                <span className="font-bold text-lg">1 USD =</span>
-                                <input id="rate-usd" type="number" value="1" disabled className="w-full rounded-md bg-gray-100 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
-                                <span className="font-bold">USD</span>
+                                <span className="font-bold text-lg text-gray-500">1 USD =</span>
+                                <input id="rate-usd" type="number" value="1" disabled className="w-full rounded-md bg-gray-100 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 cursor-not-allowed font-mono" />
+                                <span className="font-bold text-gray-700 dark:text-gray-300 w-12">USD</span>
                             </div>
                         </div>
                         <div>
                             <label htmlFor="rate-eur" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Euro Rate</label>
                             <div className="mt-1 flex items-center gap-2">
-                                <span className="font-bold text-lg">1 USD =</span>
+                                <span className="font-bold text-lg text-gray-500">1 USD =</span>
                                 <input 
                                     id="rate-eur"
                                     name="exchangeRates.EUR"
@@ -387,15 +403,15 @@ const Settings: React.FC = () => {
                                     step="0.0001"
                                     value={localSettings.exchangeRates?.EUR || ''} 
                                     onChange={handleExchangeRateChange} 
-                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 font-mono"
                                 />
-                                <span className="font-bold">EUR</span>
+                                <span className="font-bold text-gray-700 dark:text-gray-300 w-12">EUR</span>
                             </div>
                         </div>
                         <div>
                             <label htmlFor="rate-pkr" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pakistani Rupee Rate</label>
                             <div className="mt-1 flex items-center gap-2">
-                                <span className="font-bold text-lg">1 USD =</span>
+                                <span className="font-bold text-lg text-gray-500">1 USD =</span>
                                 <input 
                                     id="rate-pkr"
                                     name="exchangeRates.PKR"
@@ -403,17 +419,56 @@ const Settings: React.FC = () => {
                                     step="0.01"
                                     value={localSettings.exchangeRates?.PKR || ''} 
                                     onChange={handleExchangeRateChange} 
-                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 font-mono"
                                 />
-                                <span className="font-bold">PKR</span>
+                                <span className="font-bold text-gray-700 dark:text-gray-300 w-12">PKR</span>
                             </div>
                         </div>
                     </div>
-                    <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-700">
-                        <h4 className="font-semibold">Calculated Rates (for reference)</h4>
-                        <div className="text-sm space-y-2">
-                            <p>1 USD = <strong>{(localSettings.exchangeRates?.PKR || 0).toFixed(2)}</strong> PKR</p>
-                            <p>1 EUR = <strong>{((localSettings.exchangeRates?.PKR || 1) / (localSettings.exchangeRates?.EUR || 1)).toFixed(2)}</strong> PKR</p>
+                    
+                    <div className="space-y-6">
+                        <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-700">
+                            <h4 className="font-semibold text-gray-700 dark:text-gray-300">Calculated Reference Rates</h4>
+                            <div className="text-sm space-y-2 font-mono text-gray-600 dark:text-gray-400">
+                                <p>1 USD = <strong>{(localSettings.exchangeRates?.PKR || 0).toFixed(2)}</strong> PKR</p>
+                                <p>1 EUR = <strong>{((localSettings.exchangeRates?.PKR || 1) / (localSettings.exchangeRates?.EUR || 1)).toFixed(2)}</strong> PKR</p>
+                                <p>1 EUR = <strong>{(1 / (localSettings.exchangeRates?.EUR || 1)).toFixed(4)}</strong> USD</p>
+                            </div>
+                        </div>
+
+                        {/* Rate Simulator */}
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h4 className="font-bold text-blue-800 dark:text-blue-200 mb-3 flex items-center">
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                                Rate Simulator
+                            </h4>
+                            <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
+                                Test your current (unsaved) rates to ensure conversions work as intended.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <label className="block text-xs font-medium uppercase text-gray-500 mb-1">Amount</label>
+                                    <input type="number" value={simAmount} onChange={e => setSimAmount(parseFloat(e.target.value) || 0)} className="w-full rounded-md text-sm py-1.5 dark:bg-gray-700 dark:border-gray-600 border-gray-300"/>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium uppercase text-gray-500 mb-1">From</label>
+                                    <select value={simFrom} onChange={e => setSimFrom(e.target.value as Currency)} className="w-full rounded-md text-sm py-1.5 dark:bg-gray-700 dark:border-gray-600 border-gray-300">
+                                        <option value="USD">USD</option><option value="EUR">EUR</option><option value="PKR">PKR</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium uppercase text-gray-500 mb-1">To</label>
+                                    <select value={simTo} onChange={e => setSimTo(e.target.value as Currency)} className="w-full rounded-md text-sm py-1.5 dark:bg-gray-700 dark:border-gray-600 border-gray-300">
+                                        <option value="USD">USD</option><option value="EUR">EUR</option><option value="PKR">PKR</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-center shadow-sm">
+                                <span className="text-gray-500 text-xs uppercase tracking-wide">Result:</span>
+                                <span className="text-xl font-bold ml-2 text-green-600 dark:text-green-400">
+                                    {formatCurrency(calculateConversion(simAmount, simFrom, simTo, localSettings.exchangeRates), simTo)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>

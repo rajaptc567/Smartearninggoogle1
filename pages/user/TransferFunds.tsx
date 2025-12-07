@@ -140,7 +140,6 @@ const TransferFunds: React.FC = () => {
     // Cross-currency calculation
     useEffect(() => {
         if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && parseFloat(amount) > 0) {
-            // FIX: Removed cast to keyof typeof settings.exchangeRates to avoid TS error: Argument of type 'string | number | symbol' is not assignable to parameter of type 'string'.
             const fromCurrency = currentUser.currency.toUpperCase();
             const toCurrency = recipientUser.currency.toUpperCase();
             
@@ -343,8 +342,11 @@ const TransferFunds: React.FC = () => {
                                         <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold"><span className="text-gray-800 dark:text-gray-200">Total Deducted:</span><span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span></div>
                                         {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && exchangeRate !== null && receivedAmount !== null && (
                                             <>
-                                                <div className="flex justify-between pt-2 border-t dark:border-gray-600"><span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span><span className="font-medium text-xs">1 {currentUser.currency} ≈ {exchangeRate.toFixed(4)} {recipientUser.currency}</span></div>
-                                                <div className="flex justify-between font-bold text-lg"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>
+                                                <div className="flex justify-between pt-2 border-t dark:border-gray-600 text-xs">
+                                                    <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
+                                                    <span className="font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 rounded">1 {currentUser.currency} = {exchangeRate.toFixed(4)} {recipientUser.currency}</span>
+                                                </div>
+                                                <div className="flex justify-between font-bold text-lg mt-1"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>
                                             </>
                                         )}
                                     </div>
