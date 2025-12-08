@@ -50,7 +50,7 @@ const Settings: React.FC = () => {
     const { name, value } = e.target;
     if (name.startsWith('homepageContent.')) {
         const field = name.split('.')[1];
-        setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value }}));
+        setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
     } else {
         setLocalSettings(prev => ({...prev, [name]: value }));
     }
@@ -301,6 +301,7 @@ const Settings: React.FC = () => {
         {/* HOMEPAGE TAB */}
         {activeTab === 'homepage' && (
             <div className="space-y-6 animate-fade-in">
+               {/* Featured Plans */}
                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Featured Investment Plans</h4>
                     <p className="text-xs text-gray-500">Select plans to display on the homepage. The current design shows a maximum of 3.</p>
@@ -333,17 +334,95 @@ const Settings: React.FC = () => {
                         })}
                     </div>
                 </div>
-                {/* ... Rest of Homepage Content ... */}
+
+                {/* Hero Section */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
-                     <h4 className="font-semibold text-gray-800 dark:text-white">Text Content</h4>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Hero Section</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="text-sm font-medium">Hero Title</label>
-                            <textarea name="homepageContent.heroTitle" value={localSettings.homepageContent?.heroTitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700"/>
+                            <input name="homepageContent.heroTitle" value={localSettings.homepageContent?.heroTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
-                         {/* ... other homepage inputs ... */}
+                        <div>
+                            <label className="text-sm font-medium">Hero Subtitle</label>
+                            <textarea name="homepageContent.heroSubtitle" value={localSettings.homepageContent?.heroSubtitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
                     </div>
-                 </div>
+                </div>
+
+                {/* Video Section */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Video Showcase</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="text-sm font-medium">Video Embed URL</label>
+                            <input name="homepageVideoUrl" value={localSettings.homepageVideoUrl || ''} onChange={handleTextChange} placeholder="https://www.youtube.com/embed/..." className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Video Title</label>
+                            <input name="homepageContent.videoTitle" value={localSettings.homepageContent?.videoTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Video Description</label>
+                            <textarea name="homepageContent.videoDesc" value={localSettings.homepageContent?.videoDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Features Section */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Features</h4>
+                    {[1, 2, 3].map(num => (
+                        <div key={num} className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b dark:border-gray-600 pb-4 last:border-0 last:pb-0">
+                            <div>
+                                <label className="text-sm font-medium">Feature {num} Title</label>
+                                <input name={`homepageContent.feature${num}Title`} value={(localSettings.homepageContent as any)?.[`feature${num}Title`] || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Feature {num} Description</label>
+                                <textarea name={`homepageContent.feature${num}Desc`} value={(localSettings.homepageContent as any)?.[`feature${num}Desc`] || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Info Sections (Multi-Currency, MLM, CTA) */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Content Sections</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b dark:border-gray-600 pb-4">
+                        <div>
+                            <label className="text-sm font-medium">Multi-Currency Title</label>
+                            <input name="homepageContent.multiCurrencyTitle" value={localSettings.homepageContent?.multiCurrencyTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Multi-Currency Description</label>
+                            <textarea name="homepageContent.multiCurrencyDesc" value={localSettings.homepageContent?.multiCurrencyDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b dark:border-gray-600 pb-4">
+                        <div>
+                            <label className="text-sm font-medium">MLM Section Title</label>
+                            <input name="homepageContent.mlmTitle" value={localSettings.homepageContent?.mlmTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">MLM Section Description</label>
+                            <textarea name="homepageContent.mlmDesc" value={localSettings.homepageContent?.mlmDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium">CTA Title</label>
+                            <input name="homepageContent.ctaTitle" value={localSettings.homepageContent?.ctaTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">CTA Description</label>
+                            <textarea name="homepageContent.ctaDesc" value={localSettings.homepageContent?.ctaDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+                </div>
             </div>
         )}
         

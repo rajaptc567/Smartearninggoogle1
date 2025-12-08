@@ -25,31 +25,57 @@ export interface Activity {
 interface ActivityTickerProps {
   activities: Activity[];
   speed: number;
+  pauseOnHover?: boolean;
+  style?: {
+      backgroundColor?: string;
+      textColor?: string;
+      accentColor?: string;
+  };
 }
 
-const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities, speed = 6 }) => {
+const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities, speed = 6, pauseOnHover = false, style }) => {
     if (!activities || activities.length === 0) {
         return null;
     }
 
-    // Duplicate the activities to create a seamless loop, ensuring there's enough content to scroll
+    // Duplicate the activities to create a seamless loop
     const extendedActivities = activities.length > 20 ? [...activities] : [...activities, ...activities, ...activities];
     const duration = extendedActivities.length * speed;
 
+    const customBg = style?.backgroundColor ? { backgroundColor: style.backgroundColor } : {};
+    const customText = style?.textColor ? { color: style.textColor } : {};
+    
+    // We inject a style tag for accent color override if provided, 
+    // targeting strong tags inside the ticker
+    const accentStyle = style?.accentColor ? `
+        .ticker-item strong { color: ${style.accentColor} !important; }
+    ` : '';
+
     return (
-        <div className="relative w-full h-10 bg-white dark:bg-gray-800 border-b dark:border-gray-700 overflow-hidden shadow-inner">
-            <div className="absolute inset-0 flex items-center animate-marquee whitespace-nowrap">
+        <div 
+            className={`relative w-full h-10 border-b dark:border-gray-700 overflow-hidden shadow-inner ${!style?.backgroundColor ? 'bg-white dark:bg-gray-800' : ''}`}
+            style={customBg}
+        >
+            <style>{accentStyle}</style>
+            <div 
+                className={`absolute inset-0 flex items-center animate-marquee whitespace-nowrap ${pauseOnHover ? 'hover:pause-animation' : ''}`}
+            >
                 {extendedActivities.map((activity, index) => (
-                    <div key={`${activity.id}-${index}`} className="inline-flex items-center mx-6">
+                    <div key={`${activity.id}-${index}`} className="inline-flex items-center mx-6 ticker-item" style={customText}>
                         {icons[activity.type]}
-                        <span className="ml-2 text-sm text-gray-800 dark:text-gray-200" dangerouslySetInnerHTML={{ __html: activity.text }}></span>
-                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{activity.time}</span>
+                        <span className={`ml-2 text-sm ${!style?.textColor ? 'text-gray-800 dark:text-gray-200' : ''}`} dangerouslySetInnerHTML={{ __html: activity.text }}></span>
+                        <span className={`ml-2 text-xs ${!style?.textColor ? 'text-gray-500 dark:text-gray-400' : 'opacity-70'}`}>{activity.time}</span>
                     </div>
                 ))}
             </div>
-             {/* Gradient Overlays for fade effect */}
-            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-white to-transparent dark:from-gray-800"></div>
-            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white to-transparent dark:from-gray-800"></div>
+             {/* Gradient Overlays - Only show if no custom background to avoid mismatch */}
+            {!style?.backgroundColor && (
+                <>
+                    <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-white to-transparent dark:from-gray-800 pointer-events-none"></div>
+                    <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white to-transparent dark:from-gray-800 pointer-events-none"></div>
+                </>
+            )}
+            
             <style>
             {`
                 @keyframes marquee {
@@ -58,6 +84,9 @@ const ActivityTicker: React.FC<ActivityTickerProps> = ({ activities, speed = 6 }
                 }
                 .animate-marquee {
                     animation: marquee ${duration}s linear infinite;
+                }
+                .hover\\:pause-animation:hover {
+                    animation-play-state: paused;
                 }
             `}
             </style>

@@ -234,7 +234,7 @@ export interface DemoProfile {
 export interface DemoActivityTemplate {
     _id: string;
     template: string;
-    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan';
+    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan' | 'commission';
     enabled: boolean;
 }
 
@@ -295,6 +295,12 @@ export interface Settings {
     demoActivityTemplates?: DemoActivityTemplate[];
     tickerSpeed?: number;
     tickerContentSource?: 'hybrid' | 'real_only' | 'demo_only';
+    tickerPauseOnHover?: boolean;
+    tickerStyle?: {
+        backgroundColor?: string;
+        textColor?: string;
+        accentColor?: string;
+    };
     tickerRealActivities?: {
         deposits: boolean;
         withdrawals: boolean;

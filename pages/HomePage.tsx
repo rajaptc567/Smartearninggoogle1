@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -13,7 +11,6 @@ interface EditableTextProps {
   editMode: boolean;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  // FIX: Changed from `keyof JSX.IntrinsicElements` to `React.ElementType` to resolve missing namespace 'JSX' error.
   tag?: React.ElementType;
   className?: string;
   multiline?: boolean;
@@ -76,39 +73,49 @@ const MLMDiagram = () => ( /* Unchanged from previous version */ <div className=
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { state, dispatch } = useData();
-    const { settings, investmentPlans } = state;
+    const { settings, investmentPlans, currentUser } = state;
 
     const [editMode, setEditMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
     const [pageContent, setPageContent] = useState<Partial<HomepageContent>>(settings.homepageContent || {});
+    const [videoUrl, setVideoUrl] = useState(settings.homepageVideoUrl || '');
 
     useEffect(() => {
         const hash = window.location.hash;
         const queryIndex = hash.indexOf('?');
         if (queryIndex !== -1) {
             const params = new URLSearchParams(hash.substring(queryIndex));
-            if (params.get('edit') === 'true') {
+            if (params.get('edit') === 'true' && currentUser?.username === 'admin') {
                 setEditMode(true);
             }
         }
-    }, []);
+    }, [currentUser]);
 
      useEffect(() => {
         setPageContent(settings.homepageContent || {});
+        setVideoUrl(settings.homepageVideoUrl || '');
         setIsDirty(false);
-    }, [settings.homepageContent]);
+    }, [settings]);
 
     const handleContentChange = (field: keyof HomepageContent) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setPageContent(prev => ({ ...prev, [field]: e.target.value }));
         setIsDirty(true);
     };
 
+    const handleVideoUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setVideoUrl(e.target.value);
+        setIsDirty(true);
+    };
+
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // FIX: Cast pageContent to HomepageContent to satisfy the type requirement of the settings object.
-            const updatedSettings = { ...settings, homepageContent: pageContent as HomepageContent };
+            const updatedSettings = { 
+                ...settings, 
+                homepageContent: pageContent as HomepageContent,
+                homepageVideoUrl: videoUrl 
+            };
             const savedSettings = await updateSettings(updatedSettings);
             dispatch({ type: 'UPDATE_SETTINGS', payload: savedSettings });
             alert('Homepage content saved successfully!');
@@ -180,11 +187,28 @@ const HomePage: React.FC = () => {
                     <div className="flex justify-between items-center py-4">
                         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
                         <nav className="hidden md:flex items-center space-x-2">
-                            <Button variant="secondary" onClick={() => navigate('/login')}>Login</Button>
-                            <Button onClick={() => navigate('/register')}>Sign Up</Button>
+                            {currentUser ? (
+                                <>
+                                    <Button variant="secondary" onClick={() => navigate('/member')}>Dashboard</Button>
+                                    {currentUser.username === 'admin' && (
+                                        <Button onClick={() => setEditMode(!editMode)}>
+                                            {editMode ? 'Exit Edit' : 'Edit Page'}
+                                        </Button>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <Button variant="secondary" onClick={() => navigate('/login')}>Login</Button>
+                                    <Button onClick={() => navigate('/register')}>Sign Up</Button>
+                                </>
+                            )}
                         </nav>
-                        <div className="md:hidden">
-                            <Button size="sm" onClick={() => navigate('/login')}>Login</Button>
+                        <div className="md:hidden flex gap-2">
+                             {currentUser ? (
+                                <Button size="sm" onClick={() => navigate('/member')}>Dashboard</Button>
+                            ) : (
+                                <Button size="sm" onClick={() => navigate('/login')}>Login</Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -227,23 +251,40 @@ const HomePage: React.FC = () => {
                 </section>
 
                 {/* Video Showcase Section */}
-                {settings.homepageVideoUrl && (
+                {(settings.homepageVideoUrl || editMode) && (
                     <section className="py-16 bg-white dark:bg-gray-800">
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="text-center mb-12">
                                 <EditableText editMode={editMode} value={pageContent.videoTitle || ''} onChange={handleContentChange('videoTitle')} tag="h2" className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white" />
                                 <EditableText editMode={editMode} value={pageContent.videoDesc || ''} onChange={handleContentChange('videoDesc')} multiline className="mt-3 text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
                             </div>
-                            <div className="aspect-w-16 aspect-h-9 max-w-4xl mx-auto rounded-lg overflow-hidden shadow-2xl border-4 border-gray-200 dark:border-gray-700">
-                                <iframe
-                                    className="w-full h-full"
-                                    src={settings.homepageVideoUrl}
-                                    title="Platform Showcase Video"
-                                    frameBorder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen>
-                                </iframe>
-                            </div>
+                            
+                            {editMode && (
+                                <div className="max-w-2xl mx-auto mb-6">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Video Embed URL</label>
+                                    <input 
+                                        type="text" 
+                                        value={videoUrl} 
+                                        onChange={handleVideoUrlChange} 
+                                        className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 p-2 focus:ring-2 focus:ring-blue-500"
+                                        placeholder="https://www.youtube.com/embed/..."
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Must be an embeddable URL (e.g. YouTube Embed).</p>
+                                </div>
+                            )}
+
+                            {videoUrl && (
+                                <div className="aspect-w-16 aspect-h-9 max-w-4xl mx-auto rounded-lg overflow-hidden shadow-2xl border-4 border-gray-200 dark:border-gray-700">
+                                    <iframe
+                                        className="w-full h-full"
+                                        src={videoUrl}
+                                        title="Platform Showcase Video"
+                                        frameBorder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen>
+                                    </iframe>
+                                </div>
+                            )}
                         </div>
                     </section>
                 )}

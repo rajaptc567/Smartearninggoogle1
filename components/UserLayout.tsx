@@ -111,33 +111,62 @@ const UserLayout: React.FC = () => {
                 if (!profile) return;
 
                 let text = template.template;
-                
                 text = text.replace('{name}', `<strong class="font-semibold">${profile.name}</strong>`);
                 text = text.replace('{country}', `<strong>${profile.country}</strong>`);
+                text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
 
+                // Find active plans matching profile currency for intelligent pricing
+                const plansForCurrency = investmentPlans.filter(p => p.status === 'Active' && p.currency === profile.currency);
+                const randomPlan = plansForCurrency.length > 0 ? plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)] : null;
+
+                // Logic 1: Exact Price for Deposit, Withdrawal, Plan Buy
+                const useExactPlanPrice = ['deposit', 'withdrawal', 'plan'].includes(template.type);
+                if (useExactPlanPrice && randomPlan) {
+                    if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
+                    if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
+                }
+
+                // Logic 2: Commission Calculation
+                if (template.type === 'commission' && randomPlan) {
+                    // Randomize between direct (Level 1) and indirect (Level 2) to show variety
+                    // Weighted 70% towards Direct Commission as they are more common/higher
+                    const isDirect = Math.random() > 0.3; 
+                    const commConfig = isDirect 
+                        ? (randomPlan.directCommissions?.[0]) 
+                        : (randomPlan.indirectCommissions?.[0]);
+                    
+                    let commVal = 0;
+                    if (commConfig) {
+                        commVal = commConfig.type === 'percentage' 
+                            ? (randomPlan.price * commConfig.value) / 100 
+                            : commConfig.value;
+                    } else {
+                        // Fallback if config is missing: assume 5%
+                        commVal = randomPlan.price * 0.05; 
+                    }
+
+                    if (text.includes('{amount}')) {
+                        text = text.replace('{amount}', `<strong>${formatCurrency(commVal, profile.currency)}</strong>`);
+                    }
+                }
+
+                // Fallback for {plan} if it wasn't replaced above (e.g. if no random plan found)
+                if (text.includes('{plan}')) {
+                     text = text.replace('{plan}', `<strong>${randomPlan ? randomPlan.name : 'Premium Plan'}</strong>`);
+                }
+
+                // Fallback for {amount} (Transfers, or if no plan found) -> Use Range Settings
                 if (text.includes('{amount}')) {
                     const ranges = settings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                     const currencyRange = ranges[profile.currency];
                     const randomAmount = currencyRange ? Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min : 100;
                     text = text.replace('{amount}', `<strong>${formatCurrency(randomAmount, profile.currency)}</strong>`);
                 }
-                if (text.includes('{currency}')) {
-                    text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
-                }
-                if (text.includes('{plan}')) {
-                    const plansForCurrency = investmentPlans.filter(p => p.status === 'Active' && p.currency === profile.currency);
-                    if (plansForCurrency.length > 0) {
-                        const randomPlan = plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)];
-                        text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
-                    } else {
-                        return; // Skip if no suitable plan exists
-                    }
-                }
                 
                 if (text) {
                     const hoursAgo = Math.floor(Math.random() * 10) + 1;
-                    // Make ID more unique
-                    activities.push({ id: `demo-${template._id}-${profile._id}-${Date.now()}`, type: template.type, text, time: `${hoursAgo}h ago` });
+                    // Make ID unique to prevent key warnings
+                    activities.push({ id: `demo-${template._id}-${profile._id}-${Date.now()}-${Math.random()}`, type: template.type, text, time: `${hoursAgo}h ago` });
                 }
             });
         }
@@ -171,7 +200,14 @@ const UserLayout: React.FC = () => {
       <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <UserHeader setSidebarOpen={setSidebarOpen} />
-        {settings.tickerEnabled !== false && <ActivityTicker activities={generatedActivities} speed={settings.tickerSpeed || 6} />}
+        {settings.tickerEnabled !== false && (
+            <ActivityTicker 
+                activities={generatedActivities} 
+                speed={settings.tickerSpeed || 6} 
+                pauseOnHover={settings.tickerPauseOnHover}
+                style={settings.tickerStyle}
+            />
+        )}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
