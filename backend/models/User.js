@@ -43,7 +43,7 @@ const UserSchema = new mongoose.Schema({
     },
     currency: {
         type: String,
-        enum: ['EUR', 'PKR'],
+        enum: ['EUR', 'PKR', 'USD'],
         required: true,
     },
     walletBalance: {
@@ -91,11 +91,13 @@ UserSchema.pre('save', async function(next) {
 
     // Auto-update currency IF country is modified OR if currency is missing.
     if (this.isModified('country') || !this.currency) {
-        if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+        if (this.country.toLowerCase() === 'pakistan') {
+             this.currency = 'PKR';
+        } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
             this.currency = 'EUR';
         } else {
-            // Default to PKR for Pakistan and rest of world
-            this.currency = 'PKR';
+            // Default to USD for rest of world
+            this.currency = 'USD';
         }
     }
     

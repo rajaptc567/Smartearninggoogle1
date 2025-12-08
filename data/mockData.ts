@@ -109,7 +109,7 @@ export const mockSettings: Settings = {
         ],
         allowCrossCurrency: true
     },
-    exchangeRates: { EUR: 300.00, PKR: 1 },
+    exchangeRates: { EUR: 300.00, PKR: 1, USD: 280.00 },
     restrictWithdrawalAmount: false,
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,

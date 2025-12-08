@@ -128,6 +128,7 @@ const Deposits: React.FC = () => {
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
                         <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
                     </select>
                     <input 
                         type="text" 

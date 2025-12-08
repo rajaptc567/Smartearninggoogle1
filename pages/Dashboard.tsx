@@ -285,6 +285,7 @@ const Dashboard: React.FC = () => {
                 >
                     <option value="PKR">Stats in PKR</option>
                     <option value="EUR">Stats in EUR</option>
+                    <option value="USD">Stats in USD</option>
                 </select>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6">

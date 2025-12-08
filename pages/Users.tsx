@@ -215,6 +215,7 @@ const Users: React.FC = () => {
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
                         <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
                     </select>
 
                     {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
@@ -903,7 +904,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                     <div>
                         <label className="text-sm font-medium">Target Users</label>
                         {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
-                        <select value={targetType} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
+                        <select value={targetType} onChange={(e) => { setTargetType(e.target.value as 'all' | 'plan' | 'manual'); setTargetIds([]); }} className="w-full rounded-md dark:bg-gray-700 mt-1">
                             <option value="all">All Users ({allUsers.length})</option>
                             <option value="plan">Users with Specific Plan(s)</option>
                             <option value="manual">Manually Select Users</option>
@@ -913,7 +914,7 @@ const BulkRestrictionsModal: React.FC<{ allUsers: User[]; investmentPlans: Inves
                         <div>
                             <label className="text-sm font-medium">Select Plans</label>
                             {/* FIX: Explicitly typed the event object to resolve 'unknown' type error. */}
-                            <select multiple value={targetIds} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTargetIds(Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
+                            <select multiple value={targetIds} onChange={(e) => setTargetIds(Array.from(e.target.selectedOptions, (option: HTMLOptionElement) => option.value))} className="w-full rounded-md dark:bg-gray-700 mt-1 h-32">
                                 {investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>)}
                             </select>
                         </div>

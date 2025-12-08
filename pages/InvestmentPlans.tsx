@@ -96,6 +96,7 @@ const InvestmentPlans: React.FC = () => {
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
                         <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
                     </select>
                 </div>
                 <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
@@ -348,6 +349,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             >
                                 <option value="PKR">PKR (Rs)</option>
                                 <option value="EUR">EUR (€)</option>
+                                <option value="USD">USD ($)</option>
                             </select>
                         </div>
                         <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} placeholder="Price" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>

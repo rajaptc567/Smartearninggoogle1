@@ -16,9 +16,9 @@ const RuleSchema = new mongoose.Schema({
     },
     currency: {
         type: String,
-        enum: ['EUR', 'PKR'],
+        enum: ['EUR', 'PKR', 'USD'],
         required: true,
-        default: 'PKR',
+        default: 'USD',
     },
 }, {
     timestamps: true

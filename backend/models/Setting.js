@@ -8,7 +8,7 @@ const TransferTierSchema = new mongoose.Schema({
     feeValue: { type: Number, required: true },
     currency: {
         type: String,
-        enum: ['EUR', 'PKR'],
+        enum: ['EUR', 'PKR', 'USD'],
         required: true,
     },
     enabled: { type: Boolean, default: true }
@@ -18,7 +18,7 @@ const DemoProfileSchema = new mongoose.Schema({
     _id: { type: String, required: true },
     name: { type: String, required: true },
     country: { type: String, required: true },
-    currency: { type: String, enum: ['EUR', 'PKR'], required: true },
+    currency: { type: String, enum: ['EUR', 'PKR', 'USD'], required: true },
 });
 
 const DemoActivityTemplateSchema = new mongoose.Schema({
@@ -32,6 +32,7 @@ const PlanEquivalencyGroupSchema = new mongoose.Schema({
     _id: { type: String, required: true },
     pkrPlanId: { type: String },
     eurPlanId: { type: String },
+    usdPlanId: { type: String },
 });
 
 const HomepageContentSchema = new mongoose.Schema({
@@ -65,7 +66,7 @@ const SettingSchema = new mongoose.Schema({
         allowCrossCurrency: { type: Boolean, default: false }
     },
     exchangeRates: {
-        USD: { type: Number, default: 1 }, // Kept for base logic
+        USD: { type: Number, default: 1 }, 
         EUR: { type: Number, default: 0.92 },
         PKR: { type: Number, default: 278.00 }
     },
@@ -121,6 +122,7 @@ const SettingSchema = new mongoose.Schema({
     tickerDemoAmountRanges: {
         EUR: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
         PKR: { min: { type: Number, default: 5000 }, max: { type: Number, default: 50000 } },
+        USD: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
     },
     planEquivalencyGroups: [PlanEquivalencyGroupSchema],
     homepageVideoUrl: {
@@ -136,41 +138,21 @@ const SettingSchema = new mongoose.Schema({
         default: [],
     },
 }, {
-    // Use a capped collection of size 1 to ensure only one settings document exists
-    capped: { size: 1024, max: 1 }
+    timestamps: true
 });
 
 
 const defaultDemoProfiles = [
+    {"_id":"1","name":"John S.","country":"United States","currency":"USD"},
     {"_id":"2","name":"Maria G.","country":"Germany","currency":"EUR"},
     {"_id":"3","name":"Ali K.","country":"Pakistan","currency":"PKR"},
+    {"_id":"4","name":"Emily R.","country":"Canada","currency":"USD"},
     {"_id":"5","name":"Fatima Z.","country":"Pakistan","currency":"PKR"},
     {"_id":"6","name":"Lucas M.","country":"France","currency":"EUR"},
+    {"_id":"7","name":"Michael B.","country":"United Kingdom","currency":"USD"},
     {"_id":"8","name":"Ahmed R.","country":"Pakistan","currency":"PKR"},
+    {"_id":"9","name":"Sophia L.","country":"Australia","currency":"USD"},
     {"_id":"10","name":"Aisha M.","country":"Pakistan","currency":"PKR"},
-    {"_id":"11","name":"Daniel K.","country":"Germany","currency":"EUR"},
-    {"_id":"13","name":"Hassan J.","country":"Pakistan","currency":"PKR"},
-    {"_id":"14","name":"Chloe T.","country":"France","currency":"EUR"},
-    {"_id":"16","name":"Zainab A.","country":"Pakistan","currency":"PKR"},
-    {"_id":"18","name":"Bilal Q.","country":"Pakistan","currency":"PKR"},
-    {"_id":"20","name":"Laura B.","country":"Germany","currency":"EUR"},
-    {"_id":"22","name":"Usman G.","country":"Pakistan","currency":"PKR"},
-    {"_id":"23","name":"Arthur R.","country":"France","currency":"EUR"},
-    {"_id":"25","name":"Sana I.","country":"Pakistan","currency":"PKR"},
-    {"_id":"27","name":"Omer S.","country":"Pakistan","currency":"PKR"},
-    {"_id":"29","name":"Jonas F.","country":"Germany","currency":"EUR"},
-    {"_id":"31","name":"Imran H.","country":"Pakistan","currency":"PKR"},
-    {"_id":"32","name":"Manon L.","country":"France","currency":"EUR"},
-    {"_id":"34","name":"Maryam B.","country":"Pakistan","currency":"PKR"},
-    {"_id":"36","name":"Saad A.","country":"Pakistan","currency":"PKR"},
-    {"_id":"38","name":"Finn S.","country":"Germany","currency":"EUR"},
-    {"_id":"40","name":"Khadija N.","country":"Pakistan","currency":"PKR"},
-    {"_id":"41","name":"Louis B.","country":"France","currency":"EUR"},
-    {"_id":"43","name":"Ayesha T.","country":"Pakistan","currency":"PKR"},
-    {"_id":"45","name":"Fahad M.","country":"Pakistan","currency":"PKR"},
-    {"_id":"47","name":"Leon K.","country":"Germany","currency":"EUR"},
-    {"_id":"49","name":"Hamza Y.","country":"Pakistan","currency":"PKR"},
-    {"_id":"50","name":"Camille D.","country":"France","currency":"EUR"},
 ];
 
 const defaultDemoTemplates = [
@@ -187,7 +169,8 @@ const defaultSettingsObject = {
         enabled: true,
         tiers: [
             { minAmount: 1, maxAmount: 10000, feeType: 'percentage', feeValue: 1.5, currency: 'EUR', enabled: true },
-            { minAmount: 100, maxAmount: 50000, feeType: 'fixed', feeValue: 150, currency: 'PKR', enabled: true }
+            { minAmount: 100, maxAmount: 50000, feeType: 'fixed', feeValue: 150, currency: 'PKR', enabled: true },
+            { minAmount: 10, maxAmount: 5000, feeType: 'fixed', feeValue: 2, currency: 'USD', enabled: true }
         ],
         allowCrossCurrency: false,
     },
@@ -207,6 +190,7 @@ const defaultSettingsObject = {
     tickerDemoAmountRanges: {
         EUR: { min: 50, max: 500 },
         PKR: { min: 5000, max: 50000 },
+        USD: { min: 50, max: 500 },
     },
     planEquivalencyGroups: [],
     homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',

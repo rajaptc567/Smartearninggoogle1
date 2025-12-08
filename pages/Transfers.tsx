@@ -105,6 +105,7 @@ const Transfers: React.FC = () => {
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
                         <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
                     </select>
                     <input 
                         type="text" 
@@ -138,10 +139,11 @@ const Transfers: React.FC = () => {
                         <h3 className="text-xl font-bold mb-4">Transfer Details - <span className="text-blue-600 dark:text-blue-400">{selectedTransfer._id}</span></h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                            <div><span className="font-semibold">From:</span> {selectedTransfer.senderName} (ID: {selectedTransfer.senderId})</div>
-                            <div><span className="font-semibold">To:</span> {selectedTransfer.recipientName} (ID: {selectedTransfer.recipientId})</div>
+                            <div><span className="font-semibold">Sender:</span> {selectedTransfer.senderName}</div>
+                            <div><span className="font-semibold">Recipient:</span> {selectedTransfer.recipientName}</div>
                             <div><span className="font-semibold">Amount:</span> {formatCurrency(selectedTransfer.amount, selectedTransfer.currency)}</div>
-                            <div><span className="font-semibold">Date:</span> {new Date(selectedTransfer.date).toLocaleString()}</div>
+                            <div><span className="font-semibold">Fee:</span> {formatCurrency(selectedTransfer.fee || 0, selectedTransfer.currency)}</div>
+                            <div className="md:col-span-2"><span className="font-semibold">Date:</span> {new Date(selectedTransfer.date).toLocaleString()}</div>
                         </div>
 
                          <div className="mt-6">
@@ -151,13 +153,15 @@ const Transfers: React.FC = () => {
                                 value={currentStatus} 
                                 onChange={(e) => setCurrentStatus(e.target.value as Transfer['status'])}
                                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                disabled={selectedTransfer.status !== Status.Pending}
                             >
                                 <option value={Status.Pending}>Pending</option>
                                 <option value={Status.Approved}>Approved</option>
                                 <option value={Status.Rejected}>Rejected</option>
                             </select>
-                            {selectedTransfer.status !== Status.Pending && <p className="text-xs text-yellow-500 mt-1">This transfer has already been processed and cannot be changed.</p>}
+                            <p className="text-xs text-gray-500 mt-1">
+                                <strong>Approved:</strong> Recipient receives funds. <br/>
+                                <strong>Rejected:</strong> Sender gets a refund (including fee).
+                            </p>
                         </div>
 
                          <div className="mt-6">
@@ -168,13 +172,13 @@ const Transfers: React.FC = () => {
                                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                 value={adminNotes}
                                 onChange={(e) => setAdminNotes(e.target.value)}
-                                placeholder="Add remarks for this transaction..."
+                                placeholder="Add remarks..."
                             />
                         </div>
 
                         <div className="mt-8 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                            <Button variant="secondary" onClick={handleCloseDetailModal} disabled={isSaving}>Cancel</Button>
-                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving || selectedTransfer.status !== Status.Pending}>
+                            <Button variant="secondary" onClick={handleCloseDetailModal}>Cancel</Button>
+                            <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
                                 {isSaving ? 'Saving...' : 'Save Changes'}
                             </Button>
                         </div>

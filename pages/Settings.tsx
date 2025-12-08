@@ -200,13 +200,12 @@ const Settings: React.FC = () => {
       if (from === to) return amount;
       
       const safeRates = { ...rates };
-      // Logic with USD as Base (1):
-      // Rate[Currency] = Value in Currency per 1 USD.
+      // Logic relies on rates relative to a common base (e.g. Rate[Currency] units per 1 BaseUnit)
       
       const rateFrom = safeRates[from] || 1;
       const rateTo = safeRates[to] || 1;
       
-      // Convert 'From' to Base(USD): Amount / RateFrom
+      // Convert 'From' to Base: Amount / RateFrom
       const inBase = amount / rateFrom;
       
       // Convert Base to 'To': inBase * RateTo
@@ -352,14 +351,14 @@ const Settings: React.FC = () => {
         {activeTab === 'exchange_rates' && (
             <div className="space-y-8 animate-fade-in">
                 
-                <div className="flex flex-col sm:flex-row justify-between items-center bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex flex-col sm:flex-row justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                      <div className="mb-3 sm:mb-0">
-                        <h4 className="text-sm font-bold text-green-800 dark:text-green-300 uppercase tracking-wider">System Base Currency</h4>
-                        <div className="text-2xl font-extrabold text-green-900 dark:text-white mt-1">USD <span className="text-base font-normal opacity-70">(US Dollar)</span></div>
-                    </div>
-                     <div className="text-sm text-green-700 dark:text-green-200 max-w-md text-right">
-                        The system uses USD as the primary base for calculations (1.0). <br/>
-                        Set the rates below to define how many units of other currencies equal 1 USD.
+                        <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Currency Rates</h4>
+                        <div className="text-sm text-blue-700 dark:text-blue-200 mt-1 max-w-2xl">
+                           Define the value of each currency relative to the system's internal base unit. 
+                           <br/>Example: If USD = 1 and PKR = 278, then 1 USD = 278 PKR. 
+                           <br/>You can adjust all values freely.
+                        </div>
                     </div>
                 </div>
 
@@ -379,79 +378,52 @@ const Settings: React.FC = () => {
                             </Button>
                         </div>
                         
-                        {/* EUR CARD */}
-                        <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-xl">🇪🇺</div>
-                                    <div>
-                                        <h5 className="font-bold text-gray-900 dark:text-white">Euro (EUR)</h5>
-                                        <p className="text-xs text-gray-500">European Union</p>
+                        {/* Currency Cards Loop */}
+                        {(['USD', 'EUR', 'PKR'] as const).map(currency => (
+                            <div key={currency} className="bg-white dark:bg-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
+                                <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
+                                    <div className="flex items-center space-x-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+                                            currency === 'USD' ? 'bg-green-100 dark:bg-green-900' :
+                                            currency === 'EUR' ? 'bg-indigo-100 dark:bg-indigo-900' :
+                                            'bg-teal-100 dark:bg-teal-900'
+                                        }`}>
+                                            {currency === 'USD' ? '🇺🇸' : currency === 'EUR' ? '🇪🇺' : '🇵🇰'}
+                                        </div>
+                                        <div>
+                                            <h5 className="font-bold text-gray-900 dark:text-white">{currency}</h5>
+                                            <p className="text-xs text-gray-500">
+                                                {currency === 'USD' ? 'US Dollar' : currency === 'EUR' ? 'Euro' : 'Pakistani Rupee'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs text-gray-400 uppercase">Current</div>
+                                        <div className="font-mono font-bold">{localSettings.exchangeRates?.[currency]}</div>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-xs text-gray-400 uppercase">Current</div>
-                                    <div className="font-mono font-bold">{localSettings.exchangeRates?.EUR}</div>
-                                </div>
-                            </div>
-                            <div className="p-5">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Exchange Rate</label>
-                                <div className="relative rounded-md shadow-sm">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
-                                        <span className="text-gray-500 sm:text-sm font-bold">1 USD = </span>
-                                    </div>
-                                    <input
-                                        name="exchangeRates.EUR"
-                                        type="number"
-                                        step="0.0001"
-                                        value={localSettings.exchangeRates?.EUR || ''}
-                                        onChange={handleExchangeRateChange}
-                                        className="block w-full rounded-md border-gray-300 pl-20 focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600 py-3 font-mono text-lg"
-                                        placeholder="0.92"
-                                    />
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 pr-3 flex items-center">
-                                        <span className="text-gray-500 sm:text-sm">EUR</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* PKR CARD */}
-                        <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-xl">🇵🇰</div>
-                                    <div>
-                                        <h5 className="font-bold text-gray-900 dark:text-white">Pakistani Rupee (PKR)</h5>
-                                        <p className="text-xs text-gray-500">Pakistan</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs text-gray-400 uppercase">Current</div>
-                                    <div className="font-mono font-bold">{localSettings.exchangeRates?.PKR}</div>
-                                </div>
-                            </div>
-                            <div className="p-5">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Exchange Rate</label>
-                                <div className="relative rounded-md shadow-sm">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
-                                        <span className="text-gray-500 sm:text-sm font-bold">1 USD = </span>
-                                    </div>
-                                    <input
-                                        name="exchangeRates.PKR"
-                                        type="number"
-                                        step="0.01"
-                                        value={localSettings.exchangeRates?.PKR || ''}
-                                        onChange={handleExchangeRateChange}
-                                        className="block w-full rounded-md border-gray-300 pl-20 focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600 py-3 font-mono text-lg"
-                                        placeholder="278.00"
-                                    />
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 pr-3 flex items-center">
-                                        <span className="text-gray-500 sm:text-sm">PKR</span>
+                                <div className="p-5">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Exchange Rate (vs Base)</label>
+                                    <div className="relative rounded-md shadow-sm">
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
+                                            <span className="text-gray-500 sm:text-sm font-bold">1 Base = </span>
+                                        </div>
+                                        <input
+                                            name={`exchangeRates.${currency}`}
+                                            type="number"
+                                            step="0.0001"
+                                            value={localSettings.exchangeRates?.[currency] || ''}
+                                            onChange={handleExchangeRateChange}
+                                            className="block w-full rounded-md border-gray-300 pl-20 focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-800 dark:border-gray-600 py-3 font-mono text-lg"
+                                            placeholder="1.00"
+                                        />
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <span className="text-gray-500 sm:text-sm">{currency}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
                     
                     {/* RIGHT COLUMN: SIMULATOR & REFERENCE */}
@@ -500,13 +472,19 @@ const Settings: React.FC = () => {
                                 <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded">
                                     <span className="text-gray-600 dark:text-gray-400">1 USD =</span>
                                     <span className="font-mono font-bold text-gray-900 dark:text-white">
-                                        {localSettings.exchangeRates?.PKR} PKR
+                                        {localSettings.exchangeRates?.USD && localSettings.exchangeRates?.PKR 
+                                            ? (localSettings.exchangeRates.PKR / localSettings.exchangeRates.USD).toFixed(2) 
+                                            : 'N/A'
+                                        } PKR
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/30 rounded">
                                     <span className="text-gray-600 dark:text-gray-400">1 EUR =</span>
                                     <span className="font-mono font-bold text-gray-900 dark:text-white">
-                                        {((localSettings.exchangeRates?.PKR || 278) / (localSettings.exchangeRates?.EUR || 0.92)).toFixed(2)} PKR
+                                        {localSettings.exchangeRates?.EUR && localSettings.exchangeRates?.PKR
+                                            ? (localSettings.exchangeRates.PKR / localSettings.exchangeRates.EUR).toFixed(2)
+                                            : 'N/A'
+                                        } PKR
                                     </span>
                                 </div>
                             </div>
