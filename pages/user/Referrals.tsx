@@ -107,13 +107,15 @@ const Referrals: React.FC = () => {
         return formattedVal;
     };
 
-    const getCommissionInfoForReferral = useCallback((referral: User): { earned: number; held: number; pendingReason: string | null; relatedPlanName?: string } => {
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; pendingReason: string | null; relatedPlanName?: string } => {
         if (!currentUser) return { earned: 0, held: 0, pendingReason: null };
 
+        // STRICT FILTER: Only show commissions related to the currently selected plan (or its equivalents)
         const referralCommissions = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
-            t.sourceUserId === referral._id
+            t.sourceUserId === referral._id &&
+            (t.relatedPlanId ? contextPlanIds.has(t.relatedPlanId) : false) 
         );
 
         const earned = referralCommissions
@@ -223,8 +225,8 @@ const Referrals: React.FC = () => {
                 t.status === 'Approved' && 
                 t.sourceUserId &&
                 finalDownlineUserIds.has(t.sourceUserId) &&
-                // If we want to strictly filter earnings by the selected plan context:
-                (t.relatedPlanId ? equivalentPlanIdsForSelected.has(t.relatedPlanId) : true) 
+                // Strictly filter earnings by the selected plan context
+                (t.relatedPlanId ? equivalentPlanIdsForSelected.has(t.relatedPlanId) : false) 
             )
             .reduce((sum, t) => sum + t.amount, 0);
 
@@ -254,7 +256,8 @@ const Referrals: React.FC = () => {
         // Get equivalent name if they have another plan
         const equivalentPlanName = otherActivePlan ? getEquivalentPlanNameForUserCurrency(otherActivePlan.planId) : null;
 
-        const { earned, held, pendingReason, relatedPlanName } = getCommissionInfoForReferral(node.user);
+        // PASS the context IDs to ensure stats are filtered for this plan
+        const { earned, held, pendingReason, relatedPlanName } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
 
         return (
             <li key={node.user._id} className="relative pl-6 sm:pl-8">
@@ -389,7 +392,7 @@ const Referrals: React.FC = () => {
         <div className="space-y-8 max-w-6xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">My Network</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Network Genealogy</h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-1">
                         Track your team growth and commissions. 
                         {settings.requirePlanMatchForCommission && " Earnings require you to match your referral's plan."}

@@ -36,7 +36,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
         { to: '/member/plans', label: 'Investment Plans', icon: <PlanIcon />, condition: null },
         { to: '/member/active-plans', label: 'My Active Plans', icon: <ActivePlansIcon />, condition: null },
         { to: '/member/transactions', label: 'Transactions', icon: <WalletIcon />, condition: null },
-        { to: '/member/referrals', label: 'My Network', icon: <UsersIcon />, condition: null },
+        { to: '/member/referrals', label: 'Network Genealogy', icon: <UsersIcon />, condition: null },
         { to: '/member/messages', label: 'Inbox', icon: <InboxIcon />, badge: unreadMessagesCount },
         { to: '/member/disputes', label: 'Disputes', icon: <DisputeIcon />, condition: null },
         { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
