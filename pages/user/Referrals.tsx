@@ -30,12 +30,22 @@ const Referrals: React.FC = () => {
 
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+    
+    // Filters
+    const [showRelevantOnly, setShowRelevantOnly] = useState(false);
+    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [filterLevel, setFilterLevel] = useState<string>('all');
 
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
         }
     }, [uniqueActivePlans, selectedPlanId]);
+    
+    // Reset filters when plan changes
+    useEffect(() => {
+        setFilterLevel('all');
+    }, [selectedPlanId]);
     
     // Determine which plans are equivalent to the selected one
     const equivalentPlanIdsForSelected = useMemo(() => {
@@ -60,6 +70,11 @@ const Referrals: React.FC = () => {
         if (!selectedPlanId) return null;
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
+
+    const maxLevels = useMemo(() => {
+        if (!selectedPlanDetails) return 10;
+        return 1 + (selectedPlanDetails.indirectCommissions?.length || 0);
+    }, [selectedPlanDetails]);
 
     const getEquivalentPlanNameForUserCurrency = useCallback((planId: string) => {
         if (!settings.planEquivalencyGroups || !currentUser) return null;
@@ -200,22 +215,56 @@ const Referrals: React.FC = () => {
             }));
         };
         
-        const fullGenealogyTree = buildFullTree(currentUser.username, 1);
+        let fullGenealogyTree = buildFullTree(currentUser.username, 1);
 
-        // Flatten for stats
-        const finalDownline: User[] = [];
-        const traverseFinalTreeForStats = (nodes: GenealogyNode[]) => {
+        // Filter Function for Tree
+        const filterTree = (nodes: GenealogyNode[]): GenealogyNode[] => {
+            return nodes.map(node => {
+                // 1. Level Filter (Depth)
+                if (filterLevel !== 'all' && node.level > parseInt(filterLevel)) {
+                    return null;
+                }
+
+                // 2. Relevance Check
+                const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+                // Relevant if toggle OFF OR (toggle ON AND has earnings for this plan)
+                const isRelevant = !showRelevantOnly || (earned > 0 || held > 0);
+
+                // 3. Status Filter
+                const matchesStatus = filterStatus === 'all' || node.user.status === filterStatus;
+
+                // Combine Local Logic: Must be Relevant AND Match Status to be a "Target"
+                const isTargetNode = isRelevant && matchesStatus;
+
+                // 4. Recursion
+                const filteredChildren = filterTree(node.children);
+                
+                // 5. Decision: Keep if it is a target, OR if it has children (is a path to a target)
+                if (isTargetNode || filteredChildren.length > 0) {
+                    return { ...node, children: filteredChildren };
+                }
+                return null;
+            }).filter((n): n is GenealogyNode => n !== null);
+        };
+
+        const filteredTree = filterTree(fullGenealogyTree);
+
+        const allNodes: User[] = [];
+        const traverseForStats = (nodes: GenealogyNode[]) => {
             nodes.forEach(node => {
-                finalDownline.push(node.user);
-                traverseFinalTreeForStats(node.children);
+                allNodes.push(node.user);
+                traverseForStats(node.children);
             });
         };
-        traverseFinalTreeForStats(fullGenealogyTree);
+        // To get accurate stats, we should traverse the UNFILTERED tree structure relative to this plan
+        // But stats should ideally reflect the entire network, so we use the raw tree
+        const rawTree = buildFullTree(currentUser.username, 1); 
+        traverseForStats(rawTree);
 
         // Stats specific to the SELECTED PLAN view
-        const activeMembersInSelectedPlan = finalDownline.filter(u => u.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
+        const activeMembersInSelectedPlan = allNodes.filter(u => u.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId)));
         
-        const finalDownlineUserIds = new Set(finalDownline.map(u => u._id));
+        const finalDownlineUserIds = new Set(allNodes.map(u => u._id));
         
         // Calculate total earnings from this downline specifically for the selected plan
         const totalEarnings = transactions
@@ -231,14 +280,14 @@ const Referrals: React.FC = () => {
             .reduce((sum, t) => sum + t.amount, 0);
 
         return {
-            genealogyTree: fullGenealogyTree,
+            genealogyTree: filteredTree,
             networkStats: { 
-                totalReferrals: finalDownline.length,
+                totalReferrals: allNodes.length,
                 activeMembers: activeMembersInSelectedPlan.length,
                 earnings: totalEarnings
             }
         };
-    }, [currentUser, users, transactions, equivalentPlanIdsForSelected]);
+    }, [currentUser, users, transactions, equivalentPlanIdsForSelected, showRelevantOnly, filterStatus, filterLevel, getCommissionInfoForReferral]);
 
     const renderTreeNode = (node: GenealogyNode) => {
         const isCollapsed = collapsedNodes.has(node.user._id);
@@ -258,6 +307,25 @@ const Referrals: React.FC = () => {
 
         // PASS the context IDs to ensure stats are filtered for this plan
         const { earned, held, pendingReason, relatedPlanName } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+
+        // --- Commission Rate Info ---
+        let commissionRateLabel = null;
+        if (selectedPlanDetails) {
+            let commConfig;
+            // Level is 1-based in node.level.
+            if (node.level === 1) {
+                // Use Direct Commission config (usually first element if array, or legacy)
+                commConfig = (selectedPlanDetails.directCommissions || [])[0];
+            } else {
+                // Indirect commissions start at Level 2 (index 0 of indirect array)
+                commConfig = (selectedPlanDetails.indirectCommissions || [])[node.level - 2];
+            }
+
+            if (commConfig) {
+                const val = commConfig.type === 'percentage' ? `${commConfig.value}%` : formatCurrency(commConfig.value, selectedPlanDetails.currency);
+                commissionRateLabel = <span className="text-[10px] text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600 ml-2">Rate: {val}</span>;
+            }
+        }
 
         return (
             <li key={node.user._id} className="relative pl-6 sm:pl-8">
@@ -292,6 +360,8 @@ const Referrals: React.FC = () => {
                                     <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600">
                                         Level {node.level}
                                     </span>
+                                    {commissionRateLabel}
+                                    <Badge status={node.user.status} />
                                 </div>
                                 <p className="text-xs text-gray-500">@{node.user.username}</p>
                                 
@@ -319,7 +389,7 @@ const Referrals: React.FC = () => {
                                     ) : (
                                         <span className="text-xs font-medium text-gray-400 flex items-center">
                                             <span className="w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
-                                            Inactive
+                                            Inactive (No Plan)
                                         </span>
                                     )}
                                 </div>
@@ -495,9 +565,52 @@ const Referrals: React.FC = () => {
 
             {/* Tree View */}
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden min-h-[400px]">
-                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-10">
-                    <h2 className="font-bold text-gray-800 dark:text-white text-lg">Network Genealogy</h2>
-                    <p className="text-xs text-gray-500">Viewing structure for <strong>{currentPlanName}</strong> context.</p>
+                <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 className="font-bold text-gray-800 dark:text-white text-lg">Network Genealogy</h2>
+                        <p className="text-xs text-gray-500">Viewing structure for <strong>{currentPlanName}</strong> context.</p>
+                    </div>
+                    
+                    <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+                        <div className="flex flex-wrap items-center gap-3 justify-end">
+                            <select 
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                                className="text-xs rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 py-1"
+                            >
+                                <option value="all">All Status</option>
+                                <option value={Status.Active}>Active</option>
+                                <option value={Status.Pending}>Pending</option>
+                                <option value={Status.Blocked}>Blocked</option>
+                                <option value={Status.Paused}>Paused</option>
+                            </select>
+
+                            <select 
+                                value={filterLevel}
+                                onChange={(e) => setFilterLevel(e.target.value)}
+                                className="text-xs rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 py-1"
+                            >
+                                <option value="all">All Levels</option>
+                                {Array.from({ length: maxLevels }, (_, i) => i + 1).map(lvl => (
+                                    <option key={lvl} value={lvl}>Up to Level {lvl}</option>
+                                ))}
+                            </select>
+
+                            <label className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showRelevantOnly} 
+                                    onChange={(e) => setShowRelevantOnly(e.target.checked)} 
+                                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                />
+                                <span className="text-xs font-medium">Hide Irrelevant</span>
+                            </label>
+                        </div>
+                        <p className="text-[10px] text-gray-400 text-right leading-tight max-w-xs">
+                            Note: Sponsor gets commission only from the <strong>first purchased plan</strong> of a referral (unless recurring enabled). <br/>
+                            "Hide Irrelevant" filters out members who have not generated commissions for this plan.
+                        </p>
+                    </div>
                 </div>
                 
                 <div className="p-4 md:p-8 overflow-x-auto">
