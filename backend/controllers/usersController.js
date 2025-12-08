@@ -616,25 +616,33 @@ export const purchasePlan = async (req, res) => {
                     );
                     
                     let hasEquivalentPlan = false;
+                    let targetPlanId = referralPlanId;
+
                     if (group) {
                         const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
                         const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
                         hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
+                        
+                        // Identify the specific plan the sponsor needs based on their currency
+                        const currencyKey = `${uplineUser.currency.toLowerCase()}PlanId`;
+                        if (group[currencyKey]) {
+                            targetPlanId = group[currencyKey];
+                        } else if (group.usdPlanId) {
+                            targetPlanId = group.usdPlanId; // Default to USD plan if specific currency not mapped
+                        }
                     } else {
                         hasEquivalentPlan = (uplineUser.activePlans || []).some(p => p.planId.toString() === referralPlanId);
                     }
 
                     if (!hasEquivalentPlan) {
-                        let requiredPlansString = '';
-                        if (group) {
-                            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
-                            const requiredPlans = allPlans.filter(p => groupPlanIds.includes(p._id.toString()));
-                            requiredPlansString = requiredPlans.map(p => `${p.name} (${p.currency})`).join(' or ');
-                        } else {
-                            const referralPlan = allPlans.find(p => p._id.toString() === referralPlanId);
-                            requiredPlansString = referralPlan ? `${referralPlan.name} (${referralPlan.currency})` : 'the required plan';
-                        }
-                        return { status: 'Pending', message: `Commission Held! Purchase ${requiredPlansString} to earn from ${user.username}.` };
+                        // Find the name of the plan the user needs to buy
+                        const targetPlan = allPlans.find(p => p._id.toString() === targetPlanId.toString());
+                        const requiredPlanName = targetPlan ? `${targetPlan.name} (${targetPlan.currency})` : 'the required equivalent plan';
+                        
+                        return { 
+                            status: 'Pending', 
+                            message: `Commission Held! Purchase ${requiredPlanName} to release commission earned from ${user.username}.` 
+                        };
                     }
                 }
                 else if (settings.requireActivePlanForCommission) {
@@ -706,6 +714,8 @@ export const purchasePlan = async (req, res) => {
                     continue;
                 }
 
+                // Calculate final amount in sponsor's currency immediately
+                // This ensures the value is fixed even if exchange rates change later
                 const finalCommissionAmount = convertCurrency(commissionInPurchaserCurrency, user.currency, uplineUser.currency);
 
                 if (eligibility.status === 'Approved') {
@@ -716,7 +726,11 @@ export const purchasePlan = async (req, res) => {
                         message: `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`
                     });
                 } else if (eligibility.status === 'Pending') {
-                    await Notification.create({ userId: uplineUser._id, message: eligibility.message });
+                    // Include the specific amount in the held notification
+                    await Notification.create({ 
+                        userId: uplineUser._id, 
+                        message: `${eligibility.message} Amount held: ${uplineUser.currency}${finalCommissionAmount.toFixed(2)}` 
+                    });
                 }
 
                 const currentExchangeRate = (exchangeRates && user.currency && exchangeRates[user.currency.toUpperCase()]) 
