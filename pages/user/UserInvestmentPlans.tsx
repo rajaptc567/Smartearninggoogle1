@@ -16,7 +16,7 @@ const CheckMarkIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="cu
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
-  const { investmentPlans, currentUser } = state;
+  const { investmentPlans, currentUser, transactions, settings } = state;
   const navigate = useNavigate();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,7 +29,6 @@ const UserInvestmentPlans: React.FC = () => {
   
   const activePlans = investmentPlans.filter(p => p.status === Status.Active && p.currency === currentUser.currency);
 
-  
   const handlePurchaseClick = (plan: InvestmentPlan) => {
     setSelectedPlan(plan);
     setIsModalOpen(true);
@@ -73,6 +72,63 @@ const UserInvestmentPlans: React.FC = () => {
       return `Up to ${valStr}`;
   };
 
+  // Helper to calculate total held commission that would be unlocked by buying this plan
+  const getHeldCommissionInfo = (planId: string) => {
+      const pendingCommissions = transactions.filter(t => 
+          t.userId === currentUser._id && 
+          t.type === 'Commission' && 
+          t.status === 'Pending'
+      );
+
+      let totalHeld = 0;
+      let count = 0;
+
+      pendingCommissions.forEach(comm => {
+          // Generally check if this pending commission is because of a missing plan
+          // Currently we only track relatedPlanId on commission transaction if logic allows
+          const relatedId = comm.relatedPlanId;
+          
+          // If commission is pending but has no related plan, it might be due to 'Active Plan Required' check
+          // In that case, buying ANY plan might unlock it.
+          // BUT if we want to be specific:
+          
+          let isMatch = false;
+
+          if (relatedId) {
+                // 1. Direct Match: The commission is tied to this specific plan
+                if (relatedId === planId) isMatch = true;
+
+                // 2. Equivalency Match: The commission is tied to a plan equivalent to this one
+                if (!isMatch && settings.planEquivalencyGroups) {
+                    const group = settings.planEquivalencyGroups.find(g => 
+                        g.usdPlanId === relatedId || 
+                        g.pkrPlanId === relatedId || 
+                        g.eurPlanId === relatedId
+                    );
+                    if (group) {
+                        if (group.usdPlanId === planId || group.pkrPlanId === planId || group.eurPlanId === planId) {
+                            isMatch = true;
+                        }
+                    }
+                }
+          } else {
+              // If no relatedPlanId, assume it's held due to 'RequireActivePlan' generic rule
+              // So buying ANY plan helps. We can show it on all plans or logic can be refined.
+              // For now, let's assume relatedPlanId is populated for commissions held due to Plan Matching.
+              // If held due to 'Active Plan Required', relatedPlanId might still be present from the purchase.
+              isMatch = true; // Show on all plans if generic? Or logic above handles it via relatedPlanId?
+              // Let's stick to relatedPlanId check for specificity as per request.
+          }
+
+          if (isMatch) {
+              totalHeld += comm.amount;
+              count++;
+          }
+      });
+
+      return { totalHeld, count };
+  };
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
        <div className="text-center">
@@ -85,6 +141,8 @@ const UserInvestmentPlans: React.FC = () => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
                 const canAfford = currentUser.walletBalance >= plan.price;
                 const isPopular = index === 1; // Static example to highlight a plan
+                
+                const { totalHeld, count } = getHeldCommissionInfo(plan._id);
 
                 return (
                      <div key={plan._id} className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg flex flex-col border-2 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 ${isPopular ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'}`}>
@@ -95,6 +153,20 @@ const UserInvestmentPlans: React.FC = () => {
                                 <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
                                 <p className="text-6xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">{formatCurrency(plan.price, plan.currency)}</p>
                             </div>
+                            
+                            {totalHeld > 0 && !isOwned && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-3 mb-4 rounded-lg animate-pulse">
+                                    <div className="flex items-start">
+                                        <svg className="w-5 h-5 text-yellow-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                        <div>
+                                            <p className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Commission Held!</p>
+                                            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                                Purchase this plan to instantly unlock <strong>{formatCurrency(totalHeld, currentUser.currency)}</strong> in held commissions from {count} referral(s).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             
                             <p className="text-base text-gray-600 dark:text-gray-300 text-center mb-8">{plan.description}</p>
                             
@@ -114,7 +186,7 @@ const UserInvestmentPlans: React.FC = () => {
                                </Button>
                            ) : canAfford ? (
                                <Button size="lg" className="w-full shadow-lg shadow-blue-500/30" onClick={() => handlePurchaseClick(plan)}>
-                                   Purchase Plan
+                                   {totalHeld > 0 ? 'Unlock Commissions & Purchase' : 'Purchase Plan'}
                                </Button>
                            ) : (
                                <Button size="lg" className="w-full" variant="secondary" onClick={() => navigate('/member/deposit')}>

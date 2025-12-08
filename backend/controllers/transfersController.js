@@ -137,6 +137,8 @@ export const updateTransfer = async (req, res) => {
             let receivedAmount = transfer.amount;
             let originalAmountForTx = null;
             let originalCurrencyForTx = null;
+            let senderDesc = `Transfer Sent #${transfer._id} to ${recipient.username}`;
+            let recipientDesc = `Received from ${sender.username}`;
 
             // Correct Conversion Logic (USD is base)
             if (sender.currency !== recipient.currency) {
@@ -154,6 +156,10 @@ export const updateTransfer = async (req, res) => {
                 
                 originalAmountForTx = transfer.amount;
                 originalCurrencyForTx = sender.currency;
+
+                // Update Descriptions to reflect exchange
+                senderDesc += `. Recipient received: ${recipient.currency} ${receivedAmount.toFixed(2)}`;
+                recipientDesc += ` (Original: ${sender.currency} ${transfer.amount.toFixed(2)})`;
             }
 
             // Add converted funds to recipient
@@ -162,7 +168,7 @@ export const updateTransfer = async (req, res) => {
 
             if (originalTransaction) {
                 originalTransaction.status = 'Approved';
-                originalTransaction.description = `Transfer Sent #${transfer._id} to ${recipient.username}`;
+                originalTransaction.description = senderDesc;
                 await originalTransaction.save();
             }
 
@@ -173,7 +179,7 @@ export const updateTransfer = async (req, res) => {
                 currency: recipient.currency,
                 type: 'Transfer Received',
                 amount: receivedAmount,
-                description: `Received from ${sender.username}`,
+                description: recipientDesc,
                 sourceUserId: sender._id,
                 status: 'Approved',
                 exchangeRate: rates[sender.currency.toUpperCase()] || 1
