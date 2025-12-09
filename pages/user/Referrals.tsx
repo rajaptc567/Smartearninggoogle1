@@ -95,7 +95,7 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // Helper to display max direct commission for plan details
+    // Helper to calculate max direct commission for display
     const renderMaxDirectCommission = (plan: InvestmentPlan) => {
         const comms = plan.directCommissions;
         if (!comms || comms.length === 0) return 'N/A';
@@ -586,37 +586,44 @@ const Referrals: React.FC = () => {
 
             {/* Plan Details Card */}
             {selectedPlanDetails && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm animate-fade-in">
-                    <div className="flex justify-between items-start mb-3 border-b dark:border-gray-700 pb-2">
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="text-blue-600 dark:text-blue-400">★</span> {selectedPlanDetails.name} Details
-                        </h3>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm animate-fade-in transition-all">
+                    <div className="flex flex-col md:flex-row gap-6">
+                        <div className="flex-1">
+                            <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                <span className="p-1 bg-blue-100 text-blue-600 rounded-md dark:bg-blue-900/30 dark:text-blue-400">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </span>
+                                {selectedPlanDetails.name} <span className="text-sm font-normal text-gray-500">Plan Details</span>
+                            </h3>
+                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border border-gray-100 dark:border-gray-700">
+                                {selectedPlanDetails.description}
+                            </p>
+                        </div>
+                        <div className="flex-none w-full md:w-auto min-w-[200px]">
+                             <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                    <span className="block text-[10px] uppercase text-gray-500 tracking-wider">Price</span>
+                                    <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                    <span className="block text-[10px] uppercase text-gray-500 tracking-wider">Duration</span>
+                                    <span className="font-bold text-gray-900 dark:text-white">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                    <span className="block text-[10px] uppercase text-gray-500 tracking-wider">Min Withdraw</span>
+                                    <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                    <span className="block text-[10px] uppercase text-gray-500 tracking-wider">Direct Comm</span>
+                                    <span className="font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span>
+                                </div>
+                                <div className="col-span-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded flex justify-between items-center">
+                                    <span className="text-[10px] uppercase text-gray-500 tracking-wider">Indirect Levels</span>
+                                    <span className="font-bold text-purple-600 dark:text-purple-400">{selectedPlanDetails.indirectCommissions.length}</span>
+                                </div>
+                             </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm mb-3">
-                        <div>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Price</span>
-                            <span className="font-bold text-gray-800 dark:text-gray-200 text-lg">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Duration</span>
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Unlimited' : `${selectedPlanDetails.durationDays} Days`}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Min Withdrawal</span>
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Direct Comm (Max)</span>
-                            <span className="font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Indirect Levels</span>
-                            <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedPlanDetails.indirectCommissions.length} Levels</span>
-                        </div>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-700/50">
-                        {selectedPlanDetails.description}
-                    </p>
                 </div>
             )}
 
