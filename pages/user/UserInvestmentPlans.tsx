@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
 import { InvestmentPlan, Status, formatCurrency } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { purchasePlan as apiPurchasePlan } from '../../services/api';
 
 // --- Icon Components ---
@@ -18,10 +18,24 @@ const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
   const { investmentPlans, currentUser, transactions, settings } = state;
   const navigate = useNavigate();
+  const location = useLocation();
+  const highlightPlanId = location.state?.highlightPlanId;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<InvestmentPlan | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+
+  // Effect to scroll to the highlighted plan
+  useEffect(() => {
+    if (highlightPlanId) {
+        setTimeout(() => {
+            const element = document.getElementById(`plan-${highlightPlanId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 500);
+    }
+  }, [highlightPlanId]);
 
   if (!currentUser) {
     return <div>Loading user data...</div>;
@@ -141,11 +155,22 @@ const UserInvestmentPlans: React.FC = () => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
                 const canAfford = currentUser.walletBalance >= plan.price;
                 const isPopular = index === 1; // Static example to highlight a plan
+                const isHighlighted = highlightPlanId === plan._id;
                 
                 const { totalHeld, count } = getHeldCommissionInfo(plan._id);
 
                 return (
-                     <div key={plan._id} className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg flex flex-col border-2 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 ${isPopular ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'}`}>
+                     <div 
+                        key={plan._id} 
+                        id={`plan-${plan._id}`}
+                        className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg flex flex-col border-2 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 
+                            ${isHighlighted 
+                                ? 'border-yellow-500 ring-4 ring-yellow-500/30 transform scale-105 z-10' 
+                                : isPopular 
+                                    ? 'border-blue-500' 
+                                    : 'border-gray-200 dark:border-gray-700'
+                            }`}
+                    >
                         {isPopular && <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-full z-10 tracking-wider uppercase">Most Popular</div>}
                         
                         <div className="p-8 flex-grow flex flex-col">
