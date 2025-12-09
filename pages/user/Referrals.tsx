@@ -95,6 +95,21 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
+    // Helper to display max direct commission for plan details
+    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
+        const comms = plan.directCommissions;
+        if (!comms || comms.length === 0) return 'N/A';
+        let maxVal = 0;
+        let maxType: 'percentage' | 'fixed' = 'percentage';
+        comms.forEach(c => {
+            if (c.value > maxVal) {
+                maxVal = c.value;
+                maxType = c.type;
+            }
+        });
+        return maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+    };
+
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; pendingReason: string | null; relatedPlanName?: string; earningSourcePlanId?: string } => {
         if (!currentUser) return { earned: 0, held: 0, pendingReason: null };
 
@@ -521,6 +536,8 @@ const Referrals: React.FC = () => {
         return null;
     }, [earningSourcePlan, currentUser, settings.planEquivalencyGroups, investmentPlans]);
 
+    const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
+
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             {/* Header */}
@@ -566,6 +583,45 @@ const Referrals: React.FC = () => {
                     <Button size="sm" onClick={() => navigate('/member/plans')}>Buy Plan</Button>
                 </div>
             )}
+
+            {/* Plan Details Card */}
+            {selectedPlanDetails && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm animate-fade-in">
+                    <div className="flex justify-between items-start mb-3 border-b dark:border-gray-700 pb-2">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="text-blue-600 dark:text-blue-400">★</span> {selectedPlanDetails.name} Details
+                        </h3>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm mb-3">
+                        <div>
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Price</span>
+                            <span className="font-bold text-gray-800 dark:text-gray-200 text-lg">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Duration</span>
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Unlimited' : `${selectedPlanDetails.durationDays} Days`}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Min Withdrawal</span>
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Direct Comm (Max)</span>
+                            <span className="font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Indirect Levels</span>
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedPlanDetails.indirectCommissions.length} Levels</span>
+                        </div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-md border dark:border-gray-700/50">
+                        {selectedPlanDetails.description}
+                    </p>
+                </div>
+            )}
+
+            {/* Share Buttons */}
+            <ShareButtons url={referralLink} title="Join my network on SmartEarning!" />
 
             {/* Detailed Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
