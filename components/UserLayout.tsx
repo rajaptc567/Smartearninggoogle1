@@ -8,7 +8,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { markNotificationPopupAsShown } from '../services/api';
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
-import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal } from '../types';
+import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice } from '../types';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -51,6 +51,14 @@ const UserLayout: React.FC = () => {
     const excludedUserIds = new Set(users.filter(u => u.restrictions?.excludeFromTicker).map(u => u._id));
     const contentSource = settings.tickerContentSource || 'hybrid';
     const realActivitySettings = settings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
+    const realTemplates = settings.tickerRealActivityTemplates || {
+        deposits: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'],
+        withdrawals: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'],
+        registrations: ['<strong class="font-semibold">{name}</strong> from {country} just joined!'],
+        commissions: ['<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})'],
+        transfers: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'],
+        planPurchases: ['<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})']
+    };
 
     const timeAgo = (date: Date): string => {
         const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -61,6 +69,21 @@ const UserLayout: React.FC = () => {
         if (hours < 24) return `${hours}h ago`;
         return `${Math.floor(hours / 24)}d ago`;
     };
+
+    const processTemplate = (template: string, replacements: Record<string, string>) => {
+        let res = template;
+        Object.keys(replacements).forEach(key => {
+            res = res.replace(new RegExp(`{${key}}`, 'g'), replacements[key]);
+        });
+        return res;
+    };
+
+    // Helper to get random template
+    const getRandomTemplate = (type: keyof typeof realTemplates) => {
+        const list = realTemplates[type];
+        if (!list || !Array.isArray(list) || list.length === 0) return '';
+        return list[Math.floor(Math.random() * list.length)];
+    }
 
     // 1. Process Real Activities
     if (contentSource === 'hybrid' || contentSource === 'real_only') {
@@ -88,13 +111,39 @@ const UserLayout: React.FC = () => {
 
         realActivitiesSource.forEach(item => {
           let text = '';
+          const templateStr = getRandomTemplate(item.type === 'joined' ? 'registrations' : item.type === 'plan' ? 'planPurchases' : item.type === 'commission' ? 'commissions' : item.type + 's' as any);
+          
+          if (!templateStr) return;
+
           switch (item.type) {
-            case 'deposit': const d = item.data as Deposit; text = `<strong class="font-semibold">${d.userName}</strong> from <strong>${users.find(u=>u._id===d.userId)?.country}</strong> made a deposit of <strong>${formatCurrency(d.amount, d.currency)}</strong>`; break;
-            case 'withdrawal': const w = item.data as Withdrawal; text = `<strong class="font-semibold">${w.userName}</strong> from <strong>${users.find(u=>u._id===w.userId)?.country}</strong> withdrew <strong>${formatCurrency(w.amount, w.currency)}</strong>`; break;
-            case 'joined': const u = item.data as User; text = `<strong class="font-semibold">${u.username}</strong> from <strong>${u.country}</strong> just joined SmartEarning`; break;
-            case 'commission': const c = item.data as Transaction; text = `<strong class="font-semibold">${c.userName}</strong> earned a commission of <strong>${formatCurrency(c.amount, c.currency)}</strong>`; break;
-            case 'transfer': const t = item.data as Transfer; text = `<strong class="font-semibold">${t.senderName}</strong> sent funds to another member`; break;
-            case 'plan': const p = item.data as Transaction; const planName = p.description.replace('Purchased ', '').replace(' plan', ''); text = `<strong class="font-semibold">${p.userName}</strong> purchased the <strong>${planName}</strong> plan`; break;
+            case 'deposit': 
+                const d = item.data as Deposit; 
+                text = processTemplate(templateStr, { name: d.userName, amount: formatCurrency(d.amount, d.currency) });
+                break;
+            case 'withdrawal': 
+                const w = item.data as Withdrawal; 
+                text = processTemplate(templateStr, { name: w.userName, amount: formatCurrency(w.amount, w.currency) });
+                break;
+            case 'joined': 
+                const u = item.data as User; 
+                text = processTemplate(templateStr, { name: u.username, country: u.country });
+                break;
+            case 'commission': 
+                const c = item.data as Transaction; 
+                const level = c.level || 1;
+                const source = level === 1 ? 'from direct referral' : `from level ${level} referral`;
+                text = processTemplate(templateStr, { name: c.userName, amount: formatCurrency(c.amount, c.currency), source });
+                break;
+            case 'transfer': 
+                const t = item.data as Transfer; 
+                text = processTemplate(templateStr, { name: t.senderName, amount: formatCurrency(t.amount, t.currency), recipient: t.recipientName });
+                break;
+            case 'plan': 
+                const p = item.data as Transaction; 
+                const planName = p.description.replace('Purchased ', '').replace(' plan', ''); 
+                const planPrice = formatCurrency(Math.abs(p.amount), p.currency);
+                text = processTemplate(templateStr, { name: p.userName, plan: planName, amount: planPrice });
+                break;
           }
           if(text) activities.push({ id: `${item.type}-${item.data._id}`, type: item.type as Activity['type'], text, time: timeAgo(item.date) });
         });
@@ -204,6 +253,46 @@ const UserLayout: React.FC = () => {
       }
   };
   
+  // Filter Notices for the current user
+  const visibleNotices = useMemo(() => {
+      if (!settings.notices || !currentUser) return [];
+      
+      const now = new Date().getTime();
+
+      return settings.notices.filter(notice => {
+          if (!notice.enabled) return false;
+          
+          // Time Limitation Check
+          if (notice.startTime) {
+              if (now < new Date(notice.startTime).getTime()) return false;
+          }
+          if (notice.endTime) {
+              if (now > new Date(notice.endTime).getTime()) return false;
+          }
+
+          // Targeting Logic
+          if (notice.targetType === 'all') return true;
+          
+          if (notice.targetType === 'inactive') {
+              return (!currentUser.activePlans || currentUser.activePlans.length === 0);
+          }
+          
+          if (notice.targetType === 'plan') {
+              if (!notice.targetIds || notice.targetIds.length === 0) return false;
+              // Check if user has ANY of the targeted plans active
+              return currentUser.activePlans?.some(p => notice.targetIds?.includes(p.planId));
+          }
+          
+          if (notice.targetType === 'manual') {
+              if (!notice.targetIds || notice.targetIds.length === 0) return false;
+              return notice.targetIds.includes(currentUser._id);
+          }
+          
+          return false;
+      });
+  }, [settings.notices, currentUser]);
+
+  
   if (!state.currentUser) {
     return null; 
   }
@@ -213,6 +302,16 @@ const UserLayout: React.FC = () => {
       <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <UserHeader setSidebarOpen={setSidebarOpen} />
+        
+        {/* System Notices Bar */}
+        {visibleNotices.length > 0 && (
+            <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                {visibleNotices.map(notice => (
+                    <NoticeItem key={notice._id} notice={notice} />
+                ))}
+            </div>
+        )}
+
         {settings.tickerEnabled !== false && (
             <ActivityTicker 
                 activities={generatedActivities} 
@@ -248,6 +347,45 @@ const UserLayout: React.FC = () => {
       )}
     </div>
   );
+};
+
+// Sub-component for individual notices to handle animations cleanly
+const NoticeItem: React.FC<{ notice: Notice }> = ({ notice }) => {
+    const colorClasses = {
+        info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+        success: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
+        warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
+        danger: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+    };
+
+    const containerClass = `w-full py-2 px-4 text-sm font-medium flex items-center justify-center overflow-hidden ${colorClasses[notice.color || 'info']}`;
+
+    if (notice.style === 'sliding') {
+        return (
+            <div className={containerClass}>
+                <div className="animate-marquee whitespace-nowrap w-full">
+                    <span className="inline-block px-4">{notice.message}</span>
+                    <span className="inline-block px-4">{notice.message}</span>
+                    <span className="inline-block px-4">{notice.message}</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (notice.style === 'blinking') {
+        return (
+            <div className={`${containerClass} animate-pulse`}>
+                {notice.message}
+            </div>
+        );
+    }
+
+    // Static
+    return (
+        <div className={containerClass}>
+            {notice.message}
+        </div>
+    );
 };
 
 export default UserLayout;

@@ -3,6 +3,7 @@ import express from 'express';
 import {
     getRules,
     createRule,
+    updateRule,
     deleteRule
 } from '../controllers/rulesController.js';
 
@@ -13,6 +14,7 @@ router.route('/')
     .post(createRule);
 
 router.route('/:id')
+    .put(updateRule)
     .delete(deleteRule);
 
 export default router;

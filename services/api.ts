@@ -41,7 +41,7 @@ const handleResponse = async (response: Response) => {
     }
 };
 
-// ... [User API Functions kept as is] ...
+// ... [User API Functions] ...
 export const getUsers = async (): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`);
     const result = await handleResponse(response);
@@ -367,6 +367,16 @@ export const getRules = async (): Promise<Rule[]> => {
 export const createRule = async (ruleData: Partial<Rule>): Promise<Rule> => {
     const response = await fetch(`${API_BASE_URL}/rules`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ruleData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateRule = async (id: string, ruleData: Partial<Rule>): Promise<Rule> => {
+    const response = await fetch(`${API_BASE_URL}/rules/${id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ruleData),
     });

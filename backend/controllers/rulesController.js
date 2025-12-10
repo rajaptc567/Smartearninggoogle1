@@ -12,8 +12,31 @@ export const getRules = async (req, res) => {
 
 export const createRule = async (req, res) => {
     try {
+        // Check if rule already exists for this plan
+        const existingRule = await Rule.findOne({ targetPlanId: req.body.targetPlanId });
+        if (existingRule) {
+            // Update existing instead of creating duplicate (One rule per plan logic)
+            const updatedRule = await Rule.findByIdAndUpdate(existingRule._id, req.body, { new: true, runValidators: true });
+            return res.status(200).json({ success: true, data: updatedRule });
+        }
+
         const rule = await Rule.create(req.body);
         res.status(201).json({ success: true, data: rule });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const updateRule = async (req, res) => {
+    try {
+        const rule = await Rule.findByIdAndUpdate(req.params.id, req.body, {
+            new: true,
+            runValidators: true,
+        });
+        if (!rule) {
+            return res.status(404).json({ success: false, error: 'Rule not found' });
+        }
+        res.status(200).json({ success: true, data: rule });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

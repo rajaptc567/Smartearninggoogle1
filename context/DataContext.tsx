@@ -55,7 +55,8 @@ const initialState: AppState = {
         isUserTransferEnabled: true,
         transferConfig: {
             enabled: true,
-            tiers: []
+            tiers: [],
+            allowCrossCurrency: false
         },
         exchangeRates: {
             USD: 1,

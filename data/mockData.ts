@@ -117,6 +117,7 @@ export const mockSettings: Settings = {
     requireUplineEligibility: false,
     withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
     tickerSpeed: 6,
+    tickerContentSource: 'hybrid',
     featuredPlanIds: [],
     demoProfiles: [
         { _id: 'dp1', name: 'Maria', country: 'Germany', currency: 'EUR' },
@@ -160,7 +161,8 @@ export const mockTransactions: Transaction[] = [
 ];
 export const mockNotifications: Notification[] = [
     {
-        _id: 'n1', userId: 'u2', message: 'Welcome to SmartEarning!', read: false, date: new Date().toISOString()
+        _id: 'n1', userId: 'u2', message: 'Welcome to SmartEarning!', read: false, date: new Date().toISOString(),
+        senderType: 'System', isPopup: false, popupShown: false
     }
 ];
 export const mockTransfers: Transfer[] = [];

@@ -38,6 +38,10 @@ const RuleSchema = new mongoose.Schema({
         required: true,
         default: 'USD',
     },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
 }, {
     timestamps: true
 });

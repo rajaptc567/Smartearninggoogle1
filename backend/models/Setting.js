@@ -24,8 +24,21 @@ const DemoProfileSchema = new mongoose.Schema({
 const DemoActivityTemplateSchema = new mongoose.Schema({
     _id: { type: String, required: true },
     template: { type: String, required: true },
-    type: { type: String, enum: ['withdrawal', 'transfer', 'joined', 'deposit', 'plan'], required: true },
+    type: { type: String, enum: ['withdrawal', 'transfer', 'joined', 'deposit', 'plan', 'commission'], required: true },
     enabled: { type: Boolean, default: true },
+});
+
+const NoticeSchema = new mongoose.Schema({
+    _id: { type: String, required: true },
+    message: { type: String, required: true },
+    targetType: { type: String, enum: ['all', 'plan', 'inactive', 'manual'], required: true },
+    targetIds: [String],
+    style: { type: String, enum: ['sliding', 'blinking', 'static'], default: 'sliding' },
+    speed: { type: String, enum: ['slow', 'normal', 'fast'], default: 'normal' },
+    enabled: { type: Boolean, default: true },
+    color: { type: String, enum: ['info', 'success', 'warning', 'danger'], default: 'info' },
+    startTime: { type: String }, // ISO Date string
+    endTime: { type: String } // ISO Date string
 });
 
 const PlanEquivalencyGroupSchema = new mongoose.Schema({
@@ -105,6 +118,7 @@ const SettingSchema = new mongoose.Schema({
     },
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
+    notices: [NoticeSchema], // Added notices array
     tickerSpeed: { type: Number, default: 6 },
     tickerContentSource: {
         type: String,
@@ -118,6 +132,14 @@ const SettingSchema = new mongoose.Schema({
         commissions: { type: Boolean, default: true },
         transfers: { type: Boolean, default: true },
         planPurchases: { type: Boolean, default: true }
+    },
+    tickerRealActivityTemplates: {
+        deposits: { type: [String], default: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'] },
+        withdrawals: { type: [String], default: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'] },
+        registrations: { type: [String], default: ['<strong class="font-semibold">{name}</strong> from {country} just joined!'] },
+        commissions: { type: [String], default: ['<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})'] },
+        transfers: { type: [String], default: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'] },
+        planPurchases: { type: [String], default: ['<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})'] }
     },
     tickerDemoAmountRanges: {
         EUR: { min: { type: Number, default: 50 }, max: { type: Number, default: 500 } },
@@ -184,9 +206,54 @@ const defaultSettingsObject = {
     withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
     demoProfiles: defaultDemoProfiles,
     demoActivityTemplates: defaultDemoTemplates,
+    notices: [], // Default empty notices
     tickerSpeed: 6,
     tickerContentSource: 'hybrid',
     tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
+    tickerRealActivityTemplates: {
+        deposits: [
+            '<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>',
+            'New deposit of <strong>{amount}</strong> from <strong class="font-semibold">{name}</strong>',
+            '<strong class="font-semibold">{name}</strong> just added <strong>{amount}</strong> to their wallet',
+            'Funds received! <strong class="font-semibold">{name}</strong>: <strong>{amount}</strong>',
+            '<strong>{amount}</strong> deposit confirmed for <strong class="font-semibold">{name}</strong>'
+        ],
+        withdrawals: [
+            '<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>',
+            'Payout of <strong>{amount}</strong> sent to <strong class="font-semibold">{name}</strong>',
+            '<strong class="font-semibold">{name}</strong> just cashed out <strong>{amount}</strong>',
+            'Withdrawal processed: <strong class="font-semibold">{name}</strong> (<strong>{amount}</strong>)',
+            'Congratulations <strong class="font-semibold">{name}</strong> on your withdrawal of <strong>{amount}</strong>'
+        ],
+        registrations: [
+            '<strong class="font-semibold">{name}</strong> from {country} just joined!',
+            'Welcome <strong class="font-semibold">{name}</strong> from {country} to the community',
+            'New member alert: <strong class="font-semibold">{name}</strong> ({country})',
+            '<strong class="font-semibold">{name}</strong> has registered from {country}',
+            'Our community is growing! Welcome <strong class="font-semibold">{name}</strong>'
+        ],
+        commissions: [
+            '<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})',
+            '<strong>{amount}</strong> commission for <strong class="font-semibold">{name}</strong> ({source})',
+            '<strong class="font-semibold">{name}</strong> just made <strong>{amount}</strong> from referral',
+            'Referral bonus! <strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong>',
+            '<strong>{amount}</strong> added to <strong class="font-semibold">{name}</strong>\'s wallet ({source})'
+        ],
+        transfers: [
+            '<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}',
+            'Fund transfer: <strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong>',
+            '<strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong> to a friend',
+            '<strong>{amount}</strong> transferred by <strong class="font-semibold">{name}</strong>',
+            'Internal transfer of <strong>{amount}</strong> completed by <strong class="font-semibold">{name}</strong>'
+        ],
+        planPurchases: [
+            '<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})',
+            '<strong class="font-semibold">{name}</strong> upgraded to <strong>{plan}</strong>',
+            'New <strong>{plan}</strong> activation by <strong class="font-semibold">{name}</strong>',
+            '<strong class="font-semibold">{name}</strong> started earning with <strong>{plan}</strong>',
+            'Investment made: <strong class="font-semibold">{name}</strong> bought <strong>{plan}</strong>'
+        ]
+    },
     tickerDemoAmountRanges: {
         EUR: { min: 50, max: 500 },
         PKR: { min: 5000, max: 50000 },
@@ -233,6 +300,23 @@ SettingSchema.statics.getSettings = async function() {
     if (!settings.demoActivityTemplates || settings.demoActivityTemplates.length === 0) {
         settings.demoActivityTemplates = defaultDemoTemplates;
         needsSave = true;
+    }
+    // Added self-healing for notices
+    if (!settings.notices) {
+        settings.notices = [];
+        needsSave = true;
+    }
+    // Added self-healing for real activity templates
+    if (!settings.tickerRealActivityTemplates) {
+        settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
+        needsSave = true;
+    } else {
+        // Migration: Ensure keys exist if missing or if string (convert to array)
+        // Note: Simple check here, robust migration should handle string->array conversion if data exists
+        if(!Array.isArray(settings.tickerRealActivityTemplates.deposits)) {
+             settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
+             needsSave = true;
+        }
     }
 
     if (needsSave) {

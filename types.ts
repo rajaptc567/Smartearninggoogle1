@@ -1,43 +1,29 @@
 
-export type Currency = 'EUR' | 'PKR' | 'USD';
-
-export const currencySymbols: Record<Currency, string> = {
-    EUR: '€',
-    PKR: 'Rs',
-    USD: '$',
-};
-
-export const formatCurrency = (amount: number, currency: Currency | string) => {
-    if (typeof amount !== 'number' || isNaN(amount)) {
-        amount = 0;
-    }
-    const symbol = (currencySymbols as any)[currency] || '';
-
-    if (currency === 'PKR') {
-        if (Number.isInteger(amount)) {
-             return `${symbol}${amount.toFixed(0)}`;
-        }
-        return `${symbol}${amount.toFixed(2)}`;
-    }
-    
-    return `${symbol}${amount.toFixed(2)}`;
-};
-
+export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
-  Active = 'Active',
-  Blocked = 'Blocked',
-  Pending = 'Pending',
-  Approved = 'Approved',
-  Rejected = 'Rejected',
-  Paid = 'Paid',
-  Disabled = 'Disabled',
-  Matching = 'Matching',
-  Paused = 'Paused',
-  Open = 'Open',
-  Processing = 'Processing',
-  Resolved = 'Resolved',
-  Closed = 'Closed',
+    Active = 'Active',
+    Pending = 'Pending',
+    Blocked = 'Blocked',
+    Approved = 'Approved',
+    Rejected = 'Rejected',
+    Paid = 'Paid',
+    Disabled = 'Disabled',
+    Matching = 'Matching',
+    Paused = 'Paused',
+    Open = 'Open',
+    Processing = 'Processing',
+    Resolved = 'Resolved',
+    Closed = 'Closed'
+}
+
+export interface UserRestrictions {
+    deposit: boolean;
+    withdrawal: boolean;
+    transfer: boolean;
+    earning: boolean;
+    dispute: boolean;
+    excludeFromTicker: boolean;
 }
 
 export interface ActivePlan {
@@ -47,48 +33,39 @@ export interface ActivePlan {
     purchaseDate: string;
 }
 
-export interface UserRestrictions {
-    deposit: boolean;
-    withdrawal: boolean;
-    transfer: boolean;
-    earning: boolean; // Blocks commissions
-    dispute: boolean; // Blocks disputes
-    excludeFromTicker?: boolean;
-}
-
 export interface User {
-  _id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  whatsapp?: string;
-  country: string;
-  currency: Currency;
-  walletBalance: number;
-  activePlan: string;
-  activePlans?: ActivePlan[];
-  registrationDate: string;
-  status: Status;
-  sponsor?: string;
-  restrictions?: UserRestrictions;
+    _id: string;
+    username: string;
+    fullName: string;
+    email: string;
+    phone: string;
+    whatsapp?: string;
+    country: string;
+    currency: Currency;
+    walletBalance: number;
+    activePlan?: string;
+    activePlans?: ActivePlan[];
+    status: Status | 'Active' | 'Blocked' | 'Pending' | 'Paused';
+    registrationDate: string;
+    restrictions?: UserRestrictions;
+    sponsor?: string;
 }
 
 export interface Deposit {
-  _id: string;
-  userId: string;
-  userName: string;
-  method: string;
-  amount: number;
-  currency: Currency;
-  transactionId: string;
-  senderAccountTitle?: string;
-  receiptUrl?: string;
-  status: Status.Pending | Status.Approved | Status.Rejected;
-  date: string;
-  adminNotes?: string;
-  userNotes?: string;
-  matchedWithdrawalId?: string;
+    _id: string;
+    userId: string;
+    userName: string;
+    method: string;
+    amount: number;
+    currency: Currency;
+    transactionId: string;
+    senderAccountTitle?: string;
+    receiptUrl?: string;
+    status: Status | 'Pending' | 'Approved' | 'Rejected';
+    date: string;
+    adminNotes?: string;
+    userNotes?: string;
+    matchedWithdrawalId?: string;
 }
 
 export interface Withdrawal {
@@ -102,27 +79,12 @@ export interface Withdrawal {
     finalAmount: number;
     accountTitle: string;
     accountNumber: string;
-    status: Status.Pending | Status.Approved | Status.Paid | Status.Rejected | Status.Matching;
+    status: Status | 'Pending' | 'Approved' | 'Paid' | 'Rejected' | 'Matching';
     date: string;
     adminNotes?: string;
     userNotes?: string;
     matchRemainingAmount?: number;
     matchedDepositIds?: Deposit[];
-}
-
-export interface Transfer {
-  _id: string;
-  senderId: string;
-  senderName: string;
-  recipientId: string;
-  recipientName: string;
-  amount: number;
-  currency: Currency;
-  fee?: number;
-  totalDeducted?: number;
-  status: Status.Pending | Status.Approved | Status.Rejected;
-  date: string;
-  adminNotes?: string;
 }
 
 export interface PaymentMethod {
@@ -132,7 +94,7 @@ export interface PaymentMethod {
     type: 'Deposit' | 'Withdrawal';
     accountTitle: string;
     accountNumber: string;
-    instructions: string;
+    instructions?: string;
     minAmount: number;
     maxAmount: number;
     feePercent: number;
@@ -156,51 +118,37 @@ export interface InvestmentPlan {
     durationDays: number;
     minWithdraw: number;
     description: string;
-    status: Status.Active | Status.Disabled;
-    
+    status: Status | 'Active' | 'Disabled';
     directReferralLimit: number;
     directCommissions: Commission[];
     indirectCommissions: Commission[];
-
-    commissionDeductions: {
+    commissionDeductions?: {
         afterMaxPayout: Commission;
         afterMaxEarning: Commission;
         afterMaxDirect: Commission;
     };
-    
-    autoUpgrade: {
+    autoUpgrade?: {
         enabled: boolean;
         toPlanId?: string;
     };
-
-    holdPosition: {
+    holdPosition?: {
         enabled: boolean;
         slots: number[];
     };
-    
-    transferConfig?: {
-        enabled: boolean;
-        feeType: CommissionType;
-        feeValue: number;
-        minAmount: number;
-        maxAmount: number;
-    };
-    equivalentPlanIds?: string[];
 }
-
 
 export interface Transaction {
     _id: string;
     userId: string;
     userName: string;
-    type: 'Deposit' | 'Withdrawal' | 'Commission' | 'Manual Credit' | 'Manual Debit' | 'Withdrawal Request' | 'Withdrawal Refund' | 'Plan Purchase' | 'Transfer Sent' | 'Transfer Received' | 'Transfer Request' | 'Transfer Refund';
+    type: string;
     amount: number;
     currency: Currency;
-    date: string;
     description: string;
+    status?: string;
+    date: string;
     level?: number;
     sourceUserId?: string;
-    status?: 'Pending' | 'Approved' | 'Rejected';
     relatedPlanId?: string;
     originalAmount?: number;
     originalCurrency?: Currency;
@@ -209,19 +157,15 @@ export interface Transaction {
 
 export interface Rule {
     _id: string;
-    targetPlanId: string; // The plan the user wants to join
-    targetPlanName: string; 
-    
-    // Conditions
-    requiredPlanIds: string[]; // List of plans user MUST already have
+    targetPlanId: string;
+    targetPlanName: string;
+    requiredPlanIds: string[];
     requiredPlanNames: string[];
-    
     minTotalEarnings?: number;
-    maxTotalEarnings?: number; // E.g. "Can't join starter plan if you earned > 1000"
-    
+    maxTotalEarnings?: number;
     minDirectReferrals?: number;
-    
     currency: Currency;
+    isActive?: boolean;
 }
 
 export interface TransferFeeTier {
@@ -245,6 +189,19 @@ export interface DemoActivityTemplate {
     template: string;
     type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan' | 'commission';
     enabled: boolean;
+}
+
+export interface Notice {
+    _id: string;
+    message: string;
+    targetType: 'all' | 'plan' | 'inactive' | 'manual';
+    targetIds?: string[];
+    style: 'sliding' | 'blinking' | 'static';
+    speed?: 'slow' | 'normal' | 'fast';
+    enabled: boolean;
+    color?: 'info' | 'success' | 'warning' | 'danger';
+    startTime?: string;
+    endTime?: string;
 }
 
 export interface PlanEquivalencyGroup {
@@ -271,26 +228,23 @@ export interface HomepageContent {
     mlmDesc: string;
     ctaTitle: string;
     ctaDesc: string;
+    [key: string]: string | undefined;
 }
 
 export interface Settings {
-    tickerEnabled?: boolean;
-    isUserTransferEnabled: boolean; 
-    
+    isUserTransferEnabled: boolean;
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
-        allowCrossCurrency?: boolean;
+        allowCrossCurrency: boolean;
     };
-
     exchangeRates: {
+        USD: number;
         EUR: number;
         PKR: number;
-        USD: number;
     };
-
     restrictWithdrawalAmount: boolean;
-    requirePlanMatchForCommission: boolean; 
+    requirePlanMatchForCommission: boolean;
     requireActivePlanForCommission: boolean;
     oneTimeCommissionPerGroup: boolean;
     recurringCommissionPlanIds?: string[];
@@ -300,10 +254,9 @@ export interface Settings {
         value: number;
         unit: 'hours' | 'days' | 'weeks' | 'months';
     };
-    demoProfiles?: DemoProfile[];
-    demoActivityTemplates?: DemoActivityTemplate[];
-    tickerSpeed?: number;
-    tickerContentSource?: 'hybrid' | 'real_only' | 'demo_only';
+    tickerSpeed: number;
+    tickerContentSource: 'hybrid' | 'real_only' | 'demo_only';
+    tickerEnabled?: boolean;
     tickerPauseOnHover?: boolean;
     tickerStyle?: {
         backgroundColor?: string;
@@ -318,11 +271,22 @@ export interface Settings {
         transfers: boolean;
         planPurchases: boolean;
     };
+    tickerRealActivityTemplates?: {
+        deposits: string[];
+        withdrawals: string[];
+        registrations: string[];
+        commissions: string[];
+        transfers: string[];
+        planPurchases: string[];
+    };
     tickerDemoAmountRanges?: {
+        USD: { min: number; max: number };
         EUR: { min: number; max: number };
         PKR: { min: number; max: number };
-        USD?: { min: number; max: number };
     };
+    demoProfiles?: DemoProfile[];
+    demoActivityTemplates?: DemoActivityTemplate[];
+    notices?: Notice[];
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
@@ -330,36 +294,51 @@ export interface Settings {
 }
 
 export interface Notification {
-  _id: string;
-  userId: string;
-  senderType?: 'Admin' | 'System';
-  subject?: string;
-  message: string;
-  isPopup?: boolean;
-  popupShown?: boolean;
-  read: boolean;
-  date: string;
+    _id: string;
+    userId: string;
+    senderType: 'Admin' | 'System';
+    subject?: string;
+    message: string;
+    isPopup: boolean;
+    popupShown: boolean;
+    read: boolean;
+    date: string;
+}
+
+export interface Transfer {
+    _id: string;
+    senderId: string;
+    senderName: string;
+    recipientId: string;
+    recipientName: string;
+    amount: number;
+    currency: Currency;
+    fee?: number;
+    totalDeducted?: number;
+    status: Status | 'Pending' | 'Approved' | 'Rejected';
+    date: string;
+    adminNotes?: string;
 }
 
 export interface Log {
-  _id: string;
-  timestamp: string;
-  action: string;
-  affectedUser: string;
-  details: string;
-  performedBy: string;
+    _id: string;
+    action: string;
+    affectedUser?: string;
+    details?: string;
+    performedBy: string;
+    timestamp: string;
 }
 
 export interface PasswordResetRequest {
-  _id: string;
-  userId: string;
-  userEmail: string;
-  userName: string;
-  status: 'Pending' | 'Handled';
-  requestDate: string;
+    _id: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    status: 'Pending' | 'Handled';
+    requestDate: string;
 }
 
-export interface DisputeMessage {
+export interface Message {
     sender: 'User' | 'Admin' | 'System';
     message: string;
     date: string;
@@ -374,33 +353,29 @@ export interface Dispute {
     referenceId: string;
     description: string;
     proofUrl?: string;
-    status: Status.Open | Status.Processing | Status.Resolved | Status.Closed;
+    status: Status | 'Open' | 'Processing' | 'Resolved' | 'Closed';
     adminResponse?: string;
-    messages?: DisputeMessage[];
+    messages?: Message[];
+    adminUnread: boolean;
+    userUnread: boolean;
     date: string;
-    adminUnread?: boolean;
-    userUnread?: boolean;
 }
 
+export const currencySymbols: Record<string, string> = {
+    USD: '$',
+    EUR: '€',
+    PKR: 'Rs',
+};
+
+export const formatCurrency = (amount: number | undefined | null, currency: string = 'USD') => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+        const symbol = currencySymbols[currency] || currency || '$';
+        return `${symbol} 0.00`;
+    }
+    const symbol = currencySymbols[currency] || currency;
+    return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const countries = [
-  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
-  "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
-  "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
-  "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo, Democratic Republic of the",
-  "Congo, Republic of the", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti",
-  "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini",
-  "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala",
-  "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland",
-  "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos",
-  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia",
-  "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia",
-  "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger",
-  "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine State", "Panama", "Papua New Guinea",
-  "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis",
-  "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal",
-  "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa",
-  "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan",
-  "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
-  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City",
-  "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"
+    "United States", "United Kingdom", "Canada", "Australia", "Germany", "France", "Italy", "Spain", "Pakistan", "India", "China", "Japan", "Brazil", "Russia", "Mexico", "Indonesia", "Turkey", "Saudi Arabia", "United Arab Emirates", "South Africa", "Nigeria", "Egypt", "Bangladesh", "Vietnam", "Thailand", "Malaysia", "Singapore", "New Zealand", "Netherlands", "Belgium", "Switzerland", "Sweden", "Norway", "Denmark", "Finland", "Poland", "Austria", "Greece", "Portugal", "Ireland", "Czech Republic", "Hungary", "Romania"
 ];
