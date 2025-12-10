@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../hooks/useData';
-import { Settings, DemoProfile, DemoActivityTemplate, Currency, countries, formatCurrency } from '../types';
+import { Settings, DemoProfile, DemoActivityTemplate, Currency, countries, formatCurrency, InvestmentPlan } from '../types';
 import { updateSettings } from '../services/api';
 import Button from '../components/ui/Button';
 import ActivityTicker, { Activity } from '../components/ui/ActivityTicker';
@@ -38,6 +38,17 @@ const TickerSettings: React.FC = () => {
     const [bulkTemplateText, setBulkTemplateText] = useState('');
     const [currentTemplate, setCurrentTemplate] = useState<Partial<DemoActivityTemplate> | null>(null);
     const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+
+    // Template Builder State
+    const [builderProfileId, setBuilderProfileId] = useState('');
+    const [builderAction, setBuilderAction] = useState('joined');
+    const [builderPlanId, setBuilderPlanId] = useState('');
+    const [builderTransferAmount, setBuilderTransferAmount] = useState('');
+    const [builderRecipientId, setBuilderRecipientId] = useState('');
+    
+    // Commission Specific Builder State
+    const [builderCommissionType, setBuilderCommissionType] = useState<'direct' | 'indirect'>('direct');
+    const [builderIndirectLevel, setBuilderIndirectLevel] = useState<string>('0'); // Stores index of indirect array
 
     // Bulk Edit Modals
     const [isBulkEditProfilesModalOpen, setIsBulkEditProfilesModalOpen] = useState(false);
@@ -266,8 +277,17 @@ const TickerSettings: React.FC = () => {
         }
     };
 
-    // --- Template Management ---
+    // --- Template Management & Builder ---
     const handleOpenTemplateModal = (template: DemoActivityTemplate | null) => {
+        // Reset builder state
+        setBuilderProfileId('');
+        setBuilderAction('joined');
+        setBuilderPlanId('');
+        setBuilderTransferAmount('');
+        setBuilderRecipientId('');
+        setBuilderCommissionType('direct');
+        setBuilderIndirectLevel('0');
+
         if (template) {
             setCurrentTemplate({ ...template });
             setIsEditingTemplate(true);
@@ -276,6 +296,65 @@ const TickerSettings: React.FC = () => {
             setIsEditingTemplate(false);
         }
         setIsTemplateModalOpen(true);
+    };
+
+    const handleBuilderApply = () => {
+        if (!builderProfileId) return;
+        const profile = localSettings.demoProfiles?.find(p => p._id === builderProfileId);
+        if (!profile) return;
+
+        let newText = '';
+        let newType: any = builderAction;
+
+        if (builderAction === 'joined') {
+            newText = `<strong class="font-semibold">${profile.name}</strong> from <strong>${profile.country}</strong> just joined SmartEarning!`;
+        } else if (builderAction === 'transfer') {
+            if (!builderRecipientId || !builderTransferAmount) return alert("Please fill amount and recipient");
+            const recipient = localSettings.demoProfiles?.find(p => p._id === builderRecipientId);
+            const amt = parseFloat(builderTransferAmount);
+            newText = `<strong class="font-semibold">${profile.name}</strong> sent <strong>${formatCurrency(amt, profile.currency)}</strong> to <strong class="font-semibold">${recipient?.name || 'Someone'}</strong>`;
+        } else {
+            // Deposit, Withdraw, Plan, Commission
+            if (!builderPlanId) return alert("Please select a plan");
+            const plan = investmentPlans.find(p => p._id === builderPlanId);
+            if (!plan) return;
+
+            if (builderAction === 'deposit') {
+                newText = `<strong class="font-semibold">${profile.name}</strong> from <strong>${profile.country}</strong> made a deposit of <strong>${formatCurrency(plan.price, profile.currency)}</strong>`;
+            } else if (builderAction === 'withdrawal') {
+                newText = `<strong class="font-semibold">${profile.name}</strong> from <strong>${profile.country}</strong> withdrew <strong>${formatCurrency(plan.price, profile.currency)}</strong>`;
+            } else if (builderAction === 'plan') {
+                newText = `<strong class="font-semibold">${profile.name}</strong> purchased the <strong>${plan.name}</strong> plan`;
+            } else if (builderAction === 'commission') {
+                // Calculate estimated commission based on plan & selection
+                let comm = 0;
+                let desc = 'commission';
+                
+                if (builderCommissionType === 'direct') {
+                    if (plan.directCommissions.length > 0) {
+                        const c = plan.directCommissions[0];
+                        comm = c.type === 'percentage' ? (plan.price * c.value / 100) : c.value;
+                    } else {
+                        comm = plan.price * 0.05; // Fallback 5%
+                    }
+                    desc = 'direct commission';
+                } else {
+                    const idx = parseInt(builderIndirectLevel);
+                    if (plan.indirectCommissions && plan.indirectCommissions[idx]) {
+                        const c = plan.indirectCommissions[idx];
+                        comm = c.type === 'percentage' ? (plan.price * c.value / 100) : c.value;
+                        desc = `Level ${idx + 2} commission`;
+                    } else {
+                        // Fallback if index invalid or empty, prevent crash
+                        comm = 0;
+                        desc = `Level ${idx + 2} commission`;
+                    }
+                }
+                newText = `<strong class="font-semibold">${profile.name}</strong> earned a ${desc} of <strong>${formatCurrency(comm, profile.currency)}</strong>`;
+            }
+        }
+
+        setCurrentTemplate({ ...currentTemplate, template: newText, type: newType });
     };
 
     const handleSaveTemplate = () => {
@@ -488,6 +567,12 @@ const TickerSettings: React.FC = () => {
     // --- Render Helpers ---
     const paginatedProfiles = (localSettings.demoProfiles || []).slice((profilesCurrentPage - 1) * profilesPerPage, profilesCurrentPage * profilesPerPage);
     const paginatedTemplates = (localSettings.demoActivityTemplates || []).slice((templatesCurrentPage - 1) * templatesPerPage, templatesCurrentPage * templatesPerPage);
+
+    // Helpers for Builder
+    const builderSelectedProfile = localSettings.demoProfiles?.find(p => p._id === builderProfileId);
+    const builderAvailablePlans = builderSelectedProfile 
+        ? investmentPlans.filter(p => p.currency === builderSelectedProfile.currency && p.status === 'Active') 
+        : [];
 
     return (
         <div className="space-y-6">
@@ -777,7 +862,7 @@ const TickerSettings: React.FC = () => {
                                             <span className="uppercase text-xs font-bold">{template.type.substring(0, 2)}</span>
                                         </div>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{template.template}</p>
+                                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200" dangerouslySetInnerHTML={{__html: template.template}}></p>
                                             <p className="text-xs text-gray-500 uppercase tracking-wide">{template.type}</p>
                                         </div>
                                     </div>
@@ -831,14 +916,162 @@ const TickerSettings: React.FC = () => {
                 </Modal>
             )}
 
-            {/* Template Modal */}
+            {/* Template Modal with Visual Builder */}
             {isTemplateModalOpen && currentTemplate && (
                 <Modal isOpen={true} onClose={() => setIsTemplateModalOpen(false)}>
-                    <div className="p-4 w-[500px] max-w-full">
-                        <h3 className="text-lg font-bold mb-4">{currentTemplate._id ? 'Edit Template' : 'Add Template'}</h3>
+                    <div className="p-6 w-[600px] max-w-full">
+                        <h3 className="text-xl font-bold mb-4">{currentTemplate._id ? 'Edit Template' : 'Add Template'}</h3>
                         
+                        {/* VISUAL BUILDER SECTION */}
+                        <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <h4 className="text-sm font-bold uppercase text-blue-600 dark:text-blue-400 mb-3">Template Builder</h4>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-semibold mb-1 text-gray-500">1. Actor Profile</label>
+                                    <select 
+                                        className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                        value={builderProfileId}
+                                        onChange={e => {
+                                            setBuilderProfileId(e.target.value);
+                                            setBuilderPlanId(''); // Reset dependent fields
+                                        }}
+                                    >
+                                        <option value="">-- Select Profile --</option>
+                                        {localSettings.demoProfiles?.map(p => (
+                                            <option key={p._id} value={p._id}>{p.name} ({p.country} - {p.currency})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold mb-1 text-gray-500">2. Event Type</label>
+                                    <select 
+                                        className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                        value={builderAction}
+                                        onChange={e => setBuilderAction(e.target.value)}
+                                    >
+                                        <option value="joined">New Registration</option>
+                                        <option value="deposit">Deposit</option>
+                                        <option value="withdrawal">Withdrawal</option>
+                                        <option value="plan">Plan Purchase</option>
+                                        <option value="commission">Commission</option>
+                                        <option value="transfer">Transfer</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* DYNAMIC FIELDS BASED ON ACTION */}
+                            {(builderAction === 'deposit' || builderAction === 'withdrawal' || builderAction === 'plan' || builderAction === 'commission') && (
+                                <div className="mb-4">
+                                    <label className="block text-xs font-semibold mb-1 text-gray-500">3. Select Plan Amount ({builderSelectedProfile?.currency || 'Select Profile First'})</label>
+                                    <select 
+                                        className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                        value={builderPlanId}
+                                        onChange={e => setBuilderPlanId(e.target.value)}
+                                        disabled={!builderProfileId}
+                                    >
+                                        <option value="">-- Select Plan --</option>
+                                        {builderAvailablePlans.map(p => (
+                                            <option key={p._id} value={p._id}>{p.name} - {formatCurrency(p.price, p.currency)}</option>
+                                        ))}
+                                        {builderSelectedProfile && builderAvailablePlans.length === 0 && <option disabled>No active plans found for {builderSelectedProfile.currency}</option>}
+                                    </select>
+                                </div>
+                            )}
+
+                            {builderAction === 'commission' && builderPlanId && (
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1 text-gray-500">4. Commission Type</label>
+                                        <select 
+                                            className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                            value={builderCommissionType}
+                                            onChange={e => setBuilderCommissionType(e.target.value as 'direct' | 'indirect')}
+                                        >
+                                            <option value="direct">Direct (Level 1)</option>
+                                            <option value="indirect">Indirect (Level 2+)</option>
+                                        </select>
+                                    </div>
+                                    {builderCommissionType === 'indirect' && (
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1 text-gray-500">5. Select Level</label>
+                                            <select 
+                                                className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                                value={builderIndirectLevel}
+                                                onChange={e => setBuilderIndirectLevel(e.target.value)}
+                                            >
+                                                {(() => {
+                                                    const plan = investmentPlans.find(p => p._id === builderPlanId);
+                                                    if (!plan || !plan.indirectCommissions || plan.indirectCommissions.length === 0) {
+                                                        return <option value="0">No indirect levels configured</option>;
+                                                    }
+                                                    return plan.indirectCommissions.map((_, idx) => (
+                                                        <option key={idx} value={idx}>Level {idx + 2}</option>
+                                                    ));
+                                                })()}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {builderAction === 'transfer' && (
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1 text-gray-500">3. Random Amount</label>
+                                        <input 
+                                            type="number" 
+                                            className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                            placeholder="e.g. 50"
+                                            value={builderTransferAmount}
+                                            onChange={e => setBuilderTransferAmount(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1 text-gray-500">4. Recipient</label>
+                                        <select 
+                                            className="w-full rounded text-sm p-2 border dark:bg-gray-800 dark:border-gray-600"
+                                            value={builderRecipientId}
+                                            onChange={e => setBuilderRecipientId(e.target.value)}
+                                        >
+                                            <option value="">-- Select Recipient --</option>
+                                            {localSettings.demoProfiles?.filter(p => p._id !== builderProfileId).map(p => (
+                                                <option key={p._id} value={p._id}>{p.name} ({p.country})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+
+                            <Button onClick={handleBuilderApply} size="sm" className="w-full" disabled={!builderProfileId}>
+                                Generate Template Text from Selection
+                            </Button>
+                        </div>
+
+                        {/* RAW EDIT SECTION */}
                         <div className="mb-4">
-                            <label className="block text-sm font-medium mb-1">Event Type</label>
+                            <label className="block text-sm font-medium mb-1">Generated / Editable Template Text</label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {['{name}', '{amount}', '{country}', '{plan}', '{currency}'].map(variable => (
+                                    <button 
+                                        key={variable} 
+                                        onClick={() => handleInsertVariable(variable)}
+                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200"
+                                    >
+                                        + {variable}
+                                    </button>
+                                ))}
+                            </div>
+                            <textarea 
+                                ref={templateTextareaRef}
+                                className="w-full border rounded p-2 dark:bg-gray-700 h-24 font-mono text-sm" 
+                                value={currentTemplate.template} 
+                                onChange={e => setCurrentTemplate({...currentTemplate, template: e.target.value})}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">HTML tags like &lt;strong&gt; are allowed for styling.</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium mb-1">Assigned Type</label>
                             <select 
                                 className="w-full border rounded p-2 dark:bg-gray-700" 
                                 value={currentTemplate.type} 
@@ -853,28 +1086,7 @@ const TickerSettings: React.FC = () => {
                             </select>
                         </div>
 
-                        <div className="mb-2">
-                            <label className="block text-sm font-medium mb-1">Template Text</label>
-                            <div className="flex flex-wrap gap-2 mb-2">
-                                {['{name}', '{amount}', '{country}', '{plan}', '{currency}'].map(variable => (
-                                    <button 
-                                        key={variable} 
-                                        onClick={() => handleInsertVariable(variable)}
-                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200"
-                                    >
-                                        + {variable}
-                                    </button>
-                                ))}
-                            </div>
-                            <textarea 
-                                ref={templateTextareaRef}
-                                className="w-full border rounded p-2 dark:bg-gray-700 h-24" 
-                                value={currentTemplate.template} 
-                                onChange={e => setCurrentTemplate({...currentTemplate, template: e.target.value})}
-                            />
-                        </div>
-
-                        <div className="mt-4 flex justify-end gap-2">
+                        <div className="mt-6 flex justify-end gap-2 border-t pt-4 dark:border-gray-700">
                             <Button variant="secondary" onClick={() => setIsTemplateModalOpen(false)}>Cancel</Button>
                             <Button onClick={handleSaveTemplate}>Save Template</Button>
                         </div>
