@@ -115,54 +115,67 @@ const UserLayout: React.FC = () => {
                 text = text.replace('{country}', `<strong>${profile.country}</strong>`);
                 text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
 
-                // Find active plans matching profile currency for intelligent pricing
+                // --- SMART PRICING LOGIC ---
+                
+                // Get valid plans for this fake user's currency
                 const plansForCurrency = investmentPlans.filter(p => p.status === 'Active' && p.currency === profile.currency);
                 const randomPlan = plansForCurrency.length > 0 ? plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)] : null;
 
-                // Logic 1: Exact Price for Deposit, Withdrawal, Plan Buy
-                const useExactPlanPrice = ['deposit', 'withdrawal', 'plan'].includes(template.type);
-                if (useExactPlanPrice && randomPlan) {
-                    if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
-                    if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
-                }
-
-                // Logic 2: Commission Calculation
-                if (template.type === 'commission' && randomPlan) {
-                    // Randomize between direct (Level 1) and indirect (Level 2) to show variety
-                    // Weighted 70% towards Direct Commission as they are more common/higher
-                    const isDirect = Math.random() > 0.3; 
-                    const commConfig = isDirect 
-                        ? (randomPlan.directCommissions?.[0]) 
-                        : (randomPlan.indirectCommissions?.[0]);
-                    
-                    let commVal = 0;
-                    if (commConfig) {
-                        commVal = commConfig.type === 'percentage' 
-                            ? (randomPlan.price * commConfig.value) / 100 
-                            : commConfig.value;
+                // Case A: Deposit, Withdrawal, Plan Purchase -> MUST match a real plan price
+                if (['deposit', 'withdrawal', 'plan'].includes(template.type)) {
+                    if (randomPlan) {
+                        // Use exact plan price
+                        text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
+                        text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
                     } else {
-                        // Fallback if config is missing: assume 5%
-                        commVal = randomPlan.price * 0.05; 
+                        // Fallback if no plan exists for this currency (prevent broken text)
+                        text = text.replace('{amount}', `<strong>${formatCurrency(100, profile.currency)}</strong>`);
+                        text = text.replace('{plan}', `<strong>Basic</strong>`);
                     }
+                }
 
-                    if (text.includes('{amount}')) {
+                // Case B: Commission -> MUST match a real plan's commission calculation
+                else if (template.type === 'commission') {
+                    if (randomPlan) {
+                        // Randomly simulate Direct (Level 1) or Indirect (Level 2)
+                        const isDirect = Math.random() > 0.4; // 60% chance direct
+                        
+                        let commVal = 0;
+                        if (isDirect && randomPlan.directCommissions?.length > 0) {
+                            const config = randomPlan.directCommissions[0];
+                            commVal = config.type === 'percentage' ? (randomPlan.price * config.value) / 100 : config.value;
+                        } else if (!isDirect && randomPlan.indirectCommissions?.length > 0) {
+                            const config = randomPlan.indirectCommissions[0];
+                            commVal = config.type === 'percentage' ? (randomPlan.price * config.value) / 100 : config.value;
+                        } else {
+                            // Fallback logic if plan doesn't have configs
+                            commVal = randomPlan.price * 0.05; 
+                        }
+                        
                         text = text.replace('{amount}', `<strong>${formatCurrency(commVal, profile.currency)}</strong>`);
+                    } else {
+                        text = text.replace('{amount}', `<strong>${formatCurrency(5, profile.currency)}</strong>`);
                     }
                 }
 
-                // Fallback for {plan} if it wasn't replaced above (e.g. if no random plan found)
-                if (text.includes('{plan}')) {
-                     text = text.replace('{plan}', `<strong>${randomPlan ? randomPlan.name : 'Premium Plan'}</strong>`);
-                }
-
-                // Fallback for {amount} (Transfers, or if no plan found) -> Use Range Settings
-                if (text.includes('{amount}')) {
+                // Case C: Transfers -> Random value within range settings
+                else if (template.type === 'transfer') {
                     const ranges = settings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
-                    const currencyRange = ranges[profile.currency];
-                    const randomAmount = currencyRange ? Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min : 100;
+                    const currencyRange = ranges[profile.currency] || { min: 10, max: 100 };
+                    
+                    // Round to nearest 10 for cleaner transfer amounts
+                    let randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
+                    randomAmount = Math.round(randomAmount / 10) * 10; 
+
                     text = text.replace('{amount}', `<strong>${formatCurrency(randomAmount, profile.currency)}</strong>`);
                 }
                 
+                // Cleanup: If any {amount} or {plan} tags remain (e.g. template type mismatch), clean them up generic
+                if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(50, profile.currency)}</strong>`);
+                if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>Standard</strong>`);
+
+                // ---------------------------
+
                 if (text) {
                     const hoursAgo = Math.floor(Math.random() * 10) + 1;
                     // Make ID unique to prevent key warnings

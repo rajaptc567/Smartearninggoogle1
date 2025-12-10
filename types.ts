@@ -209,9 +209,18 @@ export interface Transaction {
 
 export interface Rule {
     _id: string;
-    fromPlan: string;
-    toPlan: string;
-    requiredEarnings: number;
+    targetPlanId: string; // The plan the user wants to join
+    targetPlanName: string; 
+    
+    // Conditions
+    requiredPlanIds: string[]; // List of plans user MUST already have
+    requiredPlanNames: string[];
+    
+    minTotalEarnings?: number;
+    maxTotalEarnings?: number; // E.g. "Can't join starter plan if you earned > 1000"
+    
+    minDirectReferrals?: number;
+    
     currency: Currency;
 }
 

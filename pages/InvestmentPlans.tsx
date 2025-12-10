@@ -7,6 +7,13 @@ import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
 import { createInvestmentPlan, updateInvestmentPlan, deleteInvestmentPlan } from '../services/api';
 
+const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
+    <label className="inline-flex items-center cursor-pointer">
+        <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only peer" />
+        <div className={`relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}></div>
+    </label>
+);
+
 const InvestmentPlans: React.FC = () => {
     const { state, dispatch } = useData();
     const { investmentPlans } = state;
@@ -14,6 +21,7 @@ const InvestmentPlans: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
+    const [togglingId, setTogglingId] = useState<string | null>(null);
 
     const handleOpenModal = (plan: InvestmentPlan | null = null) => {
         setEditingPlan(plan);
@@ -50,6 +58,20 @@ const InvestmentPlans: React.FC = () => {
                 console.error("Failed to delete plan:", error);
                 alert(`Error: ${error instanceof Error ? error.message : 'Could not delete plan.'}`);
             }
+        }
+    };
+
+    const handleToggleStatus = async (plan: InvestmentPlan) => {
+        setTogglingId(plan._id);
+        const newStatus = plan.status === Status.Active ? Status.Disabled : Status.Active;
+        try {
+            const updatedPlan = await updateInvestmentPlan(plan._id, { status: newStatus });
+            dispatch({ type: 'UPDATE_INVESTMENT_PLAN', payload: updatedPlan });
+        } catch (error) {
+            console.error("Failed to update plan status:", error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not update plan status.'}`);
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -106,7 +128,14 @@ const InvestmentPlans: React.FC = () => {
                     <div key={plan._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                           <Badge status={plan.status} />
+                           <div className="flex items-center gap-2">
+                               <Badge status={plan.status} />
+                               <ToggleSwitch 
+                                   checked={plan.status === Status.Active} 
+                                   onChange={() => handleToggleStatus(plan)} 
+                                   disabled={togglingId === plan._id}
+                               />
+                           </div>
                         </div>
                         <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-4">{formatCurrency(plan.price, plan.currency)}</p>
                         <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-grow">

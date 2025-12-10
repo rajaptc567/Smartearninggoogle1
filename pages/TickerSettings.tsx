@@ -418,25 +418,53 @@ const TickerSettings: React.FC = () => {
                 text = text.replace('{country}', `<strong>${profile.country}</strong>`);
                 text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
 
-                // Strict Price Matching for Preview (Logic Mirror)
-                const useExactPlanPrice = ['deposit', 'withdrawal', 'plan'].includes(template.type);
+                // --- SMART PRICING LOGIC FOR PREVIEW ---
+                const plansForCurrency = investmentPlans.filter(p => p.currency === profile.currency && p.status === 'Active');
+                const randomPlan = plansForCurrency.length > 0 ? plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)] : null;
 
-                if (useExactPlanPrice) {
-                    const plans = investmentPlans.filter(p => p.currency === profile.currency && p.status === 'Active');
-                    if (plans.length > 0) {
-                        const randomPlan = plans[Math.floor(Math.random() * plans.length)];
-                        if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
-                        if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
+                // Case A: Deposit, Withdrawal, Plan Purchase -> MUST match a real plan price
+                if (['deposit', 'withdrawal', 'plan'].includes(template.type)) {
+                    if (randomPlan) {
+                        text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
+                        text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
+                    } else {
+                        text = text.replace('{amount}', `<strong>${formatCurrency(100, profile.currency)}</strong>`);
+                        text = text.replace('{plan}', `<strong>Basic</strong>`);
                     }
                 }
 
-                // If amount is present but wasn't replaced by plan logic (e.g. Transfer)
-                if (text.includes('{amount}')) {
+                // Case B: Commission -> MUST match a real plan's commission calculation
+                else if (template.type === 'commission') {
+                    if (randomPlan) {
+                        const isDirect = Math.random() > 0.4; // 60% chance direct
+                        let commVal = 0;
+                        if (isDirect && randomPlan.directCommissions?.length > 0) {
+                            const config = randomPlan.directCommissions[0];
+                            commVal = config.type === 'percentage' ? (randomPlan.price * config.value) / 100 : config.value;
+                        } else if (!isDirect && randomPlan.indirectCommissions?.length > 0) {
+                            const config = randomPlan.indirectCommissions[0];
+                            commVal = config.type === 'percentage' ? (randomPlan.price * config.value) / 100 : config.value;
+                        } else {
+                            commVal = randomPlan.price * 0.05; 
+                        }
+                        text = text.replace('{amount}', `<strong>${formatCurrency(commVal, profile.currency)}</strong>`);
+                    } else {
+                        text = text.replace('{amount}', `<strong>${formatCurrency(5, profile.currency)}</strong>`);
+                    }
+                }
+
+                // Case C: Transfers -> Random value within range settings
+                else if (template.type === 'transfer') {
                     const ranges = localSettings.tickerDemoAmountRanges;
                     const range = ranges?.[profile.currency] || { min: 100, max: 1000 };
-                    const amt = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+                    let amt = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+                    amt = Math.round(amt / 10) * 10;
                     text = text.replace('{amount}', `<strong>${formatCurrency(amt, profile.currency)}</strong>`);
                 }
+                
+                // Fallback cleanups
+                if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(50, profile.currency)}</strong>`);
+                if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>Standard</strong>`);
                 
                 activities.push({ id: `preview-${i}`, type: template.type, text, time: `${i * 2 + 1}m ago` });
             }
@@ -483,7 +511,7 @@ const TickerSettings: React.FC = () => {
                 
                 {/* Live Preview Bar */}
                 <div className="border rounded-md overflow-hidden bg-gray-50 dark:bg-gray-900">
-                    <div className="text-xs text-gray-400 p-1 uppercase tracking-wider bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700">Live Preview</div>
+                    <div className="text-xs text-gray-400 p-1 uppercase tracking-wider bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700">Live Preview (Demo Data)</div>
                     <ActivityTicker 
                         activities={previewActivities} 
                         speed={localSettings.tickerSpeed || 6} 
@@ -576,9 +604,9 @@ const TickerSettings: React.FC = () => {
                             <div>
                                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Demo Amount Ranges</h3>
                                 <p className="text-sm text-gray-500">
-                                    Used for Transfer/Joined amounts. 
+                                    Used <strong>only</strong> for Transfer amounts. 
                                     <br />
-                                    <span className="text-blue-500 text-xs">Note: Deposit, Withdrawal, Plan Purchase, and Commissions will AUTOMATICALLY calculate based on your Active Plans.</span>
+                                    <span className="text-blue-500 text-xs font-semibold">Note: Deposit, Withdrawal, Plan Purchase, and Commissions will AUTOMATICALLY calculate based on your Active Plans to ensure realism.</span>
                                 </p>
                             </div>
                             <Button size="sm" variant="secondary" onClick={handleAutoFillRanges}>Auto-fill from Plans</Button>
