@@ -18,14 +18,17 @@ const SaveIcon = () => <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const EditIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
 const PlusIcon = () => <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
-const DepositIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>;
-const WithdrawalIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>;
-const UsersIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
-const EarningsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
-const TransferIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>;
-const PlanIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
-const ShieldCheckIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
-const FilterIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>;
+const DepositIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>;
+const WithdrawalIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>;
+const UsersIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
+const EarningsIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
+const TransferIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>;
+const PlanIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
+const ShieldCheckIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
+const FilterIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>;
+const ChevronDownIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
+const ChevronUpIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
+const SearchIcon = () => <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
 
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; }> = ({ checked, onChange }) => (
     <label className="inline-flex items-center cursor-pointer">
@@ -79,13 +82,14 @@ const PRESETS = {
     ]
 };
 
-const TemplateManager: React.FC<{
+const TemplateEditor: React.FC<{
     typeKey: keyof typeof PRESETS;
     activeTemplates: string[];
     onUpdate: (newTemplates: string[]) => void;
-}> = ({ typeKey, activeTemplates, onUpdate }) => {
+    availableVariables: string[];
+}> = ({ typeKey, activeTemplates, onUpdate, availableVariables }) => {
     const [newTemplate, setNewTemplate] = useState('');
-    const [isPresetOpen, setIsPresetOpen] = useState(false);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const handleAdd = () => {
         if (newTemplate.trim()) {
@@ -98,75 +102,141 @@ const TemplateManager: React.FC<{
         onUpdate(activeTemplates.filter((_, i) => i !== index));
     };
 
-    const handleAddPreset = (template: string) => {
-        if (!activeTemplates.includes(template)) {
-            onUpdate([...activeTemplates, template]);
+    const handleInsertVariable = (variable: string) => {
+        if (inputRef.current) {
+            const start = inputRef.current.selectionStart;
+            const end = inputRef.current.selectionEnd;
+            const text = newTemplate;
+            const before = text.substring(0, start);
+            const after = text.substring(end, text.length);
+            const newValue = before + variable + after;
+            setNewTemplate(newValue);
+            
+            // Restore focus and cursor position after React re-render
+            setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                    inputRef.current.setSelectionRange(start + variable.length, start + variable.length);
+                }
+            }, 0);
+        } else {
+            setNewTemplate(prev => prev + variable);
         }
-        setIsPresetOpen(false);
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 overflow-hidden h-full flex flex-col">
-            <div className="p-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
-                <div className="font-semibold text-sm text-gray-700 dark:text-gray-200 capitalize">{typeKey.replace(/([A-Z])/g, ' $1').trim()}</div>
-                <div className="relative">
-                    <button 
-                        onClick={() => setIsPresetOpen(!isPresetOpen)} 
-                        className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center transition-colors"
-                    >
-                        + Presets
-                    </button>
-                    {isPresetOpen && (
-                        <>
-                            <div className="fixed inset-0 z-10" onClick={() => setIsPresetOpen(false)}></div>
-                            <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 border dark:border-gray-600 shadow-xl rounded-md z-20 max-h-60 overflow-y-auto">
-                                <div className="p-2 text-xs font-bold text-gray-500 uppercase border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900">Select Template</div>
-                                {PRESETS[typeKey].map((p, idx) => (
-                                    <button 
-                                        key={idx} 
-                                        onClick={() => handleAddPreset(p)}
-                                        className="w-full text-left p-2 text-xs hover:bg-blue-50 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-0 text-gray-700 dark:text-gray-300"
-                                        title={p}
-                                    >
-                                        <div dangerouslySetInnerHTML={{__html: p}} />
-                                    </button>
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            <div className="p-3 flex-grow overflow-y-auto max-h-48 space-y-2">
-                {activeTemplates.map((t, i) => (
-                    <div key={i} className="group relative bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-xs">
-                        <span className="block pr-4 text-gray-600 dark:text-gray-300" dangerouslySetInnerHTML={{__html: t}} />
-                        <button 
-                            onClick={() => handleRemove(i)} 
-                            className="absolute top-1 right-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+        <div className="space-y-4">
+            <div className="space-y-2">
+                <div className="flex flex-wrap gap-2 mb-2">
+                    {availableVariables.map(v => (
+                        <button
+                            key={v}
+                            type="button"
+                            onClick={() => handleInsertVariable(v)}
+                            className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-md border border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            {v}
                         </button>
-                    </div>
-                ))}
-                {activeTemplates.length === 0 && <p className="text-xs text-gray-400 italic text-center py-4">No templates active.</p>}
-            </div>
-
-            <div className="p-2 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
-                <div className="flex gap-1">
-                    <input 
-                        className="flex-grow text-xs rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 p-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Add custom HTML..."
+                    ))}
+                </div>
+                <div className="flex gap-2">
+                    <textarea
+                        ref={inputRef}
+                        className="flex-grow text-sm rounded-lg border-gray-300 dark:bg-gray-800 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500 min-h-[60px]"
+                        placeholder="Type message template here..."
                         value={newTemplate}
                         onChange={e => setNewTemplate(e.target.value)}
-                        onKeyPress={e => e.key === 'Enter' && handleAdd()}
+                        onKeyPress={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleAdd();
+                            }
+                        }}
                     />
-                    <button onClick={handleAdd} disabled={!newTemplate.trim()} className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-50">Add</button>
+                    <Button onClick={handleAdd} disabled={!newTemplate.trim()} className="self-end">Add</Button>
+                </div>
+                <p className="text-xs text-gray-500">HTML allowed (e.g., &lt;strong&gt;bold&lt;/strong&gt;). Click variables above to insert.</p>
+            </div>
+
+            <div className="space-y-2">
+                <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Templates ({activeTemplates.length})</h5>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {activeTemplates.map((t, i) => (
+                        <div key={i} className="flex items-start justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 group hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 mr-2 break-words" dangerouslySetInnerHTML={{__html: t}} />
+                            <button 
+                                onClick={() => handleRemove(i)} 
+                                className="text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Remove Template"
+                            >
+                                <TrashIcon />
+                            </button>
+                        </div>
+                    ))}
+                    {activeTemplates.length === 0 && (
+                        <div className="text-center p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+                            <p className="text-sm text-gray-500">No templates defined. This event type will be skipped.</p>
+                            <button 
+                                onClick={() => onUpdate([PRESETS[typeKey][0]])} 
+                                className="text-blue-600 hover:underline text-xs mt-1"
+                            >
+                                Restore Default
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
+
+const RealActivityCard: React.FC<{
+    item: { id: string; label: string; icon: React.ReactNode };
+    isActive: boolean;
+    templates: string[];
+    onToggle: (id: any) => void;
+    onUpdateTemplates: (id: any, templates: string[]) => void;
+    variables: string[];
+}> = ({ item, isActive, templates, onToggle, onUpdateTemplates, variables }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+        <div className={`border dark:border-gray-700 rounded-xl transition-all duration-200 ${isActive ? 'bg-white dark:bg-gray-800 shadow-sm' : 'bg-gray-50 dark:bg-gray-800/50 opacity-75'}`}>
+            <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="flex items-center gap-4">
+                    <div className={`p-2.5 rounded-lg ${isActive ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                        {item.icon}
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white">{item.label}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {templates.length} Active Template{templates.length !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4" onClick={e => e.stopPropagation()}>
+                    <ToggleSwitch checked={isActive} onChange={() => onToggle(item.id)} />
+                    <button className={`p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} onClick={() => setIsExpanded(!isExpanded)}>
+                        <ChevronDownIcon />
+                    </button>
+                </div>
+            </div>
+            
+            {isExpanded && (
+                <div className="px-4 pb-4 pt-0 border-t dark:border-gray-700 animate-fade-in bg-gray-50/50 dark:bg-gray-900/20">
+                    <div className="pt-4">
+                        <TemplateEditor 
+                            typeKey={item.id as any}
+                            activeTemplates={templates}
+                            onUpdate={(newT) => onUpdateTemplates(item.id, newT)}
+                            availableVariables={variables}
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 const TickerSettings: React.FC = () => {
     const { state, dispatch } = useData();
@@ -175,6 +245,14 @@ const TickerSettings: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
     const [activeTab, setActiveTab] = useState<'general' | 'real' | 'profiles' | 'templates' | 'notices'>('general');
+
+    // Filter States for Real Activity Debug
+    const [debugEventType, setDebugEventType] = useState('all');
+    const [debugSearch, setDebugSearch] = useState('');
+
+    // Filter States for Templates Tab
+    const [templateSearch, setTemplateSearch] = useState('');
+    const [templateTypeFilter, setTemplateTypeFilter] = useState('all');
 
     // Selection State
     const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
@@ -397,6 +475,7 @@ const TickerSettings: React.FC = () => {
              let formatted = builderCustomText;
              if(builderCustomStyle==='success') formatted=`<span class="text-green-600 font-bold">${builderCustomText}</span>`;
              if(builderCustomStyle==='danger') formatted=`<span class="text-red-600 font-bold">${builderCustomText}</span>`;
+             if(builderCustomStyle==='info') formatted=`<span class="text-blue-600 font-bold">${builderCustomText}</span>`;
              newText = formatted;
         } else {
              if(builderAction==='joined') newText = `<strong class="font-semibold">{name}</strong> from {country} just joined!`;
@@ -451,7 +530,13 @@ const TickerSettings: React.FC = () => {
     const handleOpenNoticeModal = (n: Notice | null) => { setCurrentNotice(n || { message: '', targetType: 'all', enabled: true }); setIsNoticeModalOpen(true); };
     const handleSaveNotice = () => { if(!currentNotice?.message) return; const newN = { ...currentNotice, _id: currentNotice._id || String(Date.now()) } as Notice; setLocalSettings(prev => ({ ...prev, notices: prev.notices?.some(n=>n._id===newN._id) ? prev.notices.map(n=>n._id===newN._id ? newN : n) : [newN, ...(prev.notices||[])] })); setIsNoticeModalOpen(false); setIsDirty(true); };
     const handleDeleteNotice = (id: string) => { if(window.confirm('Delete?')) { setLocalSettings(prev => ({ ...prev, notices: prev.notices?.filter(n=>n._id!==id) })); setIsDirty(true); } };
-    const handleToggleNoticeUser = (id: string) => setCurrentNotice(prev => ({ ...prev, targetIds: prev?.targetIds?.includes(id) ? prev.targetIds.filter(i=>i!==id) : [...(prev?.targetIds||[]), id] }));
+    
+    const handleToggleNoticeUser = (userId: string) => {
+        if (!currentNotice) return;
+        const ids = currentNotice.targetIds || [];
+        const newIds = ids.includes(userId) ? ids.filter(id => id !== userId) : [...ids, userId];
+        setCurrentNotice({ ...currentNotice, targetIds: newIds });
+    };
 
 
     // --- Previews ---
@@ -522,7 +607,7 @@ const TickerSettings: React.FC = () => {
 
     // NEW: Computed list of real activities
     const realActivityPreviewList = useMemo(() => {
-        const list: { type: string, description: string, date: string, source: any }[] = [];
+        let list: { type: string, description: string, date: string, source: any }[] = [];
         const toggles = localSettings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
         
         const getTemplates = (key: keyof typeof PRESETS) => {
@@ -555,15 +640,55 @@ const TickerSettings: React.FC = () => {
                 if (tpl) list.push({ type: 'Deposit', description: processTemplate(tpl, { name: d.userName, amount: fmt(d.amount, d.currency) }), date: d.date, source: d });
             });
         }
+        if (toggles.withdrawals) {
+            withdrawals.filter(w => w.status === 'Paid').slice(0, 5).forEach(w => {
+                const tpl = getRandom(templates.withdrawals);
+                if (tpl) list.push({ type: 'Withdrawal', description: processTemplate(tpl, { name: w.userName, amount: fmt(w.amount, w.currency) }), date: w.date, source: w });
+            });
+        }
         if (toggles.registrations) {
             users.slice(0, 5).forEach(u => {
                 const tpl = getRandom(templates.registrations);
                 if (tpl) list.push({ type: 'Registration', description: processTemplate(tpl, { name: u.username, country: u.country }), date: u.registrationDate, source: u });
             });
         }
+        if (toggles.commissions) {
+            transactions.filter(t => t.type === 'Commission' && t.status === 'Approved').slice(0, 5).forEach(t => {
+                const tpl = getRandom(templates.commissions);
+                if (tpl) list.push({ type: 'Commission', description: processTemplate(tpl, { name: t.userName, amount: fmt(t.amount, t.currency), source: 'referral' }), date: t.date, source: t });
+            });
+        }
+        if (toggles.planPurchases) {
+            transactions.filter(t => t.type === 'Plan Purchase' && t.status === 'Approved').slice(0, 5).forEach(t => {
+                const tpl = getRandom(templates.planPurchases);
+                const planName = t.description.replace('Purchased ', '').replace(' plan', '');
+                if (tpl) list.push({ type: 'Plan', description: processTemplate(tpl, { name: t.userName, plan: planName, amount: fmt(Math.abs(t.amount), t.currency) }), date: t.date, source: t });
+            });
+        }
+
+        // Apply filters
+        if (debugEventType !== 'all') {
+            list = list.filter(item => item.type.toLowerCase() === debugEventType.toLowerCase());
+        }
+        if (debugSearch) {
+            const term = debugSearch.toLowerCase();
+            list = list.filter(item => 
+                item.description.toLowerCase().includes(term) || 
+                item.type.toLowerCase().includes(term) ||
+                (item.source.userName && item.source.userName.toLowerCase().includes(term))
+            );
+        }
 
         return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 20);
-    }, [localSettings.tickerRealActivities, localSettings.tickerRealActivityTemplates, deposits, withdrawals, users, transactions, transfers]);
+    }, [localSettings.tickerRealActivities, localSettings.tickerRealActivityTemplates, deposits, withdrawals, users, transactions, transfers, debugEventType, debugSearch]);
+
+    const filteredTemplates = (localSettings.demoActivityTemplates || []).filter(t => {
+        const matchesSearch = !templateSearch || t.template.toLowerCase().includes(templateSearch.toLowerCase());
+        const matchesType = templateTypeFilter === 'all' || t.type === templateTypeFilter;
+        return matchesSearch && matchesType;
+    });
+    
+    const paginatedFilteredTemplates = filteredTemplates.slice((templatesCurrentPage - 1) * templatesPerPage, templatesCurrentPage * templatesPerPage);
 
     const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon: React.ReactNode }) => (
         <button 
@@ -580,7 +705,6 @@ const TickerSettings: React.FC = () => {
     );
 
     const paginatedProfiles = (localSettings.demoProfiles || []).slice((profilesCurrentPage - 1) * profilesPerPage, profilesCurrentPage * profilesPerPage);
-    const paginatedTemplates = (localSettings.demoActivityTemplates || []).slice((templatesCurrentPage - 1) * templatesPerPage, templatesCurrentPage * templatesPerPage);
     const builderSelectedProfile = isManualProfile ? (manualProfileName ? { _id: 'manual', name: manualProfileName, country: manualProfileCountry, currency: manualProfileCurrency } as DemoProfile : null) : localSettings.demoProfiles?.find(p => p._id === builderProfileId);
     const builderAvailablePlans = builderSelectedProfile ? investmentPlans.filter(p => p.currency === builderSelectedProfile.currency && p.status === 'Active') : [];
 
@@ -620,8 +744,8 @@ const TickerSettings: React.FC = () => {
                 <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto no-scrollbar">
                     <TabButton id="general" label="General Settings" icon={<GeneralIcon />} />
                     <TabButton id="real" label="Real Activity" icon={<RealIcon />} />
+                    <TabButton id="templates" label={`Demo Templates (${localSettings.demoActivityTemplates?.length || 0})`} icon={<TemplateIcon />} />
                     <TabButton id="profiles" label={`Demo Profiles (${localSettings.demoProfiles?.length || 0})`} icon={<ProfileIcon />} />
-                    <TabButton id="templates" label={`Templates (${localSettings.demoActivityTemplates?.length || 0})`} icon={<TemplateIcon />} />
                     <TabButton id="notices" label={`Notices (${localSettings.notices?.length || 0})`} icon={<NoticeIcon />} />
                 </div>
 
@@ -771,48 +895,87 @@ const TickerSettings: React.FC = () => {
                             </div>
 
                             <div>
-                                <div className="flex justify-between items-end mb-4">
-                                    <h4 className="text-lg font-bold text-gray-800 dark:text-white">Event Types & Templates</h4>
-                                    <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                                        Customize how each event appears
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {[
-                                        { id: 'deposits', label: 'Deposits', icon: <DepositIcon /> },
-                                        { id: 'withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> },
-                                        { id: 'registrations', label: 'Registrations', icon: <UsersIcon /> },
-                                        { id: 'commissions', label: 'Commissions', icon: <EarningsIcon /> },
-                                        { id: 'transfers', label: 'Transfers', icon: <TransferIcon /> },
-                                        { id: 'planPurchases', label: 'Plan Purchases', icon: <PlanIcon /> },
-                                    ].map(item => (
-                                        <div key={item.id} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl p-0 hover:shadow-lg transition-all duration-300 overflow-hidden group">
-                                            <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center group-hover:bg-gray-100 dark:group-hover:bg-gray-900 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-lg shadow-sm">
-                                                        {item.icon}
-                                                    </div>
-                                                    <span className="font-bold text-gray-800 dark:text-gray-100">{item.label}</span>
-                                                </div>
-                                                <ToggleSwitch 
-                                                    checked={!!localSettings.tickerRealActivities?.[item.id as keyof Settings['tickerRealActivities']]} 
-                                                    onChange={() => handleRealActivityChange(item.id as any)} 
-                                                />
-                                            </div>
-                                            <div className="p-4 h-56 bg-white dark:bg-gray-800">
-                                                <TemplateManager 
-                                                    typeKey={item.id as keyof typeof PRESETS}
-                                                    activeTemplates={(localSettings.tickerRealActivityTemplates as any)?.[item.id] || []}
-                                                    onUpdate={(newTemplates) => handleRealTemplateUpdate(item.id as any, newTemplates)}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                                <h4 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Event Types & Templates</h4>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <RealActivityCard 
+                                        item={{ id: 'deposits', label: 'Deposits', icon: <DepositIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.deposits}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.deposits || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{amount}']}
+                                    />
+                                    <RealActivityCard 
+                                        item={{ id: 'withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.withdrawals}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.withdrawals || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{amount}']}
+                                    />
+                                    <RealActivityCard 
+                                        item={{ id: 'registrations', label: 'Registrations', icon: <UsersIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.registrations}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.registrations || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{country}']}
+                                    />
+                                    <RealActivityCard 
+                                        item={{ id: 'commissions', label: 'Commissions', icon: <EarningsIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.commissions}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.commissions || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{amount}', '{source}']}
+                                    />
+                                    <RealActivityCard 
+                                        item={{ id: 'transfers', label: 'Transfers', icon: <TransferIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.transfers}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.transfers || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{amount}', '{recipient}']}
+                                    />
+                                    <RealActivityCard 
+                                        item={{ id: 'planPurchases', label: 'Plan Purchases', icon: <PlanIcon /> }}
+                                        isActive={!!localSettings.tickerRealActivities?.planPurchases}
+                                        templates={(localSettings.tickerRealActivityTemplates as any)?.planPurchases || []}
+                                        onToggle={handleRealActivityChange}
+                                        onUpdateTemplates={handleRealTemplateUpdate}
+                                        variables={['{name}', '{plan}', '{amount}']}
+                                    />
                                 </div>
                             </div>
 
                             <div>
-                                <h4 className="text-lg font-bold text-gray-800 dark:text-white mb-4">Recent Real Events (Debug View)</h4>
+                                <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-4">
+                                    <h4 className="text-lg font-bold text-gray-800 dark:text-white">Recent Real Events (Debug View)</h4>
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                        <select 
+                                            className="bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm rounded-md p-2 w-full sm:w-auto"
+                                            value={debugEventType}
+                                            onChange={e => setDebugEventType(e.target.value)}
+                                        >
+                                            <option value="all">All Events</option>
+                                            <option value="deposit">Deposits</option>
+                                            <option value="withdrawal">Withdrawals</option>
+                                            <option value="registration">Registrations</option>
+                                            <option value="commission">Commissions</option>
+                                            <option value="plan">Plan Purchases</option>
+                                        </select>
+                                        <div className="relative w-full sm:w-auto">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search events..." 
+                                                className="pl-8 bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm rounded-md p-2 w-full"
+                                                value={debugSearch}
+                                                onChange={e => setDebugSearch(e.target.value)}
+                                            />
+                                            <div className="absolute left-2.5 top-2.5"><SearchIcon /></div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div className="border rounded-lg overflow-hidden dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-b dark:border-gray-700">
@@ -834,6 +997,100 @@ const TickerSettings: React.FC = () => {
                                             )}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CONTENT: TEMPLATES (DEMO) */}
+                    {activeTab === 'templates' && (
+                        <div className="space-y-4 animate-fade-in">
+                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
+                                <div>
+                                    <h4 className="font-bold text-gray-800 dark:text-white">Simulated Messages (Demo)</h4>
+                                    <p className="text-sm text-gray-500">Templates used for fake activity generation when using Hybrid or Demo mode.</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedTemplateIds.length > 0 && (
+                                        <>
+                                            <Button size="sm" variant="secondary" onClick={() => setIsBulkEditTemplatesModalOpen(true)}>Edit Selected</Button>
+                                            <Button size="sm" variant="danger" onClick={handleBulkDeleteTemplates}>Delete ({selectedTemplateIds.length})</Button>
+                                        </>
+                                    )}
+                                    <Button size="sm" variant="secondary" onClick={()=>setIsBulkTemplateModalOpen(true)}>Bulk Import</Button>
+                                    <Button size="sm" onClick={()=>handleOpenTemplateModal(null)}>+ Builder</Button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 mb-4 items-center">
+                                <div className="relative flex-grow max-w-md">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search templates content..." 
+                                        className="pl-8 w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm py-2"
+                                        value={templateSearch}
+                                        onChange={e => setTemplateSearch(e.target.value)}
+                                    />
+                                    <div className="absolute left-2.5 top-2.5"><SearchIcon /></div>
+                                </div>
+                                <select 
+                                    className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm py-2"
+                                    value={templateTypeFilter}
+                                    onChange={e => setTemplateTypeFilter(e.target.value)}
+                                >
+                                    <option value="all">All Types</option>
+                                    <option value="joined">Joined</option>
+                                    <option value="deposit">Deposit</option>
+                                    <option value="withdrawal">Withdrawal</option>
+                                    <option value="commission">Commission</option>
+                                    <option value="transfer">Transfer</option>
+                                    <option value="plan">Plan</option>
+                                </select>
+                            </div>
+
+                            <div className="border rounded-lg overflow-hidden dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800">
+                                 <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 uppercase text-xs font-semibold">
+                                        <tr>
+                                            <th className="px-4 py-3 w-10 text-center"><input type="checkbox" className="rounded" checked={paginatedFilteredTemplates.length > 0 && paginatedFilteredTemplates.every(t=>selectedTemplateIds.includes(t._id))} onChange={()=>handleSelectAllTemplates(paginatedFilteredTemplates)} /></th>
+                                            <th className="px-4 py-3">Template Preview</th>
+                                            <th className="px-4 py-3">Type</th>
+                                            <th className="px-4 py-3 text-center">Status</th>
+                                            <th className="px-4 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y dark:divide-gray-700">
+                                        {paginatedFilteredTemplates.map(t=>(
+                                            <tr key={t._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-3 text-center"><input type="checkbox" className="rounded" checked={selectedTemplateIds.includes(t._id)} onChange={()=>handleToggleSelectTemplate(t._id)}/></td>
+                                                <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300" dangerouslySetInnerHTML={{__html: t.template}}></td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${
+                                                        t.type === 'withdrawal' || t.type === 'transfer' ? 'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:border-red-900 dark:text-red-300' :
+                                                        t.type === 'deposit' || t.type === 'commission' ? 'bg-green-50 text-green-700 border-green-100 dark:bg-green-900/30 dark:border-green-900 dark:text-green-300' :
+                                                        'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:border-blue-900 dark:text-blue-300'
+                                                    }`}>
+                                                        {t.type}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={`w-3 h-3 inline-block rounded-full ${t.enabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <button onClick={()=>handleOpenTemplateModal(t)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-3 transition-colors"><EditIcon /></button>
+                                                    <button onClick={()=>handleDeleteTemplate(t._id)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon /></button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {paginatedFilteredTemplates.length === 0 && <div className="p-8 text-center text-gray-500">No templates found matching your filters.</div>}
+                            </div>
+                             <div className="flex justify-between items-center pt-2">
+                                <span className="text-xs text-gray-500">Showing {Math.min(filteredTemplates.length, (templatesCurrentPage-1)*templatesPerPage+1)} - {Math.min(filteredTemplates.length, templatesCurrentPage*templatesPerPage)} of {filteredTemplates.length}</span>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="secondary" disabled={templatesCurrentPage === 1} onClick={() => setTemplatesCurrentPage(p => p - 1)}>Prev</Button>
+                                    <Button size="sm" variant="secondary" disabled={paginatedFilteredTemplates.length < templatesPerPage} onClick={() => setTemplatesCurrentPage(p => p + 1)}>Next</Button>
                                 </div>
                             </div>
                         </div>
@@ -894,66 +1151,6 @@ const TickerSettings: React.FC = () => {
                                 <div className="flex gap-2">
                                     <Button size="sm" variant="secondary" disabled={profilesCurrentPage === 1} onClick={() => setProfilesCurrentPage(p => p - 1)}>Prev</Button>
                                     <Button size="sm" variant="secondary" disabled={paginatedProfiles.length < profilesPerPage} onClick={() => setProfilesCurrentPage(p => p + 1)}>Next</Button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* CONTENT: TEMPLATES */}
-                    {activeTab === 'templates' && (
-                        <div className="space-y-4 animate-fade-in">
-                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
-                                <div>
-                                    <h4 className="font-bold text-gray-800 dark:text-white">Simulated Messages</h4>
-                                    <p className="text-sm text-gray-500">Templates used for fake activity generation.</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    {selectedTemplateIds.length > 0 && (
-                                        <>
-                                            <Button size="sm" variant="secondary" onClick={() => setIsBulkEditTemplatesModalOpen(true)}>Edit Selected</Button>
-                                            <Button size="sm" variant="danger" onClick={handleBulkDeleteTemplates}>Delete ({selectedTemplateIds.length})</Button>
-                                        </>
-                                    )}
-                                    <Button size="sm" variant="secondary" onClick={()=>setIsBulkTemplateModalOpen(true)}>Bulk Import</Button>
-                                    <Button size="sm" onClick={()=>handleOpenTemplateModal(null)}>+ Builder</Button>
-                                </div>
-                            </div>
-
-                            <div className="border rounded-lg overflow-hidden dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800">
-                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 uppercase text-xs font-semibold">
-                                        <tr>
-                                            <th className="px-4 py-3 w-10 text-center"><input type="checkbox" className="rounded" checked={paginatedTemplates.length > 0 && paginatedTemplates.every(t=>selectedTemplateIds.includes(t._id))} onChange={()=>handleSelectAllTemplates(paginatedTemplates)} /></th>
-                                            <th className="px-4 py-3">Template Preview</th>
-                                            <th className="px-4 py-3">Type</th>
-                                            <th className="px-4 py-3 text-center">Status</th>
-                                            <th className="px-4 py-3 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y dark:divide-gray-700">
-                                        {paginatedTemplates.map(t=>(
-                                            <tr key={t._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-3 text-center"><input type="checkbox" className="rounded" checked={selectedTemplateIds.includes(t._id)} onChange={()=>handleToggleSelectTemplate(t._id)}/></td>
-                                                <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300" dangerouslySetInnerHTML={{__html: t.template}}></td>
-                                                <td className="px-4 py-3"><span className="text-xs uppercase bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{t.type}</span></td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <span className={`w-3 h-3 inline-block rounded-full ${t.enabled ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    <button onClick={()=>handleOpenTemplateModal(t)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-3 transition-colors"><EditIcon /></button>
-                                                    <button onClick={()=>handleDeleteTemplate(t._id)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon /></button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                {paginatedTemplates.length === 0 && <div className="p-8 text-center text-gray-500">No templates found.</div>}
-                            </div>
-                             <div className="flex justify-between items-center pt-2">
-                                <span className="text-xs text-gray-500">Showing {Math.min(localSettings.demoActivityTemplates?.length||0, (templatesCurrentPage-1)*templatesPerPage+1)} - {Math.min(localSettings.demoActivityTemplates?.length||0, templatesCurrentPage*templatesPerPage)} of {localSettings.demoActivityTemplates?.length||0}</span>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="secondary" disabled={templatesCurrentPage === 1} onClick={() => setTemplatesCurrentPage(p => p - 1)}>Prev</Button>
-                                    <Button size="sm" variant="secondary" disabled={paginatedTemplates.length < templatesPerPage} onClick={() => setTemplatesCurrentPage(p => p + 1)}>Next</Button>
                                 </div>
                             </div>
                         </div>
@@ -1308,6 +1505,56 @@ const TickerSettings: React.FC = () => {
             {isBulkEditTemplatesModalOpen && (
                 <Modal isOpen={true} onClose={() => setIsBulkEditTemplatesModalOpen(false)}>
                     <div className="p-4 w-96"><h3 className="text-lg font-bold mb-4">Bulk Edit Templates</h3><div className="space-y-3"><div><label className="text-xs font-bold">Set Type</label><select className="w-full border rounded p-2 dark:bg-gray-700" value={bulkEditTemplateData.type || ''} onChange={e => setBulkEditTemplateData({...bulkEditTemplateData, type: e.target.value})}><option value="">-- No Change --</option><option value="joined">New User Joined</option><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option><option value="transfer">Transfer</option><option value="plan">Plan Purchase</option><option value="commission">Commission Earned</option></select></div><div><label className="text-xs font-bold">Set Status</label><select className="w-full border rounded p-2 dark:bg-gray-700" value={bulkEditTemplateData.enabled || ''} onChange={e => setBulkEditTemplateData({...bulkEditTemplateData, enabled: e.target.value})}><option value="">-- No Change --</option><option value="true">Enabled</option><option value="false">Disabled</option></select></div></div><div className="mt-6 flex justify-end gap-2"><Button variant="secondary" onClick={() => setIsBulkEditTemplatesModalOpen(false)}>Cancel</Button><Button onClick={handleBulkEditTemplatesSave}>Apply Changes</Button></div></div>
+                </Modal>
+            )}
+            
+            {/* Notice Modal */}
+            {isNoticeModalOpen && currentNotice && (
+                <Modal isOpen={true} onClose={() => setIsNoticeModalOpen(false)}>
+                    <div className="p-4 w-[500px]">
+                        <h3 className="text-lg font-bold mb-4">{currentNotice._id ? 'Edit Notice' : 'Add Notice'}</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Message</label>
+                                <textarea className="w-full border rounded p-2 dark:bg-gray-700" rows={3} value={currentNotice.message} onChange={e => setCurrentNotice({...currentNotice, message: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Color</label>
+                                    <select className="w-full border rounded p-2 dark:bg-gray-700" value={currentNotice.color} onChange={e => setCurrentNotice({...currentNotice, color: e.target.value as any})}>
+                                        <option value="info">Info (Blue)</option><option value="success">Success (Green)</option><option value="warning">Warning (Yellow)</option><option value="danger">Danger (Red)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Style</label>
+                                    <select className="w-full border rounded p-2 dark:bg-gray-700" value={currentNotice.style} onChange={e => setCurrentNotice({...currentNotice, style: e.target.value as any})}>
+                                        <option value="sliding">Sliding (Marquee)</option><option value="static">Static</option><option value="blinking">Blinking</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Target Audience</label>
+                                <select className="w-full border rounded p-2 dark:bg-gray-700" value={currentNotice.targetType} onChange={e => setCurrentNotice({...currentNotice, targetType: e.target.value as any, targetIds: []})}>
+                                    <option value="all">All Users</option><option value="plan">Users with Specific Plan</option><option value="inactive">Inactive Users</option><option value="manual">Specific Users (Manual)</option>
+                                </select>
+                            </div>
+                            {currentNotice.targetType === 'plan' && (
+                                <div><label className="block text-xs font-medium text-gray-500 mb-1">Select Plans</label><select multiple className="w-full border rounded p-2 dark:bg-gray-700 h-24 text-sm" value={currentNotice.targetIds} onChange={e => setCurrentNotice({...currentNotice, targetIds: Array.from(e.target.selectedOptions, (o: HTMLOptionElement) => o.value)})}>{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</select></div>
+                            )}
+                            {currentNotice.targetType === 'manual' && (
+                                <div><input className="w-full border rounded p-2 dark:bg-gray-700 text-sm mb-2" placeholder="Search user..." value={manualUserSearch} onChange={e => setManualUserSearch(e.target.value)} /><div className="max-h-32 overflow-y-auto border rounded p-2 dark:bg-gray-700">{users.filter(u => !manualUserSearch || u.username.includes(manualUserSearch)).map(u => <div key={u._id} className="flex items-center gap-2 mb-1"><input type="checkbox" checked={currentNotice.targetIds?.includes(u._id)} onChange={() => handleToggleNoticeUser(u._id)} /> <span className="text-sm">{u.username}</span></div>)}</div></div>
+                            )}
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm font-medium">Status:</label>
+                                <ToggleSwitch checked={currentNotice.enabled !== false} onChange={() => setCurrentNotice({...currentNotice, enabled: !currentNotice.enabled})} />
+                                <span className="text-sm">{currentNotice.enabled !== false ? 'Active' : 'Disabled'}</span>
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-2">
+                            <Button variant="secondary" onClick={() => setIsNoticeModalOpen(false)}>Cancel</Button>
+                            <Button onClick={handleSaveNotice}>Save Notice</Button>
+                        </div>
+                    </div>
                 </Modal>
             )}
 
