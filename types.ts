@@ -271,6 +271,11 @@ export interface Settings {
         transfers: boolean;
         planPurchases: boolean;
     };
+    tickerRealActivityConfig?: {
+        minAmount: number;
+        privacyMode: boolean;
+        excludedCurrencies: Currency[];
+    };
     tickerRealActivityTemplates?: {
         deposits: string[];
         withdrawals: string[];

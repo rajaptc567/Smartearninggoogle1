@@ -118,7 +118,7 @@ const SettingSchema = new mongoose.Schema({
     },
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
-    notices: [NoticeSchema], // Added notices array
+    notices: [NoticeSchema],
     tickerSpeed: { type: Number, default: 6 },
     tickerContentSource: {
         type: String,
@@ -132,6 +132,11 @@ const SettingSchema = new mongoose.Schema({
         commissions: { type: Boolean, default: true },
         transfers: { type: Boolean, default: true },
         planPurchases: { type: Boolean, default: true }
+    },
+    tickerRealActivityConfig: {
+        minAmount: { type: Number, default: 0 },
+        privacyMode: { type: Boolean, default: false },
+        excludedCurrencies: { type: [String], default: [] }
     },
     tickerRealActivityTemplates: {
         deposits: { type: [String], default: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'] },
@@ -210,6 +215,7 @@ const defaultSettingsObject = {
     tickerSpeed: 6,
     tickerContentSource: 'hybrid',
     tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
+    tickerRealActivityConfig: { minAmount: 0, privacyMode: false, excludedCurrencies: [] },
     tickerRealActivityTemplates: {
         deposits: [
             '<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>',
@@ -312,11 +318,15 @@ SettingSchema.statics.getSettings = async function() {
         needsSave = true;
     } else {
         // Migration: Ensure keys exist if missing or if string (convert to array)
-        // Note: Simple check here, robust migration should handle string->array conversion if data exists
         if(!Array.isArray(settings.tickerRealActivityTemplates.deposits)) {
              settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
              needsSave = true;
         }
+    }
+    // Added self-healing for real activity config
+    if (!settings.tickerRealActivityConfig) {
+        settings.tickerRealActivityConfig = defaultSettingsObject.tickerRealActivityConfig;
+        needsSave = true;
     }
 
     if (needsSave) {

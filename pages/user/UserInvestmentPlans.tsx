@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
-import { InvestmentPlan, Status, formatCurrency } from '../../types';
+import { InvestmentPlan, Status, formatCurrency, Rule } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -13,10 +13,11 @@ const DollarIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-
 const UsersIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
 const StarIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>;
 const CheckMarkIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
+const LockIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>;
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
-  const { investmentPlans, currentUser, transactions, settings } = state;
+  const { investmentPlans, currentUser, transactions, settings, rules } = state;
   const navigate = useNavigate();
   const location = useLocation();
   const highlightPlanId = location.state?.highlightPlanId;
@@ -98,21 +99,11 @@ const UserInvestmentPlans: React.FC = () => {
       let count = 0;
 
       pendingCommissions.forEach(comm => {
-          // Generally check if this pending commission is because of a missing plan
-          // Currently we only track relatedPlanId on commission transaction if logic allows
           const relatedId = comm.relatedPlanId;
-          
-          // If commission is pending but has no related plan, it might be due to 'Active Plan Required' check
-          // In that case, buying ANY plan might unlock it.
-          // BUT if we want to be specific:
-          
           let isMatch = false;
 
           if (relatedId) {
-                // 1. Direct Match: The commission is tied to this specific plan
                 if (relatedId === planId) isMatch = true;
-
-                // 2. Equivalency Match: The commission is tied to a plan equivalent to this one
                 if (!isMatch && settings.planEquivalencyGroups) {
                     const group = settings.planEquivalencyGroups.find(g => 
                         g.usdPlanId === relatedId || 
@@ -126,12 +117,7 @@ const UserInvestmentPlans: React.FC = () => {
                     }
                 }
           } else {
-              // If no relatedPlanId, assume it's held due to 'RequireActivePlan' generic rule
-              // So buying ANY plan helps. We can show it on all plans or logic can be refined.
-              // For now, let's assume relatedPlanId is populated for commissions held due to Plan Matching.
-              // If held due to 'Active Plan Required', relatedPlanId might still be present from the purchase.
-              isMatch = true; // Show on all plans if generic? Or logic above handles it via relatedPlanId?
-              // Let's stick to relatedPlanId check for specificity as per request.
+              isMatch = true; 
           }
 
           if (isMatch) {
@@ -141,6 +127,35 @@ const UserInvestmentPlans: React.FC = () => {
       });
 
       return { totalHeld, count };
+  };
+
+  // Helper to check rules
+  const checkPrerequisites = (planId: string) => {
+      const rule = rules.find(r => r.targetPlanId === planId && r.isActive !== false);
+      if (!rule) return null;
+
+      const userPlanIds = (currentUser.activePlans || []).map(p => p.planId);
+      
+      // Check Plan Requirements
+      const requiredPlanDetails = rule.requiredPlanIds
+          .map(reqId => investmentPlans.find(p => p._id === reqId))
+          .filter(Boolean) as InvestmentPlan[];
+
+      const missingPlans = requiredPlanDetails.filter(p => !userPlanIds.includes(p._id));
+      const metPlans = requiredPlanDetails.filter(p => userPlanIds.includes(p._id));
+
+      // Check other constraints (Optional based on implementation, strictness)
+      // For now we focus on Plan Requirements as the visual lock
+      
+      const isLocked = missingPlans.length > 0;
+
+      return {
+          hasRule: true,
+          isLocked,
+          missingPlans,
+          metPlans,
+          rule
+      };
   };
 
   return (
@@ -153,11 +168,15 @@ const UserInvestmentPlans: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
             {activePlans.map((plan, index) => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
-                const canAfford = currentUser.walletBalance >= plan.price;
                 const isPopular = index === 1; // Static example to highlight a plan
                 const isHighlighted = highlightPlanId === plan._id;
                 
                 const { totalHeld, count } = getHeldCommissionInfo(plan._id);
+                
+                // Rule Check
+                const prerequisites = checkPrerequisites(plan._id);
+                const isLocked = prerequisites?.isLocked;
+                const canAfford = currentUser.walletBalance >= plan.price;
 
                 return (
                      <div 
@@ -179,7 +198,35 @@ const UserInvestmentPlans: React.FC = () => {
                                 <p className="text-6xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">{formatCurrency(plan.price, plan.currency)}</p>
                             </div>
                             
-                            {totalHeld > 0 && !isOwned && (
+                            {/* PREREQUISITES SECTION */}
+                            {prerequisites && prerequisites.hasRule && (prerequisites.missingPlans.length > 0 || prerequisites.metPlans.length > 0) && !isOwned && (
+                                <div className={`mb-6 p-4 rounded-lg border text-left text-sm ${isLocked ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
+                                    <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-wide text-xs">
+                                        {isLocked ? (
+                                            <span className="text-red-600 dark:text-red-400 flex items-center"><LockIcon /> Locked: Prerequisites Missing</span>
+                                        ) : (
+                                            <span className="text-green-600 dark:text-green-400 flex items-center"><CheckMarkIcon /> Unlocked: Prerequisites Met</span>
+                                        )}
+                                    </div>
+                                    <p className="mb-2 text-gray-600 dark:text-gray-300 font-medium">To join this plan, you must have:</p>
+                                    <ul className="space-y-1.5">
+                                        {prerequisites.metPlans.map(p => (
+                                            <li key={p._id} className="flex items-center text-green-700 dark:text-green-400">
+                                                <span className="mr-2">✅</span> 
+                                                <span>{p.name}</span>
+                                            </li>
+                                        ))}
+                                        {prerequisites.missingPlans.map(p => (
+                                            <li key={p._id} className="flex items-center text-red-600 dark:text-red-400 font-semibold">
+                                                <span className="mr-2">❌</span> 
+                                                <span>{p.name}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {totalHeld > 0 && !isOwned && !isLocked && (
                                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-3 mb-4 rounded-lg animate-pulse">
                                     <div className="flex items-start">
                                         <svg className="w-5 h-5 text-yellow-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -208,6 +255,10 @@ const UserInvestmentPlans: React.FC = () => {
                            {isOwned ? (
                                <Button size="lg" className="w-full flex items-center justify-center bg-green-600 hover:bg-green-700 focus:ring-green-500" disabled>
                                    <CheckMarkIcon /> Plan is Active
+                               </Button>
+                           ) : isLocked ? (
+                               <Button size="lg" className="w-full bg-gray-400 hover:bg-gray-400 cursor-not-allowed" disabled>
+                                   <LockIcon /> Locked (See Requirements)
                                </Button>
                            ) : canAfford ? (
                                <Button size="lg" className="w-full shadow-lg shadow-blue-500/30" onClick={() => handlePurchaseClick(plan)}>
