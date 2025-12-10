@@ -22,6 +22,11 @@ const WithdrawFunds: React.FC = () => {
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
 
+    // History Filter State
+    const [historyStatus, setHistoryStatus] = useState<string>('');
+    const [historyDateFrom, setHistoryDateFrom] = useState('');
+    const [historyDateTo, setHistoryDateTo] = useState('');
+
     const withdrawalMethods = useMemo(() => {
         if (!currentUser) return [];
         return paymentMethods.filter(method => 
@@ -43,13 +48,29 @@ const WithdrawFunds: React.FC = () => {
         [selectedMethodId, withdrawalMethods]
     );
 
-    // User Withdrawal History
-    const userWithdrawals = useMemo(() => {
+    // Filtered User Withdrawal History
+    const filteredWithdrawals = useMemo(() => {
         if (!currentUser) return [];
         return withdrawals
-            .filter(w => w.userId === currentUser._id)
+            .filter(w => {
+                if (w.userId !== currentUser._id) return false;
+
+                // Status Filter
+                if (historyStatus && w.status !== historyStatus) return false;
+
+                // Date Filter
+                if (historyDateFrom || historyDateTo) {
+                    const itemDate = new Date(w.date).setHours(0,0,0,0);
+                    const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
+                    const to = historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null;
+                    
+                    if (from && itemDate < from) return false;
+                    if (to && itemDate > to) return false;
+                }
+                return true;
+            })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [withdrawals, currentUser]);
+    }, [withdrawals, currentUser, historyStatus, historyDateFrom, historyDateTo]);
 
     // CHECK FREQUENCY: Calculate if user is allowed to withdraw right now
     useEffect(() => {
@@ -262,10 +283,46 @@ const WithdrawFunds: React.FC = () => {
 
             {/* WITHDRAWAL HISTORY SECTION */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">My Withdrawal History</h3>
-                {userWithdrawals.length > 0 ? (
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-white">My Withdrawal History</h3>
+                    
+                    {/* Filters */}
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <select 
+                            value={historyStatus} 
+                            onChange={(e) => setHistoryStatus(e.target.value)} 
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value={Status.Paid}>Paid</option>
+                            <option value={Status.Approved}>Approved</option>
+                            <option value={Status.Pending}>Pending</option>
+                            {/* Matching status hidden for users */}
+                            <option value={Status.Rejected}>Rejected</option>
+                        </select>
+                        <div className="flex items-center gap-2">
+                            <input 
+                                type="date" 
+                                value={historyDateFrom} 
+                                onChange={(e) => setHistoryDateFrom(e.target.value)} 
+                                className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                                placeholder="From"
+                            />
+                            <span className="text-gray-400">-</span>
+                            <input 
+                                type="date" 
+                                value={historyDateTo} 
+                                onChange={(e) => setHistoryDateTo(e.target.value)} 
+                                className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                                placeholder="To"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {filteredWithdrawals.length > 0 ? (
                     <Table headers={['Date', 'Method', 'Amount', 'Fee', 'Net Received', 'Status']}>
-                        {userWithdrawals.map(withdrawal => (
+                        {filteredWithdrawals.map(withdrawal => (
                             <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(withdrawal.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{withdrawal.method}</td>
@@ -277,7 +334,7 @@ const WithdrawFunds: React.FC = () => {
                         ))}
                     </Table>
                 ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No withdrawal history found.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No withdrawal history found matching the criteria.</p>
                 )}
             </div>
         </div>

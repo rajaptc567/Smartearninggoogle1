@@ -20,6 +20,11 @@ const DepositFunds: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
+    // History Filter State
+    const [historyStatus, setHistoryStatus] = useState<string>('');
+    const [historyDateFrom, setHistoryDateFrom] = useState('');
+    const [historyDateTo, setHistoryDateTo] = useState('');
+
     // Get unique prices from active investment plans for the dropdown, filtered by user's currency
     const planPrices = useMemo(() => {
         if (!currentUser) return [];
@@ -51,13 +56,29 @@ const DepositFunds: React.FC = () => {
         [selectedMethodId, availableMethods]
     );
 
-    // User Deposit History
-    const userDeposits = useMemo(() => {
+    // Filtered User Deposit History
+    const filteredDeposits = useMemo(() => {
         if (!currentUser) return [];
         return deposits
-            .filter(d => d.userId === currentUser._id)
+            .filter(d => {
+                if (d.userId !== currentUser._id) return false;
+                
+                // Status Filter
+                if (historyStatus && d.status !== historyStatus) return false;
+
+                // Date Filter
+                if (historyDateFrom || historyDateTo) {
+                    const itemDate = new Date(d.date).setHours(0,0,0,0);
+                    const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
+                    const to = historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null;
+                    
+                    if (from && itemDate < from) return false;
+                    if (to && itemDate > to) return false;
+                }
+                return true;
+            })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [deposits, currentUser]);
+    }, [deposits, currentUser, historyStatus, historyDateFrom, historyDateTo]);
 
     // Reset selected method if amount changes and the previous method is no longer valid
     useEffect(() => {
@@ -297,10 +318,44 @@ const DepositFunds: React.FC = () => {
 
             {/* DEPOSIT HISTORY SECTION */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">My Deposit History</h3>
-                {userDeposits.length > 0 ? (
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-white">My Deposit History</h3>
+                    
+                    {/* Filters */}
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <select 
+                            value={historyStatus} 
+                            onChange={(e) => setHistoryStatus(e.target.value)} 
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value={Status.Approved}>Approved</option>
+                            <option value={Status.Pending}>Pending</option>
+                            <option value={Status.Rejected}>Rejected</option>
+                        </select>
+                        <div className="flex items-center gap-2">
+                            <input 
+                                type="date" 
+                                value={historyDateFrom} 
+                                onChange={(e) => setHistoryDateFrom(e.target.value)} 
+                                className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                                placeholder="From"
+                            />
+                            <span className="text-gray-400">-</span>
+                            <input 
+                                type="date" 
+                                value={historyDateTo} 
+                                onChange={(e) => setHistoryDateTo(e.target.value)} 
+                                className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                                placeholder="To"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {filteredDeposits.length > 0 ? (
                     <Table headers={['Date', 'Method', 'Amount', 'Tx ID', 'Status']}>
-                        {userDeposits.map((deposit) => (
+                        {filteredDeposits.map((deposit) => (
                             <tr key={deposit._id} className="text-gray-700 dark:text-gray-400">
                                 <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-sm">{deposit.method}</td>
@@ -311,7 +366,7 @@ const DepositFunds: React.FC = () => {
                         ))}
                     </Table>
                 ) : (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No deposit history found.</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No deposit history found matching the criteria.</p>
                 )}
             </div>
         </div>

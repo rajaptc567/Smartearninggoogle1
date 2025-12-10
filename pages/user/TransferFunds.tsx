@@ -3,11 +3,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
-import { formatCurrency, User, currencySymbols, Currency } from '../../types';
+import { formatCurrency, User, currencySymbols, Currency, Transfer, Status } from '../../types';
+import Table from '../../components/ui/Table';
+import Badge from '../../components/ui/Badge';
 
 const TransferFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { currentUser, users, settings } = state;
+    const { currentUser, users, settings, transfers } = state;
     
     const [recipientIdentifier, setRecipientIdentifier] = useState('');
     const [isManualEntry, setIsManualEntry] = useState(false);
@@ -26,6 +28,11 @@ const TransferFunds: React.FC = () => {
     // Manual entry validation state
     const [manualRecipientState, setManualRecipientState] = useState<{ status: 'idle' | 'loading' | 'valid' | 'invalid'; message: string | null }>({ status: 'idle', message: null });
 
+    // History Filter States
+    const [historyType, setHistoryType] = useState<'All' | 'Sent' | 'Received'>('All');
+    const [historyStatus, setHistoryStatus] = useState<string>('');
+    const [historyDateFrom, setHistoryDateFrom] = useState('');
+    const [historyDateTo, setHistoryDateTo] = useState('');
 
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
@@ -236,132 +243,247 @@ const TransferFunds: React.FC = () => {
         }
     };
 
-    if (!currentUser) return <div>Loading...</div>;
+    // Filtered History Logic
+    const filteredHistory = useMemo(() => {
+        if (!currentUser) return [];
+        return transfers.filter(t => {
+            const isSender = t.senderId === currentUser._id;
+            const isRecipient = t.recipientId === currentUser._id;
+            
+            if (!isSender && !isRecipient) return false;
 
-    if (isSubmitted) {
-        return (
-             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md text-center">
-                 <div className="mx-auto bg-green-100 dark:bg-green-900 rounded-full h-16 w-16 flex items-center justify-center">
-                    <svg className="h-10 w-10 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <h2 className="text-2xl font-bold mt-4 text-gray-800 dark:text-white">Transfer Request Submitted!</h2>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Your request has been sent and is now pending admin approval.</p>
-                <Button onClick={() => setIsSubmitted(false)} className="mt-6">Make Another Transfer</Button>
-            </div>
-        );
-    }
+            // Type
+            if (historyType === 'Sent' && !isSender) return false;
+            if (historyType === 'Received' && !isRecipient) return false;
+
+            // Status
+            if (historyStatus && t.status !== historyStatus) return false;
+
+            // Date
+            if (historyDateFrom || historyDateTo) {
+                const txDate = new Date(t.date).setHours(0,0,0,0);
+                const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : -8640000000000000;
+                const to = historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : 8640000000000000;
+                if (txDate < from || txDate > to) return false;
+            }
+
+            return true;
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [transfers, currentUser, historyType, historyStatus, historyDateFrom, historyDateTo]);
+
+    if (!currentUser) return <div>Loading...</div>;
 
     const showAmountForm = (!isManualEntry && recipientUser) || (isManualEntry && manualRecipientState.status === 'valid');
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-            <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Available Wallet Balance</p>
-                <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
-            </div>
-
-            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Transfer Funds</h2>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-                 <div>
-                    <label htmlFor="recipient-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
-                    <select
-                        id="recipient-select"
-                        value={isManualEntry ? 'manual' : recipientIdentifier}
-                        onChange={handleDropdownChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    >
-                        <option value="">-- Select from your network --</option>
-                        {availableRecipients.map(({ user, level }) => (
-                            <option key={user._id} value={user.username}>
-                                {user.fullName} (@{user.username}) - {user.currency} (Level {level})
-                            </option>
-                        ))}
-                        <option value="manual">-- Other (Enter Manually) --</option>
-                    </select>
-                </div>
-                
-                {isManualEntry && (
-                    <div className="animate-fade-in">
-                        <label htmlFor="manual-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enter Recipient's Username or Email</label>
-                        <input
-                            type="text"
-                            id="manual-recipient"
-                            value={recipientIdentifier}
-                            onChange={(e) => setRecipientIdentifier(e.target.value)}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="e.g., jane.doe or jane.doe@example.com"
-                            autoComplete="off"
-                        />
-                        <div className="mt-2 text-xs h-4">
-                            {manualRecipientState.status === 'loading' && <p className="text-gray-500">{manualRecipientState.message}</p>}
-                            {manualRecipientState.status === 'invalid' && <p className="text-red-500 font-semibold">{manualRecipientState.message}</p>}
-                            {manualRecipientState.status === 'valid' && <p className="text-green-600 font-semibold">{manualRecipientState.message}</p>}
-                        </div>
+        <div className="space-y-8 max-w-4xl mx-auto">
+            {/* Transfer Form Card */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <div className="max-w-2xl mx-auto">
+                    <div className="text-center mb-6 border-b dark:border-gray-700 pb-4">
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Available Wallet Balance</p>
+                        <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
                     </div>
-                )}
-                
-                {showAmountForm && (
-                    <div className="space-y-4 mt-4 pt-4 border-t dark:border-gray-700 animate-fade-in">
-                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && (
-                            <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
-                                Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
-                            </div>
-                        )}
-                        <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
-                            <div className="relative mt-1">
-                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                    <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
-                                </div>
-                                <input
-                                    type="number"
-                                    id="amount"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    placeholder="0.00"
-                                    className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                    required
-                                />
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currentUser.currency}</span>
-                                </div>
-                            </div>
-                        </div>
 
-                        {amount && currentUser && (
-                            <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
-                                {feeError ? ( <p className="text-sm text-red-600 dark:text-red-400">{feeError}</p> ) : (
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span><span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span></div>
-                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Processing Fee:</span><span className="font-medium text-red-500">+{formatCurrency(fee, currentUser.currency)}</span></div>
-                                        <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold"><span className="text-gray-800 dark:text-gray-200">Total Deducted:</span><span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span></div>
-                                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && exchangeRate !== null && receivedAmount !== null && (
-                                            <>
-                                                <div className="flex justify-between pt-2 border-t dark:border-gray-600 text-xs">
-                                                    <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
-                                                    <span className="font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 rounded">1 {currentUser.currency} = {exchangeRate.toFixed(4)} {recipientUser.currency}</span>
-                                                </div>
-                                                <div className="flex justify-between font-bold text-lg mt-1"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>
-                                            </>
-                                        )}
+                    {isSubmitted ? (
+                        <div className="text-center animate-fade-in">
+                            <div className="mx-auto bg-green-100 dark:bg-green-900 rounded-full h-16 w-16 flex items-center justify-center">
+                                <svg className="h-10 w-10 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-2xl font-bold mt-4 text-gray-800 dark:text-white">Transfer Request Submitted!</h2>
+                            <p className="mt-2 text-gray-600 dark:text-gray-400">Your request has been sent and is now pending admin approval.</p>
+                            <Button onClick={() => setIsSubmitted(false)} className="mt-6">Make Another Transfer</Button>
+                        </div>
+                    ) : (
+                        <>
+                            <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Transfer Funds</h2>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label htmlFor="recipient-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Recipient</label>
+                                    <select
+                                        id="recipient-select"
+                                        value={isManualEntry ? 'manual' : recipientIdentifier}
+                                        onChange={handleDropdownChange}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                    >
+                                        <option value="">-- Select from your network --</option>
+                                        {availableRecipients.map(({ user, level }) => (
+                                            <option key={user._id} value={user.username}>
+                                                {user.fullName} (@{user.username}) - {user.currency} (Level {level})
+                                            </option>
+                                        ))}
+                                        <option value="manual">-- Other (Enter Manually) --</option>
+                                    </select>
+                                </div>
+                                
+                                {isManualEntry && (
+                                    <div className="animate-fade-in">
+                                        <label htmlFor="manual-recipient" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Enter Recipient's Username or Email</label>
+                                        <input
+                                            type="text"
+                                            id="manual-recipient"
+                                            value={recipientIdentifier}
+                                            onChange={(e) => setRecipientIdentifier(e.target.value)}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            placeholder="e.g., jane.doe or jane.doe@example.com"
+                                            autoComplete="off"
+                                        />
+                                        <div className="mt-2 text-xs h-4">
+                                            {manualRecipientState.status === 'loading' && <p className="text-gray-500">{manualRecipientState.message}</p>}
+                                            {manualRecipientState.status === 'invalid' && <p className="text-red-500 font-semibold">{manualRecipientState.message}</p>}
+                                            {manualRecipientState.status === 'valid' && <p className="text-green-600 font-semibold">{manualRecipientState.message}</p>}
+                                        </div>
                                     </div>
                                 )}
-                            </div>
-                        )}
-                        <div className="pt-4 flex justify-end">
-                            <Button type="submit" disabled={isSubmitting || !!feeError || !amount}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
-                        </div>
-                    </div>
-                )}
+                                
+                                {showAmountForm && (
+                                    <div className="space-y-4 mt-4 pt-4 border-t dark:border-gray-700 animate-fade-in">
+                                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && (
+                                            <div className="p-3 text-sm text-blue-700 bg-blue-100 rounded-md dark:bg-blue-900/50 dark:text-blue-300">
+                                                Recipient is registered under another currency ({recipientUser.currency}). Exchange rates will apply to this transfer.
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Transfer</label>
+                                            <div className="relative mt-1">
+                                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                    <span className="text-gray-500 sm:text-sm">{currencySymbols[currentUser.currency]}</span>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    id="amount"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    value={amount}
+                                                    onChange={(e) => setAmount(e.target.value)}
+                                                    placeholder="0.00"
+                                                    className="block w-full rounded-md border-gray-300 pl-7 pr-12 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                    required
+                                                />
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                                    <span className="text-gray-500 dark:text-gray-400 sm:text-sm">{currentUser.currency}</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-            </form>
+                                        {amount && currentUser && (
+                                            <div className={`p-4 rounded-lg border ${feeError ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600'}`}>
+                                                {feeError ? ( <p className="text-sm text-red-600 dark:text-red-400">{feeError}</p> ) : (
+                                                    <div className="space-y-2 text-sm">
+                                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Transfer Amount:</span><span className="font-medium">{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</span></div>
+                                                        <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Processing Fee:</span><span className="font-medium text-red-500">+{formatCurrency(fee, currentUser.currency)}</span></div>
+                                                        <div className="flex justify-between pt-2 border-t dark:border-gray-600 font-bold"><span className="text-gray-800 dark:text-gray-200">Total Deducted:</span><span className="text-green-600 dark:text-green-400">{formatCurrency(totalDeduction, currentUser.currency)}</span></div>
+                                                        {recipientUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && exchangeRate !== null && receivedAmount !== null && (
+                                                            <>
+                                                                <div className="flex justify-between pt-2 border-t dark:border-gray-600 text-xs">
+                                                                    <span className="text-gray-600 dark:text-gray-400">Exchange Rate:</span>
+                                                                    <span className="font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1 rounded">1 {currentUser.currency} = {exchangeRate.toFixed(4)} {recipientUser.currency}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-lg mt-1"><span className="text-gray-800 dark:text-gray-200">Recipient Receives:</span><span className="text-green-600 dark:text-green-400">≈ {formatCurrency(receivedAmount, recipientUser.currency)}</span></div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="pt-4 flex justify-end">
+                                            <Button type="submit" disabled={isSubmitting || !!feeError || !amount}>{isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </form>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Transfer History Section */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Transfer History</h3>
+                
+                {/* Filters */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Type</label>
+                        <select 
+                            value={historyType} 
+                            onChange={(e) => setHistoryType(e.target.value as any)} 
+                            className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        >
+                            <option value="All">All</option>
+                            <option value="Sent">Sent</option>
+                            <option value="Received">Received</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                        <select 
+                            value={historyStatus} 
+                            onChange={(e) => setHistoryStatus(e.target.value)} 
+                            className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+                        >
+                            <option value="">All Statuses</option>
+                            {Object.values(Status).filter(s => s !== Status.Matching).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
+                        <input 
+                            type="date" 
+                            value={historyDateFrom} 
+                            onChange={(e) => setHistoryDateFrom(e.target.value)} 
+                            className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
+                        <input 
+                            type="date" 
+                            value={historyDateTo} 
+                            onChange={(e) => setHistoryDateTo(e.target.value)} 
+                            className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" 
+                        />
+                    </div>
+                </div>
+
+                {/* Table */}
+                {filteredHistory.length > 0 ? (
+                    <Table headers={['Date', 'Type', 'Counterparty', 'Amount', 'Fee', 'Status']}>
+                        {filteredHistory.map(transfer => {
+                            const isSender = transfer.senderId === currentUser._id;
+                            const counterpartyName = isSender ? transfer.recipientName : transfer.senderName;
+                            const directionLabel = isSender ? 'Sent' : 'Received';
+                            const amountColor = isSender ? 'text-red-600' : 'text-green-600';
+                            const amountPrefix = isSender ? '-' : '+';
+
+                            return (
+                                <tr key={transfer._id} className="text-gray-700 dark:text-gray-400">
+                                    <td className="px-4 py-3 text-sm">{new Date(transfer.date).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${isSender ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                                            {directionLabel}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm font-medium">{counterpartyName}</td>
+                                    <td className={`px-4 py-3 font-mono font-bold ${amountColor} text-sm`}>
+                                        {amountPrefix}{formatCurrency(transfer.amount, transfer.currency)}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                        {isSender && transfer.fee && transfer.fee > 0 ? formatCurrency(transfer.fee, transfer.currency) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3"><Badge status={transfer.status as Status} /></td>
+                                </tr>
+                            )
+                        })}
+                    </Table>
+                ) : (
+                    <p className="text-center text-gray-500 py-8 italic">No transfer history found matching filters.</p>
+                )}
+            </div>
         </div>
     );
-}
+};
 
 export default TransferFunds;
