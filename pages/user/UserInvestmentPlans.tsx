@@ -1,19 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../hooks/useData';
-import { InvestmentPlan, Status, formatCurrency, Rule } from '../../types';
+import { InvestmentPlan, Status, currencySymbols } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { purchasePlan as apiPurchasePlan } from '../../services/api';
 
 // --- Icon Components ---
-const ClockIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
-const DollarIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
-const UsersIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
-const StarIcon = () => <svg className="w-6 h-6 mr-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>;
-const CheckMarkIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
+const CheckIcon = ({ className }: { className?: string }) => (
+    <svg className={className || "w-5 h-5"} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+);
 const LockIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>;
+const CrownIcon = () => <svg className="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>;
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
@@ -25,6 +24,46 @@ const UserInvestmentPlans: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<InvestmentPlan | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+
+  // Define themes for cards to cycle through
+  const planThemes = [
+    {
+        name: 'Blue',
+        gradient: 'from-blue-500 to-cyan-500',
+        bgLight: 'bg-blue-50',
+        text: 'text-blue-600',
+        border: 'border-blue-200',
+        button: 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700',
+        shadow: 'shadow-blue-500/20'
+    },
+    {
+        name: 'Purple',
+        gradient: 'from-purple-500 to-pink-500',
+        bgLight: 'bg-purple-50',
+        text: 'text-purple-600',
+        border: 'border-purple-200',
+        button: 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700',
+        shadow: 'shadow-purple-500/20'
+    },
+    {
+        name: 'Emerald',
+        gradient: 'from-emerald-500 to-teal-500',
+        bgLight: 'bg-emerald-50',
+        text: 'text-emerald-600',
+        border: 'border-emerald-200',
+        button: 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700',
+        shadow: 'shadow-emerald-500/20'
+    },
+    {
+        name: 'Amber',
+        gradient: 'from-amber-500 to-orange-500',
+        bgLight: 'bg-amber-50',
+        text: 'text-amber-600',
+        border: 'border-amber-200',
+        button: 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700',
+        shadow: 'shadow-amber-500/20'
+    }
+  ];
 
   // Effect to scroll to the highlighted plan
   useEffect(() => {
@@ -72,6 +111,17 @@ const UserInvestmentPlans: React.FC = () => {
     setSelectedPlan(null);
   }
 
+  // --- Smart Price Formatter ---
+  const formatPrice = (amount: number, currency: string) => {
+      const symbol = currencySymbols[currency] || currency;
+      // If it's a whole number, don't show decimals
+      if (amount % 1 === 0) {
+          return `${symbol} ${amount.toLocaleString()}`;
+      }
+      // Otherwise show standard 2 decimals
+      return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const renderDirectCommission = (plan: InvestmentPlan) => {
       const comms = plan.directCommissions;
       if (!comms || comms.length === 0) return 'N/A';
@@ -83,8 +133,8 @@ const UserInvestmentPlans: React.FC = () => {
               maxType = c.type;
           }
       });
-      const valStr = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
-      return `Up to ${valStr}`;
+      const valStr = maxType === 'percentage' ? `${maxVal}%` : formatPrice(maxVal, plan.currency);
+      return comms.length > 1 ? `Up to ${valStr}` : valStr;
   };
 
   // Helper to calculate total held commission that would be unlocked by buying this plan
@@ -136,16 +186,12 @@ const UserInvestmentPlans: React.FC = () => {
 
       const userPlanIds = (currentUser.activePlans || []).map(p => p.planId);
       
-      // Check Plan Requirements
       const requiredPlanDetails = rule.requiredPlanIds
           .map(reqId => investmentPlans.find(p => p._id === reqId))
           .filter(Boolean) as InvestmentPlan[];
 
       const missingPlans = requiredPlanDetails.filter(p => !userPlanIds.includes(p._id));
       const metPlans = requiredPlanDetails.filter(p => userPlanIds.includes(p._id));
-
-      // Check other constraints (Optional based on implementation, strictness)
-      // For now we focus on Plan Requirements as the visual lock
       
       const isLocked = missingPlans.length > 0;
 
@@ -159,21 +205,27 @@ const UserInvestmentPlans: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-       <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">Investment Plans</h2>
-            <p className="text-lg text-gray-500 dark:text-gray-400 mt-2 max-w-2xl mx-auto">Choose a plan to start earning or upgrade to unlock greater potential.</p>
+    <div className="space-y-10 max-w-7xl mx-auto px-2">
+       <div className="text-center space-y-3">
+            <h2 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
+                Choose Your Investment Plan
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                Unlock your earning potential with our tailored packages. 
+                Invest securely and grow your network today.
+            </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-6">
             {activePlans.map((plan, index) => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
-                const isPopular = index === 1; // Static example to highlight a plan
+                const isPopular = index === 1; // Highlight logic (can be made dynamic later)
                 const isHighlighted = highlightPlanId === plan._id;
                 
-                const { totalHeld, count } = getHeldCommissionInfo(plan._id);
+                // Select a theme cyclically
+                const theme = planThemes[index % planThemes.length];
                 
-                // Rule Check
+                const { totalHeld, count } = getHeldCommissionInfo(plan._id);
                 const prerequisites = checkPrerequisites(plan._id);
                 const isLocked = prerequisites?.isLocked;
                 const canAfford = currentUser.walletBalance >= plan.price;
@@ -182,92 +234,123 @@ const UserInvestmentPlans: React.FC = () => {
                      <div 
                         key={plan._id} 
                         id={`plan-${plan._id}`}
-                        className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg flex flex-col border-2 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 
+                        className={`group relative flex flex-col bg-white dark:bg-gray-800 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-2
                             ${isHighlighted 
-                                ? 'border-yellow-500 ring-4 ring-yellow-500/30 transform scale-105 z-10' 
-                                : isPopular 
-                                    ? 'border-blue-500' 
-                                    : 'border-gray-200 dark:border-gray-700'
+                                ? 'ring-4 ring-yellow-400 dark:ring-yellow-500 scale-105 z-10' 
+                                : `hover:shadow-2xl ${theme.shadow}`
                             }`}
                     >
-                        {isPopular && <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs font-bold px-4 py-1.5 rounded-full z-10 tracking-wider uppercase">Most Popular</div>}
+                        {/* Header Gradient */}
+                        <div className={`h-2 rounded-t-3xl bg-gradient-to-r ${theme.gradient}`}></div>
+
+                        {/* Popular Badge */}
+                        {isPopular && (
+                            <div className="absolute top-0 right-0 -mt-3 mr-4">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-lg bg-gradient-to-r ${theme.gradient}`}>
+                                    <CrownIcon />
+                                    <span className="ml-1">Best Value</span>
+                                </span>
+                            </div>
+                        )}
                         
                         <div className="p-8 flex-grow flex flex-col">
-                            <div className="text-center mb-6">
-                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
-                                <p className="text-6xl font-extrabold text-blue-600 dark:text-blue-400 mt-2">{formatCurrency(plan.price, plan.currency)}</p>
+                            <div className="mb-6">
+                                <h3 className="text-xl font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{plan.name}</h3>
+                                <div className="mt-2 flex items-baseline">
+                                    <span className={`text-5xl font-extrabold tracking-tight ${theme.text}`}>
+                                        {formatPrice(plan.price, plan.currency)}
+                                    </span>
+                                </div>
+                                <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed min-h-[40px]">
+                                    {plan.description}
+                                </p>
                             </div>
-                            
-                            {/* PREREQUISITES SECTION */}
-                            {prerequisites && prerequisites.hasRule && (prerequisites.missingPlans.length > 0 || prerequisites.metPlans.length > 0) && !isOwned && (
-                                <div className={`mb-6 p-4 rounded-lg border text-left text-sm ${isLocked ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
-                                    <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-wide text-xs">
-                                        {isLocked ? (
-                                            <span className="text-red-600 dark:text-red-400 flex items-center"><LockIcon /> Locked: Prerequisites Missing</span>
-                                        ) : (
-                                            <span className="text-green-600 dark:text-green-400 flex items-center"><CheckMarkIcon /> Unlocked: Prerequisites Met</span>
-                                        )}
-                                    </div>
-                                    <p className="mb-2 text-gray-600 dark:text-gray-300 font-medium">To join this plan, you must have:</p>
-                                    <ul className="space-y-1.5">
-                                        {prerequisites.metPlans.map(p => (
-                                            <li key={p._id} className="flex items-center text-green-700 dark:text-green-400">
-                                                <span className="mr-2">✅</span> 
-                                                <span>{p.name}</span>
-                                            </li>
-                                        ))}
-                                        {prerequisites.missingPlans.map(p => (
-                                            <li key={p._id} className="flex items-center text-red-600 dark:text-red-400 font-semibold">
-                                                <span className="mr-2">❌</span> 
-                                                <span>{p.name}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
 
-                            {totalHeld > 0 && !isOwned && !isLocked && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-3 mb-4 rounded-lg animate-pulse">
-                                    <div className="flex items-start">
-                                        <svg className="w-5 h-5 text-yellow-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                                        <div>
-                                            <p className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Commission Held!</p>
-                                            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                                Purchase this plan to instantly unlock <strong>{formatCurrency(totalHeld, currentUser.currency)}</strong> in held commissions from {count} referral(s).
-                                            </p>
-                                        </div>
+                            {/* Features List */}
+                            <ul className="space-y-4 mb-8 flex-grow">
+                                <li className="flex items-start">
+                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
                                     </div>
-                                </div>
-                            )}
-                            
-                            <p className="text-base text-gray-600 dark:text-gray-300 text-center mb-8">{plan.description}</p>
-                            
-                            <ul className="space-y-5 text-base text-gray-600 dark:text-gray-300 flex-grow mb-8 border-t border-gray-200 dark:border-gray-700 pt-8">
-                                <li className="flex items-center"><ClockIcon /> <div><span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</div></li>
-                                <li className="flex items-center"><DollarIcon /> <div><span className="font-semibold">Min. Withdraw:</span> {formatCurrency(plan.minWithdraw, plan.currency)}</div></li>
-                                <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Up to ${plan.directReferralLimit}`}</div></li>
-                                <li className="flex items-center"><StarIcon /> <div><span className="font-semibold">Direct Commission: </span> {renderDirectCommission(plan)}</div></li>
-                                <li className="flex items-center"><UsersIcon /> <div><span className="font-semibold">Indirect Levels: </span> {plan.indirectCommissions.length}</div></li>
+                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                        <span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}
+                                    </span>
+                                </li>
+                                <li className="flex items-start">
+                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                    </div>
+                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                        <span className="font-semibold">Min Withdraw:</span> {formatPrice(plan.minWithdraw, plan.currency)}
+                                    </span>
+                                </li>
+                                <li className="flex items-start">
+                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                    </div>
+                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                        <span className="font-semibold">Direct Comm:</span> {renderDirectCommission(plan)}
+                                    </span>
+                                </li>
+                                <li className="flex items-start">
+                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                    </div>
+                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                        <span className="font-semibold">Network:</span> {plan.indirectCommissions.length} Levels Deep
+                                    </span>
+                                </li>
                             </ul>
+                            
+                            {/* ALERTS SECTION */}
+                            <div className="space-y-3">
+                                {/* Rule Lock Alert */}
+                                {prerequisites && prerequisites.hasRule && (prerequisites.missingPlans.length > 0 || prerequisites.metPlans.length > 0) && !isOwned && (
+                                    <div className={`p-3 rounded-lg border text-xs ${isLocked ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200' : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200'}`}>
+                                        <div className="flex items-center gap-1 font-bold mb-1">
+                                            {isLocked ? <LockIcon /> : <CheckIcon className="w-4 h-4" />}
+                                            {isLocked ? "Prerequisites Missing" : "Prerequisites Met"}
+                                        </div>
+                                        {prerequisites.missingPlans.length > 0 && <div>Missing: {prerequisites.missingPlans.map(p => p.name).join(', ')}</div>}
+                                    </div>
+                                )}
+
+                                {/* Held Commission Alert */}
+                                {totalHeld > 0 && !isOwned && !isLocked && (
+                                    <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-200 text-xs animate-pulse">
+                                        <div className="font-bold flex items-center gap-1">
+                                            <span className="text-lg">💰</span> Commission Held!
+                                        </div>
+                                        <div>Purchase to unlock <strong>{formatPrice(totalHeld, currentUser.currency)}</strong>.</div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        
-                        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-b-2xl mt-auto">
+
+                        {/* Action Button */}
+                        <div className="p-6 pt-0 mt-auto">
                            {isOwned ? (
-                               <Button size="lg" className="w-full flex items-center justify-center bg-green-600 hover:bg-green-700 focus:ring-green-500" disabled>
-                                   <CheckMarkIcon /> Plan is Active
-                               </Button>
+                               <button disabled className="w-full py-3 px-4 rounded-xl font-bold text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed flex items-center justify-center gap-2">
+                                   <CheckIcon className="w-5 h-5" /> Active Plan
+                               </button>
                            ) : isLocked ? (
-                               <Button size="lg" className="w-full bg-gray-400 hover:bg-gray-400 cursor-not-allowed" disabled>
-                                   <LockIcon /> Locked (See Requirements)
-                               </Button>
+                               <button disabled className="w-full py-3 px-4 rounded-xl font-bold text-white bg-gray-400 cursor-not-allowed flex items-center justify-center gap-2">
+                                   <LockIcon /> Locked
+                               </button>
                            ) : canAfford ? (
-                               <Button size="lg" className="w-full shadow-lg shadow-blue-500/30" onClick={() => handlePurchaseClick(plan)}>
-                                   {totalHeld > 0 ? 'Unlock Commissions & Purchase' : 'Purchase Plan'}
-                               </Button>
+                               <button 
+                                    onClick={() => handlePurchaseClick(plan)}
+                                    className={`w-full py-3 px-4 rounded-xl font-bold text-white shadow-lg transition-all transform hover:scale-[1.02] active:scale-95 ${theme.button}`}
+                                >
+                                   {totalHeld > 0 ? 'Unlock & Purchase' : 'Get Started'}
+                               </button>
                            ) : (
-                               <Button size="lg" className="w-full" variant="secondary" onClick={() => navigate('/member/deposit')}>
-                                   Deposit to Purchase
-                               </Button>
+                               <button 
+                                    onClick={() => navigate('/member/deposit')}
+                                    className="w-full py-3 px-4 rounded-xl font-bold text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 dark:bg-gray-700 dark:text-blue-300 dark:border-gray-600 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                   Deposit to Buy
+                               </button>
                            )}
                         </div>
                     </div>
@@ -277,35 +360,51 @@ const UserInvestmentPlans: React.FC = () => {
 
         {isModalOpen && selectedPlan && (
             <Modal isOpen={isModalOpen} onClose={handleCloseModal}>
-                <div className="p-6 text-center max-w-md">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Confirm Purchase</h2>
-                    <p className="my-3 text-gray-600 dark:text-gray-300">You are about to purchase the <span className="font-bold text-blue-500">{selectedPlan.name}</span> plan.</p>
+                <div className="p-6 text-center max-w-md mx-auto">
+                    <div className="mb-4 inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-3xl">
+                        🛒
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Confirm Purchase</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                        You are about to purchase the <span className="font-bold text-blue-600 dark:text-blue-400">{selectedPlan.name}</span> plan.
+                    </p>
                     
                     {currentUser.walletBalance >= selectedPlan.price ? (
-                        <div>
-                             <div className="my-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2 border border-gray-200 dark:border-gray-700">
-                                <div className="flex justify-between text-lg"><span className="text-gray-500">Current Balance:</span> <span className="font-semibold">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</span></div>
-                                <div className="flex justify-between text-lg"><span className="text-gray-500">Plan Cost:</span> <span className="font-semibold text-red-500">-{formatCurrency(selectedPlan.price, selectedPlan.currency)}</span></div>
-                                <div className="flex justify-between text-xl font-bold pt-2 border-t dark:border-gray-600"><span className="text-gray-800 dark:text-white">New Balance:</span> <span className="text-green-600">{formatCurrency((currentUser.walletBalance - selectedPlan.price), currentUser.currency)}</span></div>
-                            </div>
-                             <div className="mt-8 flex justify-center space-x-4">
-                                <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing} className="w-full">Cancel</Button>
-                                <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing} className="w-full">
-                                    {isPurchasing ? 'Processing...' : 'Confirm & Pay'}
-                                </Button>
+                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 mb-6">
+                             <div className="flex justify-between text-sm mb-2">
+                                 <span className="text-gray-500 dark:text-gray-400">Current Balance</span>
+                                 <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(currentUser.walletBalance, currentUser.currency)}</span>
+                             </div>
+                             <div className="flex justify-between text-sm mb-2">
+                                 <span className="text-gray-500 dark:text-gray-400">Plan Cost</span>
+                                 <span className="font-semibold text-red-500">-{formatPrice(selectedPlan.price, selectedPlan.currency)}</span>
+                             </div>
+                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
+                             <div className="flex justify-between text-base font-bold">
+                                 <span className="text-gray-800 dark:text-gray-200">New Balance</span>
+                                 <span className="text-green-600 dark:text-green-400">{formatPrice((currentUser.walletBalance - selectedPlan.price), currentUser.currency)}</span>
                              </div>
                         </div>
                     ) : (
-                         <div>
-                            <p className="my-6 p-4 rounded-md bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                                Your balance of <span className="font-bold">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</span> is insufficient. Please deposit at least <span className="font-bold">{formatCurrency((selectedPlan.price - currentUser.walletBalance), currentUser.currency)}</span> to proceed.
+                         <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 mb-6">
+                            <p className="text-sm text-red-700 dark:text-red-300">
+                                Insufficient balance. You need <span className="font-bold">{formatPrice((selectedPlan.price - currentUser.walletBalance), currentUser.currency)}</span> more.
                             </p>
-                            <div className="mt-8 flex justify-center space-x-4">
-                                <Button variant="secondary" onClick={handleCloseModal} className="w-full">Cancel</Button>
-                                <Button variant="primary" onClick={() => navigate('/member/deposit')} className="w-full">Go to Deposit</Button>
-                            </div>
                          </div>
                     )}
+                    
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing} className="flex-1">Cancel</Button>
+                        {currentUser.walletBalance >= selectedPlan.price ? (
+                            <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing} className="flex-1">
+                                {isPurchasing ? 'Processing...' : 'Confirm & Pay'}
+                            </Button>
+                        ) : (
+                             <Button variant="primary" onClick={() => navigate('/member/deposit')} className="flex-1">
+                                Go to Deposit
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </Modal>
         )}
