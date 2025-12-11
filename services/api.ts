@@ -271,6 +271,14 @@ export const updateNotification = async (id: string, data: Partial<Notification>
     return result.data;
 };
 
+export const deleteNotification = async (id: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
+        method: 'DELETE',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {
         method: 'PUT',

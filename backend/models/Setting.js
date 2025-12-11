@@ -138,6 +138,10 @@ const SettingSchema = new mongoose.Schema({
         privacyMode: { type: Boolean, default: false },
         excludedCurrencies: { type: [String], default: [] }
     },
+    tickerHiddenEventIds: {
+        type: [String],
+        default: []
+    },
     tickerRealActivityTemplates: {
         deposits: { type: [String], default: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'] },
         withdrawals: { type: [String], default: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'] },
@@ -216,6 +220,7 @@ const defaultSettingsObject = {
     tickerContentSource: 'hybrid',
     tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
     tickerRealActivityConfig: { minAmount: 0, privacyMode: false, excludedCurrencies: [] },
+    tickerHiddenEventIds: [],
     tickerRealActivityTemplates: {
         deposits: [
             '<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>',
@@ -298,7 +303,7 @@ SettingSchema.statics.getSettings = async function() {
         return settings;
     }
 
-    // Self-healing: Check if demo data is missing and add it.
+    // Self-healing logic
     if (!settings.demoProfiles || settings.demoProfiles.length === 0) {
         settings.demoProfiles = defaultDemoProfiles;
         needsSave = true;
@@ -307,25 +312,25 @@ SettingSchema.statics.getSettings = async function() {
         settings.demoActivityTemplates = defaultDemoTemplates;
         needsSave = true;
     }
-    // Added self-healing for notices
     if (!settings.notices) {
         settings.notices = [];
         needsSave = true;
     }
-    // Added self-healing for real activity templates
     if (!settings.tickerRealActivityTemplates) {
         settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
         needsSave = true;
     } else {
-        // Migration: Ensure keys exist if missing or if string (convert to array)
         if(!Array.isArray(settings.tickerRealActivityTemplates.deposits)) {
              settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
              needsSave = true;
         }
     }
-    // Added self-healing for real activity config
     if (!settings.tickerRealActivityConfig) {
         settings.tickerRealActivityConfig = defaultSettingsObject.tickerRealActivityConfig;
+        needsSave = true;
+    }
+    if (!settings.tickerHiddenEventIds) {
+        settings.tickerHiddenEventIds = [];
         needsSave = true;
     }
 

@@ -48,7 +48,10 @@ const UserLayout: React.FC = () => {
     if (!users.length) return [];
   
     const activities: Activity[] = [];
+    // Combine exclusions: Users blocked via restrictions + specific events hidden by admin
     const excludedUserIds = new Set(users.filter(u => u.restrictions?.excludeFromTicker).map(u => u._id));
+    const hiddenEventIds = new Set(settings.tickerHiddenEventIds || []);
+
     const contentSource = settings.tickerContentSource || 'hybrid';
     const realActivitySettings = settings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
     const realTemplates = settings.tickerRealActivityTemplates || {
@@ -103,38 +106,44 @@ const UserLayout: React.FC = () => {
         return true;
     }
 
+    // Helper to get user country
+    const getUserCountry = (userId: string) => {
+        const u = users.find(user => user._id === userId);
+        return u ? u.country : '';
+    };
+
     // 1. Process Real Activities
     if (contentSource === 'hybrid' || contentSource === 'real_only') {
         const realSources = [];
         
         if (realActivitySettings.deposits) {
             realSources.push(...deposits
-                .filter(d => d.status === 'Approved' && !excludedUserIds.has(d.userId) && isValidAmount(d.amount, d.currency))
+                .filter(d => d.status === 'Approved' && !excludedUserIds.has(d.userId) && !hiddenEventIds.has(d._id) && isValidAmount(d.amount, d.currency))
                 .slice(0, 3).map(d => ({ type: 'deposit', data: d, date: new Date(d.date) })));
         }
         if (realActivitySettings.withdrawals) {
             realSources.push(...withdrawals
-                .filter(w => w.status === 'Paid' && !excludedUserIds.has(w.userId) && isValidAmount(w.amount, w.currency))
+                .filter(w => w.status === 'Paid' && !excludedUserIds.has(w.userId) && !hiddenEventIds.has(w._id) && isValidAmount(w.amount, w.currency))
                 .slice(0, 3).map(w => ({ type: 'withdrawal', data: w, date: new Date(w.date) })));
         }
         if (realActivitySettings.registrations) {
             // Registrations usually don't have an amount to filter, unless we check subscription plan price? 
             // For now, allow all registrations unless excluded by user logic
-            realSources.push(...users.filter(u => !excludedUserIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
+            realSources.push(...users.filter(u => !excludedUserIds.has(u._id) && !hiddenEventIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
         }
         if (realActivitySettings.commissions) {
             realSources.push(...transactions
-                .filter(t => t.type === 'Commission' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && isValidAmount(t.amount, t.currency))
+                .filter(t => t.type === 'Commission' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && !hiddenEventIds.has(t._id) && isValidAmount(t.amount, t.currency))
                 .slice(0, 3).map(t => ({ type: 'commission', data: t, date: new Date(t.date) })));
         }
         if (realActivitySettings.transfers) {
             realSources.push(...transfers
-                .filter(t => t.status === 'Approved' && !excludedUserIds.has(t.senderId) && isValidAmount(t.amount, t.currency))
+                .filter(t => t.status === 'Approved' && !excludedUserIds.has(t.senderId) && !hiddenEventIds.has(t._id) && isValidAmount(t.amount, t.currency))
                 .slice(0, 3).map(t => ({ type: 'transfer', data: t, date: new Date(t.date) })));
         }
         if (realActivitySettings.planPurchases) {
             realSources.push(...transactions
-                .filter(t => t.type === 'Plan Purchase' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && isValidAmount(Math.abs(t.amount), t.currency))
+                .filter(t => t.type === 'Plan Purchase' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && !hiddenEventIds.has(t._id) && isValidAmount(Math.abs(t.amount), t.currency))
                 .slice(0, 3).map(t => ({ type: 'plan', data: t, date: new Date(t.date) })));
         }
 
@@ -149,31 +158,31 @@ const UserLayout: React.FC = () => {
           switch (item.type) {
             case 'deposit': 
                 const d = item.data as Deposit; 
-                text = processTemplate(templateStr, { name: processName(d.userName), amount: formatCurrency(d.amount, d.currency) });
+                text = processTemplate(templateStr, { name: processName(d.userName), amount: formatCurrency(d.amount, d.currency), currency: d.currency, country: getUserCountry(d.userId) });
                 break;
             case 'withdrawal': 
                 const w = item.data as Withdrawal; 
-                text = processTemplate(templateStr, { name: processName(w.userName), amount: formatCurrency(w.amount, w.currency) });
+                text = processTemplate(templateStr, { name: processName(w.userName), amount: formatCurrency(w.amount, w.currency), currency: w.currency, country: getUserCountry(w.userId) });
                 break;
             case 'joined': 
                 const u = item.data as User; 
-                text = processTemplate(templateStr, { name: processName(u.username), country: u.country });
+                text = processTemplate(templateStr, { name: processName(u.username), country: u.country, currency: u.currency });
                 break;
             case 'commission': 
                 const c = item.data as Transaction; 
                 const level = c.level || 1;
                 const source = level === 1 ? 'from direct referral' : `from level ${level} referral`;
-                text = processTemplate(templateStr, { name: processName(c.userName), amount: formatCurrency(c.amount, c.currency), source });
+                text = processTemplate(templateStr, { name: processName(c.userName), amount: formatCurrency(c.amount, c.currency), currency: c.currency, country: getUserCountry(c.userId), source });
                 break;
             case 'transfer': 
                 const t = item.data as Transfer; 
-                text = processTemplate(templateStr, { name: processName(t.senderName), amount: formatCurrency(t.amount, t.currency), recipient: processName(t.recipientName) });
+                text = processTemplate(templateStr, { name: processName(t.senderName), amount: formatCurrency(t.amount, t.currency), currency: t.currency, country: getUserCountry(t.senderId), recipient: processName(t.recipientName) });
                 break;
             case 'plan': 
                 const p = item.data as Transaction; 
                 const planName = p.description.replace('Purchased ', '').replace(' plan', ''); 
                 const planPrice = formatCurrency(Math.abs(p.amount), p.currency);
-                text = processTemplate(templateStr, { name: processName(p.userName), plan: planName, amount: planPrice });
+                text = processTemplate(templateStr, { name: processName(p.userName), plan: planName, amount: planPrice, currency: p.currency, country: getUserCountry(p.userId) });
                 break;
           }
           if(text) activities.push({ id: `${item.type}-${item.data._id}`, type: item.type as Activity['type'], text, time: timeAgo(item.date) });

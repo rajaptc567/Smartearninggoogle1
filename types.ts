@@ -276,6 +276,7 @@ export interface Settings {
         privacyMode: boolean;
         excludedCurrencies: Currency[];
     };
+    tickerHiddenEventIds?: string[];
     tickerRealActivityTemplates?: {
         deposits: string[];
         withdrawals: string[];

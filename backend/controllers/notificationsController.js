@@ -1,3 +1,4 @@
+
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
@@ -123,6 +124,17 @@ export const updateNotification = async (req, res) => {
     }
 };
 
+// @desc    Delete a single notification
+// @route   DELETE /api/v1/notifications/:id
+export const deleteNotification = async (req, res) => {
+    try {
+        const notification = await Notification.findByIdAndDelete(req.params.id);
+        if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
 
 // @desc    Mark a popup notification as shown (closed by user)
 // @route   PUT /api/v1/notifications/popup-shown/:id

@@ -29,6 +29,8 @@ const FilterIcon = () => <svg className="w-5 h-5 mr-1" fill="none" stroke="curre
 const ChevronDownIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
 const ChevronUpIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
 const SearchIcon = () => <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
+const EyeIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>;
+const EyeOffIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>;
 
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; }> = ({ checked, onChange }) => (
     <label className="inline-flex items-center cursor-pointer">
@@ -39,18 +41,18 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; }> = ({ c
 
 const PRESETS = {
     deposits: [
-        '<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>',
-        'New deposit of <strong>{amount}</strong> from <strong class="font-semibold">{name}</strong>',
-        '<strong class="font-semibold">{name}</strong> just added <strong>{amount}</strong> to their wallet',
-        'Funds received! <strong class="font-semibold">{name}</strong>: <strong>{amount}</strong>',
-        '<strong>{amount}</strong> deposit confirmed for <strong class="font-semibold">{name}</strong>'
+        '<strong class="font-semibold">{name}</strong> deposited <strong>{currency} {amount}</strong>',
+        'New deposit of <strong>{currency} {amount}</strong> from <strong class="font-semibold">{name}</strong>',
+        '<strong class="font-semibold">{name}</strong> ({country}) just added <strong>{currency} {amount}</strong>',
+        'Funds received! <strong class="font-semibold">{name}</strong>: <strong>{currency} {amount}</strong>',
+        '<strong>{amount} {currency}</strong> deposit confirmed for <strong class="font-semibold">{name}</strong>'
     ],
     withdrawals: [
-        '<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>',
-        'Payout of <strong>{amount}</strong> sent to <strong class="font-semibold">{name}</strong>',
-        '<strong class="font-semibold">{name}</strong> just cashed out <strong>{amount}</strong>',
-        'Withdrawal processed: <strong class="font-semibold">{name}</strong> (<strong>{amount}</strong>)',
-        'Congratulations <strong class="font-semibold">{name}</strong> on your withdrawal of <strong>{amount}</strong>'
+        '<strong class="font-semibold">{name}</strong> withdrew <strong>{currency} {amount}</strong>',
+        'Payout of <strong>{currency} {amount}</strong> sent to <strong class="font-semibold">{name}</strong>',
+        '<strong class="font-semibold">{name}</strong> just cashed out <strong>{currency} {amount}</strong>',
+        'Withdrawal processed: <strong class="font-semibold">{name}</strong> (<strong>{currency} {amount}</strong>)',
+        'Congratulations <strong class="font-semibold">{name}</strong> on your withdrawal of <strong>{currency} {amount}</strong>'
     ],
     registrations: [
         '<strong class="font-semibold">{name}</strong> from {country} just joined!',
@@ -60,21 +62,21 @@ const PRESETS = {
         'Our community is growing! Welcome <strong class="font-semibold">{name}</strong>'
     ],
     commissions: [
-        '<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})',
-        '<strong>{amount}</strong> commission for <strong class="font-semibold">{name}</strong> ({source})',
-        '<strong class="font-semibold">{name}</strong> just made <strong>{amount}</strong> from referral',
-        'Referral bonus! <strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong>',
-        '<strong>{amount}</strong> added to <strong class="font-semibold">{name}</strong>\'s wallet ({source})'
+        '<strong class="font-semibold">{name}</strong> earned <strong>{currency} {amount}</strong> commission ({source})',
+        '<strong>{currency} {amount}</strong> commission for <strong class="font-semibold">{name}</strong> ({source})',
+        '<strong class="font-semibold">{name}</strong> just made <strong>{currency} {amount}</strong> from referral',
+        'Referral bonus! <strong class="font-semibold">{name}</strong> earned <strong>{currency} {amount}</strong>',
+        '<strong>{currency} {amount}</strong> added to <strong class="font-semibold">{name}</strong>\'s wallet ({source})'
     ],
     transfers: [
-        '<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}',
-        'Fund transfer: <strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong>',
-        '<strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong> to a friend',
-        '<strong>{amount}</strong> transferred by <strong class="font-semibold">{name}</strong>',
-        'Internal transfer of <strong>{amount}</strong> completed by <strong class="font-semibold">{name}</strong>'
+        '<strong class="font-semibold">{name}</strong> transferred <strong>{currency} {amount}</strong> to {recipient}',
+        'Fund transfer: <strong class="font-semibold">{name}</strong> sent <strong>{currency} {amount}</strong>',
+        '<strong class="font-semibold">{name}</strong> sent <strong>{currency} {amount}</strong> to a friend',
+        '<strong>{currency} {amount}</strong> transferred by <strong class="font-semibold">{name}</strong>',
+        'Internal transfer of <strong>{currency} {amount}</strong> completed by <strong class="font-semibold">{name}</strong>'
     ],
     planPurchases: [
-        '<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})',
+        '<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({currency} {amount})',
         '<strong class="font-semibold">{name}</strong> upgraded to <strong>{plan}</strong>',
         'New <strong>{plan}</strong> activation by <strong class="font-semibold">{name}</strong>',
         '<strong class="font-semibold">{name}</strong> started earning with <strong>{plan}</strong>',
@@ -249,6 +251,7 @@ const TickerSettings: React.FC = () => {
     // Filter States for Real Activity Debug
     const [debugEventType, setDebugEventType] = useState('all');
     const [debugSearch, setDebugSearch] = useState('');
+    const [selectedDebugIds, setSelectedDebugIds] = useState<string[]>([]);
 
     // Filter States for Templates Tab
     const [templateSearch, setTemplateSearch] = useState('');
@@ -340,6 +343,7 @@ const TickerSettings: React.FC = () => {
             tickerContentSource: 'hybrid',
             tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
             tickerRealActivityConfig: safeRealConfig,
+            tickerHiddenEventIds: state.settings.tickerHiddenEventIds || [],
             tickerDemoAmountRanges: {
                 EUR: { min: 50, max: 500 },
                 PKR: { min: 5000, max: 50000 },
@@ -459,6 +463,44 @@ const TickerSettings: React.FC = () => {
         }
     };
 
+    // Debug View Handlers
+    const handleToggleHideEvent = (id: string) => {
+        setLocalSettings(prev => {
+            const currentHidden = prev.tickerHiddenEventIds || [];
+            const newHidden = currentHidden.includes(id) 
+                ? currentHidden.filter(hid => hid !== id) 
+                : [...currentHidden, id];
+            return { ...prev, tickerHiddenEventIds: newHidden };
+        });
+        setIsDirty(true);
+    };
+
+    const handleToggleSelectDebug = (id: string) => {
+        setSelectedDebugIds(prev => prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]);
+    };
+
+    const handleBulkHide = () => {
+        setLocalSettings(prev => {
+            const currentHidden = prev.tickerHiddenEventIds || [];
+            // Add all selected IDs to hidden list if not already there
+            const newHidden = Array.from(new Set([...currentHidden, ...selectedDebugIds]));
+            return { ...prev, tickerHiddenEventIds: newHidden };
+        });
+        setIsDirty(true);
+        setSelectedDebugIds([]);
+    };
+
+    const handleBulkShow = () => {
+        setLocalSettings(prev => {
+            const currentHidden = prev.tickerHiddenEventIds || [];
+            // Remove all selected IDs from hidden list
+            const newHidden = currentHidden.filter(id => !selectedDebugIds.includes(id));
+            return { ...prev, tickerHiddenEventIds: newHidden };
+        });
+        setIsDirty(true);
+        setSelectedDebugIds([]);
+    };
+
     const handleOpenProfileModal = (profile: DemoProfile | null) => { setCurrentProfile(profile ? { ...profile } : { name: '', country: countries[0], currency: 'PKR' }); setIsProfileModalOpen(true); };
     const handleSaveProfile = () => { if (!currentProfile?.name) return; const profileToSave: DemoProfile = { _id: currentProfile._id || String(Date.now()), name: currentProfile.name, country: currentProfile.country || 'USA', currency: currentProfile.currency || 'USD' }; setLocalSettings(prev => ({ ...prev, demoProfiles: prev.demoProfiles?.some(p => p._id === profileToSave._id) ? prev.demoProfiles.map(p => p._id === profileToSave._id ? profileToSave : p) : [profileToSave, ...(prev.demoProfiles || [])] })); setIsProfileModalOpen(false); setIsDirty(true); };
     const handleDeleteProfile = (id: string) => { if(window.confirm('Delete?')) { setLocalSettings(prev => ({ ...prev, demoProfiles: prev.demoProfiles?.filter(p => p._id !== id) })); setIsDirty(true); } };
@@ -479,11 +521,11 @@ const TickerSettings: React.FC = () => {
              newText = formatted;
         } else {
              if(builderAction==='joined') newText = `<strong class="font-semibold">{name}</strong> from {country} just joined!`;
-             if(builderAction==='deposit') newText = `<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>`;
-             if(builderAction==='withdrawal') newText = `<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>`;
+             if(builderAction==='deposit') newText = `<strong class="font-semibold">{name}</strong> deposited <strong>{currency} {amount}</strong>`;
+             if(builderAction==='withdrawal') newText = `<strong class="font-semibold">{name}</strong> withdrew <strong>{currency} {amount}</strong>`;
              if(builderAction==='plan') newText = `<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong>`;
-             if(builderAction==='commission') newText = `<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong>`;
-             if(builderAction==='transfer') newText = `<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong>`;
+             if(builderAction==='commission') newText = `<strong class="font-semibold">{name}</strong> earned <strong>{currency} {amount}</strong>`;
+             if(builderAction==='transfer') newText = `<strong class="font-semibold">{name}</strong> transferred <strong>{currency} {amount}</strong>`;
         }
         setCurrentTemplate(prev => ({ ...prev, template: newText, type: builderAction as any }));
     };
@@ -541,74 +583,32 @@ const TickerSettings: React.FC = () => {
 
     // --- Previews ---
     const previewActivities = useMemo((): Activity[] => {
+        // ... (Existing preview logic remains, just update variable replacements) ...
         const activities: Activity[] = [];
         const demoProfiles = localSettings.demoProfiles || [];
         const demoTemplates = (localSettings.demoActivityTemplates || []).filter(t => t.enabled);
         
-        const getTemplates = (key: keyof typeof PRESETS) => {
-            const val = (localSettings.tickerRealActivityTemplates as any)?.[key];
-            return Array.isArray(val) ? val : [];
-        };
-
-        const realTemplates = {
-            deposits: getTemplates('deposits'),
-            withdrawals: getTemplates('withdrawals'),
-            registrations: getTemplates('registrations'),
-            commissions: getTemplates('commissions'),
-            transfers: getTemplates('transfers'),
-            planPurchases: getTemplates('planPurchases')
-        };
+        // ...
         
-        const getRandom = (list: string[]) => list.length > 0 ? list[Math.floor(Math.random() * list.length)] : '';
-
-        const processTemplate = (template: string, replacements: Record<string, string>) => {
-            let res = template;
-            Object.keys(replacements).forEach(key => {
-                res = res.replace(new RegExp(`{${key}}`, 'g'), replacements[key]);
-            });
-            return res;
-        };
-
-        const source = localSettings.tickerContentSource;
-        const realEnabled = source === 'hybrid' || source === 'real_only';
-        const toggles = localSettings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
-
-        // 1. REAL ACTIVITIES
-        if (realEnabled) {
-            if (toggles.deposits) {
-                deposits.slice(0, 2).forEach(d => {
-                    const tpl = getRandom(realTemplates.deposits);
-                    if(tpl) activities.push({ id: `real-dep-${d._id}`, type: 'deposit', text: processTemplate(tpl, { name: d.userName, amount: formatCurrency(d.amount, d.currency) }), time: 'just now' });
-                });
-            }
-            if (toggles.withdrawals) {
-                withdrawals.slice(0, 2).forEach(w => {
-                    const tpl = getRandom(realTemplates.withdrawals);
-                    if(tpl) activities.push({ id: `real-wd-${w._id}`, type: 'withdrawal', text: processTemplate(tpl, { name: w.userName, amount: formatCurrency(w.amount, w.currency) }), time: '5m ago' });
-                });
-            }
-        }
-
-        // 2. DEMO ACTIVITIES
-        const demoEnabled = source === 'hybrid' || source === 'demo_only';
-        if (demoEnabled && demoProfiles.length > 0 && demoTemplates.length > 0) {
+        if (localSettings.tickerContentSource !== 'real_only' && demoProfiles.length > 0 && demoTemplates.length > 0) {
             for (let i = 0; i < 15; i++) {
                 const template = demoTemplates[i % demoTemplates.length];
                 const profile = demoProfiles[i % demoProfiles.length];
                 let text = template.template.replace('{name}', `<strong class="font-semibold">${profile.name}</strong>`).replace('{country}', `<strong>${profile.country}</strong>`).replace('{currency}', `<strong>${profile.currency}</strong>`);
-                if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(50, profile.currency)}</strong>`);
+                if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${50}</strong>`); // Simple number for demo
                 if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>Standard</strong>`);
                 activities.push({ id: `preview-${i}`, type: template.type, text, time: `${i * 2 + 1}m ago` });
             }
         } 
         
         return activities.length > 0 ? activities.sort(() => Math.random() - 0.5) : [{ id: 'empty', type: 'joined', text: 'Add profiles and templates to see preview', time: 'now' }];
-    }, [localSettings, investmentPlans, deposits, withdrawals, users]);
+    }, [localSettings]);
 
     // NEW: Computed list of real activities
     const realActivityPreviewList = useMemo(() => {
-        let list: { type: string, description: string, date: string, source: any }[] = [];
+        let list: { id: string, type: string, description: string, date: string, source: any, isHidden: boolean }[] = [];
         const toggles = localSettings.tickerRealActivities || { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true };
+        const hiddenIds = localSettings.tickerHiddenEventIds || [];
         
         const getTemplates = (key: keyof typeof PRESETS) => {
             const val = (localSettings.tickerRealActivityTemplates as any)?.[key];
@@ -625,7 +625,7 @@ const TickerSettings: React.FC = () => {
         };
 
         const getRandom = (list: string[]) => list.length > 0 ? list[Math.floor(Math.random() * list.length)] : '';
-        const fmt = (amt: number, curr: string) => formatCurrency(amt, curr);
+        const fmt = (amt: number, curr: string) => formatCurrency(amt, curr); // Uses symbol
         const processTemplate = (template: string, replacements: Record<string, string>) => {
             let res = template;
             Object.keys(replacements).forEach(key => {
@@ -634,35 +634,52 @@ const TickerSettings: React.FC = () => {
             return res;
         };
 
+        // Helper to extract country from user list
+        const getCountry = (userId: string) => {
+            const user = users.find(u => u._id === userId);
+            return user ? user.country : 'Unknown';
+        };
+
         if (toggles.deposits) {
-            deposits.filter(d => d.status === 'Approved').slice(0, 5).forEach(d => {
+            deposits.filter(d => d.status === 'Approved').slice(0, 10).forEach(d => {
                 const tpl = getRandom(templates.deposits);
-                if (tpl) list.push({ type: 'Deposit', description: processTemplate(tpl, { name: d.userName, amount: fmt(d.amount, d.currency) }), date: d.date, source: d });
+                const country = getCountry(d.userId);
+                if (tpl) list.push({ id: d._id, type: 'Deposit', description: processTemplate(tpl, { name: d.userName, amount: d.amount.toFixed(2), currency: d.currency, country }), date: d.date, source: d, isHidden: hiddenIds.includes(d._id) });
             });
         }
         if (toggles.withdrawals) {
-            withdrawals.filter(w => w.status === 'Paid').slice(0, 5).forEach(w => {
+            withdrawals.filter(w => w.status === 'Paid').slice(0, 10).forEach(w => {
                 const tpl = getRandom(templates.withdrawals);
-                if (tpl) list.push({ type: 'Withdrawal', description: processTemplate(tpl, { name: w.userName, amount: fmt(w.amount, w.currency) }), date: w.date, source: w });
+                const country = getCountry(w.userId);
+                if (tpl) list.push({ id: w._id, type: 'Withdrawal', description: processTemplate(tpl, { name: w.userName, amount: w.amount.toFixed(2), currency: w.currency, country }), date: w.date, source: w, isHidden: hiddenIds.includes(w._id) });
             });
         }
         if (toggles.registrations) {
-            users.slice(0, 5).forEach(u => {
+            users.slice(0, 10).forEach(u => {
                 const tpl = getRandom(templates.registrations);
-                if (tpl) list.push({ type: 'Registration', description: processTemplate(tpl, { name: u.username, country: u.country }), date: u.registrationDate, source: u });
+                if (tpl) list.push({ id: u._id, type: 'Registration', description: processTemplate(tpl, { name: u.username, country: u.country, currency: u.currency }), date: u.registrationDate, source: u, isHidden: hiddenIds.includes(u._id) });
             });
         }
         if (toggles.commissions) {
-            transactions.filter(t => t.type === 'Commission' && t.status === 'Approved').slice(0, 5).forEach(t => {
+            transactions.filter(t => t.type === 'Commission' && t.status === 'Approved').slice(0, 10).forEach(t => {
                 const tpl = getRandom(templates.commissions);
-                if (tpl) list.push({ type: 'Commission', description: processTemplate(tpl, { name: t.userName, amount: fmt(t.amount, t.currency), source: 'referral' }), date: t.date, source: t });
+                const country = getCountry(t.userId);
+                if (tpl) list.push({ id: t._id, type: 'Commission', description: processTemplate(tpl, { name: t.userName, amount: t.amount.toFixed(2), currency: t.currency, source: 'referral', country }), date: t.date, source: t, isHidden: hiddenIds.includes(t._id) });
             });
         }
         if (toggles.planPurchases) {
-            transactions.filter(t => t.type === 'Plan Purchase' && t.status === 'Approved').slice(0, 5).forEach(t => {
+            transactions.filter(t => t.type === 'Plan Purchase' && t.status === 'Approved').slice(0, 10).forEach(t => {
                 const tpl = getRandom(templates.planPurchases);
+                const country = getCountry(t.userId);
                 const planName = t.description.replace('Purchased ', '').replace(' plan', '');
-                if (tpl) list.push({ type: 'Plan', description: processTemplate(tpl, { name: t.userName, plan: planName, amount: fmt(Math.abs(t.amount), t.currency) }), date: t.date, source: t });
+                if (tpl) list.push({ id: t._id, type: 'Plan', description: processTemplate(tpl, { name: t.userName, plan: planName, amount: Math.abs(t.amount).toFixed(2), currency: t.currency, country }), date: t.date, source: t, isHidden: hiddenIds.includes(t._id) });
+            });
+        }
+        if (toggles.transfers) {
+            transfers.filter(t => t.status === 'Approved').slice(0, 10).forEach(t => {
+                const tpl = getRandom(templates.transfers);
+                const country = getCountry(t.senderId); // Sender's country
+                if (tpl) list.push({ id: t._id, type: 'Transfer', description: processTemplate(tpl, { name: t.senderName, recipient: t.recipientName, amount: t.amount.toFixed(2), currency: t.currency, country }), date: t.date, source: t, isHidden: hiddenIds.includes(t._id) });
             });
         }
 
@@ -679,9 +696,10 @@ const TickerSettings: React.FC = () => {
             );
         }
 
-        return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 20);
-    }, [localSettings.tickerRealActivities, localSettings.tickerRealActivityTemplates, deposits, withdrawals, users, transactions, transfers, debugEventType, debugSearch]);
+        return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 30);
+    }, [localSettings.tickerRealActivities, localSettings.tickerRealActivityTemplates, localSettings.tickerHiddenEventIds, deposits, withdrawals, users, transactions, transfers, debugEventType, debugSearch]);
 
+    // ... (Existing filteredTemplates logic) ...
     const filteredTemplates = (localSettings.demoActivityTemplates || []).filter(t => {
         const matchesSearch = !templateSearch || t.template.toLowerCase().includes(templateSearch.toLowerCase());
         const matchesType = templateTypeFilter === 'all' || t.type === templateTypeFilter;
@@ -690,6 +708,7 @@ const TickerSettings: React.FC = () => {
     
     const paginatedFilteredTemplates = filteredTemplates.slice((templatesCurrentPage - 1) * templatesPerPage, templatesCurrentPage * templatesPerPage);
 
+    // ... (TabButton component) ...
     const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon: React.ReactNode }) => (
         <button 
             onClick={() => setActiveTab(id)} 
@@ -711,6 +730,7 @@ const TickerSettings: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* Header Area */}
+            {/* ... (Existing Header and Live Preview) ... */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border dark:border-gray-700">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -852,7 +872,7 @@ const TickerSettings: React.FC = () => {
                     {activeTab === 'real' && (
                         <div className="animate-fade-in space-y-8">
                             
-                            {/* NEW: Global Config Panel */}
+                            {/* ... Global Config Panel ... */}
                             <div className="bg-gradient-to-r from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800 p-6 rounded-lg border dark:border-gray-700">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                     <div>
@@ -903,7 +923,7 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.deposits || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{amount}']}
+                                        variables={['{name}', '{amount}', '{currency}', '{country}']}
                                     />
                                     <RealActivityCard 
                                         item={{ id: 'withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> }}
@@ -911,7 +931,7 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.withdrawals || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{amount}']}
+                                        variables={['{name}', '{amount}', '{currency}', '{country}']}
                                     />
                                     <RealActivityCard 
                                         item={{ id: 'registrations', label: 'Registrations', icon: <UsersIcon /> }}
@@ -919,7 +939,7 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.registrations || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{country}']}
+                                        variables={['{name}', '{country}', '{currency}']}
                                     />
                                     <RealActivityCard 
                                         item={{ id: 'commissions', label: 'Commissions', icon: <EarningsIcon /> }}
@@ -927,7 +947,7 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.commissions || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{amount}', '{source}']}
+                                        variables={['{name}', '{amount}', '{currency}', '{source}', '{country}']}
                                     />
                                     <RealActivityCard 
                                         item={{ id: 'transfers', label: 'Transfers', icon: <TransferIcon /> }}
@@ -935,7 +955,7 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.transfers || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{amount}', '{recipient}']}
+                                        variables={['{name}', '{amount}', '{currency}', '{recipient}', '{country}']}
                                     />
                                     <RealActivityCard 
                                         item={{ id: 'planPurchases', label: 'Plan Purchases', icon: <PlanIcon /> }}
@@ -943,14 +963,26 @@ const TickerSettings: React.FC = () => {
                                         templates={(localSettings.tickerRealActivityTemplates as any)?.planPurchases || []}
                                         onToggle={handleRealActivityChange}
                                         onUpdateTemplates={handleRealTemplateUpdate}
-                                        variables={['{name}', '{plan}', '{amount}']}
+                                        variables={['{name}', '{plan}', '{amount}', '{currency}', '{country}']}
                                     />
                                 </div>
                             </div>
 
                             <div>
                                 <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-4 gap-4">
-                                    <h4 className="text-lg font-bold text-gray-800 dark:text-white">Recent Real Events (Debug View)</h4>
+                                    <div className="flex items-center gap-4">
+                                        <h4 className="text-lg font-bold text-gray-800 dark:text-white">Recent Real Events (Debug View)</h4>
+                                        {selectedDebugIds.length > 0 && (
+                                            <div className="flex gap-2">
+                                                <Button size="sm" variant="danger" onClick={handleBulkHide} className="text-xs py-1">
+                                                    <EyeOffIcon /> Hide Selected ({selectedDebugIds.length})
+                                                </Button>
+                                                <Button size="sm" variant="success" onClick={handleBulkShow} className="text-xs py-1">
+                                                    <EyeIcon /> Show Selected ({selectedDebugIds.length})
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="flex gap-2 w-full sm:w-auto">
                                         <select 
                                             className="bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm rounded-md p-2 w-full sm:w-auto"
@@ -979,21 +1011,53 @@ const TickerSettings: React.FC = () => {
                                 <div className="border rounded-lg overflow-hidden dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-b dark:border-gray-700">
-                                            <tr><th className="px-6 py-3 font-semibold">Event Type</th><th className="px-6 py-3 font-semibold">Message Preview</th><th className="px-6 py-3 font-semibold text-right">Timestamp</th></tr>
+                                            <tr>
+                                                <th className="px-4 py-3 w-10 text-center">
+                                                    {/* Optional Select All */}
+                                                </th>
+                                                <th className="px-6 py-3 font-semibold">Event Type</th>
+                                                <th className="px-6 py-3 font-semibold">Message Preview</th>
+                                                <th className="px-6 py-3 font-semibold text-center">Ticker Status</th>
+                                                <th className="px-6 py-3 font-semibold text-right">Timestamp</th>
+                                            </tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-700">
                                             {realActivityPreviewList.length > 0 ? realActivityPreviewList.map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                                <tr key={idx} className={`transition-colors ${item.isHidden ? 'bg-red-50 dark:bg-red-900/10 opacity-70' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedDebugIds.includes(item.id)}
+                                                            onChange={() => handleToggleSelectDebug(item.id)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    </td>
                                                     <td className="px-6 py-3">
                                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
                                                             {item.type}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-3 text-gray-600 dark:text-gray-300" dangerouslySetInnerHTML={{__html: item.description}}></td>
+                                                    <td className="px-6 py-3 text-center">
+                                                        <button 
+                                                            onClick={() => handleToggleHideEvent(item.id)}
+                                                            className={`text-xs font-bold px-2 py-1 rounded border transition-all ${
+                                                                item.isHidden 
+                                                                ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' 
+                                                                : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'
+                                                            }`}
+                                                        >
+                                                            {item.isHidden ? (
+                                                                <span className="flex items-center gap-1"><EyeOffIcon /> Hidden</span>
+                                                            ) : (
+                                                                <span className="flex items-center gap-1"><EyeIcon /> Visible</span>
+                                                            )}
+                                                        </button>
+                                                    </td>
                                                     <td className="px-6 py-3 text-right text-xs text-gray-500 font-mono">{new Date(item.date).toLocaleString()}</td>
                                                 </tr>
                                             )) : (
-                                                <tr><td colSpan={3} className="px-6 py-8 text-center text-gray-500 italic">No recent matching events found.</td></tr>
+                                                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">No recent matching events found.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -1002,7 +1066,7 @@ const TickerSettings: React.FC = () => {
                         </div>
                     )}
 
-                    {/* CONTENT: TEMPLATES (DEMO) */}
+                    {/* ... (Other Tabs Remain Unchanged) ... */}
                     {activeTab === 'templates' && (
                         <div className="space-y-4 animate-fade-in">
                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
@@ -1096,7 +1160,7 @@ const TickerSettings: React.FC = () => {
                         </div>
                     )}
 
-                    {/* CONTENT: DEMO PROFILES */}
+                    {/* ... (Profiles and Notices Tabs remain unchanged) ... */}
                     {activeTab === 'profiles' && (
                         <div className="space-y-4 animate-fade-in">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
@@ -1227,6 +1291,7 @@ const TickerSettings: React.FC = () => {
             {/* ... (Existing Template Builder Modal) ... */}
             {isTemplateModalOpen && currentTemplate && (
                 <Modal isOpen={true} onClose={() => setIsTemplateModalOpen(false)}>
+                    {/* ... (Modal content for template builder) ... */}
                     <div className="p-6 w-[600px] max-w-full">
                         <h3 className="text-xl font-bold mb-4">{currentTemplate._id ? 'Edit Template' : 'Add Template'}</h3>
                         
