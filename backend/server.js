@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import connectDB from './config/db.js';
+import User from './models/User.js'; // Import User model for seeding
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -20,7 +21,7 @@ import ruleRoutes from './routes/ruleRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
-import disputeRoutes from './routes/disputeRoutes.js'; // Added
+import disputeRoutes from './routes/disputeRoutes.js';
 
 // Load env vars
 dotenv.config();
@@ -50,6 +51,44 @@ if (!fs.existsSync(uploadsDir)) {
 // Set static folder for uploads
 app.use('/uploads', express.static(uploadsDir));
 
+// Seed Admin User Function
+const seedAdminUser = async () => {
+    try {
+        const adminEmail = 'studio56.pk@gmail.com';
+        // Password provided by user
+        const adminPassword = 'raja5207901@'; 
+        
+        const existingUser = await User.findOne({ email: adminEmail });
+        
+        if (!existingUser) {
+            console.log('Seeding Admin User...');
+            await User.create({
+                username: 'admin',
+                fullName: 'System Admin',
+                email: adminEmail,
+                password: adminPassword,
+                phone: '0000000000',
+                country: 'Pakistan',
+                currency: 'PKR',
+                status: 'Active',
+                restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
+            });
+            console.log('Admin User Created Successfully');
+        } else {
+            // Check if we need to sync credentials (force update password to ensure login works)
+            // We set the password field. The pre-save hook in User model handles hashing.
+            console.log('Syncing Admin Credentials...');
+            existingUser.password = adminPassword;
+            existingUser.status = 'Active'; // Ensure not blocked
+            if(existingUser.username !== 'admin') existingUser.username = 'admin'; // Enforce username
+            await existingUser.save();
+            console.log('Admin User Credentials Synced');
+        }
+    } catch (error) {
+        console.error('Admin Seeding Error:', error.message);
+    }
+};
+
 // A simple test route
 app.get('/', (req, res) => {
     res.send('SmartEarning API is running...');
@@ -68,7 +107,7 @@ app.use('/api/v1/rules', ruleRoutes);
 app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
-app.use('/api/v1/disputes', disputeRoutes); // Added
+app.use('/api/v1/disputes', disputeRoutes);
 
 // Custom Error Handler
 const errorHandler = (err, req, res, next) => {
@@ -79,8 +118,10 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    // Run seeder after server starts
+    await seedAdminUser();
 });
 
 // Handle unhandled promise rejections
