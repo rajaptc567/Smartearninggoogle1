@@ -1,5 +1,6 @@
 
 import express from 'express';
+import multer from 'multer';
 import {
     getPaymentMethods,
     createPaymentMethod,
@@ -7,14 +8,21 @@ import {
     deletePaymentMethod
 } from '../controllers/paymentMethodsController.js';
 
+// Configure multer for Memory Storage (same as deposits)
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 2 * 1024 * 1024 } // Limit logo size to 2MB
+});
+
 const router = express.Router();
 
 router.route('/')
     .get(getPaymentMethods)
-    .post(createPaymentMethod);
+    .post(upload.single('logo'), createPaymentMethod);
 
 router.route('/:id')
-    .put(updatePaymentMethod)
+    .put(upload.single('logo'), updatePaymentMethod)
     .delete(deletePaymentMethod);
 
 export default router;

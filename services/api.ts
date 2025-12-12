@@ -302,21 +302,43 @@ export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     return result.data;
 };
 
-export const createPaymentMethod = async (methodData: Partial<PaymentMethod>): Promise<PaymentMethod> => {
+// UPDATED: Now supports FormData for file uploads
+export const createPaymentMethod = async (methodData: Partial<PaymentMethod> | FormData): Promise<PaymentMethod> => {
+    const headers: HeadersInit = {};
+    let body: BodyInit;
+
+    if (methodData instanceof FormData) {
+        body = methodData;
+    } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify(methodData);
+    }
+
     const response = await fetch(`${API_BASE_URL}/payment-methods`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(methodData),
+        headers: headers,
+        body: body,
     });
     const result = await handleResponse(response);
     return result.data;
 };
 
-export const updatePaymentMethod = async (id: string, methodData: Partial<PaymentMethod>): Promise<PaymentMethod> => {
+// UPDATED: Now supports FormData for file uploads
+export const updatePaymentMethod = async (id: string, methodData: Partial<PaymentMethod> | FormData): Promise<PaymentMethod> => {
+    const headers: HeadersInit = {};
+    let body: BodyInit;
+
+    if (methodData instanceof FormData) {
+        body = methodData;
+    } else {
+        headers['Content-Type'] = 'application/json';
+        body = JSON.stringify(methodData);
+    }
+
     const response = await fetch(`${API_BASE_URL}/payment-methods/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(methodData),
+        headers: headers,
+        body: body,
     });
     const result = await handleResponse(response);
     return result.data;

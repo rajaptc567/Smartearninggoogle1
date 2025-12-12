@@ -70,6 +70,17 @@ const InvestmentPlanSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: false },
         slots: [Number],
     },
+    customFeatures: {
+        type: [String],
+        default: []
+    },
+    displayConfig: {
+        showDuration: { type: Boolean, default: true },
+        showMinWithdraw: { type: Boolean, default: true },
+        showDirectReferrals: { type: Boolean, default: true },
+        showDirectCommission: { type: Boolean, default: true },
+        showIndirectCommission: { type: Boolean, default: true },
+    }
 }, {
     timestamps: true
 });

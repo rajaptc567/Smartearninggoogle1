@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency } from '../types';
+import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
 import { updateSettings } from '../services/api';
 
 const Settings: React.FC = () => {
@@ -11,7 +11,7 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -23,6 +23,10 @@ const Settings: React.FC = () => {
   // Fake fetching state for each UX
   const [isFetchingRates, setIsFetchingRates] = useState(false);
 
+  // Logo Management State
+  const [newLogoName, setNewLogoName] = useState('');
+  const [newLogoUrl, setNewLogoUrl] = useState(''); // Text input for URL
+  const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
@@ -40,8 +44,20 @@ const Settings: React.FC = () => {
         transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
         exchangeRates: mergedRates,
         homepageVideoUrl: settings.homepageVideoUrl || '',
-        homepageContent: settings.homepageContent || { heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '' },
-        featuredPlanIds: settings.featuredPlanIds || []
+        homepageContent: settings.homepageContent || { 
+            heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', 
+            feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', 
+            showVideoSection: true,
+            videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', 
+            mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '',
+            paymentMethodsTitle: 'Supported Payment Partners',
+            paymentMethodsDesc: 'We support a variety of secure payment gateways.',
+            paymentMethodsDisplayType: 'static',
+            paymentMethodsColorStyle: 'color'
+        },
+        homepagePaymentLogos: settings.homepagePaymentLogos || [],
+        featuredPlanIds: settings.featuredPlanIds || [],
+        faqs: settings.faqs || []
     }));
     setIsDirty(false);
   }, [settings]);
@@ -55,6 +71,17 @@ const Settings: React.FC = () => {
         setLocalSettings(prev => ({...prev, [name]: value }));
     }
     setIsDirty(true);
+  }
+  
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      if (name.startsWith('homepageContent.')) {
+          const field = name.split('.')[1];
+          setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
+      } else {
+          setLocalSettings(prev => ({...prev, [name]: value }));
+      }
+      setIsDirty(true);
   }
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +98,8 @@ const Settings: React.FC = () => {
             transferConfig: { ...prev.transferConfig, enabled: checked },
             isUserTransferEnabled: checked // Sync legacy field
         }));
+    } else if (name === 'homepageContent.showVideoSection') {
+        setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, showVideoSection: checked } as any }));
     } else {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     }
@@ -112,6 +141,70 @@ const Settings: React.FC = () => {
             newIds = [...currentIds, planId];
         }
         setLocalSettings(prev => ({ ...prev, featuredPlanIds: newIds }));
+        setIsDirty(true);
+    };
+
+    // --- Logo Management Handlers ---
+    const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setNewLogoFile(e.target.files[0]);
+            // Clear URL input if file is selected
+            setNewLogoUrl('');
+        }
+    };
+
+    const handleAddLogo = async () => {
+        if (!newLogoName) return alert("Please enter a name for the payment method.");
+        
+        let logoData = newLogoUrl;
+
+        if (newLogoFile) {
+            // Convert file to Base64
+            logoData = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(newLogoFile);
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        if (!logoData) return alert("Please provide an image URL or upload a file.");
+
+        setLocalSettings(prev => ({
+            ...prev,
+            homepagePaymentLogos: [...(prev.homepagePaymentLogos || []), { name: newLogoName, logoUrl: logoData }]
+        }));
+        
+        // Reset inputs
+        setNewLogoName('');
+        setNewLogoUrl('');
+        setNewLogoFile(null);
+        setIsDirty(true);
+    };
+
+    const handleRemoveLogo = (index: number) => {
+        const newLogos = [...(localSettings.homepagePaymentLogos || [])];
+        newLogos.splice(index, 1);
+        setLocalSettings(prev => ({ ...prev, homepagePaymentLogos: newLogos }));
+        setIsDirty(true);
+    };
+
+    // --- FAQ Handlers ---
+    const handleFaqChange = (index: number, field: keyof FaqItem, value: string) => {
+        const newFaqs = [...(localSettings.faqs || [])];
+        newFaqs[index] = { ...newFaqs[index], [field]: value };
+        setLocalSettings(prev => ({ ...prev, faqs: newFaqs }));
+        setIsDirty(true);
+    };
+
+    const handleAddFaq = () => {
+        setLocalSettings(prev => ({ ...prev, faqs: [...(prev.faqs || []), { question: 'New Question', answer: 'Answer here...' }] }));
+        setIsDirty(true);
+    };
+
+    const handleRemoveFaq = (index: number) => {
+        const newFaqs = (localSettings.faqs || []).filter((_, i) => i !== index);
+        setLocalSettings(prev => ({ ...prev, faqs: newFaqs }));
         setIsDirty(true);
     };
 
@@ -236,6 +329,7 @@ const Settings: React.FC = () => {
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
           <TabButton id="general" label="General" />
           <TabButton id="homepage" label="Homepage" />
+          <TabButton id="faqs" label="FAQs" />
           <TabButton id="transfers" label="Transfers & Fees" />
           <TabButton id="withdrawals" label="Withdrawals" />
           <TabButton id="commissions" label="Commissions" />
@@ -301,6 +395,22 @@ const Settings: React.FC = () => {
         {/* HOMEPAGE TAB */}
         {activeTab === 'homepage' && (
             <div className="space-y-6 animate-fade-in">
+               
+               {/* Hero Section */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Hero Section</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium">Hero Title</label>
+                            <input name="homepageContent.heroTitle" value={localSettings.homepageContent?.heroTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Hero Subtitle</label>
+                            <textarea name="homepageContent.heroSubtitle" value={localSettings.homepageContent?.heroSubtitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+                </div>
+
                {/* Featured Plans */}
                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Featured Investment Plans</h4>
@@ -335,28 +445,38 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Hero Section */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
-                    <h4 className="font-semibold text-gray-800 dark:text-white">Hero Section</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-sm font-medium">Hero Title</label>
-                            <input name="homepageContent.heroTitle" value={localSettings.homepageContent?.heroTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium">Hero Subtitle</label>
-                            <textarea name="homepageContent.heroSubtitle" value={localSettings.homepageContent?.heroSubtitle || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                    </div>
-                </div>
-
                 {/* Video Section */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
-                    <h4 className="font-semibold text-gray-800 dark:text-white">Video Showcase</h4>
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-semibold text-gray-800 dark:text-white">Video Showcase</h4>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-xs text-gray-500 uppercase font-bold">Enable Section</span>
+                            <div className="relative inline-block w-10 h-5 transition duration-200 ease-in-out">
+                                <input
+                                    id="homepageContent.showVideoSection"
+                                    name="homepageContent.showVideoSection"
+                                    type="checkbox"
+                                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
+                                    checked={localSettings.homepageContent?.showVideoSection ?? true}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="homepageContent.showVideoSection" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.homepageContent?.showVideoSection ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
                             <label className="text-sm font-medium">Video Embed URL</label>
-                            <input name="homepageVideoUrl" value={localSettings.homepageVideoUrl || ''} onChange={handleTextChange} placeholder="https://www.youtube.com/embed/..." className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            <input 
+                                name="homepageVideoUrl" 
+                                value={localSettings.homepageVideoUrl || ''} 
+                                onChange={handleTextChange} 
+                                placeholder="e.g. https://www.youtube.com/embed/VIDEO_ID" 
+                                className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Youtube: Use <code>https://www.youtube.com/embed/ID</code>
+                            </p>
                         </div>
                         <div>
                             <label className="text-sm font-medium">Video Title</label>
@@ -365,6 +485,103 @@ const Settings: React.FC = () => {
                         <div>
                             <label className="text-sm font-medium">Video Description</label>
                             <textarea name="homepageContent.videoDesc" value={localSettings.homepageContent?.videoDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Payment Methods Section */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white">Payment Partners Display</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium">Section Title</label>
+                            <input name="homepageContent.paymentMethodsTitle" value={localSettings.homepageContent?.paymentMethodsTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">Section Description</label>
+                            <textarea name="homepageContent.paymentMethodsDesc" value={localSettings.homepageContent?.paymentMethodsDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                        </div>
+                        
+                        <div>
+                            <label className="text-sm font-medium">Animation Style</label>
+                            <select 
+                                name="homepageContent.paymentMethodsDisplayType" 
+                                value={(localSettings.homepageContent as any)?.paymentMethodsDisplayType || 'static'} 
+                                onChange={handleSelectChange} 
+                                className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            >
+                                <option value="static">Static (Grid)</option>
+                                <option value="sliding">Slide (Marquee)</option>
+                                <option value="pulsing">Blink (Pulse)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label className="text-sm font-medium">Color Style</label>
+                            <select 
+                                name="homepageContent.paymentMethodsColorStyle" 
+                                value={(localSettings.homepageContent as any)?.paymentMethodsColorStyle || 'color'} 
+                                onChange={handleSelectChange} 
+                                className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            >
+                                <option value="color">Full Color</option>
+                                <option value="grayscale">Grayscale (Color on Hover)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t dark:border-gray-600">
+                        <h5 className="font-semibold text-gray-700 dark:text-gray-300 text-sm mb-3">Display Logos Management</h5>
+                        
+                        {/* List of Existing Logos */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                            {(localSettings.homepagePaymentLogos || []).map((logo, index) => (
+                                <div key={index} className="relative p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-800 flex flex-col items-center group">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleRemoveLogo(index)}
+                                        className="absolute top-1 right-1 text-red-500 bg-gray-100 dark:bg-gray-700 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Remove Logo"
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                    <img src={logo.logoUrl} alt={logo.name} className="h-8 object-contain mb-1" />
+                                    <span className="text-xs text-center truncate w-full">{logo.name}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Add New Logo Form */}
+                        <div className="flex flex-col sm:flex-row gap-2 items-end bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
+                            <div className="flex-grow">
+                                <label className="text-xs font-bold text-gray-500">Method Name</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="e.g. Bitcoin" 
+                                    value={newLogoName} 
+                                    onChange={(e) => setNewLogoName(e.target.value)} 
+                                    className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
+                                />
+                            </div>
+                            <div className="flex-grow">
+                                <label className="text-xs font-bold text-gray-500">Image Source</label>
+                                <div className="flex flex-col gap-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        onChange={handleLogoFileChange} 
+                                        className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        placeholder="OR Paste Image URL" 
+                                        value={newLogoUrl} 
+                                        onChange={(e) => { setNewLogoUrl(e.target.value); setNewLogoFile(null); }} 
+                                        className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
+                                    />
+                                </div>
+                            </div>
+                            <Button type="button" size="sm" onClick={handleAddLogo} disabled={!newLogoName || (!newLogoUrl && !newLogoFile)}>Add</Button>
                         </div>
                     </div>
                 </div>
@@ -425,11 +642,56 @@ const Settings: React.FC = () => {
                 </div>
             </div>
         )}
+
+        {/* FAQS TAB */}
+        {activeTab === 'faqs' && (
+            <div className="space-y-4 animate-fade-in">
+                <div className="flex justify-between items-center">
+                    <h4 className="text-lg font-bold text-gray-800 dark:text-white">Frequently Asked Questions</h4>
+                    <Button onClick={handleAddFaq}>+ Add FAQ</Button>
+                </div>
+                
+                <div className="space-y-4">
+                    {(localSettings.faqs || []).map((faq, index) => (
+                        <div key={index} className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600 flex gap-4 items-start">
+                            <div className="flex-grow space-y-2">
+                                <input 
+                                    className="w-full font-bold text-gray-800 dark:text-white bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:outline-none p-1" 
+                                    placeholder="Question" 
+                                    value={faq.question}
+                                    onChange={(e) => handleFaqChange(index, 'question', e.target.value)}
+                                />
+                                <textarea 
+                                    className="w-full text-sm text-gray-600 dark:text-gray-300 bg-transparent border-0 focus:ring-0 p-1 resize-y" 
+                                    placeholder="Answer"
+                                    rows={2}
+                                    value={faq.answer}
+                                    onChange={(e) => handleFaqChange(index, 'answer', e.target.value)}
+                                />
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => handleRemoveFaq(index)} 
+                                className="text-red-500 hover:text-red-700 p-2"
+                                title="Delete FAQ"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </div>
+                    ))}
+                    {(localSettings.faqs || []).length === 0 && (
+                        <div className="text-center p-8 text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed dark:border-gray-700">
+                            No FAQs added yet.
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
         
         {/* EXCHANGE RATES TAB */}
         {activeTab === 'exchange_rates' && (
             <div className="space-y-8 animate-fade-in">
-                
+                {/* ... (Existing Exchange Rates code) ... */}
                 <div className="flex flex-col sm:flex-row justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                      <div className="mb-3 sm:mb-0">
                         <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Currency Rates</h4>
@@ -579,7 +841,7 @@ const Settings: React.FC = () => {
         {/* TRANSFERS TAB */}
         {activeTab === 'transfers' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... Transfer content ... */}
+                {/* ... (Existing Transfers Tab Code) ... */}
                  <div>
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white">Transfer Fee Structure</h3>
@@ -594,7 +856,6 @@ const Settings: React.FC = () => {
                             <option value="USD">USD</option>
                         </select>
                     </div>
-                    {/* ... Rest of Transfer Tab ... */}
                      <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
                         <div className="space-y-2">
                             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 uppercase items-center mb-2 px-1">
@@ -682,7 +943,7 @@ const Settings: React.FC = () => {
         {/* WITHDRAWALS TAB */}
         {activeTab === 'withdrawals' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... Withdrawal Content ... */}
+                {/* ... (Existing Withdrawals Tab Code) ... */}
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Withdrawal Restrictions</h3>
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -758,7 +1019,7 @@ const Settings: React.FC = () => {
         {/* COMMISSIONS TAB */}
         {activeTab === 'commissions' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... Commissions Content ... */}
+                {/* ... (Existing Commissions Tab Code) ... */}
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Referral Commission Rules</h3>
                 <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-800 dark:text-yellow-200">
                     <p className="font-bold mb-1">Important:</p>

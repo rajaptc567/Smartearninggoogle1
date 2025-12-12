@@ -135,6 +135,14 @@ export interface InvestmentPlan {
         enabled: boolean;
         slots: number[];
     };
+    customFeatures?: string[];
+    displayConfig?: {
+        showDuration: boolean;
+        showMinWithdraw: boolean;
+        showDirectReferrals: boolean;
+        showDirectCommission: boolean;
+        showIndirectCommission: boolean;
+    };
 }
 
 export interface Transaction {
@@ -211,6 +219,16 @@ export interface PlanEquivalencyGroup {
     usdPlanId?: string;
 }
 
+export interface FaqItem {
+    question: string;
+    answer: string;
+}
+
+export interface HomepagePaymentLogo {
+    name: string;
+    logoUrl: string;
+}
+
 export interface HomepageContent {
     heroTitle: string;
     heroSubtitle: string;
@@ -220,6 +238,7 @@ export interface HomepageContent {
     feature2Desc: string;
     feature3Title: string;
     feature3Desc: string;
+    showVideoSection?: boolean;
     videoTitle: string;
     videoDesc: string;
     multiCurrencyTitle: string;
@@ -228,7 +247,11 @@ export interface HomepageContent {
     mlmDesc: string;
     ctaTitle: string;
     ctaDesc: string;
-    [key: string]: string | undefined;
+    paymentMethodsTitle?: string;
+    paymentMethodsDesc?: string;
+    paymentMethodsDisplayType?: 'static' | 'sliding' | 'pulsing';
+    paymentMethodsColorStyle?: 'color' | 'grayscale';
+    [key: string]: string | boolean | undefined;
 }
 
 export interface Settings {
@@ -293,9 +316,11 @@ export interface Settings {
     demoProfiles?: DemoProfile[];
     demoActivityTemplates?: DemoActivityTemplate[];
     notices?: Notice[];
+    faqs?: FaqItem[];
     planEquivalencyGroups?: PlanEquivalencyGroup[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
+    homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
 }
 

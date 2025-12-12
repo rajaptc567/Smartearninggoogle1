@@ -230,6 +230,14 @@ const UserInvestmentPlans: React.FC = () => {
                 const isLocked = prerequisites?.isLocked;
                 const canAfford = currentUser.walletBalance >= plan.price;
 
+                const config = plan.displayConfig || { 
+                    showDuration: true, 
+                    showMinWithdraw: true, 
+                    showDirectCommission: true, 
+                    showIndirectCommission: true, 
+                    showDirectReferrals: true 
+                };
+
                 return (
                      <div 
                         key={plan._id} 
@@ -268,38 +276,67 @@ const UserInvestmentPlans: React.FC = () => {
 
                             {/* Features List */}
                             <ul className="space-y-4 mb-8 flex-grow">
-                                <li className="flex items-start">
-                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
-                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
-                                    </div>
-                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                        <span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}
-                                    </span>
-                                </li>
-                                <li className="flex items-start">
-                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
-                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
-                                    </div>
-                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                        <span className="font-semibold">Min Withdraw:</span> {formatPrice(plan.minWithdraw, plan.currency)}
-                                    </span>
-                                </li>
-                                <li className="flex items-start">
-                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
-                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
-                                    </div>
-                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                        <span className="font-semibold">Direct Comm:</span> {renderDirectCommission(plan)}
-                                    </span>
-                                </li>
-                                <li className="flex items-start">
-                                    <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
-                                        <CheckIcon className={`w-4 h-4 ${theme.text}`} />
-                                    </div>
-                                    <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                        <span className="font-semibold">Network:</span> {plan.indirectCommissions.length} Levels Deep
-                                    </span>
-                                </li>
+                                {config.showDuration && (
+                                    <li className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                            <span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}
+                                        </span>
+                                    </li>
+                                )}
+                                {config.showMinWithdraw && (
+                                    <li className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                            <span className="font-semibold">Min Withdraw:</span> {formatPrice(plan.minWithdraw, plan.currency)}
+                                        </span>
+                                    </li>
+                                )}
+                                {config.showDirectReferrals && (
+                                    <li className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                            <span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Max ${plan.directReferralLimit}`}
+                                        </span>
+                                    </li>
+                                )}
+                                {config.showDirectCommission && (
+                                    <li className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                            <span className="font-semibold">Direct Comm:</span> {renderDirectCommission(plan)}
+                                        </span>
+                                    </li>
+                                )}
+                                {config.showIndirectCommission && (
+                                    <li className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
+                                            <span className="font-semibold">Network:</span> {plan.indirectCommissions.length} Levels Deep
+                                        </span>
+                                    </li>
+                                )}
+                                {plan.customFeatures && plan.customFeatures.map((feature, i) => (
+                                    <li key={i} className="flex items-start">
+                                        <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
+                                            {/* Using standard check icon for features to maintain clean look */}
+                                            <CheckIcon className={`w-4 h-4 ${theme.text}`} />
+                                        </div>
+                                        <span className="ml-3 text-sm text-gray-700 dark:text-gray-200 font-medium">
+                                            {feature}
+                                        </span>
+                                    </li>
+                                ))}
                             </ul>
                             
                             {/* ALERTS SECTION */}

@@ -93,25 +93,8 @@ const InvestmentPlans: React.FC = () => {
 
     const handleToggleRule = async (rule: Rule) => {
         try {
-            // Optimistic update would be better, but simple refetch via API works
             const updatedRule = await updateRule(rule._id, { isActive: !rule.isActive });
-            // Since we don't have UPDATE_RULE in global reducer yet, we can refetch all or just manually update state
-            // Assuming we added ADD_RULE/DELETE_RULE/SET_RULES. Let's ensure UPDATE works by re-using ADD_RULE logic if it replaces, 
-            // or we add a new action. For now, assuming standard CRUD.
-            // Dispatching 'ADD_RULE' usually appends, so we need 'UPDATE_RULE' logic in reducer if available, 
-            // or refresh. Let's assume we can fetch rules again or add proper dispatch.
-            // Since types.ts and DataContext might not have UPDATE_RULE, we will rely on full refresh or mapped state update locally if strict.
-            // Ideally, we add UPDATE_RULE case to reducer. 
-            // For now, let's use the provided `ADD_RULE` which acts as a replacer in some implementations or just reload page.
-            // Best practice: Add proper dispatch.
-            // Re-using createRule approach:
-            
-            // NOTE: Since I can't edit DataContext reducer here easily, I will just re-fetch or use a workaround.
-            // Actually, based on previous context, I should have access to update.
-            // I'll simulate an update by fetching rules again if needed, or better, assuming generic 'SET_RULES' exists.
-            // Let's implement a clean update in state if possible.
-            
-            // To be safe and simple without modifying Context extensively:
+            // Ideally dispatch specific update, here reloading for simplicity
             window.location.reload(); 
         } catch (error) {
             console.error("Failed to toggle rule:", error);
@@ -310,7 +293,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
             if (existingRule) {
                 // Update
                 result = await updateRule(existingRule._id, payload);
-                // Note: Dispatch logic should ideally use UPDATE_RULE, assuming page refresh or generic fetch handles it for now as per constraints
                 alert("Rule updated successfully!");
             } else {
                 // Create
@@ -456,6 +438,14 @@ const defaultPlan: Partial<InvestmentPlan> = {
     },
     autoUpgrade: { enabled: false, toPlanId: undefined },
     holdPosition: { enabled: false, slots: [] },
+    customFeatures: [],
+    displayConfig: { 
+        showDuration: true, 
+        showMinWithdraw: true, 
+        showDirectCommission: true, 
+        showIndirectCommission: true, 
+        showDirectReferrals: true 
+    }
 };
 
 const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) => {
@@ -467,15 +457,31 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         ...plan,
         directCommissions: plan.directCommissions && plan.directCommissions.length > 0 
             ? plan.directCommissions 
-            : (plan.directReferralLimit > 0 ? new Array(plan.directReferralLimit).fill(defaultCommission) : [defaultCommission])
+            : (plan.directReferralLimit > 0 ? new Array(plan.directReferralLimit).fill(defaultCommission) : [defaultCommission]),
+        customFeatures: plan.customFeatures || [],
+        displayConfig: plan.displayConfig || { 
+            showDuration: true, 
+            showMinWithdraw: true, 
+            showDirectCommission: true, 
+            showIndirectCommission: true,
+            showDirectReferrals: true 
+        }
     } : defaultPlan;
 
     const [formData, setFormData] = useState<Partial<InvestmentPlan>>(initialPlan);
     const [isSaving, setIsSaving] = useState(false);
+    const [newFeature, setNewFeature] = useState('');
 
      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         
+        if(name.startsWith('displayConfig.')) {
+            const field = name.split('.')[1];
+            const checked = (e.target as HTMLInputElement).checked;
+            setFormData(prev => ({ ...prev, displayConfig: { ...prev.displayConfig!, [field]: checked }}));
+            return;
+        }
+
         if(name === 'autoUpgrade.enabled') {
             const checked = (e.target as HTMLInputElement).checked;
             setFormData(prev => ({ ...prev, autoUpgrade: { ...prev!.autoUpgrade!, enabled: checked }}));
@@ -584,6 +590,22 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         });
     };
 
+    const handleAddFeature = () => {
+        if (!newFeature.trim()) return;
+        setFormData(prev => ({
+            ...prev,
+            customFeatures: [...(prev.customFeatures || []), newFeature.trim()]
+        }));
+        setNewFeature('');
+    };
+
+    const handleRemoveFeature = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            customFeatures: (prev.customFeatures || []).filter((_, i) => i !== index)
+        }));
+    };
+
     const handleHoldSlotChange = (slotNumber: number, checked: boolean) => {
         let currentSlots = formData.holdPosition?.slots || [];
         if (checked) {
@@ -653,6 +675,60 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             <option value={Status.Disabled}>Disabled</option>
                         </select>
                         <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Description" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                </fieldset>
+
+                <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                    <legend className="px-2 font-semibold">Display Customization</legend>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" name="displayConfig.showDuration" checked={formData.displayConfig?.showDuration} onChange={handleChange} />
+                            <span>Show Duration</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" name="displayConfig.showMinWithdraw" checked={formData.displayConfig?.showMinWithdraw} onChange={handleChange} />
+                            <span>Show Min Withdraw</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" name="displayConfig.showDirectReferrals" checked={formData.displayConfig?.showDirectReferrals} onChange={handleChange} />
+                            <span>Show Direct Referrals</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" name="displayConfig.showDirectCommission" checked={formData.displayConfig?.showDirectCommission} onChange={handleChange} />
+                            <span>Show Direct Commission</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" name="displayConfig.showIndirectCommission" checked={formData.displayConfig?.showIndirectCommission} onChange={handleChange} />
+                            <span>Show Indirect Levels</span>
+                        </label>
+                    </div>
+                    
+                    <div className="mt-6 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-600">
+                        <label className="block text-sm font-bold mb-2">Custom Features List</label>
+                        <div className="flex gap-2 mb-3">
+                            <input 
+                                className="flex-grow rounded-md border dark:bg-gray-700 dark:border-gray-600 p-2 text-sm" 
+                                placeholder="e.g., '24/7 Support' or 'VIP Access'" 
+                                value={newFeature}
+                                onChange={(e) => setNewFeature(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
+                            />
+                            <Button type="button" size="sm" onClick={handleAddFeature}>Add</Button>
+                        </div>
+                        {formData.customFeatures && formData.customFeatures.length > 0 ? (
+                            <ul className="space-y-1 max-h-40 overflow-y-auto">
+                                {formData.customFeatures.map((feat, index) => (
+                                    <li key={index} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 rounded shadow-sm border border-gray-100 dark:border-gray-700 text-sm">
+                                        <span className="truncate mr-2">{feat}</span>
+                                        <button type="button" onClick={() => handleRemoveFeature(index)} className="text-red-500 hover:text-red-700 font-bold px-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
+                                            ×
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                             <p className="text-xs text-gray-400 italic text-center py-2">No custom features added.</p>
+                        )}
                     </div>
                 </fieldset>
 

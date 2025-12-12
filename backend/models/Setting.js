@@ -48,6 +48,17 @@ const PlanEquivalencyGroupSchema = new mongoose.Schema({
     usdPlanId: { type: String },
 });
 
+const FaqSchema = new mongoose.Schema({
+    question: { type: String, required: true },
+    answer: { type: String, required: true }
+}, { _id: false });
+
+// New Schema for Manual Payment Logos on Homepage
+const HomepagePaymentLogoSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    logoUrl: { type: String, required: true } // Can be URL or Base64
+}, { _id: false });
+
 const HomepageContentSchema = new mongoose.Schema({
     heroTitle: { type: String, default: "Invest in Your Future, Grow Your Network" },
     heroSubtitle: { type: String, default: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential." },
@@ -57,16 +68,49 @@ const HomepageContentSchema = new mongoose.Schema({
     feature2Desc: { type: String, default: "Earn commissions not just from your referrals, but from their referrals too." },
     feature3Title: { type: String, default: "Real-Time Tracking" },
     feature3Desc: { type: String, default: "Monitor your earnings, network growth, and transactions with our intuitive dashboard." },
+    
+    // Video Section
+    showVideoSection: { type: Boolean, default: true },
     videoTitle: { type: String, default: "See How It Works" },
     videoDesc: { type: String, default: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals." },
+    
     multiCurrencyTitle: { type: String, default: "Global Reach, Local Convenience" },
     multiCurrencyDesc: { type: String, default: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you." },
     mlmTitle: { type: String, default: "Understanding Our Earning System" },
     mlmDesc: { type: String, default: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network." },
+    
+    // Payment Methods Configuration
+    paymentMethodsTitle: { type: String, default: "Supported Payment Partners" },
+    paymentMethodsDesc: { type: String, default: "We support a variety of secure payment gateways for your convenience." },
+    paymentMethodsDisplayType: { type: String, enum: ['static', 'sliding', 'pulsing'], default: 'static' },
+    paymentMethodsColorStyle: { type: String, enum: ['color', 'grayscale'], default: 'color' },
+
     ctaTitle: { type: String, default: "Ready to Start Your Journey?" },
     ctaDesc: { type: String, default: "Join a community of forward-thinkers. Sign up today and unlock your earning potential." }
 }, { _id: false });
 
+const defaultFaqs = [
+    { question: "How do I deposit funds?", answer: "Log in to your dashboard and navigate to 'Deposit Funds'. Choose your preferred payment method (e.g., Bank Transfer, Easypaisa, JazzCash, Crypto), enter the amount, and follow the instructions. Upload your payment proof/receipt to verify the transaction. Your balance will be updated once approved by an admin." },
+    { question: "How do I withdraw my earnings?", answer: "Go to the 'Withdraw Funds' section. Select a withdrawal method (Bank, Mobile Wallet, etc.), enter the amount you wish to withdraw, and provide your account details. Withdrawal requests are typically processed within 24-48 hours." },
+    { question: "What payment methods are supported?", answer: "We support a variety of local and international methods including Easypaisa, JazzCash, Bank Transfers, PayPal, Stripe, Payoneer, and Cryptocurrency. Availability depends on your selected currency." },
+    { question: "What is the minimum investment?", answer: "You can view the minimum investment amounts on the 'Investment Plans' page. We offer various plans to suit different budgets, starting from affordable entry levels." },
+    { question: "How does the referral system work?", answer: "Share your unique referral link found on your Dashboard. You earn Direct Commissions when someone joins and invests through your link (Level 1), and Indirect Commissions from their subsequent referrals (Level 2 and beyond)." },
+    { question: "Can I transfer funds to another user?", answer: "Yes, use the 'Transfer Funds' feature in your member area to send money to other members instantly. Note that a small fee may apply, and cross-currency transfers (e.g., USD to PKR) are supported with auto-conversion." }
+];
+
+const defaultDemoProfiles = [
+    { _id: 'dp1', name: 'Maria', country: 'Germany', currency: 'EUR' },
+    { _id: 'dp2', name: 'Bob', country: 'France', currency: 'EUR' },
+    { _id: 'dp3', name: 'Ahmed', country: 'Pakistan', currency: 'PKR' },
+    { _id: 'dp4', name: 'Sarah', country: 'UK', currency: 'USD' }
+];
+
+const defaultDemoTemplates = [
+    { _id: 'dt1', template: '{name} from {country} just joined!', type: 'joined', enabled: true },
+    { _id: 'dt2', template: '{name} deposited {amount}.', type: 'deposit', enabled: true },
+    { _id: 'dt3', template: '{name} withdrew {amount}.', type: 'withdrawal', enabled: true },
+    { _id: 'dt4', template: '{name} purchased {plan}.', type: 'plan', enabled: true }
+];
 
 const SettingSchema = new mongoose.Schema({
     isUserTransferEnabled: {
@@ -119,6 +163,10 @@ const SettingSchema = new mongoose.Schema({
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
     notices: [NoticeSchema],
+    faqs: {
+        type: [FaqSchema],
+        default: defaultFaqs
+    },
     tickerSpeed: { type: Number, default: 6 },
     tickerContentSource: {
         type: String,
@@ -164,6 +212,10 @@ const SettingSchema = new mongoose.Schema({
         type: HomepageContentSchema,
         default: () => ({})
     },
+    homepagePaymentLogos: {
+        type: [HomepagePaymentLogoSchema],
+        default: []
+    },
     featuredPlanIds: {
         type: [String],
         default: [],
@@ -172,134 +224,13 @@ const SettingSchema = new mongoose.Schema({
     timestamps: true
 });
 
-
-const defaultDemoProfiles = [
-    {"_id":"1","name":"John S.","country":"United States","currency":"USD"},
-    {"_id":"2","name":"Maria G.","country":"Germany","currency":"EUR"},
-    {"_id":"3","name":"Ali K.","country":"Pakistan","currency":"PKR"},
-    {"_id":"4","name":"Emily R.","country":"Canada","currency":"USD"},
-    {"_id":"5","name":"Fatima Z.","country":"Pakistan","currency":"PKR"},
-    {"_id":"6","name":"Lucas M.","country":"France","currency":"EUR"},
-    {"_id":"7","name":"Michael B.","country":"United Kingdom","currency":"USD"},
-    {"_id":"8","name":"Ahmed R.","country":"Pakistan","currency":"PKR"},
-    {"_id":"9","name":"Sophia L.","country":"Australia","currency":"USD"},
-    {"_id":"10","name":"Aisha M.","country":"Pakistan","currency":"PKR"},
-];
-
-const defaultDemoTemplates = [
-    {"_id":"t1","template":"{name} from {country} is now part of the community!","type":"joined","enabled":true},
-    {"_id":"t36","template":"A new deposit of {amount} was made by {name}.","type":"deposit","enabled":true},
-    {"_id":"t71","template":"{name} just cashed out {amount}!","type":"withdrawal","enabled":true},
-    {"_id":"t106","template":"{name} just upgraded to the {plan} plan!","type":"plan","enabled":true},
-    {"_id":"t141","template":"{name} sent funds to another member.","type":"transfer","enabled":false},
-];
-
-const defaultSettingsObject = {
-    isUserTransferEnabled: true,
-    transferConfig: {
-        enabled: true,
-        tiers: [
-            { minAmount: 1, maxAmount: 10000, feeType: 'percentage', feeValue: 1.5, currency: 'EUR', enabled: true },
-            { minAmount: 100, maxAmount: 50000, feeType: 'fixed', feeValue: 150, currency: 'PKR', enabled: true },
-            { minAmount: 10, maxAmount: 5000, feeType: 'fixed', feeValue: 2, currency: 'USD', enabled: true }
-        ],
-        allowCrossCurrency: false,
-    },
-    exchangeRates: { USD: 1, EUR: 0.92, PKR: 278.00 },
-    restrictWithdrawalAmount: false,
-    requirePlanMatchForCommission: false,
-    requireActivePlanForCommission: false,
-    oneTimeCommissionPerGroup: false,
-    recurringCommissionPlanIds: [],
-    requireUplineEligibility: false,
-    withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
-    demoProfiles: defaultDemoProfiles,
-    demoActivityTemplates: defaultDemoTemplates,
-    notices: [], // Default empty notices
-    tickerSpeed: 6,
-    tickerContentSource: 'hybrid',
-    tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
-    tickerRealActivityConfig: { minAmount: 0, privacyMode: false, excludedCurrencies: [] },
-    tickerHiddenEventIds: [],
-    tickerRealActivityTemplates: {
-        deposits: [
-            '<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>',
-            'New deposit of <strong>{amount}</strong> from <strong class="font-semibold">{name}</strong>',
-            '<strong class="font-semibold">{name}</strong> just added <strong>{amount}</strong> to their wallet',
-            'Funds received! <strong class="font-semibold">{name}</strong>: <strong>{amount}</strong>',
-            '<strong>{amount}</strong> deposit confirmed for <strong class="font-semibold">{name}</strong>'
-        ],
-        withdrawals: [
-            '<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>',
-            'Payout of <strong>{amount}</strong> sent to <strong class="font-semibold">{name}</strong>',
-            '<strong class="font-semibold">{name}</strong> just cashed out <strong>{amount}</strong>',
-            'Withdrawal processed: <strong class="font-semibold">{name}</strong> (<strong>{amount}</strong>)',
-            'Congratulations <strong class="font-semibold">{name}</strong> on your withdrawal of <strong>{amount}</strong>'
-        ],
-        registrations: [
-            '<strong class="font-semibold">{name}</strong> from {country} just joined!',
-            'Welcome <strong class="font-semibold">{name}</strong> from {country} to the community',
-            'New member alert: <strong class="font-semibold">{name}</strong> ({country})',
-            '<strong class="font-semibold">{name}</strong> has registered from {country}',
-            'Our community is growing! Welcome <strong class="font-semibold">{name}</strong>'
-        ],
-        commissions: [
-            '<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})',
-            '<strong>{amount}</strong> commission for <strong class="font-semibold">{name}</strong> ({source})',
-            '<strong class="font-semibold">{name}</strong> just made <strong>{amount}</strong> from referral',
-            'Referral bonus! <strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong>',
-            '<strong>{amount}</strong> added to <strong class="font-semibold">{name}</strong>\'s wallet ({source})'
-        ],
-        transfers: [
-            '<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}',
-            'Fund transfer: <strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong>',
-            '<strong class="font-semibold">{name}</strong> sent <strong>{amount}</strong> to a friend',
-            '<strong>{amount}</strong> transferred by <strong class="font-semibold">{name}</strong>',
-            'Internal transfer of <strong>{amount}</strong> completed by <strong class="font-semibold">{name}</strong>'
-        ],
-        planPurchases: [
-            '<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})',
-            '<strong class="font-semibold">{name}</strong> upgraded to <strong>{plan}</strong>',
-            'New <strong>{plan}</strong> activation by <strong class="font-semibold">{name}</strong>',
-            '<strong class="font-semibold">{name}</strong> started earning with <strong>{plan}</strong>',
-            'Investment made: <strong class="font-semibold">{name}</strong> bought <strong>{plan}</strong>'
-        ]
-    },
-    tickerDemoAmountRanges: {
-        EUR: { min: 50, max: 500 },
-        PKR: { min: 5000, max: 50000 },
-        USD: { min: 50, max: 500 },
-    },
-    planEquivalencyGroups: [],
-    homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
-    homepageContent: {
-        heroTitle: "Invest in Your Future, Grow Your Network",
-        heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
-        feature1Title: "Secure Investments",
-        feature1Desc: "Your funds and data are protected with industry-standard security measures.",
-        feature2Title: "Powerful MLM System",
-        feature2Desc: "Earn commissions not just from your referrals, but from their referrals too.",
-        feature3Title: "Real-Time Tracking",
-        feature3Desc: "Monitor your earnings, network growth, and transactions with our intuitive dashboard.",
-        videoTitle: "See How It Works",
-        videoDesc: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals.",
-        multiCurrencyTitle: "Global Reach, Local Convenience",
-        multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
-        mlmTitle: "Understanding Our Earning System",
-        mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
-        ctaTitle: "Ready to Start Your Journey?",
-        ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
-    },
-    featuredPlanIds: [],
-};
-
 // Ensure a default settings document is created if one doesn't exist
 SettingSchema.statics.getSettings = async function() {
     let settings = await this.findOne();
     let needsSave = false;
 
     if (!settings) {
-        settings = await this.create(defaultSettingsObject);
+        settings = await this.create({});
         return settings;
     }
 
@@ -316,17 +247,69 @@ SettingSchema.statics.getSettings = async function() {
         settings.notices = [];
         needsSave = true;
     }
+    if (!settings.faqs || settings.faqs.length === 0) {
+        settings.faqs = defaultFaqs;
+        needsSave = true;
+    }
+    
+    // Default payment method settings if missing
+    if (!settings.homepageContent) {
+        settings.homepageContent = {};
+        needsSave = true;
+    }
+    if (settings.homepageContent.showVideoSection === undefined) {
+        settings.homepageContent.showVideoSection = true;
+        needsSave = true;
+    }
+    if (!settings.homepageContent.paymentMethodsDisplayType) {
+        settings.homepageContent.paymentMethodsDisplayType = 'static';
+        needsSave = true;
+    }
+    if (!settings.homepageContent.paymentMethodsColorStyle) {
+        settings.homepageContent.paymentMethodsColorStyle = 'color';
+        needsSave = true;
+    }
+    
+    // Seed default logos if array is missing/empty (first time migration)
+    if (!settings.homepagePaymentLogos || settings.homepagePaymentLogos.length === 0) {
+        settings.homepagePaymentLogos = [
+            { name: 'Easypaisa', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/archive/8/82/20210207125345%21Easypaisa_logo.png' },
+            { name: 'JazzCash', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/e/e8/JazzCash_logo.png' },
+            { name: 'Bank Transfer', logoUrl: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png' },
+            { name: 'PayPal', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg' },
+            { name: 'Stripe', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg' },
+            { name: 'Bitcoin', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png' },
+            { name: 'Payoneer', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/4/4e/Payoneer_logo.svg' }
+        ];
+        needsSave = true;
+    }
+
     if (!settings.tickerRealActivityTemplates) {
-        settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
+        // Reset to defaults if missing or malformed
+        settings.tickerRealActivityTemplates = {
+            deposits: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'],
+            withdrawals: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'],
+            registrations: ['<strong class="font-semibold">{name}</strong> from {country} just joined!'],
+            commissions: ['<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})'],
+            transfers: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'] ,
+            planPurchases: ['<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})']
+        };
         needsSave = true;
     } else {
         if(!Array.isArray(settings.tickerRealActivityTemplates.deposits)) {
-             settings.tickerRealActivityTemplates = defaultSettingsObject.tickerRealActivityTemplates;
+             settings.tickerRealActivityTemplates = {
+                deposits: ['<strong class="font-semibold">{name}</strong> deposited <strong>{amount}</strong>'],
+                withdrawals: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'],
+                registrations: ['<strong class="font-semibold">{name}</strong> from {country} just joined!'],
+                commissions: ['<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})'],
+                transfers: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'] ,
+                planPurchases: ['<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})']
+             };
              needsSave = true;
         }
     }
     if (!settings.tickerRealActivityConfig) {
-        settings.tickerRealActivityConfig = defaultSettingsObject.tickerRealActivityConfig;
+        settings.tickerRealActivityConfig = { minAmount: 0, privacyMode: false, excludedCurrencies: [] };
         needsSave = true;
     }
     if (!settings.tickerHiddenEventIds) {

@@ -35,13 +35,13 @@ const PaymentMethods: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleSave = async (method: PaymentMethod) => {
+    const handleSave = async (formData: FormData, id?: string) => {
         try {
-            if (editingMethod) {
-                const updatedMethod = await updatePaymentMethod(method._id, method);
+            if (id) {
+                const updatedMethod = await updatePaymentMethod(id, formData);
                 dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
             } else {
-                const newMethod = await createPaymentMethod(method);
+                const newMethod = await createPaymentMethod(formData);
                 dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
             }
             handleCloseModal();
@@ -67,8 +67,11 @@ const PaymentMethods: React.FC = () => {
     const handleToggleStatus = async (method: PaymentMethod) => {
         setTogglingId(method._id);
         const newStatus = method.status === 'Enabled' ? 'Disabled' : 'Enabled';
+        const formData = new FormData();
+        formData.append('status', newStatus);
+        
         try {
-            const updatedMethod = await updatePaymentMethod(method._id, { status: newStatus });
+            const updatedMethod = await updatePaymentMethod(method._id, formData);
             dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
         } catch (error) {
             console.error("Failed to update status:", error);
@@ -113,11 +116,16 @@ const PaymentMethods: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMethods.map(method => (
-                    <div key={method._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                    <div key={method._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 relative">
                         <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name} <span className="text-sm font-normal text-gray-400">({method.currency})</span></h3>
-                                <p className={`text-sm font-medium ${method.type === 'Deposit' ? 'text-green-500' : 'text-blue-500'}`}>{method.type}</p>
+                            <div className="flex items-center gap-3">
+                                {method.logoUrl && (
+                                    <img src={method.logoUrl} alt={method.name} className="w-10 h-10 object-contain rounded-md bg-gray-50" />
+                                )}
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name}</h3>
+                                    <p className="text-xs text-gray-400">{method.currency}</p>
+                                </div>
                             </div>
                              <ToggleSwitch 
                                 checked={method.status === 'Enabled'}
@@ -125,6 +133,10 @@ const PaymentMethods: React.FC = () => {
                                 disabled={togglingId === method._id}
                             />
                         </div>
+                        <span className={`absolute top-6 right-16 text-xs font-bold px-2 py-0.5 rounded ${method.type === 'Deposit' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {method.type}
+                        </span>
+                        
                         <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
                             <p><span className="font-semibold">Account:</span> {method.accountTitle} ({method.accountNumber})</p>
                             <p><span className="font-semibold">Limits:</span> {formatCurrency(method.minAmount, method.currency)} - {formatCurrency(method.maxAmount, method.currency)}</p>
@@ -152,13 +164,14 @@ const PaymentMethods: React.FC = () => {
 interface PaymentMethodFormModalProps {
     method: PaymentMethod | null;
     onClose: () => void;
-    onSave: (method: PaymentMethod) => void;
+    onSave: (formData: FormData, id?: string) => void;
 }
 
 const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave }) => {
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
         method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
+    const [logoFile, setLogoFile] = useState<File | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -167,10 +180,28 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         setFormData(prev => ({ ...prev, [name]: numValue }));
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setLogoFile(e.target.files[0]);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        await onSave(formData as PaymentMethod);
+        
+        const data = new FormData();
+        Object.entries(formData).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== '_id') {
+                data.append(key, String(value));
+            }
+        });
+        
+        if (logoFile) {
+            data.append('logo', logoFile);
+        }
+
+        await onSave(data, method?._id);
         setIsSaving(false);
     };
     
@@ -179,7 +210,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
                  <h2 className="text-xl font-bold">{method ? 'Edit Payment Method' : 'Add New Method'}</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name (e.g. Easypaisa)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <select
                         name="currency"
                         value={formData.currency || 'PKR'}
@@ -195,8 +226,12 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         <option value="Deposit">Deposit</option>
                         <option value="Withdrawal">Withdrawal</option>
                     </select>
+                    <div className="md:col-span-1">
+                        <label className="block text-xs text-gray-500 mb-1">Logo (Optional)</label>
+                        <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                    </div>
                     <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="Account Title" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                      <input type="number" step="0.01" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee % (Optional)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
