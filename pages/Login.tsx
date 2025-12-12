@@ -94,12 +94,6 @@ const Login: React.FC = () => {
                             Sign up
                         </Link>
                     </p>
-                    <p>
-                        Are you an administrator?{' '}
-                        <Link to="/secure-admin-login" className="font-medium text-gray-500 hover:text-gray-400">
-                            Admin Login
-                        </Link>
-                    </p>
                 </div>
             </div>
         </div>

@@ -1,6 +1,4 @@
 
-
-
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -22,6 +20,7 @@ import PasswordResets from './pages/PasswordResets';
 import AdminDisputes from './pages/AdminDisputes';
 import SentMessages from './pages/SentMessages';
 import TickerSettings from './pages/TickerSettings';
+import AdminProfile from './pages/AdminProfile'; // Import new page
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -54,7 +53,7 @@ const App: React.FC = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/secure-admin-login" element={<AdminLogin />} />
+        <Route path="/secure-admin-login56" element={<AdminLogin />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -78,6 +77,7 @@ const App: React.FC = () => {
           <Route path="logs" element={<Logs />} />
           <Route path="disputes" element={<AdminDisputes />} />
           <Route path="sent-messages" element={<SentMessages />} />
+          <Route path="profile" element={<AdminProfile />} />
         </Route>
 
         {/* User Member Area Routes */}

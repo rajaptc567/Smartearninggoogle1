@@ -6,7 +6,7 @@ export const mockUsers: User[] = [
         _id: 'u1',
         username: 'admin',
         fullName: 'System Admin',
-        email: 'admin@smartearning.com',
+        email: 'studio56.pk@gmail.com',
         phone: '1234567890',
         country: 'Pakistan',
         currency: 'PKR',

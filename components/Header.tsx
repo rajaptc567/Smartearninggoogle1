@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import NotificationBell from './ui/NotificationBell';
 import { useData } from '../hooks/useData';
 
@@ -9,12 +10,15 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { state } = useData();
 
   const getTitle = () => {
     const path = location.pathname.split('/')[2] || 'dashboard';
     if (path === 'payment-methods') return 'Payment Methods';
     if (path === 'investment-plans') return 'Investment Plans';
+    if (path === 'ticker-settings') return 'Ticker Settings';
+    if (path === 'sponsor-commission-rules') return 'Sponsor Rules';
     return path.charAt(0).toUpperCase() + path.slice(1);
   };
 
@@ -34,8 +38,12 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
       <div className="flex items-center space-x-4">
         <NotificationBell notifications={state.notifications} />
         <div className="relative">
-          <button className="flex items-center focus:outline-none">
-            <span className="mr-2 hidden md:inline">Admin</span>
+          <button 
+            className="flex items-center focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full py-1 px-2 transition-colors"
+            onClick={() => navigate('/admin/profile')}
+            title="Admin Profile & Settings"
+          >
+            <span className="mr-2 hidden md:inline font-medium text-gray-700 dark:text-gray-200">Admin</span>
             <img className="h-8 w-8 rounded-full object-cover" src="https://picsum.photos/100" alt="Admin avatar" />
           </button>
         </div>
