@@ -23,8 +23,9 @@ const AdminLogin: React.FC = () => {
             const user = await apiLogin(email, password);
             
             // SECURITY CHECK: Ensure the user is actually the admin account.
-            // We check username 'admin' so you can change your email in the profile later.
-            if (user.username !== 'admin') {
+            // We check username 'admin' OR the specific hardcoded master email.
+            // This allows you to login even if your username is different, as long as the email matches.
+            if (user.username !== 'admin' && user.email !== 'studio56.pk@gmail.com') {
                 setError('Unauthorized access. This area is restricted to administrators.');
                 // Log them out immediately if they aren't admin
                 dispatch({ type: 'SET_CURRENT_USER', payload: null }); 

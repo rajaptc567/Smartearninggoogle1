@@ -11,9 +11,12 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // SECURITY CHECK: Ensure user is logged in AND is the admin.
-    // We check username === 'admin' so the email can be changed in settings without locking the user out.
-    const isAdmin = state.currentUser && state.currentUser.username === 'admin';
+    // SECURITY CHECK: Ensure user is logged in AND is authorized.
+    // Allow if username is 'admin' OR if email is the master admin email.
+    const isAdmin = state.currentUser && (
+      state.currentUser.username === 'admin' || 
+      state.currentUser.email === 'studio56.pk@gmail.com'
+    );
     
     if (!isAdmin) {
       navigate('/secure-admin-login56', { replace: true });
@@ -21,7 +24,11 @@ const Layout: React.FC = () => {
   }, [state.currentUser, navigate]);
 
   // Prevent rendering if not authorized (avoid flash of content)
-  const isAdmin = state.currentUser && state.currentUser.username === 'admin';
+  const isAdmin = state.currentUser && (
+    state.currentUser.username === 'admin' || 
+    state.currentUser.email === 'studio56.pk@gmail.com'
+  );
+  
   if (!isAdmin) {
       return null;
   }
