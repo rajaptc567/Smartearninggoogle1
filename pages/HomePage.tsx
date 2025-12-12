@@ -322,8 +322,17 @@ const HomePage: React.FC = () => {
         return [...activePaymentMethods, ...activePaymentMethods];
     }, [activePaymentMethods]);
 
-    // Video Section Logic
+    // SECTION VISIBILITY FLAGS
+    // Using loose equality check !== false to default to true if undefined
+    const showHero = settings.homepageContent?.showHero !== false;
+    const showFeatures = settings.homepageContent?.showFeatures !== false;
+    const showMultiCurrency = settings.homepageContent?.showMultiCurrency !== false;
+    const showInvestmentPlans = settings.homepageContent?.showInvestmentPlans !== false;
+    const showMLM = settings.homepageContent?.showMLM !== false;
+    const showPaymentMethods = settings.homepageContent?.showPaymentMethods !== false;
     const showVideoSection = settings.homepageContent?.showVideoSection !== false;
+    const showFAQ = settings.homepageContent?.showFAQ !== false;
+    const showCTA = settings.homepageContent?.showCTA !== false;
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen font-sans">
@@ -382,88 +391,98 @@ const HomePage: React.FC = () => {
 
             <main>
                 {/* Hero Section */}
-                <section className="relative py-24 md:py-32 text-center overflow-hidden bg-white dark:bg-gray-900">
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900"></div>
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                        <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h2" className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight" />
-                        <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
-                        <div className="mt-10 flex justify-center gap-4">
-                            <Button size="lg" onClick={() => navigate('/register')} className="shadow-xl shadow-blue-500/20 px-8 py-4 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
-                            <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-8 py-4 text-lg">View Plans</Button>
+                {(showHero || editMode) && (
+                    <section className={`relative py-24 md:py-32 text-center overflow-hidden bg-white dark:bg-gray-900 ${!showHero && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showHero && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900"></div>
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                            <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h2" className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight" />
+                            <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
+                            <div className="mt-10 flex justify-center gap-4">
+                                <Button size="lg" onClick={() => navigate('/register')} className="shadow-xl shadow-blue-500/20 px-8 py-4 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
+                                <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-8 py-4 text-lg">View Plans</Button>
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                  {/* Features Section */}
-                <section className="py-20 bg-gray-50 dark:bg-gray-800/50">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
-                                <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
-                                <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
-                                <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                {(showFeatures || editMode) && (
+                    <section className={`py-20 bg-gray-50 dark:bg-gray-800/50 ${!showFeatures && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showFeatures && <div className="absolute top-0 right-0 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
+                                    <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-xl font-bold mb-3" />
+                                    <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
+                                    <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-xl font-bold mb-3" />
+                                    <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
+                                    <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-xl font-bold mb-3" />
+                                    <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
                 
                 {/* Global Reach (Currencies) Section */}
-                <section className="py-24 bg-gray-900 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-900/20 to-transparent pointer-events-none"></div>
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                        <div className="text-center mb-16 max-w-3xl mx-auto">
-                            <EditableText editMode={editMode} value={pageContent.multiCurrencyTitle || ''} onChange={handleContentChange('multiCurrencyTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold mb-4" />
-                            <EditableText editMode={editMode} value={pageContent.multiCurrencyDesc || ''} onChange={handleContentChange('multiCurrencyDesc')} tag="p" multiline className="text-lg text-gray-400" />
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-green-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                <div className="w-20 h-20 bg-green-900/30 rounded-full flex items-center justify-center mb-6 text-green-400">
-                                    <UsdIcon />
-                                </div>
-                                <h3 className="text-xl font-bold mb-3">US Dollar (USD)</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods.
-                                </p>
+                {(showMultiCurrency || editMode) && (
+                    <section className={`py-24 bg-gray-900 text-white relative overflow-hidden ${!showMultiCurrency && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showMultiCurrency && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-900/20 to-transparent pointer-events-none"></div>
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                            <div className="text-center mb-16 max-w-3xl mx-auto">
+                                <EditableText editMode={editMode} value={pageContent.multiCurrencyTitle || ''} onChange={handleContentChange('multiCurrencyTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold mb-4" />
+                                <EditableText editMode={editMode} value={pageContent.multiCurrencyDesc || ''} onChange={handleContentChange('multiCurrencyDesc')} tag="p" multiline className="text-lg text-gray-400" />
                             </div>
                             
-                            <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-indigo-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                <div className="w-20 h-20 bg-indigo-900/30 rounded-full flex items-center justify-center mb-6 text-indigo-400">
-                                    <EurIcon />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-green-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-20 h-20 bg-green-900/30 rounded-full flex items-center justify-center mb-6 text-green-400">
+                                        <UsdIcon />
+                                    </div>
+                                    <h3 className="text-xl font-bold mb-3">US Dollar (USD)</h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                        Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods.
+                                    </p>
                                 </div>
-                                <h3 className="text-xl font-bold mb-3">Euro (EUR)</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal.
-                                </p>
-                            </div>
-                            
-                            <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-teal-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                <div className="w-20 h-20 bg-teal-900/30 rounded-full flex items-center justify-center mb-6 text-teal-400">
-                                    <PkrIcon />
+                                
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-indigo-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-20 h-20 bg-indigo-900/30 rounded-full flex items-center justify-center mb-6 text-indigo-400">
+                                        <EurIcon />
+                                    </div>
+                                    <h3 className="text-xl font-bold mb-3">Euro (EUR)</h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                        For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal.
+                                    </p>
                                 </div>
-                                <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR)</h3>
-                                <p className="text-sm text-gray-400 leading-relaxed">
-                                    We offer dedicated plans and local payment methods for our members in Pakistan. Invest and withdraw in PKR, while still earning from referrals using any currency on the platform.
-                                </p>
+                                
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-teal-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-20 h-20 bg-teal-900/30 rounded-full flex items-center justify-center mb-6 text-teal-400">
+                                        <PkrIcon />
+                                    </div>
+                                    <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR)</h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                        We offer dedicated plans and local payment methods for our members in Pakistan. Invest and withdraw in PKR, while still earning from referrals using any currency on the platform.
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* Investment Plans Section */}
-                {featuredPlans.length > 0 && (
-                    <section id="plans" className="py-20 bg-white dark:bg-gray-900">
+                {(showInvestmentPlans || editMode) && featuredPlans.length > 0 && (
+                    <section id="plans" className={`py-20 bg-white dark:bg-gray-900 ${!showInvestmentPlans && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showInvestmentPlans && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             <h3 className="text-3xl md:text-4xl font-bold text-center mb-4">Investment Plans</h3>
                             <p className="text-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-12">Choose the plan that suits your financial goals. Transparent pricing with high returns.</p>
@@ -492,141 +511,145 @@ const HomePage: React.FC = () => {
                 )}
 
                 {/* MLM System Section */}
-                <section className="py-20 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                             <EditableText editMode={editMode} value={pageContent.mlmTitle || ''} onChange={handleContentChange('mlmTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
-                             <EditableText editMode={editMode} value={pageContent.mlmDesc || ''} onChange={handleContentChange('mlmDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
-                        </div>
-
-                        <div className="flex flex-col lg:flex-row items-center gap-12">
-                            {/* Text Content */}
-                            <div className="lg:w-1/2 space-y-6">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">How It Works</h3>
-                                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                    Think of it like building a team. Your network has multiple levels, and you earn commissions from each:
-                                </p>
-                                
-                                <div className="space-y-4">
-                                    <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                        <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 1 (Direct Referrals)</h4>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">You earn a commission when you personally invite someone to join.</p>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                        <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 2 (Indirect Referrals)</h4>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">When your Level 1 referral invites a new member, you also earn a commission.</p>
-                                    </div>
-                                    <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                        <h4 className="font-bold text-gray-900 dark:text-white mb-1">Deeper Levels (3, 4, etc.)</h4>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300">The process continues. You earn a commission when your Level 2 referrals bring in new members (your Level 3), and so on.</p>
-                                    </div>
-                                </div>
-
-                                <p className="text-gray-600 dark:text-gray-300 italic text-sm border-l-4 border-blue-500 pl-4 py-1">
-                                    This creates a powerful ripple effect, rewarding you for your leadership as your network grows. The bigger and more active your team, the higher your earning potential.
-                                </p>
-
-                                <ul className="space-y-2 mt-4">
-                                    <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
-                                        <span className="text-green-500 mr-2">✓</span> <strong>Direct Commission (Level 1):</strong> &nbsp; Earned from the people you personally refer.
-                                    </li>
-                                    <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
-                                        <span className="text-green-500 mr-2">✓</span> <strong>Indirect Commission (Level 2+):</strong> &nbsp; Earned from referrals made by your team.
-                                    </li>
-                                    <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
-                                        <span className="text-green-500 mr-2">✓</span> <strong>Unlimited Growth:</strong> &nbsp; The bigger and more active your network, the higher your potential.
-                                    </li>
-                                </ul>
+                {(showMLM || editMode) && (
+                    <section className={`py-20 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${!showMLM && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showMLM && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="text-center mb-12">
+                                 <EditableText editMode={editMode} value={pageContent.mlmTitle || ''} onChange={handleContentChange('mlmTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
+                                 <EditableText editMode={editMode} value={pageContent.mlmDesc || ''} onChange={handleContentChange('mlmDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
                             </div>
 
-                            {/* Diagram */}
-                            <div className="lg:w-1/2 w-full">
-                                <div className="bg-white dark:bg-gray-900 p-2 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                                    <MLMDiagram />
+                            <div className="flex flex-col lg:flex-row items-center gap-12">
+                                {/* Text Content */}
+                                <div className="lg:w-1/2 space-y-6">
+                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">How It Works</h3>
+                                    <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                                        Think of it like building a team. Your network has multiple levels, and you earn commissions from each:
+                                    </p>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 1 (Direct Referrals)</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">You earn a commission when you personally invite someone to join.</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 2 (Indirect Referrals)</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">When your Level 1 referral invites a new member, you also earn a commission.</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Deeper Levels (3, 4, etc.)</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">The process continues. You earn a commission when your Level 2 referrals bring in new members (your Level 3), and so on.</p>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-gray-600 dark:text-gray-300 italic text-sm border-l-4 border-blue-500 pl-4 py-1">
+                                        This creates a powerful ripple effect, rewarding you for your leadership as your network grows. The bigger and more active your team, the higher your earning potential.
+                                    </p>
+
+                                    <ul className="space-y-2 mt-4">
+                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="text-green-500 mr-2">✓</span> <strong>Direct Commission (Level 1):</strong> &nbsp; Earned from the people you personally refer.
+                                        </li>
+                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="text-green-500 mr-2">✓</span> <strong>Indirect Commission (Level 2+):</strong> &nbsp; Earned from referrals made by your team.
+                                        </li>
+                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="text-green-500 mr-2">✓</span> <strong>Unlimited Growth:</strong> &nbsp; The bigger and more active your network, the higher your potential.
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                {/* Diagram */}
+                                <div className="lg:w-1/2 w-full">
+                                    <div className="bg-white dark:bg-gray-900 p-2 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                                        <MLMDiagram />
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* NEW: Payment Methods Section (Dynamic & Admin Controlled) */}
-                <section className="py-20 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                            <EditableText editMode={editMode} value={pageContent.paymentMethodsTitle || ''} onChange={handleContentChange('paymentMethodsTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
-                            <EditableText editMode={editMode} value={pageContent.paymentMethodsDesc || ''} onChange={handleContentChange('paymentMethodsDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
-                        </div>
-                        
-                        {editMode && (
-                            <div className="max-w-4xl mx-auto mb-10 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border dark:border-gray-700 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
-                                <div className="flex gap-4 items-center">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Animation</label>
-                                        <select 
-                                            value={(pageContent as any).paymentMethodsDisplayType || 'static'} 
-                                            onChange={handleSelectChange('paymentMethodsDisplayType')} 
-                                            className="text-sm rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1"
-                                        >
-                                            <option value="static">Still (Static Grid)</option>
-                                            <option value="sliding">Slide (Marquee)</option>
-                                            <option value="pulsing">Blink (Pulse)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Style</label>
-                                        <select 
-                                            value={(pageContent as any).paymentMethodsColorStyle || 'color'} 
-                                            onChange={handleSelectChange('paymentMethodsColorStyle')} 
-                                            className="text-sm rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1"
-                                        >
-                                            <option value="color">Original Color</option>
-                                            <option value="grayscale">Grayscale (Color on Hover)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <Button size="sm" variant="secondary" onClick={() => navigate('/admin/settings')}>Manage Payment Methods</Button>
+                {(showPaymentMethods || editMode) && (
+                    <section className={`py-20 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden ${!showPaymentMethods && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showPaymentMethods && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="text-center mb-12">
+                                <EditableText editMode={editMode} value={pageContent.paymentMethodsTitle || ''} onChange={handleContentChange('paymentMethodsTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
+                                <EditableText editMode={editMode} value={pageContent.paymentMethodsDesc || ''} onChange={handleContentChange('paymentMethodsDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
                             </div>
-                        )}
-
-                        <div className={`relative ${pmDisplayType === 'sliding' ? 'w-full' : ''}`}>
-                            {pmDisplayType === 'sliding' ? (
-                                // Sliding Animation Wrapper
-                                <div className="flex animate-slide gap-8 items-center">
-                                    {/* Duplicated list for seamless loop */}
-                                    {slidingMethods.map((pm, idx) => (
-                                        <PaymentMethodCard key={`${pm.name}-${idx}`} pm={pm} colorStyle={pmColorStyle} />
-                                    ))}
-                                </div>
-                            ) : (
-                                // Static or Pulsing Grid
-                                <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10 opacity-90 hover:opacity-100 transition-opacity">
-                                    {activePaymentMethods.map((pm, idx) => (
-                                        <div key={idx} className={pmDisplayType === 'pulsing' ? 'animate-pulse' : ''}>
-                                            <PaymentMethodCard pm={pm} colorStyle={pmColorStyle} />
+                            
+                            {editMode && (
+                                <div className="max-w-4xl mx-auto mb-10 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border dark:border-gray-700 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm">
+                                    <div className="flex gap-4 items-center">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Animation</label>
+                                            <select 
+                                                value={(pageContent as any).paymentMethodsDisplayType || 'static'} 
+                                                onChange={handleSelectChange('paymentMethodsDisplayType')} 
+                                                className="text-sm rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1"
+                                            >
+                                                <option value="static">Still (Static Grid)</option>
+                                                <option value="sliding">Slide (Marquee)</option>
+                                                <option value="pulsing">Blink (Pulse)</option>
+                                            </select>
                                         </div>
-                                    ))}
-                                    {activePaymentMethods.length === 0 && (
-                                        <div className="text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg w-full max-w-lg mx-auto">
-                                            <p className="text-gray-500 dark:text-gray-400 mb-2">No payment logos configured.</p>
-                                            {currentUser?.username === 'admin' && (
-                                                <Button size="sm" onClick={() => navigate('/admin/settings')}>Add Payment Logos</Button>
-                                            )}
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Style</label>
+                                            <select 
+                                                value={(pageContent as any).paymentMethodsColorStyle || 'color'} 
+                                                onChange={handleSelectChange('paymentMethodsColorStyle')} 
+                                                className="text-sm rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white p-1"
+                                            >
+                                                <option value="color">Original Color</option>
+                                                <option value="grayscale">Grayscale (Color on Hover)</option>
+                                            </select>
                                         </div>
-                                    )}
+                                    </div>
+                                    <Button size="sm" variant="secondary" onClick={() => navigate('/admin/settings')}>Manage Payment Methods</Button>
                                 </div>
                             )}
+
+                            <div className={`relative ${pmDisplayType === 'sliding' ? 'w-full' : ''}`}>
+                                {pmDisplayType === 'sliding' ? (
+                                    // Sliding Animation Wrapper
+                                    <div className="flex animate-slide gap-8 items-center">
+                                        {/* Duplicated list for seamless loop */}
+                                        {slidingMethods.map((pm, idx) => (
+                                            <PaymentMethodCard key={`${pm.name}-${idx}`} pm={pm} colorStyle={pmColorStyle} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    // Static or Pulsing Grid
+                                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10 opacity-90 hover:opacity-100 transition-opacity">
+                                        {activePaymentMethods.map((pm, idx) => (
+                                            <div key={idx} className={pmDisplayType === 'pulsing' ? 'animate-pulse' : ''}>
+                                                <PaymentMethodCard pm={pm} colorStyle={pmColorStyle} />
+                                            </div>
+                                        ))}
+                                        {activePaymentMethods.length === 0 && (
+                                            <div className="text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg w-full max-w-lg mx-auto">
+                                                <p className="text-gray-500 dark:text-gray-400 mb-2">No payment logos configured.</p>
+                                                {currentUser?.username === 'admin' && (
+                                                    <Button size="sm" onClick={() => navigate('/admin/settings')}>Add Payment Logos</Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* Video Showcase Section */}
                 {(showVideoSection && (settings.homepageVideoUrl || editMode)) && (
-                    <section className="py-20 bg-gray-900 text-white">
+                    <section className={`py-20 bg-gray-900 text-white ${!showVideoSection && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             {editMode && !showVideoSection && (
-                                <div className="bg-red-900/50 border border-red-800 text-red-200 p-2 mb-4 text-center rounded text-sm">
-                                    Note: This section is currently DISABLED for public users.
-                                </div>
+                                <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>
                             )}
                             <div className="text-center mb-12">
                                 <EditableText editMode={editMode} value={pageContent.videoTitle || ''} onChange={handleContentChange('videoTitle')} tag="h2" className="text-3xl md:text-4xl font-bold" />
@@ -663,79 +686,92 @@ const HomePage: React.FC = () => {
                 )}
 
                 {/* FAQ Section */}
-                <section className="py-20 bg-white dark:bg-gray-800">
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
-                            <p className="text-lg text-gray-600 dark:text-gray-400">Everything you need to know about getting started.</p>
-                        </div>
+                {(showFAQ || editMode) && (
+                    <section className={`py-20 bg-white dark:bg-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
+                                <p className="text-lg text-gray-600 dark:text-gray-400">Everything you need to know about getting started.</p>
+                            </div>
 
-                        <div className="space-y-4">
-                            {localFaqs.length > 0 ? (
-                                localFaqs.map((faq, index) => (
-                                    <div key={index} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
-                                        <div className="p-6">
-                                            {editMode ? (
-                                                <div className="space-y-3">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full font-bold text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2" 
-                                                        value={faq.question} 
-                                                        onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
-                                                        placeholder="Question"
-                                                    />
-                                                    <textarea 
-                                                        className="w-full text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2 h-24" 
-                                                        value={faq.answer} 
-                                                        onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
-                                                        placeholder="Answer"
-                                                    />
-                                                    <div className="text-right">
-                                                        <Button size="sm" variant="danger" onClick={() => handleDeleteFaq(index)}><TrashIcon/> Delete FAQ</Button>
+                            <div className="space-y-4">
+                                {localFaqs.length > 0 ? (
+                                    localFaqs.map((faq, index) => (
+                                        <div key={index} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
+                                            <div className="p-6">
+                                                {editMode ? (
+                                                    <div className="space-y-3">
+                                                        <input 
+                                                            type="text" 
+                                                            className="w-full font-bold text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2" 
+                                                            value={faq.question} 
+                                                            onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
+                                                            placeholder="Question"
+                                                        />
+                                                        <textarea 
+                                                            className="w-full text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2 h-24" 
+                                                            value={faq.answer} 
+                                                            onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
+                                                            placeholder="Answer"
+                                                        />
+                                                        <div className="text-right">
+                                                            <Button size="sm" variant="danger" onClick={() => handleDeleteFaq(index)}><TrashIcon/> Delete FAQ</Button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <details className="group">
-                                                    <summary className="flex justify-between items-center font-medium cursor-pointer list-none text-lg text-gray-900 dark:text-white">
-                                                        <span>{faq.question}</span>
-                                                        <span className="transition group-open:rotate-180">
-                                                            <svg fill="none" height="24" shapeRendering="geometricPrecision" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
-                                                        </span>
-                                                    </summary>
-                                                    <p className="text-gray-600 dark:text-gray-300 mt-3 group-open:animate-fadeIn">
-                                                        {faq.answer}
-                                                    </p>
-                                                </details>
-                                            )}
+                                                ) : (
+                                                    <details className="group">
+                                                        <summary className="flex justify-between items-center font-medium cursor-pointer list-none text-lg text-gray-900 dark:text-white">
+                                                            <span>{faq.question}</span>
+                                                            <span className="transition group-open:rotate-180">
+                                                                <svg fill="none" height="24" shapeRendering="geometricPrecision" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                                                            </span>
+                                                        </summary>
+                                                        <p className="text-gray-600 dark:text-gray-300 mt-3 group-open:animate-fadeIn">
+                                                            {faq.answer}
+                                                        </p>
+                                                    </details>
+                                                )}
+                                            </div>
                                         </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500 py-8">No FAQs available yet.</div>
+                                )}
+                                
+                                {editMode && (
+                                    <div className="text-center pt-6">
+                                        <Button onClick={handleAddFaq}><PlusIcon/> Add New Question</Button>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-500 py-8">No FAQs available yet.</div>
-                            )}
-                            
-                            {editMode && (
-                                <div className="text-center pt-6">
-                                    <Button onClick={handleAddFaq}><PlusIcon/> Add New Question</Button>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
 
                 {/* Final CTA */}
-                <section className="py-24 bg-blue-600 dark:bg-blue-900 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-blue-500 opacity-20 blur-3xl"></div>
-                    <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-purple-500 opacity-20 blur-3xl"></div>
-                    
-                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-                        <EditableText editMode={editMode} value={pageContent.ctaTitle || ''} onChange={handleContentChange('ctaTitle')} tag="h2" className="text-4xl md:text-5xl font-bold mb-6" />
-                        <EditableText editMode={editMode} value={pageContent.ctaDesc || ''} onChange={handleContentChange('ctaDesc')} multiline className="text-xl text-blue-100 max-w-2xl mx-auto mb-10" />
-                        <div>
-                            <Button size="lg" onClick={() => navigate('/register')} className="!bg-white !text-blue-600 hover:!bg-gray-100 border-0 px-10 py-4 text-lg font-bold shadow-xl transition-transform hover:scale-105">Create Your Account</Button>
+                {(showCTA || editMode) && (
+                    <section className={`py-24 bg-blue-600 dark:bg-blue-900 text-white relative overflow-hidden ${!showCTA && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                        {editMode && !showCTA && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
+                        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-blue-500 opacity-20 blur-3xl"></div>
+                        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-purple-500 opacity-20 blur-3xl"></div>
+                        
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+                            <EditableText editMode={editMode} value={pageContent.ctaTitle || ''} onChange={handleContentChange('ctaTitle')} tag="h2" className="text-4xl md:text-5xl font-bold mb-6" />
+                            <EditableText editMode={editMode} value={pageContent.ctaDesc || ''} onChange={handleContentChange('ctaDesc')} multiline className="text-xl text-blue-100 max-w-2xl mx-auto mb-10" />
+                            <div>
+                                <Button 
+                                    size="lg" 
+                                    onClick={() => navigate('/register')} 
+                                    style={{ backgroundColor: '#ffffff', color: '#2563eb' }}
+                                    className="border-0 px-10 py-4 text-lg font-bold shadow-xl transition-transform hover:scale-105 hover:bg-gray-100"
+                                >
+                                    Create Your Account
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
             </main>
 
             {/* Footer */}

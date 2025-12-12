@@ -230,6 +230,18 @@ export interface HomepagePaymentLogo {
 }
 
 export interface HomepageContent {
+    // Visibility flags
+    showHero?: boolean;
+    showFeatures?: boolean;
+    showMultiCurrency?: boolean;
+    showInvestmentPlans?: boolean;
+    showMLM?: boolean;
+    showPaymentMethods?: boolean;
+    showVideoSection?: boolean;
+    showFAQ?: boolean;
+    showCTA?: boolean;
+
+    // Content fields
     heroTitle: string;
     heroSubtitle: string;
     feature1Title: string;
@@ -238,7 +250,6 @@ export interface HomepageContent {
     feature2Desc: string;
     feature3Title: string;
     feature3Desc: string;
-    showVideoSection?: boolean;
     videoTitle: string;
     videoDesc: string;
     multiCurrencyTitle: string;

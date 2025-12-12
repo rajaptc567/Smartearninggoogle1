@@ -44,16 +44,27 @@ const Settings: React.FC = () => {
         transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
         exchangeRates: mergedRates,
         homepageVideoUrl: settings.homepageVideoUrl || '',
-        homepageContent: settings.homepageContent || { 
+        homepageContent: {
+            // Content
             heroTitle: '', heroSubtitle: '', feature1Title: '', feature1Desc: '', 
             feature2Title: '', feature2Desc: '', feature3Title: '', feature3Desc: '', 
-            showVideoSection: true,
             videoTitle: '', videoDesc: '', multiCurrencyTitle: '', multiCurrencyDesc: '', 
             mlmTitle: '', mlmDesc: '', ctaTitle: '', ctaDesc: '',
             paymentMethodsTitle: 'Supported Payment Partners',
             paymentMethodsDesc: 'We support a variety of secure payment gateways.',
             paymentMethodsDisplayType: 'static',
-            paymentMethodsColorStyle: 'color'
+            paymentMethodsColorStyle: 'color',
+            // Visibility Defaults (will be overwritten by incoming settings if present)
+            showHero: true,
+            showFeatures: true,
+            showMultiCurrency: true,
+            showInvestmentPlans: true,
+            showMLM: true,
+            showPaymentMethods: true,
+            showVideoSection: true,
+            showFAQ: true,
+            showCTA: true,
+            ...settings.homepageContent // Overwrite with actual DB values
         },
         homepagePaymentLogos: settings.homepagePaymentLogos || [],
         featuredPlanIds: settings.featuredPlanIds || [],
@@ -98,8 +109,12 @@ const Settings: React.FC = () => {
             transferConfig: { ...prev.transferConfig, enabled: checked },
             isUserTransferEnabled: checked // Sync legacy field
         }));
-    } else if (name === 'homepageContent.showVideoSection') {
-        setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, showVideoSection: checked } as any }));
+    } else if (name.startsWith('homepageContent.show')) {
+        const field = name.split('.')[1];
+        setLocalSettings(prev => ({ 
+            ...prev, 
+            homepageContent: { ...prev.homepageContent, [field]: checked } as any 
+        }));
     } else {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     }
@@ -320,6 +335,23 @@ const Settings: React.FC = () => {
       </button>
   );
 
+  const ToggleSection = ({ name, label, checked, onChange }: { name: string, label: string, checked: boolean, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) => (
+      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
+          <label htmlFor={name} className="block text-sm font-medium text-gray-900 dark:text-gray-200">{label}</label>
+          <div className="relative inline-block w-10 h-5 transition duration-200 ease-in-out">
+                <input 
+                    id={name}
+                    name={name}
+                    type="checkbox" 
+                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
+                    checked={checked}
+                    onChange={onChange}
+                />
+                <label htmlFor={name} className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${checked ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+            </div>
+      </div>
+  );
+
   return (
     <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-6">
@@ -396,6 +428,22 @@ const Settings: React.FC = () => {
         {activeTab === 'homepage' && (
             <div className="space-y-6 animate-fade-in">
                
+               {/* Visibility Controls */}
+               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                   <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 text-sm uppercase tracking-wide">Section Visibility Control</h4>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                       <ToggleSection name="homepageContent.showHero" label="Hero Banner" checked={localSettings.homepageContent?.showHero !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showFeatures" label="Features Grid" checked={localSettings.homepageContent?.showFeatures !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showMultiCurrency" label="Global Currencies" checked={localSettings.homepageContent?.showMultiCurrency !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showInvestmentPlans" label="Investment Plans" checked={localSettings.homepageContent?.showInvestmentPlans !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showMLM" label="MLM Explanation" checked={localSettings.homepageContent?.showMLM !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showPaymentMethods" label="Payment Partners" checked={localSettings.homepageContent?.showPaymentMethods !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showVideoSection" label="Video Showcase" checked={localSettings.homepageContent?.showVideoSection !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showFAQ" label="FAQ Section" checked={localSettings.homepageContent?.showFAQ !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="homepageContent.showCTA" label="Bottom CTA" checked={localSettings.homepageContent?.showCTA !== false} onChange={handleCheckboxChange} />
+                   </div>
+               </div>
+
                {/* Hero Section */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Hero Section</h4>
@@ -449,20 +497,6 @@ const Settings: React.FC = () => {
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <div className="flex justify-between items-center">
                         <h4 className="font-semibold text-gray-800 dark:text-white">Video Showcase</h4>
-                        <div className="flex items-center space-x-2">
-                            <span className="text-xs text-gray-500 uppercase font-bold">Enable Section</span>
-                            <div className="relative inline-block w-10 h-5 transition duration-200 ease-in-out">
-                                <input
-                                    id="homepageContent.showVideoSection"
-                                    name="homepageContent.showVideoSection"
-                                    type="checkbox"
-                                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
-                                    checked={localSettings.homepageContent?.showVideoSection ?? true}
-                                    onChange={handleCheckboxChange}
-                                />
-                                <label htmlFor="homepageContent.showVideoSection" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.homepageContent?.showVideoSection ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
-                            </div>
-                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">

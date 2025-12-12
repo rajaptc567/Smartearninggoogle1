@@ -60,6 +60,17 @@ const HomepagePaymentLogoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const HomepageContentSchema = new mongoose.Schema({
+    // Visibility Toggles
+    showHero: { type: Boolean, default: true },
+    showFeatures: { type: Boolean, default: true },
+    showMultiCurrency: { type: Boolean, default: true },
+    showInvestmentPlans: { type: Boolean, default: true },
+    showMLM: { type: Boolean, default: true },
+    showPaymentMethods: { type: Boolean, default: true },
+    showVideoSection: { type: Boolean, default: true },
+    showFAQ: { type: Boolean, default: true },
+    showCTA: { type: Boolean, default: true },
+
     heroTitle: { type: String, default: "Invest in Your Future, Grow Your Network" },
     heroSubtitle: { type: String, default: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential." },
     feature1Title: { type: String, default: "Secure Investments" },
@@ -70,7 +81,6 @@ const HomepageContentSchema = new mongoose.Schema({
     feature3Desc: { type: String, default: "Monitor your earnings, network growth, and transactions with our intuitive dashboard." },
     
     // Video Section
-    showVideoSection: { type: Boolean, default: true },
     videoTitle: { type: String, default: "See How It Works" },
     videoDesc: { type: String, default: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals." },
     
@@ -257,10 +267,15 @@ SettingSchema.statics.getSettings = async function() {
         settings.homepageContent = {};
         needsSave = true;
     }
-    if (settings.homepageContent.showVideoSection === undefined) {
-        settings.homepageContent.showVideoSection = true;
-        needsSave = true;
-    }
+    // Initialize new boolean flags if they don't exist
+    const visibilityFlags = ['showHero', 'showFeatures', 'showMultiCurrency', 'showInvestmentPlans', 'showMLM', 'showPaymentMethods', 'showVideoSection', 'showFAQ', 'showCTA'];
+    visibilityFlags.forEach(flag => {
+        if (settings.homepageContent[flag] === undefined) {
+            settings.homepageContent[flag] = true;
+            needsSave = true;
+        }
+    });
+
     if (!settings.homepageContent.paymentMethodsDisplayType) {
         settings.homepageContent.paymentMethodsDisplayType = 'static';
         needsSave = true;
