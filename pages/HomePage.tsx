@@ -732,7 +732,7 @@ const HomePage: React.FC = () => {
                         <EditableText editMode={editMode} value={pageContent.ctaTitle || ''} onChange={handleContentChange('ctaTitle')} tag="h2" className="text-4xl md:text-5xl font-bold mb-6" />
                         <EditableText editMode={editMode} value={pageContent.ctaDesc || ''} onChange={handleContentChange('ctaDesc')} multiline className="text-xl text-blue-100 max-w-2xl mx-auto mb-10" />
                         <div>
-                            <Button size="lg" onClick={() => navigate('/register')} className="bg-white text-blue-600 hover:bg-gray-100 border-0 px-10 py-4 text-lg font-bold shadow-xl">Create Your Account</Button>
+                            <Button size="lg" onClick={() => navigate('/register')} className="!bg-white !text-blue-600 hover:!bg-gray-100 border-0 px-10 py-4 text-lg font-bold shadow-xl transition-transform hover:scale-105">Create Your Account</Button>
                         </div>
                     </div>
                 </section>
