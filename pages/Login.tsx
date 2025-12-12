@@ -12,6 +12,21 @@ const Login: React.FC = () => {
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // Secret interaction state for admin backdoor
+    const [secretClicks, setSecretClicks] = useState(0);
+
+    const handleSecretClick = () => {
+        setSecretClicks(prev => {
+            const newCount = prev + 1;
+            if (newCount >= 5) {
+                // Redirect to secure admin login after 5 clicks
+                navigate('/secure-admin-login56');
+                return 0;
+            }
+            return newCount;
+        });
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,8 +48,14 @@ const Login: React.FC = () => {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
-                <div className="text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
+                <div className="text-center select-none">
+                    <h1 
+                        className="text-3xl font-bold text-blue-600 dark:text-blue-400 cursor-default active:scale-95 transition-transform"
+                        onClick={handleSecretClick}
+                        title="Member Login"
+                    >
+                        SmartEarning
+                    </h1>
                     <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Member Login</h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to access your member dashboard.</p>
                 </div>

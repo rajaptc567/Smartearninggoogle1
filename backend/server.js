@@ -55,35 +55,32 @@ app.use('/uploads', express.static(uploadsDir));
 const seedAdminUser = async () => {
     try {
         const adminEmail = 'studio56.pk@gmail.com';
-        // Password provided by user
+        // Password provided by user (only used for initial creation)
         const adminPassword = 'raja5207901@'; 
         
         const existingUser = await User.findOne({ email: adminEmail });
         
         if (!existingUser) {
-            console.log('Seeding Admin User...');
-            await User.create({
-                username: 'admin',
-                fullName: 'System Admin',
-                email: adminEmail,
-                password: adminPassword,
-                phone: '0000000000',
-                country: 'Pakistan',
-                currency: 'PKR',
-                status: 'Active',
-                restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
-            });
-            console.log('Admin User Created Successfully');
-        } else {
-            // Check if we need to sync credentials (force update password to ensure login works)
-            // We set the password field. The pre-save hook in User model handles hashing.
-            console.log('Syncing Admin Credentials...');
-            existingUser.password = adminPassword;
-            existingUser.status = 'Active'; // Ensure not blocked
-            if(existingUser.username !== 'admin') existingUser.username = 'admin'; // Enforce username
-            await existingUser.save();
-            console.log('Admin User Credentials Synced');
-        }
+            // Check if ANY admin exists to avoid duplicates
+            const anyAdmin = await User.findOne({ username: 'admin' });
+            if (!anyAdmin) {
+                console.log('Seeding Admin User...');
+                await User.create({
+                    username: 'admin',
+                    fullName: 'System Admin',
+                    email: adminEmail,
+                    password: adminPassword,
+                    phone: '0000000000',
+                    country: 'Pakistan',
+                    currency: 'PKR',
+                    status: 'Active',
+                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
+                });
+                console.log('Admin User Created Successfully');
+            }
+        } 
+        // REMOVED the else block that forced password reset on every restart.
+        // This allows the admin to change their password via the dashboard and keep it.
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
