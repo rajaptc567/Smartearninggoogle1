@@ -134,7 +134,7 @@ export const createWithdrawal = async (req, res) => {
 // @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
-        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions } = req.body;
+        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pCustomFields } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
         if (!withdrawal) {
@@ -165,7 +165,8 @@ export const updateWithdrawal = async (req, res) => {
                 feePercent: 0,
                 status: 'Enabled',
                 instructions: p2pInstructions || '', 
-                p2pWithdrawalId: withdrawal._id
+                p2pWithdrawalId: withdrawal._id,
+                customFields: p2pCustomFields || []
             };
 
             if (originalStatus === 'Matching') {

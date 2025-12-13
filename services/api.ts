@@ -216,7 +216,7 @@ export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Pro
     return result.data;
 };
 
-export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal> & { p2pName?: string, p2pAccountTitle?: string, p2pAccountNumber?: string, p2pInstructions?: string }): Promise<{withdrawal: Withdrawal, user: User}> => {
+export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawal> & { p2pName?: string, p2pAccountTitle?: string, p2pAccountNumber?: string, p2pInstructions?: string, p2pCustomFields?: {title: string, value: string}[] }): Promise<{withdrawal: Withdrawal, user: User}> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

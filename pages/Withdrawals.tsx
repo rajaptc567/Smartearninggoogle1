@@ -22,6 +22,7 @@ const Withdrawals: React.FC = () => {
   const [p2pAccountTitle, setP2pAccountTitle] = useState('');
   const [p2pAccountNumber, setP2pAccountNumber] = useState('');
   const [p2pInstructions, setP2pInstructions] = useState('');
+  const [p2pCustomFields, setP2pCustomFields] = useState<{ title: string; value: string }[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
   
@@ -47,11 +48,13 @@ const Withdrawals: React.FC = () => {
           setP2pAccountTitle(existingMethod.accountTitle);
           setP2pAccountNumber(existingMethod.accountNumber);
           setP2pInstructions(existingMethod.instructions || '');
+          setP2pCustomFields(existingMethod.customFields || []);
       } else {
           setP2pName(`P2P - ${selectedWithdrawal.method}`);
           setP2pAccountTitle(selectedWithdrawal.accountTitle);
           setP2pAccountNumber(selectedWithdrawal.accountNumber);
           setP2pInstructions('');
+          setP2pCustomFields([]);
       }
 
       // Initialize statuses for matched deposits
@@ -85,6 +88,20 @@ const Withdrawals: React.FC = () => {
     setSelectedWithdrawal(null);
   };
 
+  const handleAddCustomField = () => {
+      setP2pCustomFields([...p2pCustomFields, { title: '', value: '' }]);
+  };
+
+  const handleCustomFieldChange = (index: number, field: 'title' | 'value', value: string) => {
+      const updated = [...p2pCustomFields];
+      updated[index][field] = value;
+      setP2pCustomFields(updated);
+  };
+
+  const handleRemoveCustomField = (index: number) => {
+      setP2pCustomFields(p2pCustomFields.filter((_, i) => i !== index));
+  };
+
   const handleSaveChanges = async () => {
     if (selectedWithdrawal) {
         setIsSaving(true);
@@ -95,6 +112,7 @@ const Withdrawals: React.FC = () => {
                 payload.p2pAccountTitle = p2pAccountTitle;
                 payload.p2pAccountNumber = p2pAccountNumber;
                 payload.p2pInstructions = p2pInstructions;
+                payload.p2pCustomFields = p2pCustomFields.filter(f => f.title.trim() !== ''); // Clean empty fields
             }
             const result = await updateWithdrawal(selectedWithdrawal._id, payload);
             dispatch({ type: 'UPDATE_WITHDRAWAL', payload: result.withdrawal });
@@ -375,6 +393,34 @@ const Withdrawals: React.FC = () => {
                                       <input type="text" placeholder="Account Number" value={p2pAccountNumber} onChange={e => setP2pAccountNumber(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
                                   </div>
                                   <textarea placeholder="Instructions for depositors..." value={p2pInstructions} onChange={e => setP2pInstructions(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" rows={2} />
+                                  
+                                  {/* Custom Fields Section for P2P */}
+                                  <div className="mt-2 border-t dark:border-gray-600 pt-2">
+                                      <div className="flex justify-between items-center mb-2">
+                                          <h6 className="text-xs font-semibold text-gray-500 uppercase">Custom Fields (e.g. Bank Code)</h6>
+                                          <Button type="button" size="sm" variant="secondary" onClick={handleAddCustomField} className="py-0.5 px-2 text-xs">+ Add Field</Button>
+                                      </div>
+                                      
+                                      {p2pCustomFields.map((field, index) => (
+                                          <div key={index} className="flex gap-2 items-center mb-2">
+                                              <input 
+                                                  placeholder="Title (e.g. Branch Code)" 
+                                                  value={field.title} 
+                                                  onChange={(e) => handleCustomFieldChange(index, 'title', e.target.value)}
+                                                  className="w-1/3 text-xs rounded-md dark:bg-gray-800 dark:border-gray-500"
+                                              />
+                                              <input 
+                                                  placeholder="Value (e.g. 0911)" 
+                                                  value={field.value} 
+                                                  onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
+                                                  className="w-full text-xs rounded-md dark:bg-gray-800 dark:border-gray-500"
+                                              />
+                                              <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700">
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                              </button>
+                                          </div>
+                                      ))}
+                                  </div>
                               </div>
                           </div>
                       )}
