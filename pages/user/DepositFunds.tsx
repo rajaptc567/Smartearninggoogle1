@@ -233,6 +233,28 @@ const DepositFunds: React.FC = () => {
                                             </button>
                                         </div>
                                     </div>
+                                    
+                                    {/* Render Custom Fields */}
+                                    {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
+                                        <>
+                                            {selectedMethod.customFields.map((field, idx) => (
+                                                <div key={idx}>
+                                                    <span className="block text-xs font-medium text-gray-500 uppercase tracking-wider">{field.title}</span>
+                                                    <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded border border-gray-300 dark:border-gray-600 mt-1">
+                                                        <span className="font-mono text-sm text-gray-900 dark:text-white truncate">{field.value}</span>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => navigator.clipboard.writeText(field.value)}
+                                                            className="ml-2 text-blue-600 hover:text-blue-700 text-xs font-medium"
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
+
                                     <div>
                                         <span className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Instructions</span>
                                         <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">

@@ -113,6 +113,16 @@ export const createPaymentMethod = async (req, res) => {
             methodData.logoUrl = `data:${mimeType};base64,${b64}`;
         }
 
+        // Parse customFields if it comes as a string (FormData)
+        if (methodData.customFields && typeof methodData.customFields === 'string') {
+            try {
+                methodData.customFields = JSON.parse(methodData.customFields);
+            } catch (e) {
+                console.error("Failed to parse customFields", e);
+                methodData.customFields = [];
+            }
+        }
+
         const method = await PaymentMethod.create(methodData);
         res.status(201).json({ success: true, data: method });
     } catch (err) {
@@ -128,6 +138,16 @@ export const updatePaymentMethod = async (req, res) => {
             const b64 = Buffer.from(req.file.buffer).toString('base64');
             const mimeType = req.file.mimetype;
             methodData.logoUrl = `data:${mimeType};base64,${b64}`;
+        }
+
+        // Parse customFields if it comes as a string (FormData)
+        if (methodData.customFields && typeof methodData.customFields === 'string') {
+            try {
+                methodData.customFields = JSON.parse(methodData.customFields);
+            } catch (e) {
+                console.error("Failed to parse customFields", e);
+                methodData.customFields = [];
+            }
         }
 
         const method = await PaymentMethod.findByIdAndUpdate(req.params.id, methodData, { new: true, runValidators: true });

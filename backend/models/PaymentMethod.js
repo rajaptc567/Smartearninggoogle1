@@ -52,7 +52,11 @@ const PaymentMethodSchema = new mongoose.Schema({
     p2pWithdrawalId: {
         type: mongoose.Schema.ObjectId,
         ref: 'Withdrawal', // Link to the withdrawal if this is a P2P method
-    }
+    },
+    customFields: [{
+        title: { type: String, required: true },
+        value: { type: String, required: true }
+    }]
 }, {
     timestamps: true
 });

@@ -101,6 +101,7 @@ export interface PaymentMethod {
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
     p2pWithdrawalId?: string;
+    customFields?: { title: string; value: string }[];
 }
 
 export type CommissionType = 'percentage' | 'fixed';
