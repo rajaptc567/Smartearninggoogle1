@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule } from '../types';
+import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -20,7 +20,12 @@ const InvestmentPlans: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
+    
+    // Filters
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
+    const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | ''>('');
+    const [priceSort, setPriceSort] = useState<'low-high' | 'high-low' | ''>('');
+    
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
     // Rule Management State
@@ -127,17 +132,37 @@ const InvestmentPlans: React.FC = () => {
         return formattedVal;
     };
 
-    const filteredPlans = investmentPlans.filter(plan => {
-        if (!currencyFilter) return true;
-        return plan.currency?.toUpperCase() === currencyFilter;
-    });
+    // Helper to format price intelligently (hide .00)
+    const formatPlanPrice = (amount: number, currency: string) => {
+        const symbol = currencySymbols[currency] || currency;
+        // If whole number, format without decimals
+        if (amount % 1 === 0) {
+            return `${symbol} ${amount.toLocaleString()}`;
+        }
+        // Otherwise use standard currency format
+        return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const filteredPlans = useMemo(() => {
+        return investmentPlans
+            .filter(plan => {
+                const matchesCurrency = !currencyFilter || plan.currency?.toUpperCase() === currencyFilter;
+                const matchesStatus = !statusFilter || plan.status === statusFilter;
+                return matchesCurrency && matchesStatus;
+            })
+            .sort((a, b) => {
+                if (priceSort === 'low-high') return a.price - b.price;
+                if (priceSort === 'high-low') return b.price - a.price;
+                return 0; // Default order (creation time usually)
+            });
+    }, [investmentPlans, currencyFilter, priceSort, statusFilter]);
 
 
     return (
         <div>
-             <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Investment Plans</h2>
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white">Investment Plans</h2>
+                <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
                     <select
                         value={currencyFilter}
                         onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
@@ -148,8 +173,29 @@ const InvestmentPlans: React.FC = () => {
                         <option value="EUR">EUR</option>
                         <option value="USD">USD</option>
                     </select>
+                    
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as any)}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Disabled">Disabled</option>
+                    </select>
+
+                    <select
+                        value={priceSort}
+                        onChange={(e) => setPriceSort(e.target.value as any)}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">Default Order</option>
+                        <option value="low-high">Price: Low to High</option>
+                        <option value="high-low">Price: High to Low</option>
+                    </select>
+
+                    <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
                 </div>
-                <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredPlans.map((plan: InvestmentPlan) => {
@@ -170,7 +216,7 @@ const InvestmentPlans: React.FC = () => {
                                 </div>
                             </div>
                             
-                            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-4">{formatCurrency(plan.price, plan.currency)}</p>
+                            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-4">{formatPlanPrice(plan.price, plan.currency)}</p>
                             
                             <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-grow">
                                 <li><span className="font-semibold">Duration:</span> {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>

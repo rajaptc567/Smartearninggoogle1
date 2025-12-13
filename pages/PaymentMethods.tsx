@@ -23,6 +23,7 @@ const PaymentMethods: React.FC = () => {
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
     const [typeFilter, setTypeFilter] = useState<'Deposit' | 'Withdrawal' | ''>('');
+    const [statusFilter, setStatusFilter] = useState<'Enabled' | 'Disabled' | ''>('');
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
     const handleOpenModal = (method: PaymentMethod | null = null) => {
@@ -84,14 +85,15 @@ const PaymentMethods: React.FC = () => {
     const filteredMethods = paymentMethods.filter(method => {
         const matchesCurrency = !currencyFilter || method.currency?.toUpperCase() === currencyFilter;
         const matchesType = !typeFilter || method.type === typeFilter;
-        return matchesCurrency && matchesType;
+        const matchesStatus = !statusFilter || method.status === statusFilter;
+        return matchesCurrency && matchesType && matchesStatus;
     });
 
     return (
         <div>
-          <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-white shrink-0">Payment Methods</h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-2xl font-semibold text-gray-800 dark:text-white shrink-0">Payment Methods</h2>
+                <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
                      <select
                         value={currencyFilter}
                         onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
@@ -111,8 +113,17 @@ const PaymentMethods: React.FC = () => {
                         <option value="Deposit">Deposit</option>
                         <option value="Withdrawal">Withdrawal</option>
                     </select>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as 'Enabled' | 'Disabled' | '')}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Status</option>
+                        <option value="Enabled">Enabled</option>
+                        <option value="Disabled">Disabled</option>
+                    </select>
+                    <Button onClick={() => handleOpenModal()}>Add New Method</Button>
                 </div>
-                <Button onClick={() => handleOpenModal()}>Add New Method</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMethods.map(method => (
