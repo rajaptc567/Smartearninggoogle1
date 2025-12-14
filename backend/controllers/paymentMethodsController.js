@@ -123,6 +123,16 @@ export const createPaymentMethod = async (req, res) => {
             }
         }
 
+        // Parse howToDeposit if it comes as a string
+        if (methodData.howToDeposit && typeof methodData.howToDeposit === 'string') {
+            try {
+                methodData.howToDeposit = JSON.parse(methodData.howToDeposit);
+            } catch (e) {
+                console.error("Failed to parse howToDeposit", e);
+                // Don't overwrite if parse fails, might mess up existing data structure if strict
+            }
+        }
+
         const method = await PaymentMethod.create(methodData);
         res.status(201).json({ success: true, data: method });
     } catch (err) {
@@ -147,6 +157,15 @@ export const updatePaymentMethod = async (req, res) => {
             } catch (e) {
                 console.error("Failed to parse customFields", e);
                 methodData.customFields = [];
+            }
+        }
+
+        // Parse howToDeposit if it comes as a string
+        if (methodData.howToDeposit && typeof methodData.howToDeposit === 'string') {
+            try {
+                methodData.howToDeposit = JSON.parse(methodData.howToDeposit);
+            } catch (e) {
+                console.error("Failed to parse howToDeposit", e);
             }
         }
 

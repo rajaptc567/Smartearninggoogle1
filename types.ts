@@ -102,6 +102,14 @@ export interface PaymentMethod {
     logoUrl?: string;
     p2pWithdrawalId?: string;
     customFields?: { title: string; value: string }[];
+    howToDeposit?: {
+        enabled: boolean;
+        steps: {
+            title: string;
+            description: string;
+            imageUrl?: string;
+        }[];
+    };
 }
 
 export type CommissionType = 'percentage' | 'fixed';

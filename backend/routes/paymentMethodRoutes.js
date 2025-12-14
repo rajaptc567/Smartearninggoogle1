@@ -12,7 +12,7 @@ import {
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 2 * 1024 * 1024 } // Limit logo size to 2MB
+    limits: { fileSize: 10 * 1024 * 1024 } // Increase Limit to 10MB to support multiple step images
 });
 
 const router = express.Router();

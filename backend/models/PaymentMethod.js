@@ -56,7 +56,15 @@ const PaymentMethodSchema = new mongoose.Schema({
     customFields: [{
         title: { type: String, required: true },
         value: { type: String, required: true }
-    }]
+    }],
+    howToDeposit: {
+        enabled: { type: Boolean, default: false },
+        steps: [{
+            title: String,
+            description: String,
+            imageUrl: String
+        }]
+    }
 }, {
     timestamps: true
 });

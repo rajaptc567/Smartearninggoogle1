@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -155,6 +155,12 @@ const PaymentMethods: React.FC = () => {
                             {method.customFields && method.customFields.length > 0 && (
                                 <p className="text-xs text-blue-500 italic">+{method.customFields.length} custom fields</p>
                             )}
+                            {method.howToDeposit?.enabled && (
+                                <p className="text-xs text-green-600 italic flex items-center">
+                                    <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Guide Active
+                                </p>
+                            )}
                         </div>
                         <div className="mt-6 flex justify-end space-x-2">
                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(method)}>Edit</Button>
@@ -186,19 +192,37 @@ interface CustomField {
     value: string;
 }
 
+interface Step {
+    title: string;
+    description: string;
+    imageUrl?: string;
+    imageFile?: File; // Temporary file object for upload
+}
+
 const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave }) => {
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
         method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    
+    // How To Deposit State
+    const [howToEnabled, setHowToEnabled] = useState(false);
+    const [howToSteps, setHowToSteps] = useState<Step[]>([]);
+
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        if (method && method.customFields) {
-            setCustomFields(method.customFields);
+        if (method) {
+            if (method.customFields) setCustomFields(method.customFields);
+            if (method.howToDeposit) {
+                setHowToEnabled(method.howToDeposit.enabled);
+                setHowToSteps(method.howToDeposit.steps.map(s => ({ ...s })));
+            }
         } else {
             setCustomFields([]);
+            setHowToEnabled(false);
+            setHowToSteps([]);
         }
     }, [method]);
 
@@ -229,13 +253,43 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         setCustomFields(updatedFields);
     };
 
+    // --- How To Steps Logic ---
+    const handleAddStep = () => {
+        setHowToSteps([...howToSteps, { title: '', description: '' }]);
+    };
+
+    const handleStepChange = (index: number, field: keyof Step, value: string) => {
+        const updated = [...howToSteps];
+        (updated[index] as any)[field] = value;
+        setHowToSteps(updated);
+    };
+
+    const handleStepImageChange = (index: number, file: File) => {
+        const updated = [...howToSteps];
+        updated[index].imageFile = file;
+        
+        // Create local preview URL
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            if(e.target?.result) {
+                updated[index].imageUrl = e.target.result as string;
+                setHowToSteps([...updated]);
+            }
+        }
+        reader.readAsDataURL(file);
+    };
+
+    const handleRemoveStep = (index: number) => {
+        setHowToSteps(howToSteps.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
         
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== '_id' && key !== 'customFields') {
+            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit') {
                 data.append(key, String(value));
             }
         });
@@ -244,9 +298,34 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             data.append('logo', logoFile);
         }
 
-        // Clean empty fields and add to form data
+        // Clean empty custom fields
         const cleanedCustomFields = customFields.filter(f => f.title.trim() !== '');
         data.append('customFields', JSON.stringify(cleanedCustomFields));
+
+        // Prepare How-To Data
+        // IMPORTANT: We need to process image files into Base64 strings BEFORE sending if we want to stick to JSON payload within FormData for complex structures.
+        // OR we just rely on the imageFile property being processed locally to imageUrl (dataURI) which is what `handleStepImageChange` does.
+        // Since the backend expects `imageUrl` in the steps array, and we set that to base64 on client, we can just send the array.
+        
+        const processedSteps = await Promise.all(howToSteps.map(async (step) => {
+            // If there is a new file, ensure imageUrl is the base64 string
+            if (step.imageFile && !step.imageUrl?.startsWith('data:')) {
+                 const base64 = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target?.result as string);
+                    reader.readAsDataURL(step.imageFile!);
+                 });
+                 return { title: step.title, description: step.description, imageUrl: base64 };
+            }
+            return { title: step.title, description: step.description, imageUrl: step.imageUrl };
+        }));
+
+        const howToDepositData = {
+            enabled: howToEnabled,
+            steps: processedSteps
+        };
+        
+        data.append('howToDeposit', JSON.stringify(howToDepositData));
 
         await onSave(data, method?._id);
         setIsSaving(false);
@@ -295,33 +374,71 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Custom Fields</h3>
                         <Button type="button" size="sm" variant="secondary" onClick={handleAddCustomField}>+ Add Field</Button>
                     </div>
-                    <p className="text-xs text-gray-500 mb-3">Add extra details like Branch Code, IBAN, Wallet ID, etc.</p>
                     
-                    {customFields.length > 0 ? (
+                    {customFields.length > 0 && (
                         <div className="space-y-2 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border dark:border-gray-600">
                             {customFields.map((field, index) => (
                                 <div key={index} className="flex gap-2 items-center">
                                     <input 
-                                        placeholder="Field Title (e.g. Branch Code)" 
+                                        placeholder="Title (e.g. Branch)" 
                                         value={field.title} 
                                         onChange={(e) => handleCustomFieldChange(index, 'title', e.target.value)}
                                         className="w-1/3 text-sm rounded-md dark:bg-gray-700 dark:border-gray-500"
                                     />
                                     <input 
-                                        placeholder="Field Detail (e.g. 0911)" 
+                                        placeholder="Value (e.g. 0911)" 
                                         value={field.value} 
                                         onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
                                         className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500"
                                     />
-                                    <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
+                                    <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700">×</button>
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="text-center p-4 border border-dashed dark:border-gray-600 rounded text-xs text-gray-400">
-                            No custom fields added.
+                    )}
+                 </div>
+
+                 {/* HOW TO DEPOSIT SECTION */}
+                 <div className="border-t dark:border-gray-700 pt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">How-To Guide</h3>
+                        <ToggleSwitch checked={howToEnabled} onChange={() => setHowToEnabled(!howToEnabled)} />
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">Provide step-by-step instructions with optional images for the user.</p>
+
+                    {howToEnabled && (
+                        <div className="space-y-4 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border dark:border-gray-600">
+                            {howToSteps.map((step, index) => (
+                                <div key={index} className="border dark:border-gray-600 p-3 rounded-md bg-white dark:bg-gray-800">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-gray-500 uppercase">Step {index + 1}</span>
+                                        <button type="button" onClick={() => handleRemoveStep(index)} className="text-red-500 text-xs hover:underline">Remove</button>
+                                    </div>
+                                    <input 
+                                        placeholder="Step Title (e.g. Open App)" 
+                                        value={step.title} 
+                                        onChange={(e) => handleStepChange(index, 'title', e.target.value)}
+                                        className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
+                                    />
+                                    <textarea 
+                                        placeholder="Description of this step..." 
+                                        value={step.description} 
+                                        onChange={(e) => handleStepChange(index, 'description', e.target.value)}
+                                        className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
+                                        rows={2}
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={(e) => e.target.files && handleStepImageChange(index, e.target.files[0])}
+                                            className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                        />
+                                        {step.imageUrl && <img src={step.imageUrl} alt="Preview" className="h-8 w-8 object-cover rounded" />}
+                                    </div>
+                                </div>
+                            ))}
+                            <Button type="button" size="sm" variant="secondary" onClick={handleAddStep} className="w-full">+ Add Step</Button>
                         </div>
                     )}
                  </div>
