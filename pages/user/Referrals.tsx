@@ -33,8 +33,8 @@ const Referrals: React.FC = () => {
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
     
-    // View Tab State: 'commissions' (default) | 'tree' | 'inactive'
-    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'inactive'>('commissions');
+    // View Tab State: 'commissions' (default) | 'tree' | 'inactive' | 'held'
+    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'inactive' | 'held'>('commissions');
 
     // Sponsor Modal State
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
@@ -64,7 +64,7 @@ const Referrals: React.FC = () => {
                 }
             }, 300);
         }
-    }, [highlightedUserId, viewMode, selectedPlanId]); // Added selectedPlanId dependency to trigger scroll after plan switch
+    }, [highlightedUserId, viewMode, selectedPlanId]);
     
     // Helper to get equivalent IDs for any plan
     const getEquivalentIds = useCallback((planId: string) => {
@@ -139,10 +139,29 @@ const Referrals: React.FC = () => {
         let relatedPlanName: string | undefined = undefined;
 
         if (pendingTransactions.length > 0) {
-            pendingReason = "Under Review";
+            const tx = pendingTransactions[0];
+            
+            if (currentUser.restrictions?.earning) {
+                pendingReason = "Account Restricted";
+            } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
+                pendingReason = "No Active Plan";
+            } else if (settings.requirePlanMatchForCommission && tx.relatedPlanId) {
+                 // Check if user has equivalent plan
+                 const reqIds = getEquivalentIds(tx.relatedPlanId);
+                 const hasMatch = currentUser.activePlans?.some(p => reqIds.has(p.planId));
+                 
+                 if (!hasMatch) {
+                     const planName = investmentPlans.find(p => p._id === tx.relatedPlanId)?.name || 'Matching Plan';
+                     pendingReason = `Missing ${planName}`;
+                 } else {
+                     pendingReason = "Pending Review";
+                 }
+            } else {
+                pendingReason = "Pending Review";
+            }
         }
         return { earned, held, pendingReason, relatedPlanName, earningSourcePlanId };
-    }, [currentUser, transactions, investmentPlans]);
+    }, [currentUser, transactions, investmentPlans, settings, getEquivalentIds]);
 
     const toggleNode = (userId: string) => {
         setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
@@ -189,9 +208,6 @@ const Referrals: React.FC = () => {
                 setViewMode('tree');
             }, 100);
         } else {
-            // Fallback: Just locate in current view even if not earning, logic might allow viewing sponsor if they are in tree but 0 earnings? 
-            // Our tree builder filters out non-earners usually.
-            // If checking 'allNodes' from current tree:
             const isInCurrentTree = allNodes.some(n => n.user._id === selectedSponsor._id);
             if (isInCurrentTree) {
                  setHighlightedUserId(selectedSponsor._id);
@@ -203,8 +219,8 @@ const Referrals: React.FC = () => {
         }
     };
 
-    const { genealogyTree, directEarners, indirectEarners, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
+    const { genealogyTree, directEarners, indirectEarners, inactiveReferrals, heldReferrals, networkStats, allNodes } = useMemo(() => {
+        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], inactiveReferrals: [], heldReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
 
         // 1. Build Full Tree First
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
@@ -231,9 +247,15 @@ const Referrals: React.FC = () => {
         const directEarnersList: GenealogyNode[] = [];
         const indirectEarnersList: GenealogyNode[] = [];
         const inactiveList: GenealogyNode[] = [];
+        const heldList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
             const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            
+            if (held > 0) {
+                heldList.push(node);
+            }
+
             if (earned > 0 || held > 0) {
                 if (node.level === 1) {
                     directEarnersList.push(node);
@@ -268,15 +290,9 @@ const Referrals: React.FC = () => {
                 
                 const filteredChildren = filterRecursive(node.children);
                 
-                // If this node is relevant, keep it and its children
-                // If it has relevant children, we might need to keep it OR flatten it
-                
                 if (isRelevant) {
                     return { ...node, children: filteredChildren };
                 } else if (filteredChildren.length > 0) {
-                    // Logic to Skip/Flatten: Return children directly? 
-                    // Arrays can't be returned here in map easily without flatMap.
-                    // We will handle flattening in the render function instead.
                     return { ...node, children: filteredChildren, isSkipped: true } as any; 
                 }
                 return null;
@@ -289,6 +305,7 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             inactiveReferrals: inactiveList,
+            heldReferrals: heldList,
             allNodes: nodesList,
             networkStats: { 
                 totalReferrals: nodesList.length,
@@ -350,7 +367,7 @@ const Referrals: React.FC = () => {
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {sourcePlan ? (
                                     <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
-                                        <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                        <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
                                         <span>Purchased {sourcePlan.name}</span>
                                         {isEquivalent && (
                                             <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>
@@ -389,7 +406,7 @@ const Referrals: React.FC = () => {
                             <div>
                                 <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Held</p>
                                 <p className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{formatCurrency(held, currentUser?.currency || 'USD')}</p>
-                                <p className="text-[10px] text-yellow-600 dark:text-yellow-500">{pendingReason}</p>
+                                <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium">{pendingReason}</p>
                             </div>
                         )}
                         {earned === 0 && held === 0 && (
@@ -403,8 +420,6 @@ const Referrals: React.FC = () => {
 
     // Recursive Tree Node Renderer
     const renderTreeNode = (node: GenealogyNode & { isSkipped?: boolean }) => {
-        // Hiding logic: If node is marked as skipped (because it has no earnings but children do),
-        // we do NOT render the card, only children.
         if (node.isSkipped) {
             return (
                 <React.Fragment key={node.user._id}>
@@ -418,10 +433,7 @@ const Referrals: React.FC = () => {
 
         return (
             <li key={node.user._id} className="relative pl-4 sm:pl-6 pt-2">
-                {/* Connecting Lines */}
                 <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
-                
-                {/* Horizontal connector to card */}
                 <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
 
                 <div className="mb-2">
@@ -451,18 +463,12 @@ const Referrals: React.FC = () => {
 
     const sponsorEarnings = calculateSponsorEarnings();
     
-    // Determine the specific plan that caused the earning from this sponsor
-    // This allows identifying which plan purchase by the sponsor triggered the commission
     const getSponsorEarningSourcePlan = () => {
         if (!selectedSponsor) return null;
-        
-        // Check earnings across all potential equivalent plans
         const info = getCommissionInfoForReferral(selectedSponsor, equivalentPlanIdsForSelected);
         if (info.earningSourcePlanId) {
             return investmentPlans.find(p => p._id === info.earningSourcePlanId);
         }
-        
-        // If not found in current context, check all active plans (for the Locate feature logic mostly, but useful here too)
         for (const plan of uniqueActivePlans) {
              const ids = getEquivalentIds(plan.planId);
              const subInfo = getCommissionInfoForReferral(selectedSponsor, ids);
@@ -470,13 +476,11 @@ const Referrals: React.FC = () => {
                  return investmentPlans.find(p => p._id === subInfo.earningSourcePlanId);
              }
         }
-        
         return null;
     };
 
     const earningSourcePlan = getSponsorEarningSourcePlan();
     
-    // General relevant plan info (fallback if no specific earning source found yet)
     const getSponsorRelevantPlan = () => {
         if (!selectedSponsor || !selectedSponsor.activePlans) return null;
         const matchedPlan = selectedSponsor.activePlans.find(p => equivalentPlanIdsForSelected.has(p.planId));
@@ -492,39 +496,29 @@ const Referrals: React.FC = () => {
     
     const sponsorPlanInfo = getSponsorRelevantPlan();
 
-    // Check if the current user's plan is equivalent (but not equal) to the sponsor's source plan
     const isLinkedPlanEquivalent = useMemo(() => {
         if (!selectedPlanDetails) return false;
-        
         if (earningSourcePlan) {
             return earningSourcePlan._id !== selectedPlanDetails._id && equivalentPlanIdsForSelected.has(earningSourcePlan._id);
         }
-        
         if (sponsorPlanInfo) {
             return sponsorPlanInfo.isEquivalent;
         }
-        
         return false;
     }, [selectedPlanDetails, earningSourcePlan, sponsorPlanInfo, equivalentPlanIdsForSelected]);
 
     const displaySourcePlanName = earningSourcePlan?.name || sponsorPlanInfo?.name || 'N/A';
 
-    // Logic to find the equivalent plan in the current user's currency to display in the button
     const planToView = useMemo(() => {
         if (!earningSourcePlan || !currentUser) return null;
-        
-        // If exact currency match, show that
         if (earningSourcePlan.currency === currentUser.currency) {
             return earningSourcePlan;
         }
-        
-        // Otherwise try to find an equivalent in the user's currency
         const group = settings.planEquivalencyGroups?.find(g => 
             g.usdPlanId === earningSourcePlan._id || 
             g.pkrPlanId === earningSourcePlan._id || 
             g.eurPlanId === earningSourcePlan._id
         );
-        
         if (group) {
             const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
             const targetId = group[targetKey];
@@ -532,7 +526,6 @@ const Referrals: React.FC = () => {
                 return investmentPlans.find(p => p._id === targetId);
             }
         }
-        
         return null;
     }, [earningSourcePlan, currentUser, settings.planEquivalencyGroups, investmentPlans]);
 
@@ -584,7 +577,7 @@ const Referrals: React.FC = () => {
                 </div>
             )}
 
-            {/* Plan Details Card - Compact & Enhanced */}
+            {/* Plan Details Card */}
             {selectedPlanDetails && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6 animate-fade-in">
                     <div className="flex flex-col md:flex-row">
@@ -679,7 +672,13 @@ const Referrals: React.FC = () => {
                         onClick={() => setViewMode('tree')} 
                         className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}
                     >
-                        Tree View (Genealogy)
+                        Tree View
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('held')} 
+                        className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}
+                    >
+                        Held Commissions ({heldReferrals.length})
                     </button>
                     <button 
                         onClick={() => setViewMode('inactive')} 
@@ -743,6 +742,28 @@ const Referrals: React.FC = () => {
                                 <p>No earning network found for this plan.</p>
                             </div>
                         )
+                    )}
+
+                    {viewMode === 'held' && (
+                        <div className="space-y-3">
+                             <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4 flex gap-3 items-start">
+                                <span className="text-xl">💡</span>
+                                <div>
+                                    <h4 className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Why are these commissions held?</h4>
+                                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                        These commissions are pending because eligibility requirements were not met at the time of purchase. 
+                                        Usually, purchasing the specific plan mentioned in the details will release these funds to your wallet immediately.
+                                    </p>
+                                </div>
+                             </div>
+                             {heldReferrals.length > 0 ? heldReferrals.map(node => (
+                                 <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />
+                             )) : (
+                                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                                     <p>No held commissions.</p>
+                                 </div>
+                             )}
+                        </div>
                     )}
 
                     {viewMode === 'inactive' && (
@@ -852,7 +873,6 @@ const Referrals: React.FC = () => {
                                 <Button 
                                     onClick={() => {
                                         setIsSponsorModalOpen(false);
-                                        // Update: Pass state to highlight the plan on the next page
                                         navigate('/member/plans', { state: { highlightPlanId: selectedPlanDetails._id } });
                                     }} 
                                     className="w-full bg-blue-600 hover:bg-blue-700"
