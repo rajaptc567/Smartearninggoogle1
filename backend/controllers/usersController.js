@@ -674,7 +674,57 @@ export const purchasePlan = async (req, res) => {
 
                 let commissionConfig;
                 if (level === 0) { // Direct Commission
-                    commissionConfig = (plan.directCommissions || [])[0];
+                    // UPDATED LOGIC: Check referral count limit specific to this plan
+                    const referralCount = await Transaction.countDocuments({
+                        userId: uplineUser._id,
+                        type: 'Commission',
+                        relatedPlanId: plan._id,
+                        level: 1,
+                        status: 'Approved' // Only count approved/paid commissions towards limit
+                    });
+
+                    // Check if limit reached
+                    if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
+                        
+                        // 1. Notify Sponsor of Missed Opportunity
+                        await Notification.create({
+                            userId: uplineUser._id,
+                            message: `⚠️ Limit Reached: You missed a commission from ${user.username} for the '${plan.name}' plan because you have filled all ${plan.directReferralLimit} direct slots for this specific plan.`
+                        });
+
+                        // 2. Log Void Transaction for Admin/History
+                        await Transaction.create({
+                            userId: uplineUser._id,
+                            userName: uplineUser.username,
+                            currency: uplineUser.currency,
+                            type: 'Missed Commission',
+                            amount: 0,
+                            level: 1,
+                            sourceUserId: user._id,
+                            description: `Direct Limit (${plan.directReferralLimit}) Reached from ${user.username} (${plan.name})`,
+                            status: 'Rejected', // Distinct status for skipped/void
+                            relatedPlanId: plan._id,
+                            originalAmount: 0,
+                            originalCurrency: user.currency
+                        });
+
+                        currentUplineUsername = uplineUser.sponsor;
+                        continue; // Skip commission for this upline, limit exceeded
+                    }
+
+                    // Select specific slot configuration if available
+                    if (plan.directCommissions && plan.directCommissions.length > 0) {
+                        // Use the referral count as index (0 for 1st, 1 for 2nd...)
+                        // If configurations run out but limit allows more, use the last defined config
+                        if (referralCount < plan.directCommissions.length) {
+                            commissionConfig = plan.directCommissions[referralCount];
+                        } else {
+                            commissionConfig = plan.directCommissions[plan.directCommissions.length - 1];
+                        }
+                    } else {
+                        // Fallback if array is empty but limit allowed (shouldn't happen with valid plan data)
+                        commissionConfig = { type: 'percentage', value: 0 }; 
+                    }
                 } else { // Indirect Commission
                     commissionConfig = (plan.indirectCommissions || [])[level - 1];
                 }
