@@ -47,7 +47,7 @@ const Referrals: React.FC = () => {
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
-    // Reset view tab when plan changes, unless we are in 'held' mode which is global
+    // Reset view tab when plan changes, unless we are in 'held' or 'all' mode which are global
     useEffect(() => {
         if (viewMode !== 'held' && viewMode !== 'all') {
             setViewMode('commissions');
@@ -141,11 +141,27 @@ const Referrals: React.FC = () => {
                      const reqIds = getEquivalentIds(t.relatedPlanId);
                      const hasMatch = currentUser.activePlans?.some(p => reqIds.has(p.planId));
                      if (!hasMatch) {
-                         // Find the specific plan details
-                         const plan = investmentPlans.find(p => p._id === t.relatedPlanId);
-                         missingPlanName = plan?.name || 'Required Plan';
-                         missingPlanId = t.relatedPlanId;
-                         reason = `Missing ${missingPlanName}`;
+                         // Find the specific plan details. We want to recommend the plan in the USER'S currency if possible.
+                         let targetPlan = investmentPlans.find(p => p._id === t.relatedPlanId);
+                         
+                         // Try to find equivalent in user currency
+                         if (settings.planEquivalencyGroups) {
+                             const group = settings.planEquivalencyGroups.find(g => 
+                                g.usdPlanId === t.relatedPlanId || g.pkrPlanId === t.relatedPlanId || g.eurPlanId === t.relatedPlanId
+                             );
+                             if (group) {
+                                 // Determine key based on current user currency
+                                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
+                                 if (group[targetKey]) {
+                                     const localPlan = investmentPlans.find(p => p._id === group[targetKey]);
+                                     if (localPlan) targetPlan = localPlan;
+                                 }
+                             }
+                         }
+
+                         missingPlanName = targetPlan?.name || 'Required Plan';
+                         missingPlanId = targetPlan?._id;
+                         reason = `Requires ${missingPlanName}`;
                      }
                 }
 
@@ -410,7 +426,7 @@ const Referrals: React.FC = () => {
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
                                     <p className="text-yellow-600 dark:text-yellow-500 font-bold">
-                                        Action Required: Review details
+                                        Action Required
                                     </p>
                                 ) : (
                                     <>
@@ -454,9 +470,9 @@ const Referrals: React.FC = () => {
                             </div>
                         )}
                         {isHeldView && breakdown.length > 0 ? (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/10 p-2 rounded border border-yellow-100 dark:border-yellow-800 space-y-2">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/10 p-2 rounded border border-yellow-100 dark:border-yellow-800 space-y-2 w-full sm:w-auto">
                                 {breakdown.map((item, idx) => (
-                                    <div key={idx} className="flex flex-col items-end">
+                                    <div key={idx} className="flex flex-col items-end gap-1">
                                         <div className="text-sm flex items-center justify-end gap-2">
                                             <span className="text-yellow-700 dark:text-yellow-400 font-medium text-xs">{item.reason}:</span>
                                             <span className="font-bold text-yellow-800 dark:text-yellow-300">{formatCurrency(item.amount, currentUser?.currency)}</span>
@@ -467,9 +483,10 @@ const Referrals: React.FC = () => {
                                                     e.stopPropagation();
                                                     navigate('/member/plans', { state: { highlightPlanId: item.planId } });
                                                 }}
-                                                className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-colors shadow-sm"
+                                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"
                                             >
-                                                Buy {item.planName}
+                                                <span>Buy {item.planName}</span>
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                             </button>
                                         )}
                                         {item.reason === 'No Active Plan' && (
@@ -478,14 +495,15 @@ const Referrals: React.FC = () => {
                                                     e.stopPropagation();
                                                     navigate('/member/plans');
                                                 }}
-                                                className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition-colors shadow-sm"
+                                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"
                                             >
-                                                Buy Any Plan
+                                                <span>Buy Any Plan</span>
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                                             </button>
                                         )}
                                     </div>
                                 ))}
-                                <div className="border-t border-yellow-200 dark:border-yellow-800 pt-1 text-[10px] text-yellow-600 dark:text-yellow-500 font-bold text-right">
+                                <div className="border-t border-yellow-200 dark:border-yellow-800 pt-1 text-[10px] text-yellow-600 dark:text-yellow-500 font-bold text-right mt-1">
                                     Total Held: {formatCurrency(held, currentUser?.currency)}
                                 </div>
                             </div>
@@ -663,8 +681,8 @@ const Referrals: React.FC = () => {
                 </div>
             )}
 
-            {/* Plan Details Card (Hide if viewing global held commissions) */}
-            {selectedPlanDetails && viewMode !== 'held' && (
+            {/* Plan Details Card (Hide if viewing global held or all) */}
+            {selectedPlanDetails && viewMode !== 'held' && viewMode !== 'all' && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6 animate-fade-in">
                     <div className="flex flex-col md:flex-row">
                         {/* Plan Header & Price */}
@@ -725,8 +743,8 @@ const Referrals: React.FC = () => {
             {/* Share Buttons */}
             {viewMode !== 'held' && <ShareButtons url={referralLink} title="Join my network on SmartEarning!" />}
 
-            {/* Detailed Stats */}
-            {viewMode !== 'held' && (
+            {/* Detailed Stats (Only visible in standard modes) */}
+            {viewMode !== 'held' && viewMode !== 'all' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
                         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Commission</p>
@@ -845,8 +863,8 @@ const Referrals: React.FC = () => {
                                 <div>
                                     <h4 className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Global Held Commissions</h4>
                                     <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                        This list shows ALL pending commissions from your network, regardless of the selected plan.
-                                        Usually, purchasing the specific plan mentioned in the details will release these funds to your wallet immediately.
+                                        This list shows ALL pending commissions from your network, regardless of the selected plan context.
+                                        Purchasing the required plan mentioned below will release these funds to your wallet.
                                     </p>
                                 </div>
                              </div>
