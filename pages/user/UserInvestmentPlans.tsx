@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../hooks/useData';
-import { InvestmentPlan, Status, currencySymbols } from '../../types';
+import { InvestmentPlan, Status, currencySymbols, formatCurrency } from '../../types';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -16,7 +16,7 @@ const CrownIcon = () => <svg className="w-6 h-6 text-yellow-400" fill="currentCo
 
 const UserInvestmentPlans: React.FC = () => {
   const { state, dispatch } = useData();
-  const { investmentPlans, currentUser, transactions, settings, rules } = state;
+  const { investmentPlans, currentUser, transactions, settings, rules, users } = state;
   const navigate = useNavigate();
   const location = useLocation();
   const highlightPlanId = location.state?.highlightPlanId;
@@ -76,6 +76,21 @@ const UserInvestmentPlans: React.FC = () => {
         }, 500);
     }
   }, [highlightPlanId]);
+
+  // Calculate User Stats for Rule Checking
+  const userStats = useMemo(() => {
+      if (!currentUser) return { totalEarnings: 0, directReferrals: 0 };
+      
+      const totalEarnings = transactions
+          .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Approved')
+          .reduce((sum, t) => sum + t.amount, 0);
+
+      const directReferrals = users.filter(u => 
+          u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase()
+      ).length;
+
+      return { totalEarnings, directReferrals };
+  }, [currentUser, transactions, users]);
 
   if (!currentUser) {
     return <div>Loading user data...</div>;
@@ -193,13 +208,28 @@ const UserInvestmentPlans: React.FC = () => {
       const missingPlans = requiredPlanDetails.filter(p => !userPlanIds.includes(p._id));
       const metPlans = requiredPlanDetails.filter(p => userPlanIds.includes(p._id));
       
-      const isLocked = missingPlans.length > 0;
+      // Check Earnings
+      const earningShortfall = rule.minTotalEarnings > 0 && userStats.totalEarnings < rule.minTotalEarnings 
+          ? rule.minTotalEarnings - userStats.totalEarnings 
+          : 0;
+          
+      const earningExceeded = rule.maxTotalEarnings && rule.maxTotalEarnings > 0 && userStats.totalEarnings > rule.maxTotalEarnings;
+
+      // Check Referrals
+      const referralShortfall = rule.minDirectReferrals > 0 && userStats.directReferrals < rule.minDirectReferrals
+          ? rule.minDirectReferrals - userStats.directReferrals
+          : 0;
+
+      const isLocked = missingPlans.length > 0 || earningShortfall > 0 || !!earningExceeded || referralShortfall > 0;
 
       return {
           hasRule: true,
           isLocked,
           missingPlans,
           metPlans,
+          earningShortfall,
+          earningExceeded,
+          referralShortfall,
           rule
       };
   };
@@ -342,13 +372,33 @@ const UserInvestmentPlans: React.FC = () => {
                             {/* ALERTS SECTION */}
                             <div className="space-y-3">
                                 {/* Rule Lock Alert */}
-                                {prerequisites && prerequisites.hasRule && (prerequisites.missingPlans.length > 0 || prerequisites.metPlans.length > 0) && !isOwned && (
-                                    <div className={`p-3 rounded-lg border text-xs ${isLocked ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200' : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200'}`}>
-                                        <div className="flex items-center gap-1 font-bold mb-1">
-                                            {isLocked ? <LockIcon /> : <CheckIcon className="w-4 h-4" />}
-                                            {isLocked ? "Prerequisites Missing" : "Prerequisites Met"}
+                                {prerequisites && prerequisites.hasRule && isLocked && !isOwned && (
+                                    <div className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200 text-xs">
+                                        <div className="flex items-center gap-1 font-bold mb-1 border-b border-red-200 dark:border-red-800 pb-1">
+                                            <LockIcon /> Prerequisites Missing
                                         </div>
-                                        {prerequisites.missingPlans.length > 0 && <div>Missing: {prerequisites.missingPlans.map(p => p.name).join(', ')}</div>}
+                                        <ul className="list-disc list-inside space-y-1 mt-1">
+                                            {prerequisites.missingPlans.length > 0 && (
+                                                <li>Required Plan{prerequisites.missingPlans.length > 1 ? 's' : ''}: <strong>{prerequisites.missingPlans.map(p => p.name).join(', ')}</strong></li>
+                                            )}
+                                            {prerequisites.earningShortfall > 0 && (
+                                                <li>Earn <strong>{formatCurrency(prerequisites.earningShortfall, currentUser.currency)}</strong> more to unlock</li>
+                                            )}
+                                            {prerequisites.earningExceeded && (
+                                                <li>Max earnings limit reached for this plan</li>
+                                            )}
+                                            {prerequisites.referralShortfall > 0 && (
+                                                <li>Refer <strong>{prerequisites.referralShortfall}</strong> more people</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                                
+                                {prerequisites && prerequisites.hasRule && !isLocked && !isOwned && (
+                                     <div className="p-3 rounded-lg border bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200 text-xs">
+                                        <div className="flex items-center gap-1 font-bold">
+                                            <CheckIcon className="w-4 h-4" /> Prerequisites Met
+                                        </div>
                                     </div>
                                 )}
 
