@@ -364,7 +364,8 @@ const Referrals: React.FC = () => {
         hasChildren?: boolean;
         isTree?: boolean;
         isHeldView?: boolean; // New prop for held view rendering
-    }> = ({ node, toggleNode, isCollapsed, hasChildren, isTree, isHeldView }) => {
+        isAllView?: boolean; // New prop for All view
+    }> = ({ node, toggleNode, isCollapsed, hasChildren, isTree, isHeldView, isAllView }) => {
         const { user } = node;
         const level = 'level' in node ? node.level : undefined;
         
@@ -372,12 +373,52 @@ const Referrals: React.FC = () => {
         let held = 0;
         let breakdown: { reason: string, planId?: string, planName?: string, amount: number }[] = [];
         let earningSourcePlanId: string | undefined;
+        let commissionSourcePlans: string[] = [];
 
         if (isHeldView) {
             // In Held View, use global data
             const stats = globalHeldData.stats.get(user._id);
             held = stats?.total || 0;
             breakdown = stats?.breakdown || [];
+        } else if (isAllView) {
+            // In All Referrals View, show lifetime commission from this user
+            const allCommissions = transactions.filter(t => 
+                t.userId === currentUser?._id &&
+                t.type === 'Commission' &&
+                t.sourceUserId === user._id &&
+                t.status === 'Approved'
+            );
+            earned = allCommissions.reduce((sum, t) => sum + t.amount, 0);
+            
+            // Extract distinct plans that generated commission
+            const planIds = new Set(allCommissions.map(t => t.relatedPlanId).filter(Boolean));
+            commissionSourcePlans = Array.from(planIds).map(id => {
+                const plan = investmentPlans.find(p => p._id === id);
+                if (!plan) return 'Unknown Plan';
+                
+                let displayName = plan.name;
+                
+                // If plan currency differs from user currency, find equivalent
+                if (currentUser && plan.currency !== currentUser.currency && settings.planEquivalencyGroups) {
+                     const group = settings.planEquivalencyGroups.find(g => 
+                        g.usdPlanId === plan._id || 
+                        g.pkrPlanId === plan._id || 
+                        g.eurPlanId === plan._id
+                    );
+                    
+                    if (group) {
+                        const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
+                        const targetId = group[targetKey];
+                        if (targetId && targetId !== plan._id) {
+                             const equivPlan = investmentPlans.find(p => p._id === targetId);
+                             if (equivPlan) {
+                                 displayName = `${plan.name} (Equiv: ${equivPlan.name})`;
+                             }
+                        }
+                    }
+                }
+                return displayName;
+            });
         } else {
             // In normal view, use context-aware data
             const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
@@ -395,7 +436,7 @@ const Referrals: React.FC = () => {
         const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
-            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView ? 'border-l-yellow-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
+            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView ? 'border-l-yellow-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {/* Only show expand button in Tree view if has children */}
@@ -428,6 +469,15 @@ const Referrals: React.FC = () => {
                                     <p className="text-yellow-600 dark:text-yellow-500 font-bold">
                                         Action Required
                                     </p>
+                                ) : isAllView ? (
+                                     commissionSourcePlans.length > 0 ? (
+                                        <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
+                                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
+                                            <span>{commissionSourcePlans.join(', ')}</span>
+                                        </p>
+                                     ) : (
+                                        <p className="text-gray-400">No commission generated</p>
+                                     )
                                 ) : (
                                     <>
                                     {sourcePlan ? (
@@ -465,7 +515,7 @@ const Referrals: React.FC = () => {
                     <div className="flex flex-col items-end gap-1 w-full sm:w-auto text-right pl-9 sm:pl-0">
                         {earned > 0 && (
                             <div>
-                                <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Commission</p>
+                                <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">{isAllView ? 'Total Earned' : 'Commission'}</p>
                                 <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(earned, currentUser?.currency || 'USD')}</p>
                             </div>
                         )}
@@ -885,7 +935,7 @@ const Referrals: React.FC = () => {
                                 Complete Referral List ({allNodes.length})
                             </h3>
                             {allNodes.length > 0 ? allNodes.map(node => (
-                                <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />
+                                <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isAllView={true} />
                             )) : (
                                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                                     <p>No referrals found.</p>
