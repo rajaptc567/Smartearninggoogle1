@@ -236,8 +236,6 @@ export interface FaqItem {
 export interface HomepagePaymentLogo {
     name: string;
     logoUrl: string;
-    size?: 'small' | 'medium' | 'large';
-    zoom?: number; // Scale percentage, default 100
 }
 
 export interface HomepageContent {

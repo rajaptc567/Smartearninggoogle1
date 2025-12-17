@@ -1,148 +1,170 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useData } from '../hooks/useData';
 import Button from '../components/ui/Button';
+import { useData } from '../hooks/useData';
+import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
-import { InvestmentPlan, HomepageContent, FaqItem, formatCurrency } from '../types';
 
-// Icons
-const GenericPaymentIcon = () => <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
-const SecureIcon = () => <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>;
-const NetworkIcon = () => <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
-const GrowthIcon = () => <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
-const UsdIcon = () => <span className="text-3xl font-bold">$</span>;
-const EurIcon = () => <span className="text-3xl font-bold">€</span>;
-const PkrIcon = () => <span className="text-3xl font-bold">₨</span>;
-const TrashIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
-const PlusIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
-const CheckIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
-
-// Helper Components
-const EditBar: React.FC<{ onSave: () => void; onExit: () => void; isSaving: boolean; isDirty: boolean }> = ({ onSave, onExit, isSaving, isDirty }) => (
-    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 shadow-lg z-50 flex justify-between items-center animate-slide-up">
-        <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
-            {isDirty ? 'You have unsaved changes.' : 'Editing Mode Active'}
-        </div>
-        <div className="flex gap-4">
-            <Button variant="secondary" onClick={onExit}>Exit</Button>
-            <Button onClick={onSave} disabled={isSaving || !isDirty}>
-                {isSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
-        </div>
-    </div>
-);
-
+// --- Reusable Editable Text Component ---
 interface EditableTextProps {
-    editMode: boolean;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-    tag?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'span' | 'div';
-    multiline?: boolean;
-    className?: string;
+  editMode: boolean;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  tag?: React.ElementType;
+  className?: string;
+  multiline?: boolean;
 }
 
-const EditableText: React.FC<EditableTextProps> = ({ editMode, value, onChange, tag: Tag = 'div', multiline = false, className = '' }) => {
+const EditableText: React.FC<EditableTextProps> = ({ editMode, value, onChange, tag = 'p', className = '', multiline = false }) => {
+    const Tag = tag;
+    const commonClasses = "transition-all duration-200";
+    const editClasses = "bg-white/10 border border-dashed border-blue-400 rounded-md p-1 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white";
+
     if (editMode) {
-        if (multiline) {
-            return (
-                <textarea 
-                    value={value} 
-                    onChange={onChange} 
-                    className={`w-full bg-yellow-50 dark:bg-yellow-900/10 border border-dashed border-yellow-300 dark:border-yellow-700 rounded p-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none ${className}`} 
-                    rows={3}
-                />
-            );
-        }
-        return (
-            <input 
-                type="text" 
-                value={value} 
-                onChange={onChange} 
-                className={`w-full bg-yellow-50 dark:bg-yellow-900/10 border border-dashed border-yellow-300 dark:border-yellow-700 rounded p-1 focus:ring-2 focus:ring-yellow-400 focus:outline-none ${className}`} 
+        return multiline ? (
+            <textarea
+                value={value}
+                onChange={onChange}
+                className={`${commonClasses} ${editClasses} resize-y min-h-[60px] w-full ${className}`}
+            />
+        ) : (
+            <input
+                type="text"
+                value={value}
+                onChange={onChange}
+                className={`${commonClasses} ${editClasses} w-full ${className}`}
             />
         );
     }
-    return <Tag className={className}>{value}</Tag>;
+    return <Tag className={`${commonClasses} ${className}`}>{value}</Tag>;
 };
 
-const MLMDiagram = () => (
-    <div className="flex flex-col items-center justify-center py-8">
-        <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg z-10 relative">You</div>
-        <div className="h-8 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-        <div className="w-64 h-0.5 bg-gray-300 dark:bg-gray-600 relative">
-            <div className="absolute left-0 top-0 w-0.5 h-4 bg-gray-300 dark:bg-gray-600 transform -translate-y-full"></div> {/* Correction for line connection */}
-        </div>
-        <div className="flex justify-between w-80 -mt-0.5"> {/* Overlap slightly */}
-             <div className="flex flex-col items-center">
-                <div className="h-8 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shadow-md">L1</div>
-                <div className="h-4 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="w-24 border-t border-gray-300 dark:border-gray-600"></div>
-                <div className="flex justify-between w-24">
-                    <div className="flex flex-col items-center">
-                        <div className="h-4 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                        <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs shadow-sm">L2</div>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <div className="h-4 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                        <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs shadow-sm">L2</div>
-                    </div>
-                </div>
-             </div>
-             
-             <div className="flex flex-col items-center">
-                <div className="h-8 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shadow-md">L1</div>
-             </div>
-
-             <div className="flex flex-col items-center">
-                <div className="h-8 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white font-bold shadow-md">L1</div>
-                <div className="h-4 w-0.5 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs shadow-sm">L2</div>
-             </div>
-        </div>
+// --- Floating Edit Bar ---
+interface EditBarProps {
+    onSave: () => void;
+    onExit: () => void;
+    isSaving: boolean;
+    isDirty: boolean;
+}
+const EditBar: React.FC<EditBarProps> = ({ onSave, onExit, isSaving, isDirty }) => (
+    <div className="fixed bottom-5 right-5 z-[100] bg-gray-900/80 backdrop-blur-sm p-3 rounded-lg shadow-2xl flex gap-3 border border-gray-700">
+        <Button onClick={onSave} disabled={isSaving || !isDirty} size="sm">
+            {isSaving ? 'Saving...' : 'Save Changes'}
+        </Button>
+        <Button variant="secondary" onClick={onExit} size="sm">Exit Edit Mode</Button>
     </div>
 );
 
+
+// --- SVG Icon Components for this page ---
+const CheckIcon = () => <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
+const SecureIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
+const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+const GrowthIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+const UsdIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /><path d="M12 12a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" /></svg>;
+const EurIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.121 15.536A9.004 9.004 0 0112 16.5c-2.43 0-4.63-.92-6.287-2.464m12.574-3.072a9.004 9.004 0 00-12.574 0M14.121 8.464A9.004 9.004 0 0112 7.5c-2.43 0-4.63.92-6.287 2.464" /></svg>;
+const PkrIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>; 
+const PlusIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
+const TrashIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
+const GenericPaymentIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+
 // Reusable Payment Method Card Component
-const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string, size?: 'small' | 'medium' | 'large', zoom?: number }; colorStyle: string }> = ({ pm, colorStyle }) => {
-    const sizeClasses = {
-        small: 'w-32 h-24 md:w-36 md:h-28 p-3',
-        medium: 'w-40 h-32 md:w-48 md:h-36 p-4',
-        large: 'w-56 h-40 md:w-64 md:h-48 p-6'
-    };
-    
-    const imgHeightClass = {
-        small: 'h-10 md:h-12',
-        medium: 'h-14 md:h-16',
-        large: 'h-20 md:h-24'
-    };
+const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center w-40 h-32 md:w-48 md:h-36 transition-all duration-300 transform hover:scale-105 hover:shadow-md group">
+        {pm.logoUrl ? (
+            <div className={`w-full h-16 flex items-center justify-center mb-3 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300`}>
+                <img src={pm.logoUrl} alt={pm.name} className="max-w-full max-h-full object-contain" title={pm.name} />
+            </div>
+        ) : (
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3 text-gray-400">
+                <GenericPaymentIcon />
+            </div>
+        )}
+        <span className="text-xs md:text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">{pm.name}</span>
+    </div>
+);
 
-    const currentSize = pm.size || 'medium';
-    const zoomScale = (pm.zoom || 100) / 100;
+// --- MLM Diagram Component ---
+const MLMDiagram = () => ( 
+    <div className="flex justify-center items-center p-2 rounded-lg">
+        <svg viewBox="0 0 500 320" className="w-full h-auto max-w-2xl drop-shadow-xl">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a" /></marker>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{stopColor: '#3b82f6', stopOpacity:1}} /><stop offset="100%" style={{stopColor: '#2563eb', stopOpacity:1}} /></linearGradient>
+                <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{stopColor: '#10b981', stopOpacity:1}} /><stop offset="100%" style={{stopColor: '#059669', stopOpacity:1}} /></linearGradient>
+                <linearGradient id="grad3" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{stopColor: '#8b5cf6', stopOpacity:1}} /><stop offset="100%" style={{stopColor: '#7c3aed', stopOpacity:1}} /></linearGradient>
+                <linearGradient id="grad4" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{stopColor: '#ef4444', stopOpacity:1}} /><stop offset="100%" style={{stopColor: '#dc2626', stopOpacity:1}} /></linearGradient>
+                <linearGradient id="grad5" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style={{stopColor: '#f59e0b', stopOpacity:1}} /><stop offset="100%" style={{stopColor: '#d97706', stopOpacity:1}} /></linearGradient>
+            </defs>
+            
+            {/* Connecting Lines */}
+            <path d="M250 55 L150 95" stroke="#94a3b8" strokeWidth="2" />
+            <path d="M250 55 L350 95" stroke="#94a3b8" strokeWidth="2" />
+            
+            <path d="M150 117 L100 155" stroke="#cbd5e1" strokeWidth="1.5" />
+            <path d="M150 117 L200 155" stroke="#cbd5e1" strokeWidth="1.5" />
+            
+            <path d="M100 177 L50 215" stroke="#e2e8f0" strokeWidth="1" />
+            <path d="M100 177 L150 215" stroke="#e2e8f0" strokeWidth="1" />
+            
+            <path d="M50 237 L25 275" stroke="#e2e8f0" strokeWidth="1" />
+            <path d="M50 237 L75 275" stroke="#e2e8f0" strokeWidth="1" />
 
-    return (
-        <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center transition-all duration-300 transform hover:scale-105 hover:shadow-md group overflow-hidden ${sizeClasses[currentSize]}`}>
-            {pm.logoUrl ? (
-                <div className={`w-full flex items-center justify-center mb-2 md:mb-3 ${imgHeightClass[currentSize]} ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300`}>
-                    <img 
-                        src={pm.logoUrl} 
-                        alt={pm.name} 
-                        className="max-w-full max-h-full object-contain transition-transform duration-300" 
-                        style={{ transform: `scale(${zoomScale})` }}
-                        title={pm.name} 
-                    />
-                </div>
-            ) : (
-                <div className={`w-12 h-12 md:w-16 md:h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3 text-gray-400`}>
-                    <GenericPaymentIcon />
-                </div>
-            )}
-            <span className={`font-semibold text-gray-700 dark:text-gray-300 text-center relative z-10 ${currentSize === 'small' ? 'text-[10px] md:text-xs' : 'text-xs md:text-sm'}`}>{pm.name}</span>
-        </div>
-    );
-};
+            <path d="M350 117 L300 155" stroke="#cbd5e1" strokeWidth="1.5" />
+            <path d="M350 117 L400 155" stroke="#cbd5e1" strokeWidth="1.5" />
+
+            <path d="M400 177 L350 215" stroke="#e2e8f0" strokeWidth="1" />
+            <path d="M400 177 L450 215" stroke="#e2e8f0" strokeWidth="1" />
+            
+            <path d="M450 237 L425 275" stroke="#e2e8f0" strokeWidth="1" />
+            <path d="M450 237 L475 275" stroke="#e2e8f0" strokeWidth="1" />
+
+            {/* Commission Flow Indicators */}
+            <g>
+                <path d="M25 260 Q 50 150 220 50" stroke="#16a34a" strokeWidth="2" fill="none" strokeDasharray="5,5" markerEnd="url(#arrowhead)" opacity="0.6"/>
+                <text x="100" y="160" fill="#10b981" fontSize="16" fontWeight="bold">$</text>
+                <text x="180" y="100" fill="#10b981" fontSize="16" fontWeight="bold">$</text>
+            </g>
+
+            {/* Nodes */}
+            <g>
+                <circle cx="250" cy="30" r="30" fill="url(#grad1)" stroke="white" strokeWidth="2"/>
+                <text x="250" y="35" fontFamily="sans-serif" fontSize="14" fontWeight="bold" fill="white" textAnchor="middle">You</text>
+            </g>
+
+            <g>
+                <circle cx="150" cy="95" r="25" fill="url(#grad2)" stroke="white" strokeWidth="2"/>
+                <text x="150" y="93" fontFamily="sans-serif" fontSize="9" fontWeight="bold" fill="white" textAnchor="middle">Direct Ref</text>
+                <text x="150" y="103" fontFamily="sans-serif" fontSize="10" fill="white" textAnchor="middle">(User A)</text>
+            </g>
+             <g>
+                <circle cx="350" cy="95" r="25" fill="url(#grad2)" stroke="white" strokeWidth="2"/>
+                <text x="350" y="93" fontFamily="sans-serif" fontSize="9" fontWeight="bold" fill="white" textAnchor="middle">Direct Ref</text>
+                <text x="350" y="103" fontFamily="sans-serif" fontSize="10" fill="white" textAnchor="middle">(User E)</text>
+            </g>
+
+            <g><circle cx="100" cy="155" r="22" fill="url(#grad3)" /><text x="100" y="152" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">Level 2</text><text x="100" y="162" fontFamily="sans-serif" fontSize="10" fill="white" textAnchor="middle">(User B)</text></g>
+            <g><circle cx="200" cy="155" r="16" fill="url(#grad3)" /><text x="200" y="158" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Lvl 2</text></g>
+            
+            <g><circle cx="50" cy="215" r="20" fill="url(#grad4)" /><text x="50" y="212" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Level 3</text><text x="50" y="222" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">(User C)</text></g>
+            <g><circle cx="150" cy="215" r="14" fill="url(#grad4)" /><text x="150" y="218" fontFamily="sans-serif" fontSize="7" fill="white" textAnchor="middle">Lvl 3</text></g>
+            
+            <g><circle cx="25" cy="275" r="18" fill="url(#grad5)" /><text x="25" y="272" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Level 4</text><text x="25" y="282" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">(User D)</text></g>
+            <g><circle cx="75" cy="275" r="12" fill="url(#grad5)" /><text x="75" y="278" fontFamily="sans-serif" fontSize="7" fill="white" textAnchor="middle">Lvl 4</text></g>
+
+            <g><circle cx="400" cy="155" r="22" fill="url(#grad3)" /><text x="400" y="152" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">Level 2</text><text x="400" y="162" fontFamily="sans-serif" fontSize="10" fill="white" textAnchor="middle">(User F)</text></g>
+            <g><circle cx="300" cy="155" r="16" fill="url(#grad3)" /><text x="300" y="158" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Lvl 2</text></g>
+
+            <g><circle cx="450" cy="215" r="20" fill="url(#grad4)" /><text x="450" y="212" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Level 3</text><text x="450" y="222" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">(User G)</text></g>
+            <g><circle cx="350" cy="215" r="14" fill="url(#grad4)" /><text x="350" y="218" fontFamily="sans-serif" fontSize="7" fill="white" textAnchor="middle">Lvl 3</text></g>
+            
+            <g><circle cx="475" cy="275" r="18" fill="url(#grad5)" /><text x="475" y="272" fontFamily="sans-serif" fontSize="8" fill="white" textAnchor="middle">Level 4</text><text x="475" y="282" fontFamily="sans-serif" fontSize="9" fill="white" textAnchor="middle">(User H)</text></g>
+            <g><circle cx="425" cy="275" r="12" fill="url(#grad5)" /><text x="425" y="278" fontFamily="sans-serif" fontSize="7" fill="white" textAnchor="middle">Lvl 4</text></g>
+        </svg>
+    </div>
+);
+
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
