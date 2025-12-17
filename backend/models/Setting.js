@@ -56,7 +56,9 @@ const FaqSchema = new mongoose.Schema({
 // New Schema for Manual Payment Logos on Homepage
 const HomepagePaymentLogoSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    logoUrl: { type: String, required: true } // Can be URL or Base64
+    logoUrl: { type: String, required: true }, // Can be URL or Base64
+    size: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
+    zoom: { type: Number, default: 100 }
 }, { _id: false });
 
 const HomepageContentSchema = new mongoose.Schema({

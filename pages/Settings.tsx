@@ -27,6 +27,8 @@ const Settings: React.FC = () => {
   const [newLogoName, setNewLogoName] = useState('');
   const [newLogoUrl, setNewLogoUrl] = useState(''); // Text input for URL
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
+  const [newLogoSize, setNewLogoSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [newLogoZoom, setNewLogoZoom] = useState<number>(100);
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
@@ -187,19 +189,40 @@ const Settings: React.FC = () => {
 
         setLocalSettings(prev => ({
             ...prev,
-            homepagePaymentLogos: [...(prev.homepagePaymentLogos || []), { name: newLogoName, logoUrl: logoData }]
+            homepagePaymentLogos: [...(prev.homepagePaymentLogos || []), { 
+                name: newLogoName, 
+                logoUrl: logoData, 
+                size: newLogoSize,
+                zoom: newLogoZoom
+            }]
         }));
         
         // Reset inputs
         setNewLogoName('');
         setNewLogoUrl('');
         setNewLogoFile(null);
+        setNewLogoSize('medium');
+        setNewLogoZoom(100);
         setIsDirty(true);
     };
 
     const handleRemoveLogo = (index: number) => {
         const newLogos = [...(localSettings.homepagePaymentLogos || [])];
         newLogos.splice(index, 1);
+        setLocalSettings(prev => ({ ...prev, homepagePaymentLogos: newLogos }));
+        setIsDirty(true);
+    };
+
+    const handleLogoSizeChange = (index: number, newSize: 'small' | 'medium' | 'large') => {
+        const newLogos = [...(localSettings.homepagePaymentLogos || [])];
+        newLogos[index] = { ...newLogos[index], size: newSize };
+        setLocalSettings(prev => ({ ...prev, homepagePaymentLogos: newLogos }));
+        setIsDirty(true);
+    };
+
+    const handleLogoZoomChange = (index: number, newZoom: number) => {
+        const newLogos = [...(localSettings.homepagePaymentLogos || [])];
+        newLogos[index] = { ...newLogos[index], zoom: newZoom };
         setLocalSettings(prev => ({ ...prev, homepagePaymentLogos: newLogos }));
         setIsDirty(true);
     };
@@ -570,17 +593,57 @@ const Settings: React.FC = () => {
                         {/* List of Existing Logos */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                             {(localSettings.homepagePaymentLogos || []).map((logo, index) => (
-                                <div key={index} className="relative p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-800 flex flex-col items-center group">
+                                <div key={index} className="relative p-3 border dark:border-gray-600 rounded bg-white dark:bg-gray-800 flex flex-col items-center group shadow-sm">
                                     <button 
                                         type="button" 
                                         onClick={() => handleRemoveLogo(index)}
-                                        className="absolute top-1 right-1 text-red-500 bg-gray-100 dark:bg-gray-700 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute top-1 right-1 text-red-500 bg-gray-100 dark:bg-gray-700 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
                                         title="Remove Logo"
                                     >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
-                                    <img src={logo.logoUrl} alt={logo.name} className="h-8 object-contain mb-1" />
-                                    <span className="text-xs text-center truncate w-full">{logo.name}</span>
+                                    
+                                    <div className="h-12 w-full flex items-center justify-center overflow-hidden mb-2 rounded bg-gray-50 dark:bg-gray-700/50">
+                                        <img 
+                                            src={logo.logoUrl} 
+                                            alt={logo.name} 
+                                            className="object-contain transition-transform duration-200"
+                                            style={{ transform: `scale(${(logo.zoom || 100) / 100})`, maxHeight: '100%', maxWidth: '100%' }}
+                                        />
+                                    </div>
+                                    
+                                    <span className="text-xs font-bold text-center truncate w-full mb-2">{logo.name}</span>
+                                    
+                                    <div className="w-full space-y-2">
+                                        {/* Size Selector */}
+                                        <div className="flex items-center justify-between gap-1">
+                                            <label className="text-[10px] text-gray-500">Size</label>
+                                            <select
+                                                value={logo.size || 'medium'}
+                                                onChange={(e) => handleLogoSizeChange(index, e.target.value as any)}
+                                                className="text-[10px] py-0.5 px-1 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white flex-grow"
+                                            >
+                                                <option value="small">Small</option>
+                                                <option value="medium">Medium</option>
+                                                <option value="large">Large</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Zoom Control */}
+                                        <div className="flex items-center gap-1">
+                                            <label className="text-[10px] text-gray-500 w-6">Zoom</label>
+                                            <input 
+                                                type="range" 
+                                                min="50" 
+                                                max="150" 
+                                                step="5"
+                                                value={logo.zoom || 100} 
+                                                onChange={(e) => handleLogoZoomChange(index, parseInt(e.target.value))}
+                                                className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-600 accent-blue-600"
+                                                title={`Zoom: ${logo.zoom || 100}%`}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -594,6 +657,29 @@ const Settings: React.FC = () => {
                                     placeholder="e.g. Bitcoin" 
                                     value={newLogoName} 
                                     onChange={(e) => setNewLogoName(e.target.value)} 
+                                    className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
+                                />
+                            </div>
+                            <div className="w-20">
+                                <label className="text-xs font-bold text-gray-500">Size</label>
+                                <select
+                                    value={newLogoSize}
+                                    onChange={(e) => setNewLogoSize(e.target.value as any)}
+                                    className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
+                                >
+                                    <option value="small">Small</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="large">Large</option>
+                                </select>
+                            </div>
+                            <div className="w-20">
+                                <label className="text-xs font-bold text-gray-500">Zoom (%)</label>
+                                <input 
+                                    type="number"
+                                    min="50"
+                                    max="200"
+                                    value={newLogoZoom}
+                                    onChange={(e) => setNewLogoZoom(parseInt(e.target.value))}
                                     className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
                                 />
                             </div>
