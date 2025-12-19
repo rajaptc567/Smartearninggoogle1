@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
-import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
+import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -34,8 +34,8 @@ const Referrals: React.FC = () => {
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
     
-    // View Tab State: 'commissions' (default) | 'tree' | 'inactive' | 'held' | 'all'
-    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'inactive' | 'held' | 'all'>('commissions');
+    // View Tab State: 'commissions' | 'tree' | 'overflow' | 'inactive' | 'held' | 'all'
+    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'inactive' | 'held' | 'all'>('commissions');
 
     // Sponsor Modal State
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
@@ -48,7 +48,6 @@ const Referrals: React.FC = () => {
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
-    // Reset view tab when plan changes, unless we are in 'held' or 'all' mode which are global
     useEffect(() => {
         if (viewMode !== 'held' && viewMode !== 'all') {
             setViewMode('commissions');
@@ -56,10 +55,8 @@ const Referrals: React.FC = () => {
         setHighlightedUserId(null);
     }, [selectedPlanId, viewMode]);
 
-    // Auto-scroll to highlighted user in tree view
     useEffect(() => {
         if (highlightedUserId && viewMode === 'tree') {
-            // Small timeout to allow DOM to render if switching views
             setTimeout(() => {
                 const element = document.getElementById(`node-${highlightedUserId}`);
                 if (element) {
@@ -69,7 +66,6 @@ const Referrals: React.FC = () => {
         }
     }, [highlightedUserId, viewMode, selectedPlanId]);
     
-    // Helper to get equivalent IDs for any plan
     const getEquivalentIds = useCallback((planId: string) => {
         const ids = new Set<string>();
         if (planId) {
@@ -88,7 +84,6 @@ const Referrals: React.FC = () => {
         return ids;
     }, [settings.planEquivalencyGroups]);
 
-    // Determine which plans are equivalent to the selected one
     const equivalentPlanIdsForSelected = useMemo(() => {
         return getEquivalentIds(selectedPlanId);
     }, [selectedPlanId, getEquivalentIds]);
@@ -98,12 +93,10 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // --- UPDATED: SLOT CALCULATION (Filtered by Selected Plan Ownership) ---
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        // A slot is used if a direct referral owns the selected plan or its equivalents
         const used = users.filter(u => 
             u.sponsor && 
             u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
@@ -113,7 +106,6 @@ const Referrals: React.FC = () => {
         return { used, limit };
     }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
 
-    // Helper to calculate max direct commission for display
     const renderMaxDirectCommission = (plan: InvestmentPlan) => {
         const comms = plan.directCommissions;
         if (!comms || comms.length === 0) return 'N/A';
@@ -128,24 +120,18 @@ const Referrals: React.FC = () => {
         return maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
     };
 
-    // --- GLOBAL HELD COMMISSIONS LOGIC ---
     const globalHeldData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
-
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number }[] }>();
-        
         transactions
             .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Pending')
             .forEach(t => {
                 if (!t.sourceUserId) return;
-                
                 const current = pendingMap.get(t.sourceUserId) || { total: 0, breakdown: [] };
                 current.total += t.amount;
-
                 let reason = "Pending Review";
                 let missingPlanId = undefined;
                 let missingPlanName = undefined;
-
                 if (currentUser.restrictions?.earning) {
                     reason = "Account Restricted";
                 } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
@@ -172,46 +158,34 @@ const Referrals: React.FC = () => {
                          reason = `Requires ${missingPlanName}`;
                      }
                 }
-
                 const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
                 if (existingEntry) {
                     existingEntry.amount += t.amount;
                 } else {
                     current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount });
                 }
-
                 pendingMap.set(t.sourceUserId, current);
             });
-
         const heldIds = Array.from(pendingMap.keys());
         const referrals = users.filter(u => heldIds.includes(u._id));
-        
         return { referrals, count: referrals.length, stats: pendingMap };
     }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users]);
 
-
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; earningSourcePlanId?: string } => {
-        if (!currentUser) return { earned: 0 };
-
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string } => {
+        if (!currentUser) return { earned: 0, held: 0 };
         const referralCommissions = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
             t.sourceUserId === referral._id &&
-            (t.relatedPlanId ? contextPlanIds.has(t.relatedPlanId) : false) 
+            (t.relatedPlanId ? contextPlanIds.has(t.relatedPlanId.toString()) : false) 
         );
-
-        const approvedTx = referralCommissions.filter(t => t.status === 'Approved');
-        const earned = approvedTx.reduce((sum, t) => sum + t.amount, 0);
-
+        const earned = referralCommissions.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+        const held = referralCommissions.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         let earningSourcePlanId: string | undefined;
-        if (approvedTx.length > 0) {
-            const tx = approvedTx[0];
-            if (tx.relatedPlanId) {
-                earningSourcePlanId = tx.relatedPlanId;
-            }
+        if (referralCommissions.length > 0) {
+            earningSourcePlanId = referralCommissions[0].relatedPlanId?.toString();
         }
-
-        return { earned, earningSourcePlanId };
+        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId };
     }, [currentUser, transactions]);
 
     const toggleNode = (userId: string) => {
@@ -232,28 +206,21 @@ const Referrals: React.FC = () => {
     const handleLocateSponsor = () => {
         if (!selectedSponsor) return;
         const currentInfo = getCommissionInfoForReferral(selectedSponsor, equivalentPlanIdsForSelected);
-        const isVisibleCurrently = currentInfo.earned > 0;
-
-        if (isVisibleCurrently) {
+        if (currentInfo.earned > 0) {
             setHighlightedUserId(selectedSponsor._id);
             setViewMode('tree');
             setIsSponsorModalOpen(false);
             return;
         }
-
         const foundPlan = uniqueActivePlans.find(plan => {
             const ids = getEquivalentIds(plan.planId);
             const info = getCommissionInfoForReferral(selectedSponsor, ids);
             return info.earned > 0;
         });
-
         if (foundPlan) {
             setIsSponsorModalOpen(false);
             setSelectedPlanId(foundPlan.planId);
-            setTimeout(() => {
-                setHighlightedUserId(selectedSponsor._id);
-                setViewMode('tree');
-            }, 100);
+            setTimeout(() => { setHighlightedUserId(selectedSponsor._id); setViewMode('tree'); }, 100);
         } else {
             const isInCurrentTree = allNodes.some(n => n.user._id === selectedSponsor._id);
             if (isInCurrentTree) {
@@ -266,8 +233,8 @@ const Referrals: React.FC = () => {
         }
     };
 
-    const { genealogyTree, directEarners, indirectEarners, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
+    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
+        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
             const directReferrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
@@ -290,21 +257,27 @@ const Referrals: React.FC = () => {
 
         const directEarnersList: GenealogyNode[] = [];
         const indirectEarnersList: GenealogyNode[] = [];
+        const overflowList: GenealogyNode[] = [];
         const inactiveList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
-            const { earned } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            if (earned > 0) {
-                if (node.level === 1) {
-                    directEarnersList.push(node);
-                } else {
-                    indirectEarnersList.push(node);
-                }
+            if (earned > 0 || held > 0) {
+                if (node.level === 1) directEarnersList.push(node);
+                else indirectEarnersList.push(node);
             } else {
-                if (!node.user.activePlans || node.user.activePlans.length === 0) {
-                    inactiveList.push(node);
-                }
+                // Check if user is in "Overflow" for the current plan
+                const isOverflow = transactions.some(t => 
+                    t.userId === currentUser._id && 
+                    t.sourceUserId === node.user._id && 
+                    t.status === 'Rejected' && 
+                    t.amount === 0 &&
+                    t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId.toString())
+                );
+
+                if (isOverflow && node.level === 1) overflowList.push(node);
+                else if (!node.user.activePlans || node.user.activePlans.length === 0) inactiveList.push(node);
             }
         });
 
@@ -312,7 +285,7 @@ const Referrals: React.FC = () => {
             t.userId === currentUser._id && 
             t.type === 'Commission' && 
             t.status === 'Approved' && 
-            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(t.relatedPlanId) : false) 
+            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(t.relatedPlanId.toString()) : false) 
         );
 
         const totalEarnings = relevantCommissions.reduce((sum, t) => sum + t.amount, 0);
@@ -321,16 +294,11 @@ const Referrals: React.FC = () => {
 
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
-                const { earned } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                const isRelevant = earned > 0;
-                
+                const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+                const isRelevant = earned > 0 || held > 0;
                 const filteredChildren = filterRecursive(node.children);
-                
-                if (isRelevant) {
-                    return { ...node, children: filteredChildren };
-                } else if (filteredChildren.length > 0) {
-                    return { ...node, children: filteredChildren, isSkipped: true } as any; 
-                }
+                if (isRelevant) return { ...node, children: filteredChildren };
+                else if (filteredChildren.length > 0) return { ...node, children: filteredChildren, isSkipped: true } as any; 
                 return null;
             }).filter((n): n is GenealogyNode => n !== null);
         };
@@ -340,6 +308,7 @@ const Referrals: React.FC = () => {
             genealogyTree: treeToRender,
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
+            overflowReferrals: overflowList,
             inactiveReferrals: inactiveList,
             allNodes: nodesList,
             networkStats: { 
@@ -353,38 +322,16 @@ const Referrals: React.FC = () => {
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
     const sponsorModalDetails = useMemo(() => {
-        if (!selectedSponsor || !currentUser) {
-            return {
-                sponsorEarnings: 0,
-                displaySourcePlanName: 'N/A',
-                earningSourcePlan: null,
-                sponsorPlanInfo: null,
-                planToView: null,
-                isLinkedPlanEquivalent: false
-            };
-        }
-
-        const allCommissionsFromSponsor = transactions.filter(t => 
-            t.userId === currentUser._id &&
-            t.type === 'Commission' &&
-            t.sourceUserId === selectedSponsor._id &&
-            t.status === 'Approved'
-        );
-
+        if (!selectedSponsor || !currentUser) return { sponsorEarnings: 0, displaySourcePlanName: 'N/A', earningSourcePlan: null, sponsorPlanInfo: null, planToView: null, isLinkedPlanEquivalent: false };
+        const allCommissionsFromSponsor = transactions.filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.sourceUserId === selectedSponsor._id && t.status === 'Approved');
         const sponsorEarnings = allCommissionsFromSponsor.reduce((sum, t) => sum + t.amount, 0);
         const lastCommission = [...allCommissionsFromSponsor].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id === lastCommission.relatedPlanId) : null;
-        
+        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id === lastCommission.relatedPlanId.toString()) : null;
         let displaySourcePlanName = earningSourcePlan?.name || 'Unknown Plan';
         let planToView = earningSourcePlan;
         let isLinkedPlanEquivalent = false;
-
         if (earningSourcePlan && currentUser.currency !== earningSourcePlan.currency && settings.planEquivalencyGroups) {
-            const group = settings.planEquivalencyGroups.find(g => 
-                g.usdPlanId === earningSourcePlan._id || 
-                g.pkrPlanId === earningSourcePlan._id || 
-                g.eurPlanId === earningSourcePlan._id
-            );
+            const group = settings.planEquivalencyGroups.find(g => g.usdPlanId === earningSourcePlan._id || g.pkrPlanId === earningSourcePlan._id || g.eurPlanId === earningSourcePlan._id);
             if (group) {
                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
                 const targetId = group[targetKey];
@@ -392,22 +339,12 @@ const Referrals: React.FC = () => {
                     const equivPlan = investmentPlans.find(p => p._id === targetId);
                     if (equivPlan) {
                         planToView = equivPlan;
-                        if (selectedPlanId === targetId) {
-                             isLinkedPlanEquivalent = true;
-                        }
+                        if (selectedPlanId === targetId) isLinkedPlanEquivalent = true;
                     }
                 }
             }
         }
-
-        return {
-            sponsorEarnings,
-            displaySourcePlanName,
-            earningSourcePlan,
-            sponsorPlanInfo: earningSourcePlan,
-            planToView,
-            isLinkedPlanEquivalent
-        };
+        return { sponsorEarnings, displaySourcePlanName, earningSourcePlan, sponsorPlanInfo: earningSourcePlan, planToView, isLinkedPlanEquivalent };
     }, [selectedSponsor, currentUser, transactions, investmentPlans, settings, selectedPlanId]);
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, sponsorPlanInfo, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
@@ -420,7 +357,7 @@ const Referrals: React.FC = () => {
         isTree?: boolean;
         isHeldView?: boolean;
         isAllView?: boolean;
-    }> = ({ node, toggleNode, iCollapsed, hasChildren, isTree, isHeldView, isAllView }) => {
+    }> = ({ node, toggleNode, isCollapsed, hasChildren, isTree, isHeldView, isAllView }) => {
         const { user } = node;
         const level = 'level' in node ? node.level : undefined;
         
@@ -429,22 +366,18 @@ const Referrals: React.FC = () => {
         let breakdown: { reason: string, planId?: string, planName?: string, amount: number }[] = [];
         let earningSourcePlanId: string | undefined;
         let commissionSourcePlans: string[] = [];
+        let isHoldPosition = false;
 
         if (isHeldView) {
             const stats = globalHeldData.stats.get(user._id);
             held = stats?.total || 0;
             breakdown = stats?.breakdown || [];
         } else if (isAllView) {
-            const allCommissions = transactions.filter(t => 
-                t.userId === currentUser?._id &&
-                t.type === 'Commission' &&
-                t.sourceUserId === user._id &&
-                t.status === 'Approved'
-            );
+            const allCommissions = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allCommissions.reduce((sum, t) => sum + t.amount, 0);
             const planIds = new Set(allCommissions.map(t => t.relatedPlanId).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
-                const plan = investmentPlans.find(p => p._id === id);
+                const plan = investmentPlans.find(p => p._id === id.toString());
                 if (!plan) return 'Unknown Plan';
                 let displayName = plan.name;
                 if (currentUser && plan.currency !== currentUser.currency && settings.planEquivalencyGroups) {
@@ -463,24 +396,32 @@ const Referrals: React.FC = () => {
         } else {
             const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
             earned = info.earned;
+            held = info.held;
             earningSourcePlanId = info.earningSourcePlanId;
+            
+            // Check if this is a "Hold Position"
+            const relevantTx = transactions.find(t => 
+                t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && 
+                t.description.toLowerCase().includes('position') &&
+                t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId.toString())
+            );
+            if (relevantTx) isHoldPosition = true;
         }
 
         const isDirect = level === 1;
         const cardBorderClass = isDirect ? 'border-l-blue-500' : 'border-l-purple-500';
         const levelBadgeColor = isDirect ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
         const isHighlighted = highlightedUserId === user._id;
-
         const sourcePlan = earningSourcePlanId ? investmentPlans.find(p => p._id === earningSourcePlanId) : null;
         const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
-            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView ? 'border-l-yellow-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
+            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView || isHoldPosition ? 'border-l-amber-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
                             <button onClick={() => toggleNode(user._id)} className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors">
-                                {node.user._id ? (collapsedNodes.has(node.user._id) ? '+' : '−') : '−'}
+                                {collapsedNodes.has(user._id) ? '+' : '−'}
                             </button>
                         ) : (
                             <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 font-bold text-xs">{user.fullName.charAt(0)}</div>
@@ -489,7 +430,8 @@ const Referrals: React.FC = () => {
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <h4 className="font-bold text-gray-900 dark:text-white">{user.username}</h4>
                                 {level && <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${levelBadgeColor}`}>{isDirect ? 'Direct' : `Level ${level}`}</span>}
-                                {user.status !== Status.Active && <Badge status={user.status} />}
+                                {user.status !== Status.Active && <Badge status={user.status as Status} />}
+                                {isHoldPosition && <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-amber-200">🔒 Hold Position</span>}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
@@ -521,6 +463,12 @@ const Referrals: React.FC = () => {
                                 <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(earned, currentUser?.currency || 'USD')}</p>
                             </div>
                         )}
+                        {held > 0 && !isHeldView && (
+                             <div className="bg-amber-50 dark:bg-amber-900/20 px-3 py-1 rounded border border-amber-100 dark:border-amber-800">
+                                <p className="text-[10px] uppercase text-amber-800 dark:text-amber-200 font-bold tracking-wider">{isHoldPosition ? 'Reserved for Upgrade' : 'Pending Verification'}</p>
+                                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatCurrency(held, currentUser?.currency || 'USD')}</p>
+                            </div>
+                        )}
                         {isHeldView && breakdown.length > 0 ? (
                             <div className="bg-yellow-50 dark:bg-yellow-900/10 p-2 rounded border border-yellow-100 dark:border-yellow-800 space-y-2 w-full sm:w-auto">
                                 {breakdown.map((item, idx) => (
@@ -535,11 +483,6 @@ const Referrals: React.FC = () => {
                                 ))}
                                 <div className="border-t border-yellow-200 dark:border-yellow-800 pt-1 text-[10px] text-yellow-600 dark:text-yellow-500 font-bold text-right mt-1">Total Held: {formatCurrency(held, currentUser?.currency)}</div>
                             </div>
-                        ) : held > 0 ? (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded border border-yellow-100 dark:border-yellow-800">
-                                <p className="text-[10px] uppercase text-yellow-800 dark:text-yellow-200 font-bold tracking-wider">Total Held</p>
-                                <p className="text-lg font-bold text-yellow-600 dark:text-green-400">{formatCurrency(held, currentUser?.currency || 'USD')}</p>
-                            </div>
                         ) : null}
                         {earned === 0 && held === 0 && <span className="text-xs text-gray-400 italic">No commission</span>}
                     </div>
@@ -549,13 +492,7 @@ const Referrals: React.FC = () => {
     };
 
     const renderTreeNode = (node: GenealogyNode & { isSkipped?: boolean }) => {
-        if (node.isSkipped) {
-            return (
-                <React.Fragment key={node.user._id}>
-                    {node.children.map(child => renderTreeNode(child))}
-                </React.Fragment>
-            );
-        }
+        if (node.isSkipped) return <React.Fragment key={node.user._id}>{node.children.map(child => renderTreeNode(child))}</React.Fragment>;
         const isCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
         return (
@@ -565,11 +502,7 @@ const Referrals: React.FC = () => {
                 <div className="mb-2">
                     <ReferralCardContent node={node} toggleNode={toggleNode} isCollapsed={isCollapsed} hasChildren={hasChildren} isTree={true} />
                 </div>
-                {hasChildren && !isCollapsed && (
-                    <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">
-                        {node.children.map(child => renderTreeNode(child))}
-                    </ul>
-                )}
+                {hasChildren && !isCollapsed && <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">{node.children.map(child => renderTreeNode(child))}</ul>}
             </li>
         );
     };
@@ -594,93 +527,42 @@ const Referrals: React.FC = () => {
                     {uniqueActivePlans.map(plan => {
                         const isActive = selectedPlanId === plan.planId;
                         return (
-                            <button 
-                                key={plan.planId} 
-                                onClick={() => setSelectedPlanId(plan.planId)}
-                                className={`flex-1 min-w-[140px] py-2 px-4 rounded-md text-sm font-medium transition-all whitespace-nowrap border
-                                    ${isActive 
-                                        ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300 shadow-sm' 
-                                        : 'bg-transparent border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}
-                                `}
-                            >
-                                {plan.planName}
-                            </button>
+                            <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`flex-1 min-w-[140px] py-2 px-4 rounded-md text-sm font-medium transition-all whitespace-nowrap border ${isActive ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300 shadow-sm' : 'bg-transparent border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>{plan.planName}</button>
                         )
                     })}
                 </div>
             ) : (
                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="text-2xl">⚠️</span>
-                        <div>
-                            <h3 className="font-bold text-yellow-800 dark:text-yellow-200">No Active Plans</h3>
-                            <p className="text-xs text-yellow-700 dark:text-yellow-300">Purchase a plan to start earning commissions.</p>
-                        </div>
-                    </div>
+                    <div className="flex items-center gap-3"><span className="text-2xl">⚠️</span><div><h3 className="font-bold text-yellow-800 dark:text-yellow-200">No Active Plans</h3><p className="text-xs text-yellow-700 dark:text-yellow-300">Purchase a plan to start earning commissions.</p></div></div>
                     <Button size="sm" onClick={() => navigate('/member/plans')}>Buy Plan</Button>
                 </div>
             )}
 
-            {selectedPlanDetails && viewMode !== 'held' && viewMode !== 'all' && (
+            {selectedPlanDetails && (viewMode !== 'held' && viewMode !== 'all') && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6 animate-fade-in">
                     <div className="flex flex-col md:flex-row">
                         <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-row md:flex-col justify-between md:justify-center items-center gap-2 md:w-48 text-center shrink-0">
-                            <div>
-                                <h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">{selectedPlanDetails.name}</h3>
-                                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Plan Details</div>
-                            </div>
-                            <div className="text-right md:text-center">
-                                <span className="block text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
-                            </div>
+                            <div><h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">{selectedPlanDetails.name}</h3><div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Plan Details</div></div>
+                            <div className="text-right md:text-center"><span className="block text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span></div>
                         </div>
-
                         <div className="flex-1 p-3 md:p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2">
-                                <span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span>
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span>
-                            </div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2">
-                                <span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span>
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span>
-                            </div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2">
-                                <span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span>
-                                <span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span>
-                            </div>
-                            <div className="text-center md:text-left px-2">
-                                <span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Indirect</span>
-                                <div className="flex items-center justify-center md:justify-start gap-1.5"><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{selectedPlanDetails.indirectCommissions.length}</span><span className="text-xs text-gray-500">Levels</span></div>
-                            </div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span></div>
+                            <div className="text-center md:text-left px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Indirect</span><div className="flex items-center justify-center md:justify-start gap-1.5"><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{selectedPlanDetails.indirectCommissions.length}</span><span className="text-xs text-gray-500">Levels</span></div></div>
                         </div>
                     </div>
-                    
-                    {/* ACCURATE Referral Slot Progress Bar - Matches Network Overview */}
                     <div className="px-4 py-4 bg-blue-50/30 dark:bg-blue-900/10 border-t border-gray-100 dark:border-gray-700">
-                        <div className="flex justify-between items-center mb-2">
-                            <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Active Direct Referrals</h4>
-                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                                Slots: {slotStats.used} / {slotStats.limit === 0 ? '∞' : slotStats.limit} used
-                            </span>
-                        </div>
-                        <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                            <div 
-                                className={`h-full transition-all duration-1000 ease-out ${slotStats.limit > 0 && slotStats.used >= slotStats.limit ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
-                                style={{ width: `${slotStats.limit === 0 ? 100 : Math.min(100, (slotStats.used / slotStats.limit) * 100)}%` }}
-                            ></div>
-                        </div>
-                        {slotStats.limit > 0 && slotStats.used >= slotStats.limit && (
-                            <p className="text-[10px] text-red-500 font-bold mt-2 animate-pulse uppercase">Maximum direct slots reached for this plan level.</p>
-                        )}
-                        {slotStats.limit === 0 && (
-                            <p className="text-[10px] text-blue-500 font-bold mt-2 uppercase">You have unlimited direct slots for this plan!</p>
-                        )}
+                        <div className="flex justify-between items-center mb-2"><h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Active Direct Referrals</h4><span className="text-sm font-bold text-blue-600 dark:text-blue-400">Slots: {slotStats.used} / {slotStats.limit === 0 ? '∞' : slotStats.limit} used</span></div>
+                        <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner"><div className={`h-full transition-all duration-1000 ease-out ${slotStats.limit > 0 && slotStats.used >= slotStats.limit ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`} style={{ width: `${slotStats.limit === 0 ? 100 : Math.min(100, (slotStats.used / slotStats.limit) * 100)}%` }}></div></div>
+                        {slotStats.limit > 0 && slotStats.used >= slotStats.limit && <p className="text-[10px] text-red-500 font-bold mt-2 animate-pulse uppercase">Maximum direct slots reached for this plan level.</p>}
                     </div>
                 </div>
             )}
 
             <ShareButtons url={referralLink} title="Join my network on SmartEarning!" />
 
-            {viewMode !== 'held' && viewMode !== 'all' && (
+            {(viewMode !== 'held' && viewMode !== 'all') && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
                         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Commission</p>
@@ -704,6 +586,7 @@ const Referrals: React.FC = () => {
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-wrap gap-2">
                     <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Commission List</button>
                     <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Tree View</button>
+                    <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Overflow & Waiting ({overflowReferrals.length})</button>
                     <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Held Commissions ({globalHeldData.count})</button>
                     <button onClick={() => setViewMode('all')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>All Referrals ({allNodes.length})</button>
                     <button onClick={() => setViewMode('inactive')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'inactive' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Inactive Members</button>
@@ -711,17 +594,17 @@ const Referrals: React.FC = () => {
                 <div className="p-4 md:p-6 overflow-x-auto">
                     {viewMode === 'commissions' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div>
-                                <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-blue-500 rounded-full mr-2"></span>Direct Referrals (Level 1)</h3>
-                                {directEarners.length > 0 ? <div className="space-y-3">{directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="p-6 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg"><p className="text-gray-500 text-sm">No direct commissions yet.</p></div>}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-purple-500 rounded-full mr-2"></span>Indirect Team (Level 2+)</h3>
-                                {indirectEarners.length > 0 ? <div className="space-y-3">{indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="p-6 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg"><p className="text-gray-500 text-sm">No indirect commissions yet.</p></div>}
-                            </div>
+                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-blue-500 rounded-full mr-2"></span>Direct Referrals (Level 1)</h3>{directEarners.length > 0 ? <div className="space-y-3">{directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="p-6 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg"><p className="text-gray-500 text-sm">No direct commissions yet.</p></div>}</div>
+                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-purple-500 rounded-full mr-2"></span>Indirect Team (Level 2+)</h3>{indirectEarners.length > 0 ? <div className="space-y-3">{indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="p-6 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg"><p className="text-gray-500 text-sm">No indirect commissions yet.</p></div>}</div>
                         </div>
                     )}
                     {viewMode === 'tree' && (genealogyTree.length > 0 ? <ul className="space-y-4">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><span className="text-4xl mb-2">🌱</span><p>No earning network found for this plan.</p></div>)}
+                    {viewMode === 'overflow' && (
+                        <div className="space-y-3">
+                            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg mb-4 flex gap-3 items-start"><span className="text-xl">📊</span><div><h4 className="font-bold text-orange-800 dark:text-orange-200 text-sm">Overflow Referrals</h4><p className="text-xs text-orange-700 dark:text-orange-300 mt-1">These direct referrals joined when your direct slots for the {currentPlanName} plan were full. You can earn from them if they upgrade to a higher plan where you have open slots!</p></div></div>
+                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No overflow referrals for this plan.</p></div>}
+                        </div>
+                    )}
                     {viewMode === 'held' && <div className="space-y-3"><div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4 flex gap-3 items-start"><span className="text-xl">💡</span><div><h4 className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Global Held Commissions</h4><p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">This list shows ALL pending commissions from your network, regardless of the selected plan context. Purchasing the required plan mentioned below will release these funds to your wallet.</p></div></div>{globalHeldData.referrals.length > 0 ? globalHeldData.referrals.map(user => <ReferralCardContent key={user._id} node={{user}} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isHeldView={true} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No held commissions.</p></div>}</div>}
                     {viewMode === 'all' && <div className="space-y-3"><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-indigo-600 rounded-full mr-2"></span>Complete Referral List ({allNodes.length})</h3>{allNodes.length > 0 ? allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isAllView={true} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No referrals found.</p></div>}</div>}
                     {viewMode === 'inactive' && (inactiveReferrals.length > 0 ? <div className="space-y-3">{inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No inactive referrals found.</p></div>)}
