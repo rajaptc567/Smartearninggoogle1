@@ -96,7 +96,36 @@ const UserInvestmentPlans: React.FC = () => {
     return <div>Loading user data...</div>;
   }
   
-  const activePlans = investmentPlans.filter(p => p.status === Status.Active && p.currency === currentUser.currency);
+  // Sorted and filtered plans based on Admin preferences
+  const activePlans = useMemo(() => {
+      let list = investmentPlans.filter(p => p.status === Status.Active && p.currency === currentUser.currency);
+      
+      const sortType = settings.planSortType || 'price-asc';
+      
+      if (sortType === 'price-asc') {
+          list.sort((a, b) => a.price - b.price);
+      } else if (sortType === 'price-desc') {
+          list.sort((a, b) => b.price - a.price);
+      } else if (sortType === 'manual' && settings.manualPlanOrder) {
+          // Sort based on the index in the manualPlanOrder array
+          list.sort((a, b) => {
+              const indexA = settings.manualPlanOrder!.indexOf(a._id);
+              const indexB = settings.manualPlanOrder!.indexOf(b._id);
+              
+              // If both are in the manual order list, sort by index
+              if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+              
+              // If only one is in the list, that one comes first
+              if (indexA !== -1) return -1;
+              if (indexB !== -1) return 1;
+              
+              // If neither is in the list, fall back to price-asc
+              return a.price - b.price;
+          });
+      }
+      
+      return list;
+  }, [investmentPlans, currentUser.currency, settings]);
 
   const handlePurchaseClick = (plan: InvestmentPlan) => {
     setSelectedPlan(plan);
@@ -126,14 +155,11 @@ const UserInvestmentPlans: React.FC = () => {
     setSelectedPlan(null);
   }
 
-  // --- Smart Price Formatter ---
   const formatPrice = (amount: number, currency: string) => {
       const symbol = currencySymbols[currency] || currency;
-      // If it's a whole number, don't show decimals
       if (amount % 1 === 0) {
           return `${symbol} ${amount.toLocaleString()}`;
       }
-      // Otherwise show standard 2 decimals
       return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
@@ -152,7 +178,6 @@ const UserInvestmentPlans: React.FC = () => {
       return comms.length > 1 ? `Up to ${valStr}` : valStr;
   };
 
-  // Helper to calculate total held commission that would be unlocked by buying this plan
   const getHeldCommissionInfo = (planId: string) => {
       const pendingCommissions = transactions.filter(t => 
           t.userId === currentUser._id && 
@@ -194,7 +219,6 @@ const UserInvestmentPlans: React.FC = () => {
       return { totalHeld, count };
   };
 
-  // Helper to check rules
   const checkPrerequisites = (planId: string) => {
       const rule = rules.find(r => r.targetPlanId === planId && r.isActive !== false);
       if (!rule) return null;
@@ -206,16 +230,13 @@ const UserInvestmentPlans: React.FC = () => {
           .filter(Boolean) as InvestmentPlan[];
 
       const missingPlans = requiredPlanDetails.filter(p => !userPlanIds.includes(p._id));
-      const metPlans = requiredPlanDetails.filter(p => userPlanIds.includes(p._id));
       
-      // Check Earnings
       const earningShortfall = rule.minTotalEarnings > 0 && userStats.totalEarnings < rule.minTotalEarnings 
           ? rule.minTotalEarnings - userStats.totalEarnings 
           : 0;
           
       const earningExceeded = rule.maxTotalEarnings && rule.maxTotalEarnings > 0 && userStats.totalEarnings > rule.maxTotalEarnings;
 
-      // Check Referrals
       const referralShortfall = rule.minDirectReferrals > 0 && userStats.directReferrals < rule.minDirectReferrals
           ? rule.minDirectReferrals - userStats.directReferrals
           : 0;
@@ -226,7 +247,6 @@ const UserInvestmentPlans: React.FC = () => {
           hasRule: true,
           isLocked,
           missingPlans,
-          metPlans,
           earningShortfall,
           earningExceeded,
           referralShortfall,
@@ -249,13 +269,10 @@ const UserInvestmentPlans: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-6">
             {activePlans.map((plan, index) => {
                 const isOwned = currentUser.activePlans && currentUser.activePlans.some(p => p.planId === plan._id);
-                const isPopular = index === 1; // Highlight logic (can be made dynamic later)
+                const isPopular = index === 1; 
                 const isHighlighted = highlightPlanId === plan._id;
-                
-                // Select a theme cyclically
                 const theme = planThemes[index % planThemes.length];
-                
-                const { totalHeld, count } = getHeldCommissionInfo(plan._id);
+                const { totalHeld } = getHeldCommissionInfo(plan._id);
                 const prerequisites = checkPrerequisites(plan._id);
                 const isLocked = prerequisites?.isLocked;
                 const canAfford = currentUser.walletBalance >= plan.price;
@@ -278,10 +295,7 @@ const UserInvestmentPlans: React.FC = () => {
                                 : `hover:shadow-2xl ${theme.shadow}`
                             }`}
                     >
-                        {/* Header Gradient */}
                         <div className={`h-2 rounded-t-3xl bg-gradient-to-r ${theme.gradient}`}></div>
-
-                        {/* Popular Badge */}
                         {isPopular && (
                             <div className="absolute top-0 right-0 -mt-3 mr-4">
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-lg bg-gradient-to-r ${theme.gradient}`}>
@@ -290,7 +304,6 @@ const UserInvestmentPlans: React.FC = () => {
                                 </span>
                             </div>
                         )}
-                        
                         <div className="p-8 flex-grow flex flex-col">
                             <div className="mb-6">
                                 <h3 className="text-xl font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{plan.name}</h3>
@@ -303,8 +316,6 @@ const UserInvestmentPlans: React.FC = () => {
                                     {plan.description}
                                 </p>
                             </div>
-
-                            {/* Features List */}
                             <ul className="space-y-4 mb-8 flex-grow">
                                 {config.showDuration && (
                                     <li className="flex items-start">
@@ -359,7 +370,6 @@ const UserInvestmentPlans: React.FC = () => {
                                 {plan.customFeatures && plan.customFeatures.map((feature, i) => (
                                     <li key={i} className="flex items-start">
                                         <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${theme.bgLight} dark:bg-gray-700`}>
-                                            {/* Using standard check icon for features to maintain clean look */}
                                             <CheckIcon className={`w-4 h-4 ${theme.text}`} />
                                         </div>
                                         <span className="ml-3 text-sm text-gray-700 dark:text-gray-200 font-medium">
@@ -368,10 +378,7 @@ const UserInvestmentPlans: React.FC = () => {
                                     </li>
                                 ))}
                             </ul>
-                            
-                            {/* ALERTS SECTION */}
                             <div className="space-y-3">
-                                {/* Rule Lock Alert */}
                                 {prerequisites && prerequisites.hasRule && isLocked && !isOwned && (
                                     <div className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700 dark:bg-red-900/30 dark:border-red-800 dark:text-red-200 text-xs">
                                         <div className="flex items-center gap-1 font-bold mb-1 border-b border-red-200 dark:border-red-800 pb-1">
@@ -393,7 +400,6 @@ const UserInvestmentPlans: React.FC = () => {
                                         </ul>
                                     </div>
                                 )}
-                                
                                 {prerequisites && prerequisites.hasRule && !isLocked && !isOwned && (
                                      <div className="p-3 rounded-lg border bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200 text-xs">
                                         <div className="flex items-center gap-1 font-bold">
@@ -401,8 +407,6 @@ const UserInvestmentPlans: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Held Commission Alert */}
                                 {totalHeld > 0 && !isOwned && !isLocked && (
                                     <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-200 text-xs animate-pulse">
                                         <div className="font-bold flex items-center gap-1">
@@ -413,8 +417,6 @@ const UserInvestmentPlans: React.FC = () => {
                                 )}
                             </div>
                         </div>
-
-                        {/* Action Button */}
                         <div className="p-6 pt-0 mt-auto">
                            {isOwned ? (
                                <button disabled className="w-full py-3 px-4 rounded-xl font-bold text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed flex items-center justify-center gap-2">

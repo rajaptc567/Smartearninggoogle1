@@ -297,6 +297,9 @@ export interface Settings {
         value: number;
         unit: 'hours' | 'days' | 'weeks' | 'months';
     };
+    // Added planSortType and manualPlanOrder to support plan ordering features and fix TypeScript errors
+    planSortType?: 'price-asc' | 'price-desc' | 'manual';
+    manualPlanOrder?: string[];
     tickerSpeed: number;
     tickerContentSource: 'hybrid' | 'real_only' | 'demo_only';
     tickerEnabled?: boolean;
