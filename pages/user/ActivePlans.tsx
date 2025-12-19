@@ -1,5 +1,6 @@
 
 import React from 'react';
+// Import useNavigate from react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
@@ -8,7 +9,8 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, investmentPlans, settings, transactions } = state;
+    const { currentUser, users, investmentPlans, settings } = state;
+    // Initialize navigate function using useNavigate hook
     const navigate = useNavigate();
 
     if (!currentUser) {
@@ -21,6 +23,7 @@ const ActivePlans: React.FC = () => {
         const plan = investmentPlans.find(p => p._id === planId);
         const limit = plan?.directReferralLimit || 0;
         
+        // 1. Identify all equivalent plan IDs for this row
         const equivIds = new Set<string>();
         equivIds.add(planId);
         const group = settings.planEquivalencyGroups?.find(g =>
@@ -32,19 +35,12 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // Count unique direct referrals who have an Approved OR Pending (Hold) commission for this plan group
-        const used = users.filter(u => {
-            const isSponsored = u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase();
-            if (!isSponsored) return false;
-
-            return transactions.some(t => 
-                t.userId === currentUser._id &&
-                t.sourceUserId === u._id &&
-                t.type === 'Commission' &&
-                (t.status === 'Approved' || (t.status === 'Pending' && t.description.toLowerCase().includes('hold'))) &&
-                (t.relatedPlanId ? equivIds.has(t.relatedPlanId) : false)
-            );
-        }).length;
+        // 2. Count direct referrals who own any of those plan IDs
+        const used = users.filter(u => 
+            u.sponsor && 
+            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
+            u.activePlans?.some(ap => equivIds.has(ap.planId))
+        ).length;
 
         return { used, limit };
     };
