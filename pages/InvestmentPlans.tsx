@@ -944,7 +944,14 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             {formData.autoUpgrade?.enabled && (
                                 <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                     <option value="">- Select Plan -</option>
-                                    {state.investmentPlans.filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    {state.investmentPlans
+                                        .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
+                                        .map(p => (
+                                            <option key={p._id} value={p._id}>
+                                                {p.name} ({formatCurrency(p.price, p.currency)})
+                                            </option>
+                                        ))
+                                    }
                                 </select>
                             )}
                         </div>
