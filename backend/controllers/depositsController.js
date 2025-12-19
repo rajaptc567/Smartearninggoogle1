@@ -1,4 +1,5 @@
 
+
 import Deposit from '../models/Deposit.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -40,8 +41,8 @@ export const createDeposit = async (req, res) => {
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
-        // Check specific activity restriction or blocked/paused status
-        if (user.status === 'Blocked' || user.status === 'Paused' || (user.restrictions && user.restrictions.deposit)) {
+        // Check specific activity restriction or blocked status
+        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.deposit)) {
             return res.status(403).json({ success: false, error: `Deposits are currently disabled for your account.` });
         }
         
@@ -65,6 +66,8 @@ export const createDeposit = async (req, res) => {
                     error: `Deposit amount ${user.currency}${depositAmount} exceeds the remaining needed amount of ${user.currency}${remaining}.`
                 });
             }
+
+            // Logic proceeds...
         }
 
         if (req.file) {
