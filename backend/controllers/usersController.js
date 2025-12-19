@@ -664,17 +664,19 @@ export const purchasePlan = async (req, res) => {
                         }
                     }
 
-                    const referralCount = await Transaction.countDocuments({
+                    // Count distinct successful or held referrals (unique sourceUserIds) for accuracy
+                    const referralCount = (await Transaction.distinct('sourceUserId', {
                         userId: uplineUser._id,
                         type: 'Commission',
                         relatedPlanId: { $in: equivIds },
                         level: 1,
-                        status: 'Approved',
-                        amount: { $gt: 0 } 
-                    });
+                        status: { $in: ['Approved', 'Pending'] }
+                    })).length;
 
-                    // --- OVERFLOW LOGIC ---
+                    // --- OVERFLOW LOGIC: Check only if it's NOT a hold position ---
+                    // If slots 4 and 5 are hold positions, and limit is 5, slot 4 and 5 must NOT be rejected.
                     if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
+                         // This is truly an overflow (e.g. 6th person joining 5 slots)
                         await Notification.create({
                             userId: uplineUser._id,
                             message: `⚠️ Slot Limit Reached! Your referral ${user.username} purchased '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
@@ -705,7 +707,8 @@ export const purchasePlan = async (req, res) => {
                             const upName = nextPlan ? nextPlan.name : 'your next plan';
                             
                             eligibility.status = 'Pending';
-                            eligibility.message = `Position Held! Commission from slot #${referralCount + 1} (${user.username}) is reserved for your auto-upgrade to ${upName}.`;
+                            // Store the specific slot number in description so UI can display "Slot #4"
+                            eligibility.message = `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade to ${upName}.`;
                         }
                     } else {
                         commissionConfig = { type: 'percentage', value: 0 }; 
@@ -778,8 +781,9 @@ export const purchasePlan = async (req, res) => {
                     amount: finalCommissionAmount,
                     level: level + 1,
                     sourceUserId: user._id,
-                    description: eligibility.status === 'Pending' && level === 0 && plan.holdPosition?.slots.includes(referralCount + 1) 
-                        ? `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade`
+                    // Use Descriptive text if it's a hold position
+                    description: eligibility.status === 'Pending' && level === 0 && eligibility.message.includes('Hold Position')
+                        ? eligibility.message
                         : `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
                     status: eligibility.status,
                     relatedPlanId: plan._id,
