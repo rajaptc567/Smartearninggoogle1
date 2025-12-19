@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
 import Badge from '../../components/ui/Badge';
@@ -42,18 +42,22 @@ const Referrals: React.FC = () => {
     const [selectedSponsor, setSelectedSponsor] = useState<User | null>(null);
     const [selectedReferralForSponsorModal, setSelectedReferralForSponsorModal] = useState<User | null>(null);
 
+    // Track previous selectedPlanId to prevent tab resetting
+    const prevPlanId = useRef(selectedPlanId);
+
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
+            prevPlanId.current = uniqueActivePlans[0].planId;
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
-    // FIX: Only reset viewMode when the PLAN changes. 
-    // Removing 'viewMode' from dependencies prevents the "blink/reset" bug.
+    // Reset viewMode ONLY when a different plan is selected
     useEffect(() => {
-        if (selectedPlanId) {
+        if (selectedPlanId && selectedPlanId !== prevPlanId.current) {
             setViewMode('commissions');
             setHighlightedUserId(null);
+            prevPlanId.current = selectedPlanId;
         }
     }, [selectedPlanId]);
 
@@ -73,14 +77,14 @@ const Referrals: React.FC = () => {
         if (planId) {
             ids.add(planId);
             const group = settings.planEquivalencyGroups?.find(g =>
-                g.usdPlanId === planId ||
-                g.pkrPlanId === planId ||
-                g.eurPlanId === planId
+                String(g.usdPlanId) === planId ||
+                String(g.pkrPlanId) === planId ||
+                String(g.eurPlanId) === planId
             );
             if (group) {
-                if (group.usdPlanId) ids.add(group.usdPlanId);
-                if (group.pkrPlanId) ids.add(group.pkrPlanId);
-                if (group.eurPlanId) ids.add(group.eurPlanId);
+                if (group.usdPlanId) ids.add(String(group.usdPlanId));
+                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
+                if (group.eurPlanId) ids.add(String(group.eurPlanId));
             }
         }
         return ids;
@@ -102,7 +106,7 @@ const Referrals: React.FC = () => {
         const used = users.filter(u => 
             u.sponsor && 
             u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(ap.planId))
+            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(String(ap.planId)))
         ).length;
 
         return { used, limit };
@@ -124,7 +128,7 @@ const Referrals: React.FC = () => {
 
     const globalHeldData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
-        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number }[] }>();
+        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
         transactions
             .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Pending')
             .forEach(t => {
@@ -134,40 +138,42 @@ const Referrals: React.FC = () => {
                 let reason = "Pending Review";
                 let missingPlanId = undefined;
                 let missingPlanName = undefined;
+                let isHoldPosition = false;
 
-                if (t.description.toLowerCase().includes('position')) {
+                if (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')) {
                     reason = "Auto-Upgrade Reservation";
+                    isHoldPosition = true;
                 } else if (currentUser.restrictions?.earning) {
                     reason = "Account Restricted";
                 } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
                     reason = "No Active Plan";
                 } else if (settings.requirePlanMatchForCommission && t.relatedPlanId) {
-                     const reqIds = getEquivalentIds(t.relatedPlanId);
-                     const hasMatch = currentUser.activePlans?.some(p => reqIds.has(p.planId));
+                     const reqIds = getEquivalentIds(String(t.relatedPlanId));
+                     const hasMatch = currentUser.activePlans?.some(p => reqIds.has(String(p.planId)));
                      if (!hasMatch) {
-                         let targetPlan = investmentPlans.find(p => p._id === t.relatedPlanId);
+                         let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
                          if (settings.planEquivalencyGroups) {
                              const group = settings.planEquivalencyGroups.find(g => 
-                                g.usdPlanId === t.relatedPlanId || g.pkrPlanId === t.relatedPlanId || g.eurPlanId === t.relatedPlanId
+                                String(g.usdPlanId) === String(t.relatedPlanId) || String(g.pkrPlanId) === String(t.relatedPlanId) || String(g.eurPlanId) === String(t.relatedPlanId)
                              );
                              if (group) {
                                  const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
                                  if (group[targetKey]) {
-                                     const localPlan = investmentPlans.find(p => p._id === group[targetKey]);
+                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
                                      if (localPlan) targetPlan = localPlan;
                                  }
                              }
                          }
                          missingPlanName = targetPlan?.name || 'Required Plan';
                          missingPlanId = targetPlan?._id;
-                         reason = `Requires ${missingPlanName}`;
+                         reason = `Requires Upgrade to ${missingPlanName}`;
                      }
                 }
                 const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
                 if (existingEntry) {
                     existingEntry.amount += t.amount;
                 } else {
-                    current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount });
+                    current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount, isHoldPosition });
                 }
                 pendingMap.set(t.sourceUserId, current);
             });
@@ -176,21 +182,23 @@ const Referrals: React.FC = () => {
         return { referrals, count: referrals.length, stats: pendingMap };
     }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users]);
 
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string } => {
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
         const referralCommissions = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
             t.sourceUserId === referral._id &&
-            (t.relatedPlanId ? contextPlanIds.has(t.relatedPlanId.toString()) : false) 
+            (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
         const earned = referralCommissions.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralCommissions.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        const isHoldPosition = referralCommissions.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+        
         let earningSourcePlanId: string | undefined;
         if (referralCommissions.length > 0) {
             earningSourcePlanId = referralCommissions[0].relatedPlanId?.toString();
         }
-        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId };
+        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId, isHoldPosition };
     }, [currentUser, transactions]);
 
     const toggleNode = (userId: string) => {
@@ -278,7 +286,7 @@ const Referrals: React.FC = () => {
                     t.sourceUserId === node.user._id && 
                     t.status === 'Rejected' && 
                     t.amount === 0 &&
-                    t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId.toString())
+                    t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
                 );
 
                 if (isOverflow && node.level === 1) {
@@ -293,7 +301,7 @@ const Referrals: React.FC = () => {
             t.userId === currentUser._id && 
             t.type === 'Commission' && 
             t.status === 'Approved' && 
-            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(t.relatedPlanId.toString()) : false) 
+            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false) 
         );
 
         const totalEarnings = relevantCommissions.reduce((sum, t) => sum + t.amount, 0);
@@ -334,20 +342,20 @@ const Referrals: React.FC = () => {
         const allCommissionsFromSponsor = transactions.filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.sourceUserId === selectedSponsor._id && t.status === 'Approved');
         const sponsorEarnings = allCommissionsFromSponsor.reduce((sum, t) => sum + t.amount, 0);
         const lastCommission = [...allCommissionsFromSponsor].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id === lastCommission.relatedPlanId.toString()) : null;
+        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id === String(lastCommission.relatedPlanId)) : null;
         let displaySourcePlanName = earningSourcePlan?.name || 'Unknown Plan';
         let planToView = earningSourcePlan;
         let isLinkedPlanEquivalent = false;
         if (earningSourcePlan && currentUser.currency !== earningSourcePlan.currency && settings.planEquivalencyGroups) {
-            const group = settings.planEquivalencyGroups.find(g => g.usdPlanId === earningSourcePlan._id || g.pkrPlanId === earningSourcePlan._id || g.eurPlanId === earningSourcePlan._id);
+            const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === String(earningSourcePlan._id) || String(g.pkrPlanId) === String(earningSourcePlan._id) || String(g.eurPlanId) === String(earningSourcePlan._id));
             if (group) {
                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
                 const targetId = group[targetKey];
                 if (targetId) {
-                    const equivPlan = investmentPlans.find(p => p._id === targetId);
+                    const equivPlan = investmentPlans.find(p => p._id === String(targetId));
                     if (equivPlan) {
                         planToView = equivPlan;
-                        if (selectedPlanId === targetId) isLinkedPlanEquivalent = true;
+                        if (selectedPlanId === String(targetId)) isLinkedPlanEquivalent = true;
                     }
                 }
             }
@@ -371,32 +379,38 @@ const Referrals: React.FC = () => {
         
         let earned = 0;
         let held = 0;
-        let breakdown: { reason: string, planId?: string, planName?: string, amount: number }[] = [];
+        let breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] = [];
         let earningSourcePlanId: string | undefined;
         let commissionSourcePlans: string[] = [];
         let isHoldPosition = false;
+        let isOverflow = false;
 
         if (isHeldView) {
             const stats = globalHeldData.stats.get(user._id);
             held = stats?.total || 0;
             breakdown = stats?.breakdown || [];
-            if (breakdown.some(b => b.reason.includes('Reservation'))) isHoldPosition = true;
+            if (breakdown.some(b => b.isHoldPosition)) isHoldPosition = true;
         } else if (isAllView) {
             const allCommissions = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allCommissions.reduce((sum, t) => sum + t.amount, 0);
-            const planIds = new Set(allCommissions.map(t => t.relatedPlanId).filter(Boolean));
+            
+            // For All View, we also need to check if there are PENDING hold positions to correctly badge the user
+            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+            if (pendingHold) isHoldPosition = true;
+
+            const planIds = new Set(allCommissions.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
-                const plan = investmentPlans.find(p => p._id === id.toString());
+                const plan = investmentPlans.find(p => p._id === id);
                 if (!plan) return 'Unknown Plan';
                 let displayName = plan.name;
                 if (currentUser && plan.currency !== currentUser.currency && settings.planEquivalencyGroups) {
-                     const group = settings.planEquivalencyGroups.find(g => g.usdPlanId === plan._id || g.pkrPlanId === plan._id || g.eurPlanId === plan._id);
+                     const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === id || String(g.pkrPlanId) === id || String(g.eurPlanId) === id);
                     if (group) {
                         const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
                         const targetId = group[targetKey];
-                        if (targetId && targetId !== plan._id) {
-                             const equivPlan = investmentPlans.find(p => p._id === targetId);
-                             if (equivPlan) displayName = `${plan.name} (Equiv: ${equivPlan.name})`;
+                        if (targetId && String(targetId) !== id) {
+                             const equivPlan = investmentPlans.find(p => p._id === String(targetId));
+                             if (equivPlan) displayName = `${plan.name} (Equiv to ${equivPlan.name})`;
                         }
                     }
                 }
@@ -407,23 +421,28 @@ const Referrals: React.FC = () => {
             earned = info.earned;
             held = info.held;
             earningSourcePlanId = info.earningSourcePlanId;
+            isHoldPosition = info.isHoldPosition || false;
             
-            const relevantTx = transactions.find(t => 
-                t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && 
-                t.description.toLowerCase().includes('position')
+            // Check specifically for overflow (Rejected $0 tx)
+            const overflowTx = transactions.find(t => 
+                t.userId === currentUser?._id && 
+                t.sourceUserId === user._id && 
+                t.status === 'Rejected' && 
+                t.amount === 0 &&
+                (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false)
             );
-            if (relevantTx) isHoldPosition = true;
+            if (overflowTx) isOverflow = true;
         }
 
         const isDirect = level === 1;
         const cardBorderClass = isDirect ? 'border-l-blue-500' : 'border-l-purple-500';
         const levelBadgeColor = isDirect ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
         const isHighlighted = highlightedUserId === user._id;
-        const sourcePlan = earningSourcePlanId ? investmentPlans.find(p => p._id === earningSourcePlanId) : null;
+        const sourcePlan = earningSourcePlanId ? investmentPlans.find(p => p._id === String(earningSourcePlanId)) : null;
         const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
-            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView || isHoldPosition ? 'border-l-amber-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
+            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView || isHoldPosition ? 'border-l-amber-500' : isOverflow ? 'border-l-orange-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
@@ -438,7 +457,8 @@ const Referrals: React.FC = () => {
                                 <h4 className="font-bold text-gray-900 dark:text-white">{user.username}</h4>
                                 {level && <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${levelBadgeColor}`}>{isDirect ? 'Direct' : `Level ${level}`}</span>}
                                 {user.status !== Status.Active && <Badge status={user.status as Status} />}
-                                {isHoldPosition && <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-amber-200">🔒 Hold Position</span>}
+                                {isHoldPosition && <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-amber-200 flex items-center gap-1"><span className="text-xs">🔒</span> Hold Position</span>}
+                                {isOverflow && <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200 flex items-center gap-1"><span className="text-xs">⚠️</span> Overflow</span>}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
@@ -447,17 +467,17 @@ const Referrals: React.FC = () => {
                                      commissionSourcePlans.length > 0 ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
                                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
-                                            <span>History: {commissionSourcePlans.join(', ')}</span>
+                                            <span>Purchased: {commissionSourcePlans.join(', ')}</span>
                                         </p>
-                                     ) : <p className="text-gray-400">No commission generated</p>
+                                     ) : <p className="text-gray-400">{isHoldPosition ? 'Commission Held for Auto-Upgrade' : 'No commission generated'}</p>
                                 ) : (
                                     sourcePlan ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
                                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
-                                            <span>Active: {sourcePlan.name}</span>
+                                            <span>Qualifying Plan: {sourcePlan.name}</span>
                                             {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent)</span>}
                                         </p>
-                                    ) : <p className="text-gray-400">No qualifying purchase</p>
+                                    ) : <p className="text-gray-400">{isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
                                 )}
                                 {user.sponsor && <p className="flex items-center gap-1"><span>Via:</span><button onClick={() => handleSponsorClick(user.sponsor!, user)} className="text-blue-500 hover:underline font-medium">@{user.sponsor}</button></p>}
                             </div>
@@ -476,22 +496,31 @@ const Referrals: React.FC = () => {
                                 <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatCurrency(held, currentUser?.currency || 'USD')}</p>
                             </div>
                         )}
+                        {isOverflow && !isHeldView && earned === 0 && (
+                            <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-100 dark:border-orange-800">
+                                <p className="text-[10px] uppercase text-orange-800 dark:text-orange-200 font-bold tracking-wider">Missed</p>
+                                <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCurrency(0, currentUser?.currency || 'USD')}</p>
+                            </div>
+                        )}
                         {isHeldView && breakdown.length > 0 ? (
                             <div className="bg-amber-50 dark:bg-amber-900/10 p-2 rounded border border-amber-100 dark:border-amber-800 space-y-2 w-full sm:w-auto">
                                 {breakdown.map((item, idx) => (
                                     <div key={idx} className="flex flex-col items-end gap-1">
                                         <div className="text-sm flex items-center justify-end gap-2">
-                                            <span className="text-amber-700 dark:text-amber-400 font-medium text-xs">{item.reason}:</span>
+                                            <span className={`text-xs font-medium ${item.isHoldPosition ? 'text-amber-600' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                {item.isHoldPosition ? '🔒 ' : ''}{item.reason}:
+                                            </span>
                                             <span className="font-bold text-amber-800 dark:text-amber-300">{formatCurrency(item.amount, currentUser?.currency)}</span>
                                         </div>
-                                        {item.planId && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Buy {item.planName}</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
+                                        {item.planId && !item.isHoldPosition && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Buy {item.planName}</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
                                         {item.reason === 'No Active Plan' && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans'); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Activate Earnings</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
+                                        {item.isHoldPosition && <p className="text-[9px] text-amber-500 italic max-w-[120px]">Automatically reserved for your next plan level upgrade.</p>}
                                     </div>
                                 ))}
                                 <div className="border-t border-amber-200 dark:border-amber-800 pt-1 text-[10px] text-amber-600 dark:text-amber-500 font-bold text-right mt-1">Total: {formatCurrency(held, currentUser?.currency)}</div>
                             </div>
                         ) : null}
-                        {earned === 0 && held === 0 && <span className="text-xs text-gray-400 italic">No commission</span>}
+                        {earned === 0 && held === 0 && !isOverflow && <span className="text-xs text-gray-400 italic">No commission</span>}
                     </div>
                 </div>
             </div>
@@ -591,7 +620,7 @@ const Referrals: React.FC = () => {
 
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[500px]">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-wrap gap-2">
-                    <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Commission List</button>
+                    <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Commission List ({directEarners.length + indirectEarners.length})</button>
                     <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Tree View ({genealogyTree.length})</button>
                     <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Overflow & Waiting ({overflowReferrals.length})</button>
                     <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Held Commissions ({globalHeldData.count})</button>
@@ -627,7 +656,7 @@ const Referrals: React.FC = () => {
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-5 rounded-xl text-left border border-gray-100 dark:border-gray-600 space-y-4">
                             <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Country</p><p className="font-semibold text-gray-900 dark:text-white flex items-center"><span className="text-lg mr-2">🌍</span> {selectedSponsor.country}</p></div>
                             <div className="grid grid-cols-2 gap-4 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Earning Source Plan</p><p className="font-bold text-gray-900 dark:text-white text-sm">{displaySourcePlanName}</p><p className="text-[10px] text-gray-400">{earningSourcePlan?.currency || sponsorPlanInfo?.currency}</p>{planToView && earningSourcePlan && planToView._id !== earningSourcePlan._id && <p className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 mt-1 rounded border border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800">(Equivalent: {planToView.name})</p>}</div>
+                                <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Earning Source Plan</p><p className="font-bold text-gray-900 dark:text-white text-sm">{displaySourcePlanName}</p><p className="text-[10px] text-gray-400">{earningSourcePlan?.currency || sponsorPlanInfo?.currency}</p>{planToView && earningSourcePlan && String(planToView._id) !== String(earningSourcePlan._id) && <p className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 mt-1 rounded border border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800">(Equivalent: {planToView.name})</p>}</div>
                                 <div className="border-l pl-3 dark:border-gray-600"><p className="text-xs text-blue-500 uppercase font-bold mb-1">Your Linked Plan</p><p className="font-bold text-blue-700 dark:text-blue-300 text-sm">{selectedPlanDetails?.name || 'None'}</p>{selectedPlanDetails && <p className="text-[10px] text-blue-400">{selectedPlanDetails.currency}</p>}{isLinkedPlanEquivalent && <p className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 mt-1 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">(Equivalent to {displaySourcePlanName})</p>}</div>
                             </div>
                             <div className="border-t border-gray-200 dark:border-gray-600 pt-4 mt-2"><p className="text-xs text-gray-500 uppercase font-bold mb-1">Total Earned from {selectedSponsor.username}</p><p className="text-3xl font-extrabold text-green-600 dark:text-green-400 tracking-tight">{formatCurrency(sponsorEarnings, currentUser.currency)}</p></div>
@@ -635,8 +664,8 @@ const Referrals: React.FC = () => {
                         </div>
                         <div className="mt-6 space-y-2">
                             <Button onClick={handleLocateSponsor} className="w-full bg-purple-600 hover:bg-purple-700">Locate {selectedSponsor.username} in Tree</Button>
-                            {planToView && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: planToView._id } }); }} className="w-full bg-green-600 hover:bg-green-700">View Sponsor Plan ({planToView.name})</Button>}
-                            {selectedPlanDetails && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: selectedPlanDetails._id } }); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
+                            {planToView && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(planToView?._id) } }); }} className="w-full bg-green-600 hover:bg-green-700">View Sponsor Plan ({planToView.name})</Button>}
+                            {selectedPlanDetails && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
                             <Button variant="secondary" onClick={() => setIsSponsorModalOpen(false)} className="w-full">Close</Button>
                         </div>
                     </div>

@@ -146,19 +146,19 @@ const canReleaseCommission = (commission, user, settings, allPlans) => {
 
         // Find the equivalency group this plan belongs to
         const group = (settings.planEquivalencyGroups || []).find(g => 
-            g.usdPlanId === referralPlanId ||
-            g.pkrPlanId === referralPlanId || 
-            g.eurPlanId === referralPlanId
+            String(g.usdPlanId) === referralPlanId ||
+            String(g.pkrPlanId) === referralPlanId || 
+            String(g.eurPlanId) === referralPlanId
         );
 
         let hasEquivalentPlan = false;
         if (group) {
-            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
-            const sponsorActivePlanIds = (user.activePlans || []).map(p => p.planId.toString());
+            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+            const sponsorActivePlanIds = (user.activePlans || []).map(p => String(p.planId));
             hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
         } else {
             // Fallback for non-grouped plans
-            hasEquivalentPlan = (user.activePlans || []).some(p => p.planId.toString() === referralPlanId);
+            hasEquivalentPlan = (user.activePlans || []).some(p => String(p.planId) === referralPlanId);
         }
         if (!hasEquivalentPlan) canRelease = false;
 
@@ -256,7 +256,7 @@ export const updateUser = async (req, res) => {
             await Transaction.updateMany({ userId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate }, $set: { currency: newCurrency } });
             await Transaction.updateMany({ userId: updatedUser._id, originalCurrency: oldCurrency }, { $mul: { originalAmount: conversionRate }, $set: { originalCurrency: newCurrency } });
             await Transfer.updateMany({ senderId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate, fee: conversionRate, totalDeducted: conversionRate }, $set: { currency: newCurrency } });
-            await Transfer.updateMany({ recipientId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate, fee: conversionRate, totalDeducted: conversionRate }, $set: { currency: newCurrency } });
+            await Transfer.updateMany({ recipientId: updatedUser._id, currency: updatedUser.currency === 'USD' ? 'USD' : (updatedUser.currency === 'PKR' ? 'PKR' : 'EUR') }, { $mul: { amount: conversionRate, fee: conversionRate, totalDeducted: conversionRate }, $set: { currency: newCurrency } });
 
             await createLog('User Currency Change', updatedUser.username, `Admin changed country to ${updatedUser.country}, converting records from ${oldCurrency} to ${newCurrency}.`, 'admin');
             await Notification.create({ userId: updatedUser._id, message: `Your account currency has been updated to ${newCurrency}. Your balance and history have been converted.` });
@@ -601,27 +601,27 @@ export const purchasePlan = async (req, res) => {
                 if (settings.requirePlanMatchForCommission) {
                     const referralPlanId = purchasePlanId.toString();
                     const group = (settings.planEquivalencyGroups || []).find(g => 
-                        g.usdPlanId === referralPlanId ||
-                        g.pkrPlanId === referralPlanId || 
-                        g.eurPlanId === referralPlanId
+                        String(g.usdPlanId) === referralPlanId ||
+                        String(g.pkrPlanId) === referralPlanId || 
+                        String(g.eurPlanId) === referralPlanId
                     );
                     
                     let hasEquivalentPlan = false;
                     let targetPlanId = referralPlanId;
 
                     if (group) {
-                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
-                        const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
+                        const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+                        const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => String(p.planId));
                         hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
                         const currencyKey = `${uplineUser.currency.toLowerCase()}PlanId`;
                         if (group[currencyKey]) targetPlanId = group[currencyKey];
                         else if (group.usdPlanId) targetPlanId = group.usdPlanId;
                     } else {
-                        hasEquivalentPlan = (uplineUser.activePlans || []).some(p => p.planId.toString() === referralPlanId);
+                        hasEquivalentPlan = (uplineUser.activePlans || []).some(p => String(p.planId) === referralPlanId);
                     }
 
                     if (!hasEquivalentPlan) {
-                        const targetPlan = allPlans.find(p => p._id.toString() === targetPlanId.toString());
+                        const targetPlan = allPlans.find(p => p._id.toString() === String(targetPlanId));
                         const requiredPlanName = targetPlan ? `${targetPlan.name} (${targetPlan.currency})` : 'the required equivalent plan';
                         return { status: 'Pending', message: `Commission Held! Purchase ${requiredPlanName} to release commission earned from ${user.username}.` };
                     }
@@ -649,20 +649,34 @@ export const purchasePlan = async (req, res) => {
 
                 let commissionConfig;
                 if (level === 0) { // Direct Commission
-                    // UPDATED: Only count PAID (>0) APPROVED commissions for slot limits to allow upgrade recovery
+                    // Identify equivalent plan IDs for the plan being purchased
+                    const equivIds = [plan._id.toString()];
+                    if (settings.planEquivalencyGroups) {
+                        const group = settings.planEquivalencyGroups.find(g => 
+                            String(g.usdPlanId) === plan._id.toString() || 
+                            String(g.pkrPlanId) === plan._id.toString() || 
+                            String(g.eurPlanId) === plan._id.toString()
+                        );
+                        if (group) {
+                            if (group.usdPlanId) equivIds.push(String(group.usdPlanId));
+                            if (group.pkrPlanId) equivIds.push(String(group.pkrPlanId));
+                            if (group.eurPlanId) equivIds.push(String(group.eurPlanId));
+                        }
+                    }
+
                     const referralCount = await Transaction.countDocuments({
                         userId: uplineUser._id,
                         type: 'Commission',
-                        relatedPlanId: plan._id,
+                        relatedPlanId: { $in: equivIds },
                         level: 1,
                         status: 'Approved',
-                        amount: { $gt: 0 } // Must be a successful paid referral
+                        amount: { $gt: 0 } 
                     });
 
                     if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
                         await Notification.create({
                             userId: uplineUser._id,
-                            message: `⚠️ Slot Limit Reached! Your direct referral ${user.username} purchased '${plan.name}', but all your ${plan.directReferralLimit} slots for this plan are full. This is an overflow referral.`
+                            message: `⚠️ Slot Limit Reached! Your referral ${user.username} purchased '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
                         });
                         await Transaction.create({
                             userId: uplineUser._id,
@@ -704,7 +718,6 @@ export const purchasePlan = async (req, res) => {
                     continue;
                 }
                 
-                // Rule: One-Time Commission - Updated to only check PAID transactions
                 if (settings.oneTimeCommissionPerGroup) {
                     const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
                     const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
@@ -716,7 +729,7 @@ export const purchasePlan = async (req, res) => {
                             sourceUserId: user._id,
                             type: 'Commission',
                             status: 'Approved',
-                            amount: { $gt: 0 } // MUST have actually been paid previously
+                            amount: { $gt: 0 }
                         });
 
                         if (existingCommission) {
@@ -738,10 +751,9 @@ export const purchasePlan = async (req, res) => {
                     uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
                     await uplineUser.save();
                     
-                    // Specialized notification for upgrade wins
                     const isRecovery = level === 0 && (await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected' }));
                     const notifText = isRecovery 
-                        ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' and filled a new slot.`
+                        ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
                         : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
                     
                     await Notification.create({ userId: uplineUser._id, message: notifText });
@@ -764,8 +776,8 @@ export const purchasePlan = async (req, res) => {
                     amount: finalCommissionAmount,
                     level: level + 1,
                     sourceUserId: user._id,
-                    description: eligibility.status === 'Pending' && plan.holdPosition?.slots.includes(referralCount + 1) 
-                        ? `Reserved: Slot #${referralCount + 1} commission from ${user.username} for Auto-Upgrade`
+                    description: eligibility.status === 'Pending' && level === 0 && plan.holdPosition?.slots.includes(referralCount + 1) 
+                        ? `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade`
                         : `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
                     status: eligibility.status,
                     relatedPlanId: plan._id,
