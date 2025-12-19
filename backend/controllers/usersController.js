@@ -673,6 +673,7 @@ export const purchasePlan = async (req, res) => {
                         amount: { $gt: 0 } 
                     });
 
+                    // --- OVERFLOW LOGIC ---
                     if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
                         await Notification.create({
                             userId: uplineUser._id,
@@ -751,8 +752,9 @@ export const purchasePlan = async (req, res) => {
                     uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
                     await uplineUser.save();
                     
-                    const isRecovery = level === 0 && (await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected' }));
-                    const notifText = isRecovery 
+                    const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
+                    
+                    const notifText = previousOverflow
                         ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
                         : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
                     

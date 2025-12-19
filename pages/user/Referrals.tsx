@@ -182,7 +182,7 @@ const Referrals: React.FC = () => {
         return { referrals, count: referrals.length, stats: pendingMap };
     }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users]);
 
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean } => {
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
         const referralCommissions = transactions.filter(t => 
             t.userId === currentUser._id &&
@@ -193,12 +193,13 @@ const Referrals: React.FC = () => {
         const earned = referralCommissions.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralCommissions.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         const isHoldPosition = referralCommissions.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+        const isOverflow = referralCommissions.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
         
         let earningSourcePlanId: string | undefined;
         if (referralCommissions.length > 0) {
             earningSourcePlanId = referralCommissions[0].relatedPlanId?.toString();
         }
-        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId, isHoldPosition };
+        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
 
     const toggleNode = (userId: string) => {
@@ -274,22 +275,13 @@ const Referrals: React.FC = () => {
         const inactiveList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
-            const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            if (earned > 0 || held > 0) {
+            if (info.earned > 0 || info.held > 0) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } else {
-                // Check if user is in "Overflow" for the current plan
-                const isOverflow = transactions.some(t => 
-                    t.userId === currentUser._id && 
-                    t.sourceUserId === node.user._id && 
-                    t.status === 'Rejected' && 
-                    t.amount === 0 &&
-                    t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
-                );
-
-                if (isOverflow && node.level === 1) {
+                if (info.isOverflow && node.level === 1) {
                     overflowList.push(node);
                 } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
@@ -310,8 +302,8 @@ const Referrals: React.FC = () => {
 
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
-                const { earned, held } = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                const isRelevant = earned > 0 || held > 0;
+                const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+                const isRelevant = info.earned > 0 || info.held > 0;
                 const filteredChildren = filterRecursive(node.children);
                 if (isRelevant) return { ...node, children: filteredChildren };
                 else if (filteredChildren.length > 0) return { ...node, children: filteredChildren, isSkipped: true } as any; 
@@ -391,14 +383,18 @@ const Referrals: React.FC = () => {
             breakdown = stats?.breakdown || [];
             if (breakdown.some(b => b.isHoldPosition)) isHoldPosition = true;
         } else if (isAllView) {
-            const allCommissions = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
-            earned = allCommissions.reduce((sum, t) => sum + t.amount, 0);
+            const allApproved = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
+            earned = allApproved.reduce((sum, t) => sum + t.amount, 0);
             
-            // For All View, we also need to check if there are PENDING hold positions to correctly badge the user
+            // For All View, check for ANY pending hold positions
             const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
             if (pendingHold) isHoldPosition = true;
+            
+            // For All View, check for ANY overflow (missed) transactions
+            const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+            if (overflowTx) isOverflow = true;
 
-            const planIds = new Set(allCommissions.map(t => String(t.relatedPlanId)).filter(Boolean));
+            const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
                 const plan = investmentPlans.find(p => p._id === id);
                 if (!plan) return 'Unknown Plan';
@@ -422,16 +418,7 @@ const Referrals: React.FC = () => {
             held = info.held;
             earningSourcePlanId = info.earningSourcePlanId;
             isHoldPosition = info.isHoldPosition || false;
-            
-            // Check specifically for overflow (Rejected $0 tx)
-            const overflowTx = transactions.find(t => 
-                t.userId === currentUser?._id && 
-                t.sourceUserId === user._id && 
-                t.status === 'Rejected' && 
-                t.amount === 0 &&
-                (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false)
-            );
-            if (overflowTx) isOverflow = true;
+            isOverflow = info.isOverflow || false;
         }
 
         const isDirect = level === 1;
@@ -469,7 +456,11 @@ const Referrals: React.FC = () => {
                                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
                                             <span>Purchased: {commissionSourcePlans.join(', ')}</span>
                                         </p>
-                                     ) : <p className="text-gray-400">{isHoldPosition ? 'Commission Held for Auto-Upgrade' : 'No commission generated'}</p>
+                                     ) : (
+                                         <p className="text-gray-400">
+                                             {isHoldPosition ? 'Commission Held for Auto-Upgrade' : isOverflow ? 'Missed (Slot Limit Reached)' : 'No commission generated'}
+                                         </p>
+                                     )
                                 ) : (
                                     sourcePlan ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
