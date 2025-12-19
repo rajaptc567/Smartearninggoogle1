@@ -9,7 +9,7 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, investmentPlans } = state;
+    const { currentUser, users, investmentPlans, settings } = state;
     // Initialize navigate function using useNavigate hook
     const navigate = useNavigate();
 
@@ -23,12 +23,23 @@ const ActivePlans: React.FC = () => {
         const plan = investmentPlans.find(p => p._id === planId);
         const limit = plan?.directReferralLimit || 0;
         
-        // Accurate Slot Calculation: Count direct referrals who have at least one active plan
+        // 1. Identify all equivalent plan IDs for this row
+        const equivIds = new Set<string>();
+        equivIds.add(planId);
+        const group = settings.planEquivalencyGroups?.find(g =>
+            g.usdPlanId === planId || g.pkrPlanId === planId || g.eurPlanId === planId
+        );
+        if (group) {
+            if (group.usdPlanId) equivIds.add(group.usdPlanId);
+            if (group.pkrPlanId) equivIds.add(group.pkrPlanId);
+            if (group.eurPlanId) equivIds.add(group.eurPlanId);
+        }
+
+        // 2. Count direct referrals who own any of those plan IDs
         const used = users.filter(u => 
             u.sponsor && 
             u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans && 
-            u.activePlans.length > 0
+            u.activePlans?.some(ap => equivIds.has(ap.planId))
         ).length;
 
         return { used, limit };

@@ -98,21 +98,20 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // --- UPDATED: SLOT CALCULATION (Matches Dashboard Network Overview) ---
+    // --- UPDATED: SLOT CALCULATION (Filtered by Selected Plan Ownership) ---
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        // Calculation matching Dashboard: Count unique direct referrals who have at least one active plan
+        // A slot is used if a direct referral owns the selected plan or its equivalents
         const used = users.filter(u => 
             u.sponsor && 
             u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans && 
-            u.activePlans.length > 0
+            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(ap.planId))
         ).length;
 
         return { used, limit };
-    }, [currentUser, selectedPlanDetails, users]);
+    }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
 
     // Helper to calculate max direct commission for display
     const renderMaxDirectCommission = (plan: InvestmentPlan) => {
@@ -421,7 +420,7 @@ const Referrals: React.FC = () => {
         isTree?: boolean;
         isHeldView?: boolean;
         isAllView?: boolean;
-    }> = ({ node, toggleNode, isCollapsed, hasChildren, isTree, isHeldView, isAllView }) => {
+    }> = ({ node, toggleNode, iCollapsed, hasChildren, isTree, isHeldView, isAllView }) => {
         const { user } = node;
         const level = 'level' in node ? node.level : undefined;
         
@@ -481,7 +480,7 @@ const Referrals: React.FC = () => {
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
                             <button onClick={() => toggleNode(user._id)} className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors">
-                                {isCollapsed ? '+' : '−'}
+                                {node.user._id ? (collapsedNodes.has(node.user._id) ? '+' : '−') : '−'}
                             </button>
                         ) : (
                             <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 font-bold text-xs">{user.fullName.charAt(0)}</div>
@@ -655,7 +654,7 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
                     
-                    {/* UPDATED: Referral Slot Progress Bar - Matches Network Overview */}
+                    {/* ACCURATE Referral Slot Progress Bar - Matches Network Overview */}
                     <div className="px-4 py-4 bg-blue-50/30 dark:bg-blue-900/10 border-t border-gray-100 dark:border-gray-700">
                         <div className="flex justify-between items-center mb-2">
                             <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Active Direct Referrals</h4>
