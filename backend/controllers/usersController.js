@@ -40,7 +40,7 @@ export const createUser = async (req, res, next) => {
             currency = 'EUR';
         } else {
             // Default to USD for rest of world
-            currency = 'USD';
+            currency = currency = 'USD';
         }
         req.body.currency = currency;
 
@@ -486,6 +486,14 @@ export const purchasePlan = async (req, res) => {
     const { planId } = req.body;
     try {
         const user = await User.findById(req.params.id);
+        
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        // CHECK STATUS
+        if (user.status === 'Blocked' || user.status === 'Paused') {
+            return res.status(403).json({ success: false, error: 'Your account is restricted. You cannot purchase plans at this time.' });
+        }
+
         const plan = await InvestmentPlan.findById(planId);
         
         const settingsDoc = await Setting.getSettings(); // Fetch settings for commission logic
@@ -495,7 +503,7 @@ export const purchasePlan = async (req, res) => {
 
         const allPlans = await InvestmentPlan.find(); // Fetch all plans for equivalency check
 
-        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
+        if (!plan) return res.status(404).json({ success: false, error: 'Plan not found'});
         
         // Currency Check
         if (user.currency !== plan.currency) {

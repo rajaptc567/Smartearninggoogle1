@@ -25,8 +25,8 @@ export const createTransfer = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sender or recipient not found.' });
         }
 
-        // 1. Check User Restrictions
-        if (sender.status === 'Blocked' || (sender.restrictions && sender.restrictions.transfer)) {
+        // 1. Check User Status & Restrictions
+        if (sender.status === 'Blocked' || sender.status === 'Paused' || (sender.restrictions && sender.restrictions.transfer)) {
             return res.status(403).json({ success: false, error: `Transfers are currently disabled for your account.` });
         }
 

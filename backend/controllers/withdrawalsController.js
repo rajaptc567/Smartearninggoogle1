@@ -47,8 +47,8 @@ export const createWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        // Check specific activity restriction or blocked status
-        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.withdrawal)) {
+        // Check specific activity restriction or blocked/paused status
+        if (user.status === 'Blocked' || user.status === 'Paused' || (user.restrictions && user.restrictions.withdrawal)) {
             return res.status(403).json({ success: false, error: `Withdrawals are currently disabled for your account.` });
         }
         
