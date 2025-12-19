@@ -48,12 +48,14 @@ const Referrals: React.FC = () => {
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
+    // FIX: Only reset viewMode when the PLAN changes. 
+    // Removing 'viewMode' from dependencies prevents the "blink/reset" bug.
     useEffect(() => {
-        if (viewMode !== 'held' && viewMode !== 'all') {
+        if (selectedPlanId) {
             setViewMode('commissions');
+            setHighlightedUserId(null);
         }
-        setHighlightedUserId(null);
-    }, [selectedPlanId, viewMode]);
+    }, [selectedPlanId]);
 
     useEffect(() => {
         if (highlightedUserId && viewMode === 'tree') {
@@ -64,7 +66,7 @@ const Referrals: React.FC = () => {
                 }
             }, 300);
         }
-    }, [highlightedUserId, viewMode, selectedPlanId]);
+    }, [highlightedUserId, viewMode]);
     
     const getEquivalentIds = useCallback((planId: string) => {
         const ids = new Set<string>();
@@ -132,7 +134,10 @@ const Referrals: React.FC = () => {
                 let reason = "Pending Review";
                 let missingPlanId = undefined;
                 let missingPlanName = undefined;
-                if (currentUser.restrictions?.earning) {
+
+                if (t.description.toLowerCase().includes('position')) {
+                    reason = "Auto-Upgrade Reservation";
+                } else if (currentUser.restrictions?.earning) {
                     reason = "Account Restricted";
                 } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
                     reason = "No Active Plan";
@@ -276,8 +281,11 @@ const Referrals: React.FC = () => {
                     t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId.toString())
                 );
 
-                if (isOverflow && node.level === 1) overflowList.push(node);
-                else if (!node.user.activePlans || node.user.activePlans.length === 0) inactiveList.push(node);
+                if (isOverflow && node.level === 1) {
+                    overflowList.push(node);
+                } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
+                    inactiveList.push(node);
+                }
             }
         });
 
@@ -372,6 +380,7 @@ const Referrals: React.FC = () => {
             const stats = globalHeldData.stats.get(user._id);
             held = stats?.total || 0;
             breakdown = stats?.breakdown || [];
+            if (breakdown.some(b => b.reason.includes('Reservation'))) isHoldPosition = true;
         } else if (isAllView) {
             const allCommissions = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allCommissions.reduce((sum, t) => sum + t.amount, 0);
@@ -399,11 +408,9 @@ const Referrals: React.FC = () => {
             held = info.held;
             earningSourcePlanId = info.earningSourcePlanId;
             
-            // Check if this is a "Hold Position"
             const relevantTx = transactions.find(t => 
                 t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && 
-                t.description.toLowerCase().includes('position') &&
-                t.relatedPlanId && equivalentPlanIdsForSelected.has(t.relatedPlanId.toString())
+                t.description.toLowerCase().includes('position')
             );
             if (relevantTx) isHoldPosition = true;
         }
@@ -435,20 +442,20 @@ const Referrals: React.FC = () => {
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
-                                    <p className="text-yellow-600 dark:text-yellow-500 font-bold">Action Required</p>
+                                    <p className="text-amber-600 dark:text-amber-500 font-bold">Action/Upgrade Required</p>
                                 ) : isAllView ? (
                                      commissionSourcePlans.length > 0 ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
                                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
-                                            <span>{commissionSourcePlans.join(', ')}</span>
+                                            <span>History: {commissionSourcePlans.join(', ')}</span>
                                         </p>
                                      ) : <p className="text-gray-400">No commission generated</p>
                                 ) : (
                                     sourcePlan ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
                                             <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
-                                            <span>Purchased {sourcePlan.name}</span>
-                                            {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent to {selectedPlanDetails?.name})</span>}
+                                            <span>Active: {sourcePlan.name}</span>
+                                            {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent)</span>}
                                         </p>
                                     ) : <p className="text-gray-400">No qualifying purchase</p>
                                 )}
@@ -465,23 +472,23 @@ const Referrals: React.FC = () => {
                         )}
                         {held > 0 && !isHeldView && (
                              <div className="bg-amber-50 dark:bg-amber-900/20 px-3 py-1 rounded border border-amber-100 dark:border-amber-800">
-                                <p className="text-[10px] uppercase text-amber-800 dark:text-amber-200 font-bold tracking-wider">{isHoldPosition ? 'Reserved for Upgrade' : 'Pending Verification'}</p>
+                                <p className="text-[10px] uppercase text-amber-800 dark:text-amber-200 font-bold tracking-wider">{isHoldPosition ? 'Upgrade Hold' : 'Pending'}</p>
                                 <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatCurrency(held, currentUser?.currency || 'USD')}</p>
                             </div>
                         )}
                         {isHeldView && breakdown.length > 0 ? (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/10 p-2 rounded border border-yellow-100 dark:border-yellow-800 space-y-2 w-full sm:w-auto">
+                            <div className="bg-amber-50 dark:bg-amber-900/10 p-2 rounded border border-amber-100 dark:border-amber-800 space-y-2 w-full sm:w-auto">
                                 {breakdown.map((item, idx) => (
                                     <div key={idx} className="flex flex-col items-end gap-1">
                                         <div className="text-sm flex items-center justify-end gap-2">
-                                            <span className="text-yellow-700 dark:text-yellow-400 font-medium text-xs">{item.reason}:</span>
-                                            <span className="font-bold text-yellow-800 dark:text-yellow-300">{formatCurrency(item.amount, currentUser?.currency)}</span>
+                                            <span className="text-amber-700 dark:text-amber-400 font-medium text-xs">{item.reason}:</span>
+                                            <span className="font-bold text-amber-800 dark:text-amber-300">{formatCurrency(item.amount, currentUser?.currency)}</span>
                                         </div>
                                         {item.planId && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Buy {item.planName}</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
-                                        {item.reason === 'No Active Plan' && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans'); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Buy Any Plan</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
+                                        {item.reason === 'No Active Plan' && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans'); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Activate Earnings</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
                                     </div>
                                 ))}
-                                <div className="border-t border-yellow-200 dark:border-yellow-800 pt-1 text-[10px] text-yellow-600 dark:text-yellow-500 font-bold text-right mt-1">Total Held: {formatCurrency(held, currentUser?.currency)}</div>
+                                <div className="border-t border-amber-200 dark:border-amber-800 pt-1 text-[10px] text-amber-600 dark:text-amber-500 font-bold text-right mt-1">Total: {formatCurrency(held, currentUser?.currency)}</div>
                             </div>
                         ) : null}
                         {earned === 0 && held === 0 && <span className="text-xs text-gray-400 italic">No commission</span>}
@@ -585,11 +592,11 @@ const Referrals: React.FC = () => {
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[500px]">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-wrap gap-2">
                     <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Commission List</button>
-                    <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Tree View</button>
+                    <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Tree View ({genealogyTree.length})</button>
                     <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Overflow & Waiting ({overflowReferrals.length})</button>
                     <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Held Commissions ({globalHeldData.count})</button>
                     <button onClick={() => setViewMode('all')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>All Referrals ({allNodes.length})</button>
-                    <button onClick={() => setViewMode('inactive')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'inactive' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Inactive Members</button>
+                    <button onClick={() => setViewMode('inactive')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'inactive' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Inactive Members ({inactiveReferrals.length})</button>
                 </div>
                 <div className="p-4 md:p-6 overflow-x-auto">
                     {viewMode === 'commissions' && (
@@ -607,7 +614,7 @@ const Referrals: React.FC = () => {
                     )}
                     {viewMode === 'held' && <div className="space-y-3"><div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4 flex gap-3 items-start"><span className="text-xl">💡</span><div><h4 className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Global Held Commissions</h4><p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">This list shows ALL pending commissions from your network, regardless of the selected plan context. Purchasing the required plan mentioned below will release these funds to your wallet.</p></div></div>{globalHeldData.referrals.length > 0 ? globalHeldData.referrals.map(user => <ReferralCardContent key={user._id} node={{user}} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isHeldView={true} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No held commissions.</p></div>}</div>}
                     {viewMode === 'all' && <div className="space-y-3"><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-indigo-600 rounded-full mr-2"></span>Complete Referral List ({allNodes.length})</h3>{allNodes.length > 0 ? allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isAllView={true} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No referrals found.</p></div>}</div>}
-                    {viewMode === 'inactive' && (inactiveReferrals.length > 0 ? <div className="space-y-3">{inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No inactive referrals found.</p></div>)}
+                    {viewMode === 'inactive' && (inactiveReferrals.length > 0 ? <div className="space-y-3"><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-red-600 rounded-full mr-2"></span>Inactive Referrals (No Active Plan)</h3>{inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />)}</div> : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No inactive referrals found.</p></div>)}
                 </div>
             </div>
 
@@ -624,7 +631,7 @@ const Referrals: React.FC = () => {
                                 <div className="border-l pl-3 dark:border-gray-600"><p className="text-xs text-blue-500 uppercase font-bold mb-1">Your Linked Plan</p><p className="font-bold text-blue-700 dark:text-blue-300 text-sm">{selectedPlanDetails?.name || 'None'}</p>{selectedPlanDetails && <p className="text-[10px] text-blue-400">{selectedPlanDetails.currency}</p>}{isLinkedPlanEquivalent && <p className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 mt-1 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800">(Equivalent to {displaySourcePlanName})</p>}</div>
                             </div>
                             <div className="border-t border-gray-200 dark:border-gray-600 pt-4 mt-2"><p className="text-xs text-gray-500 uppercase font-bold mb-1">Total Earned from {selectedSponsor.username}</p><p className="text-3xl font-extrabold text-green-600 dark:text-green-400 tracking-tight">{formatCurrency(sponsorEarnings, currentUser.currency)}</p></div>
-                            <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg border border-blue-100 dark:border-blue-800 mt-4"><p className="text-xs text-blue-700 dark:text-blue-300 uppercase font-bold mb-2">Sponsor For (Downline)</p><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-xs font-bold text-blue-800 dark:text-blue-100">{selectedReferralForSponsorModal.fullName.charAt(0)}</div><div className="text-left"><p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{selectedReferralForSponsorModal.fullName}</p><p className="text-xs text-gray-500 dark:text-gray-400">@{selectedReferralForSponsorModal.username}</p></div></div></div>
+                            <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg border border-blue-100 dark:border-blue-800 mt-4"><p className="text-xs text-bold text-blue-700 dark:text-blue-300 uppercase font-bold mb-2">Sponsor For (Downline)</p><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-xs font-bold text-blue-800 dark:text-blue-100">{selectedReferralForSponsorModal.fullName.charAt(0)}</div><div className="text-left"><p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{selectedReferralForSponsorModal.fullName}</p><p className="text-xs text-gray-500 dark:text-gray-400">@{selectedReferralForSponsorModal.username}</p></div></div></div>
                         </div>
                         <div className="mt-6 space-y-2">
                             <Button onClick={handleLocateSponsor} className="w-full bg-purple-600 hover:bg-purple-700">Locate {selectedSponsor.username} in Tree</Button>

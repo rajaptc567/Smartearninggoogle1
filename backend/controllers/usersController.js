@@ -649,13 +649,14 @@ export const purchasePlan = async (req, res) => {
 
                 let commissionConfig;
                 if (level === 0) { // Direct Commission
-                    // UPDATED: Only count APPROVED commissions for slot limits to allow upgrade recovery
+                    // UPDATED: Only count PAID (>0) APPROVED commissions for slot limits to allow upgrade recovery
                     const referralCount = await Transaction.countDocuments({
                         userId: uplineUser._id,
                         type: 'Commission',
                         relatedPlanId: plan._id,
                         level: 1,
-                        status: 'Approved'
+                        status: 'Approved',
+                        amount: { $gt: 0 } // Must be a successful paid referral
                     });
 
                     if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
