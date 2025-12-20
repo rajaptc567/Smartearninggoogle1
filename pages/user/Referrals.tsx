@@ -19,6 +19,7 @@ const Referrals: React.FC = () => {
     const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
     const location = useLocation();
+    const highlightPlanId = location.state?.highlightPlanId;
 
     const uniqueActivePlans = useMemo(() => {
         if (!currentUser || !currentUser.activePlans) return [];
@@ -34,15 +35,12 @@ const Referrals: React.FC = () => {
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
     
-    // View Tab State: 'commissions' | 'tree' | 'overflow' | 'inactive' | 'held' | 'all'
     const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'inactive' | 'held' | 'all'>('commissions');
 
-    // Sponsor Modal State
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
     const [selectedSponsor, setSelectedSponsor] = useState<User | null>(null);
     const [selectedReferralForSponsorModal, setSelectedReferralForSponsorModal] = useState<User | null>(null);
 
-    // Track previous selectedPlanId to prevent tab resetting
     const prevPlanId = useRef(selectedPlanId);
 
     useEffect(() => {
@@ -52,7 +50,6 @@ const Referrals: React.FC = () => {
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
-    // Reset viewMode ONLY when a different plan is selected
     useEffect(() => {
         if (selectedPlanId && selectedPlanId !== prevPlanId.current) {
             setViewMode('commissions');
@@ -112,20 +109,6 @@ const Referrals: React.FC = () => {
         return { used, limit };
     }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
 
-    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
-        const comms = plan.directCommissions;
-        if (!comms || comms.length === 0) return 'N/A';
-        let maxVal = 0;
-        let maxType: 'percentage' | 'fixed' = 'percentage';
-        comms.forEach(c => {
-            if (c.value > maxVal) {
-                maxVal = c.value;
-                maxType = c.type;
-            }
-        });
-        return maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
-    };
-
     const globalHeldData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
@@ -184,22 +167,40 @@ const Referrals: React.FC = () => {
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
-        const referralCommissions = transactions.filter(t => 
+        
+        // Context-specific commissions
+        const referralComms = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
             t.sourceUserId === referral._id &&
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
-        const earned = referralCommissions.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
-        const held = referralCommissions.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
-        const isHoldPosition = referralCommissions.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
-        const isOverflow = referralCommissions.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+
+        // Global commission check for this referral source
+        const globalCommsFromThisReferral = transactions.filter(t => 
+            t.userId === currentUser._id &&
+            t.type === 'Commission' &&
+            t.sourceUserId === referral._id &&
+            (t.status === 'Approved' || t.status === 'Pending')
+        );
+
+        const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+        const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        
+        // Overflow logic: Must have a rejected "limit" transaction in THIS context
+        const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+        
+        // CRITICAL UPDATE: If they have ANY successful commission GLOBALLY, they are no longer an "Overflow" entity
+        const hasPaidGlobally = globalCommsFromThisReferral.length > 0;
+        const isOverflow = hasOverflowTx && !hasPaidGlobally;
+        
+        const isHoldPosition = referralComms.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
         
         let earningSourcePlanId: string | undefined;
-        if (referralCommissions.length > 0) {
-            earningSourcePlanId = referralCommissions[0].relatedPlanId?.toString();
+        if (referralComms.length > 0) {
+            earningSourcePlanId = referralComms[0].relatedPlanId?.toString();
         }
-        return { earned, held, status: referralCommissions[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
+        return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
 
     const toggleNode = (userId: string) => {
@@ -247,6 +248,21 @@ const Referrals: React.FC = () => {
         }
     };
 
+    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
+        const comms = plan.directCommissions;
+        if (!comms || comms.length === 0) return 'None';
+        let maxVal = 0;
+        let maxType = 'percentage';
+        comms.forEach(c => {
+            if (c.value > maxVal) {
+                maxVal = c.value;
+                maxType = c.type;
+            }
+        });
+        const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+        return comms.length > 1 ? `Up to ${formattedVal}` : formattedVal;
+    };
+
     const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
         if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
 
@@ -281,6 +297,8 @@ const Referrals: React.FC = () => {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } else {
+                // EXCLUSION LOGIC: Direct referrals only stay in overflow if they haven't paid GLOBALLY.
+                // If they upgrade and pay at any level, info.isOverflow becomes false and they move to earners or general list.
                 if (info.isOverflow && node.level === 1) {
                     overflowList.push(node);
                 } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
@@ -386,13 +404,14 @@ const Referrals: React.FC = () => {
             const allApproved = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allApproved.reduce((sum, t) => sum + t.amount, 0);
             
-            // For All View, check for ANY pending hold positions
             const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
             if (pendingHold) isHoldPosition = true;
             
-            // For All View, check for ANY overflow (missed) transactions
+            // For All View: Global overflow status
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
-            if (overflowTx) isOverflow = true;
+            const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
+            
+            if (overflowTx && !anySuccess) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
@@ -560,7 +579,7 @@ const Referrals: React.FC = () => {
                 </div>
             ) : (
                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-3"><span className="text-2xl">⚠️</span><div><h3 className="font-bold text-yellow-800 dark:text-yellow-200">No Active Plans</h3><p className="text-xs text-yellow-700 dark:text-yellow-300">Purchase a plan to start earning commissions.</p></div></div>
+                    <div className="flex items-center gap-3"><span className="text-2xl">⚠️</span><div><h3 className="font-bold text-yellow-800 text-sm dark:text-yellow-200">No Active Plans</h3><p className="text-xs text-yellow-700 dark:text-yellow-300">Purchase a plan to start earning commissions.</p></div></div>
                     <Button size="sm" onClick={() => navigate('/member/plans')}>Buy Plan</Button>
                 </div>
             )}
@@ -629,7 +648,7 @@ const Referrals: React.FC = () => {
                     {viewMode === 'overflow' && (
                         <div className="space-y-3">
                             <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg mb-4 flex gap-3 items-start"><span className="text-xl">📊</span><div><h4 className="font-bold text-orange-800 dark:text-orange-200 text-sm">Overflow Referrals</h4><p className="text-xs text-orange-700 dark:text-orange-300 mt-1">These direct referrals joined when your direct slots for the {currentPlanName} plan were full. You can earn from them if they upgrade to a higher plan where you have open slots!</p></div></div>
-                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No overflow referrals for this plan.</p></div>}
+                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} />) : <div className="flex flex-col items-center justify-center py-12 text-green-600 font-bold bg-green-50 dark:bg-green-900/10 rounded-lg border-2 border-dashed border-green-200 dark:border-green-800"><p>Great! You have captured all potential commissions for this plan level.</p></div>}
                         </div>
                     )}
                     {viewMode === 'held' && <div className="space-y-3"><div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4 flex gap-3 items-start"><span className="text-xl">💡</span><div><h4 className="font-bold text-yellow-800 dark:text-yellow-200 text-sm">Global Held Commissions</h4><p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">This list shows ALL pending commissions from your network, regardless of the selected plan context. Purchasing the required plan mentioned below will release these funds to your wallet.</p></div></div>{globalHeldData.referrals.length > 0 ? globalHeldData.referrals.map(user => <ReferralCardContent key={user._id} node={{user}} toggleNode={() => {}} isCollapsed={false} hasChildren={false} isTree={false} isHeldView={true} />) : <div className="flex flex-col items-center justify-center py-12 text-gray-400"><p>No held commissions.</p></div>}</div>}
