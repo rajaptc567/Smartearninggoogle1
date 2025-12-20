@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
@@ -167,7 +168,6 @@ const Referrals: React.FC = () => {
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
         
-        // Filter transactions for THIS sponsor, from THIS referral, in THIS plan context
         const referralComms = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
@@ -175,26 +175,17 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
-        // Global commission check to see if they've paid successfully at any other context
-        const globalCommsFromThisReferral = transactions.filter(t => 
-            t.userId === currentUser._id &&
-            t.type === 'Commission' &&
-            t.sourceUserId === referral._id &&
-            (t.status === 'Approved' || t.status === 'Pending')
-        );
-
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Identify Hold Position specific to this referral and context
+        // REFINED: Strictly identify Hold Positions
         const isHoldPosition = referralComms.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
 
-        // Identify Overflow (Missed) - Triggered by rejected limit tx
+        // REFINED: Identify true Overflow (Only if NOT a Hold Position)
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
-        const hasPaidGlobally = globalCommsFromThisReferral.length > 0;
         
-        // PRIORITY: If they are a "Hold Position", they are NOT considered "Overflow" because the system has reserved a slot for them.
-        const isOverflow = hasOverflowTx && !hasPaidGlobally && !isHoldPosition;
+        // Priority: If it's a Hold Position, it is NOT an overflow/missed referral
+        const isOverflow = !isHoldPosition && hasOverflowTx;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
@@ -293,11 +284,11 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            if (info.earned > 0 || info.held > 0) {
+            // LOGIC: Any referral who has earned OR is in a hold position belongs in the earners list
+            if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } else {
-                // EXCLUSION LOGIC: Direct referrals only stay in overflow if they haven't paid GLOBALLY and are NOT in a hold slot.
                 if (info.isOverflow && node.level === 1) {
                     overflowList.push(node);
                 } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
@@ -320,7 +311,7 @@ const Referrals: React.FC = () => {
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                const isRelevant = info.earned > 0 || info.held > 0;
+                const isRelevant = info.earned > 0 || info.held > 0 || info.isHoldPosition;
                 const filteredChildren = filterRecursive(node.children);
                 if (isRelevant) return { ...node, children: filteredChildren };
                 else if (filteredChildren.length > 0) return { ...node, children: filteredChildren, isSkipped: true } as any; 
@@ -493,7 +484,7 @@ const Referrals: React.FC = () => {
                                             <span>Qualifying Plan: {sourcePlan.name}</span>
                                             {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent)</span>}
                                         </p>
-                                    ) : <p className="text-gray-400">{isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
+                                    ) : <p className="text-gray-400">{isHoldPosition ? 'Commission Reserved for Auto-Upgrade' : isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
                                 )}
                                 {user.sponsor && <p className="flex items-center gap-1"><span>Via:</span><button onClick={() => handleSponsorClick(user.sponsor!, user)} className="text-blue-500 hover:underline font-medium">@{user.sponsor}</button></p>}
                             </div>
