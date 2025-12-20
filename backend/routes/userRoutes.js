@@ -6,9 +6,11 @@ import {
     createUser,
     updateUser,
     deleteUser,
+    bulkDeleteUsers,
     loginUser,
     adjustWallet,
     purchasePlan,
+    adminActivatePlan,
     adminInitiatePasswordReset,
     resetPasswordWithToken,
     userRequestPasswordReset,
@@ -24,11 +26,13 @@ router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
 router.put('/bulk-restrictions', bulkUpdateRestrictions);
+router.delete('/bulk', bulkDeleteUsers);
 
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
 
 router.post('/:id/adjust-wallet', adjustWallet);
 router.post('/:id/purchase-plan', purchasePlan);
+router.post('/:id/activate-plan', adminActivatePlan);
 router.post('/:id/admin-reset-password', adminInitiatePasswordReset);
 
 export default router;
