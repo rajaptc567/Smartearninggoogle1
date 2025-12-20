@@ -99,17 +99,14 @@ const Referrals: React.FC = () => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        // Slot usage should count both Approved and Pending (Hold) direct commissions
-        const used = transactions.filter(t => 
-            t.userId === currentUser._id && 
-            t.type === 'Commission' && 
-            t.level === 1 && 
-            (t.status === 'Approved' || t.status === 'Pending') &&
-            t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
+        const used = users.filter(u => 
+            u.sponsor && 
+            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
+            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(String(ap.planId)))
         ).length;
 
         return { used, limit };
-    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
+    }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
 
     const globalHeldData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
@@ -177,17 +174,22 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
-        // PRIORITY: Detect if this is a Hold Position (Auto-Upgrade slot) from the description
+        // PRIORITY: Identify 'Hold Position' from descriptions
         const isHoldPosition = referralComms.some(t => (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
 
-        // "Earned" is wallet-bound Approved commission (excluding Hold positions)
-        const earned = referralComms.filter(t => t.status === 'Approved' && !(t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))).reduce((sum, t) => sum + t.amount, 0);
-        
-        // "Held" is Pending OR Approved Hold commission
-        const held = referralComms.filter(t => t.status === 'Pending' || (t.status === 'Approved' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')))).reduce((sum, t) => sum + t.amount, 0);
-        
+        // "Earned" is money in wallet (Approved and NOT hold position)
+        const earned = referralComms
+            .filter(t => t.status === 'Approved' && !(t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')))
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        // "Held" is Pending money OR Approved hold positions
+        const held = referralComms
+            .filter(t => t.status === 'Pending' || (t.status === 'Approved' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))))
+            .reduce((sum, t) => sum + t.amount, 0);
+
         // Overflow is ONLY true if it resulted in a $0 rejection AND is NOT a Hold Position
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+        
         const isOverflow = !isHoldPosition && hasOverflowTx;
         
         let earningSourcePlanId: string | undefined;

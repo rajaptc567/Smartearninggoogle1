@@ -710,7 +710,7 @@ export const purchasePlan = async (req, res) => {
                             const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
                             const upName = nextPlan ? nextPlan.name : 'your next plan';
                             
-                            eligibility.status = 'Pending'; // Mark as pending for forced savings
+                            eligibility.status = 'Approved'; // Changed to Approved per instruction
                             eligibility.message = `Position Held! Commission from slot #${referralCount + 1} (${user.username}) is reserved for your auto-upgrade to ${upName}.`;
                         }
                     } else {
@@ -755,22 +755,28 @@ export const purchasePlan = async (req, res) => {
                 const finalCommissionAmount = convertCurrency(commissionInPurchaserCurrency, user.currency, uplineUser.currency);
 
                 // --- REFINED BALANCE UPDATE LOGIC ---
-                // Only add to wallet if it's Approved AND not a hold position
                 const isHoldPositionNow = level === 0 && plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1);
 
-                if (eligibility.status === 'Approved' && !isHoldPositionNow) {
-                    uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
-                    await uplineUser.save();
-                    
-                    const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
-                    
-                    const notifText = previousOverflow
-                        ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
-                        : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
-                    
-                    await Notification.create({ userId: uplineUser._id, message: notifText });
-                } else {
-                    // It's a Pending hold slot or a restricted commission
+                if (eligibility.status === 'Approved') {
+                    if (!isHoldPositionNow) {
+                        uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
+                        await uplineUser.save();
+                        
+                        const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
+                        
+                        const notifText = previousOverflow
+                            ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
+                            : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
+                        
+                        await Notification.create({ userId: uplineUser._id, message: notifText });
+                    } else {
+                        // It's an approved hold position - do NOT update wallet balance
+                        await Notification.create({ 
+                            userId: uplineUser._id, 
+                            message: `${eligibility.message} Amount reserved: ${uplineUser.currency}${finalCommissionAmount.toFixed(2)}` 
+                        });
+                    }
+                } else if (eligibility.status === 'Pending') {
                     await Notification.create({ 
                         userId: uplineUser._id, 
                         message: `${eligibility.message} Amount reserved: ${uplineUser.currency}${finalCommissionAmount.toFixed(2)}` 
