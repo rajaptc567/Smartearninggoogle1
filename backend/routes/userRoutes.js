@@ -6,7 +6,6 @@ import {
     createUser,
     updateUser,
     deleteUser,
-    bulkDeleteUsers,
     loginUser,
     adjustWallet,
     purchasePlan,
@@ -25,7 +24,6 @@ router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
 router.put('/bulk-restrictions', bulkUpdateRestrictions);
-router.delete('/bulk', bulkDeleteUsers);
 
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
 

@@ -406,41 +406,35 @@ export const deleteUser = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: `User not found` });
 
-        // 1. Delete Associated Data
+        // Import models dynamically or ensure they are imported at top.
+        // Assuming models are imported at top: Deposit, Withdrawal, Transaction, Notification, Transfer, PasswordResetRequest
+        const { default: Deposit } = await import('../models/Deposit.js');
+        const { default: Withdrawal } = await import('../models/Withdrawal.js');
+        const { default: Transaction } = await import('../models/Transaction.js');
+        const { default: Notification } = await import('../models/Notification.js');
+        const { default: Transfer } = await import('../models/Transfer.js');
+        const { default: PasswordResetRequest } = await import('../models/PasswordResetRequest.js');
+
+        // 1. Delete Deposits
         await Deposit.deleteMany({ userId: user._id });
+
+        // 2. Delete Withdrawals
         await Withdrawal.deleteMany({ userId: user._id });
+
+        // 3. Delete Transactions
         await Transaction.deleteMany({ userId: user._id });
+
+        // 4. Delete Notifications
         await Notification.deleteMany({ userId: user._id });
+        
+        // 5. Delete Password Reset Requests
         await PasswordResetRequest.deleteMany({ userId: user._id });
+
+        // 6. Delete Transfers (Sent and Received)
         await Transfer.deleteMany({ $or: [{ senderId: user._id }, { recipientId: user._id }] });
 
-        // 2. Finally, delete the user
+        // 7. Finally, delete the user
         await User.findByIdAndDelete(req.params.id);
-
-        res.status(200).json({ success: true, data: {} });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
-};
-
-// @desc    Bulk Delete Users
-// @route   DELETE /api/v1/users/bulk
-export const bulkDeleteUsers = async (req, res) => {
-    try {
-        const { ids } = req.body;
-        if (!ids || !Array.isArray(ids)) {
-            return res.status(400).json({ success: false, error: 'Please provide an array of user IDs.' });
-        }
-
-        // Perform cascading deletes for all IDs
-        await Deposit.deleteMany({ userId: { $in: ids } });
-        await Withdrawal.deleteMany({ userId: { $in: ids } });
-        await Transaction.deleteMany({ userId: { $in: ids } });
-        await Notification.deleteMany({ userId: { $in: ids } });
-        await PasswordResetRequest.deleteMany({ userId: { $in: ids } });
-        await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
-
-        await User.deleteMany({ _id: { $in: ids } });
 
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
