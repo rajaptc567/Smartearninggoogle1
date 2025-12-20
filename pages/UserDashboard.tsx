@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
@@ -82,10 +80,12 @@ const UserDashboard: React.FC = () => {
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
-        const approvedCommissions = userTransactions.filter(t => t.type === 'Commission' && t.status === 'Approved');
+        // "Approved" commissions for dashboard counts should exclude "Held for Upgrade" ones if status is Approved but with Hold description.
+        // Actually, normally 'Approved' means added to balance.
+        const approvedCommissions = userTransactions.filter(t => t.type === 'Commission' && t.status === 'Approved' && !(t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
         
-        const totalCommission = approvedCommissions.reduce((sum, t) => sum + t.amount, 0);
-        const directCommission = approvedCommissions.filter(t => t.level === 1).reduce((sum, t) => sum + t.amount, 0);
+        const totalCommission = userTransactions.filter(t => t.type === 'Commission' && (t.status === 'Approved' || t.status === 'Pending')).reduce((sum, t) => sum + t.amount, 0);
+        const directCommission = userTransactions.filter(t => t.type === 'Commission' && (t.status === 'Approved' || t.status === 'Pending') && t.level === 1).reduce((sum, t) => sum + t.amount, 0);
         const indirectCommission = totalCommission - directCommission;
 
         const activePlanCount = (currentUser.activePlans || []).length;
@@ -97,7 +97,7 @@ const UserDashboard: React.FC = () => {
             totalCommission,
             directCommission,
             indirectCommission,
-            pendingCommission: userTransactions.filter(t => t.type === 'Commission' && t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0),
+            pendingCommission: userTransactions.filter(t => t.type === 'Commission' && (t.status === 'Pending' || (t.status === 'Approved' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))))).reduce((sum, t) => sum + t.amount, 0),
             monthlyEarnings: approvedCommissions.filter(t => t.date >= firstDayOfMonth).reduce((sum, t) => sum + t.amount, 0),
             activePlanCount,
             activePlanValue,
@@ -146,9 +146,7 @@ const UserDashboard: React.FC = () => {
     );
     
      const NetworkSummaryCard = () => {
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
         return (

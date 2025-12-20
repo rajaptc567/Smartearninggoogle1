@@ -99,20 +99,23 @@ const Referrals: React.FC = () => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        const used = users.filter(u => 
-            u.sponsor && 
-            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(String(ap.planId)))
+        // Slot usage should count both Approved and Pending (Hold) direct commissions
+        const used = transactions.filter(t => 
+            t.userId === currentUser._id && 
+            t.type === 'Commission' && 
+            t.level === 1 && 
+            (t.status === 'Approved' || t.status === 'Pending') &&
+            t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
         ).length;
 
         return { used, limit };
-    }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
+    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
 
     const globalHeldData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
         transactions
-            .filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Pending')
+            .filter(t => t.userId === currentUser._id && t.type === 'Commission' && (t.status === 'Pending' || (t.status === 'Approved' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')))))
             .forEach(t => {
                 if (!t.sourceUserId) return;
                 const current = pendingMap.get(t.sourceUserId) || { total: 0, breakdown: [] };
@@ -174,16 +177,17 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
-        const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
-        const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
-        
-        // PRIORITY: Detect if this is a Hold Position (Auto-Upgrade slot)
-        const isHoldPosition = referralComms.some(t => (t.status === 'Pending' || t.status === 'Approved') && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+        // PRIORITY: Detect if this is a Hold Position (Auto-Upgrade slot) from the description
+        const isHoldPosition = referralComms.some(t => (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
 
-        // Detecting Overflow: A rejected $0 transaction that is NOT a hold position
-        const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+        // "Earned" is wallet-bound Approved commission (excluding Hold positions)
+        const earned = referralComms.filter(t => t.status === 'Approved' && !(t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))).reduce((sum, t) => sum + t.amount, 0);
         
-        // Finalized flags
+        // "Held" is Pending OR Approved Hold commission
+        const held = referralComms.filter(t => t.status === 'Pending' || (t.status === 'Approved' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')))).reduce((sum, t) => sum + t.amount, 0);
+        
+        // Overflow is ONLY true if it resulted in a $0 rejection AND is NOT a Hold Position
+        const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
         const isOverflow = !isHoldPosition && hasOverflowTx;
         
         let earningSourcePlanId: string | undefined;
@@ -395,7 +399,7 @@ const Referrals: React.FC = () => {
             const allApproved = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allApproved.reduce((sum, t) => sum + t.amount, 0);
             
-            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && (t.status === 'Pending' || t.status === 'Approved') && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
             if (pendingHold) isHoldPosition = true;
             
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
@@ -596,9 +600,9 @@ const Referrals: React.FC = () => {
                             <div className="text-right md:text-center"><span className="block text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span></div>
                         </div>
                         <div className="flex-1 p-3 md:p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span></div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span></div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span></div>
                             <div className="text-center md:text-left px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Indirect</span><div className="flex items-center justify-center md:justify-start gap-1.5"><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{selectedPlanDetails.indirectCommissions.length}</span><span className="text-xs text-gray-500">Levels</span></div></div>
                         </div>
                     </div>
