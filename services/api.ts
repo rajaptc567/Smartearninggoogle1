@@ -92,6 +92,16 @@ export const deleteUser = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+export const bulkDeleteUsers = async (ids: string[]): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/users/bulk`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const login = async (email: string, password: string): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users/login`, {
         method: 'POST',
