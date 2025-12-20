@@ -664,23 +664,17 @@ export const purchasePlan = async (req, res) => {
                         }
                     }
 
-                    // Count total commissions (Approved and Pending) to determine accurate slot index
                     const referralCount = await Transaction.countDocuments({
                         userId: uplineUser._id,
                         type: 'Commission',
                         relatedPlanId: { $in: equivIds },
                         level: 1,
-                        status: { $in: ['Approved', 'Pending'] }
+                        status: 'Approved',
+                        amount: { $gt: 0 } 
                     });
 
-                    // --- NEW LOGIC: Check Hold Position BEFORE Overflow ---
-                    let isHoldSlot = false;
-                    if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
-                        isHoldSlot = true;
-                    }
-
                     // --- OVERFLOW LOGIC ---
-                    if (!isHoldSlot && plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
+                    if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
                         await Notification.create({
                             userId: uplineUser._id,
                             message: `⚠️ Slot Limit Reached! Your referral ${user.username} purchased '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
@@ -705,12 +699,12 @@ export const purchasePlan = async (req, res) => {
                         commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
                         
                         // --- HOLD POSITION LOGIC ---
-                        if (isHoldSlot) {
+                        if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
                             const nextPlanId = plan.autoUpgrade?.toPlanId;
                             const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
                             const upName = nextPlan ? nextPlan.name : 'your next plan';
                             
-                            eligibility.status = 'Approved'; // Changed to Approved per instruction
+                            eligibility.status = 'Pending';
                             eligibility.message = `Position Held! Commission from slot #${referralCount + 1} (${user.username}) is reserved for your auto-upgrade to ${upName}.`;
                         }
                     } else {
@@ -754,28 +748,17 @@ export const purchasePlan = async (req, res) => {
 
                 const finalCommissionAmount = convertCurrency(commissionInPurchaserCurrency, user.currency, uplineUser.currency);
 
-                // --- REFINED BALANCE UPDATE LOGIC ---
-                const isHoldPositionNow = level === 0 && plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1);
-
                 if (eligibility.status === 'Approved') {
-                    if (!isHoldPositionNow) {
-                        uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
-                        await uplineUser.save();
-                        
-                        const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
-                        
-                        const notifText = previousOverflow
-                            ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
-                            : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
-                        
-                        await Notification.create({ userId: uplineUser._id, message: notifText });
-                    } else {
-                        // It's an approved hold position - do NOT update wallet balance
-                        await Notification.create({ 
-                            userId: uplineUser._id, 
-                            message: `${eligibility.message} Amount reserved: ${uplineUser.currency}${finalCommissionAmount.toFixed(2)}` 
-                        });
-                    }
+                    uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
+                    await uplineUser.save();
+                    
+                    const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
+                    
+                    const notifText = previousOverflow
+                        ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
+                        : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s purchase of ${plan.name}.`;
+                    
+                    await Notification.create({ userId: uplineUser._id, message: notifText });
                 } else if (eligibility.status === 'Pending') {
                     await Notification.create({ 
                         userId: uplineUser._id, 
@@ -795,7 +778,7 @@ export const purchasePlan = async (req, res) => {
                     amount: finalCommissionAmount,
                     level: level + 1,
                     sourceUserId: user._id,
-                    description: isHoldPositionNow
+                    description: eligibility.status === 'Pending' && level === 0 && plan.holdPosition?.slots.includes(referralCount + 1) 
                         ? `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade`
                         : `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
                     status: eligibility.status,
