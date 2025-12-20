@@ -19,8 +19,7 @@ const Referrals: React.FC = () => {
     const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
     const location = useLocation();
-    const highlightPlanId = location.state?.highlightPlanId;
-
+    
     const uniqueActivePlans = useMemo(() => {
         if (!currentUser || !currentUser.activePlans) return [];
         const seen = new Set();
@@ -178,18 +177,19 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // REFINED: Strictly identify Hold Positions
-        const isHoldPosition = referralComms.some(t => t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+        // PRIORITY: Detect if this is a Hold Position (Auto-Upgrade slot)
+        const isHoldPosition = referralComms.some(t => (t.status === 'Pending' || t.status === 'Approved') && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
 
-        // REFINED: Identify true Overflow (Only if NOT a Hold Position)
+        // Detecting Overflow: A rejected $0 transaction that is NOT a hold position
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
         
-        // Priority: If it's a Hold Position, it is NOT an overflow/missed referral
+        // Finalized flags
         const isOverflow = !isHoldPosition && hasOverflowTx;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
-            earningSourcePlanId = referralComms[0].relatedPlanId?.toString();
+            const bestTx = referralComms.find(t => t.status === 'Approved' || t.status === 'Pending') || referralComms[0];
+            earningSourcePlanId = bestTx.relatedPlanId?.toString();
         }
         return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
@@ -284,11 +284,12 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // LOGIC: Any referral who has earned OR is in a hold position belongs in the earners list
+            // LOGIC: If the user is a 'Hold Position' user OR has earned, they are active earners.
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } else {
+                // Only move to overflow if they aren't earners/hold-slots AND triggered a limit transaction
                 if (info.isOverflow && node.level === 1) {
                     overflowList.push(node);
                 } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
@@ -454,8 +455,8 @@ const Referrals: React.FC = () => {
                                 {user.status !== Status.Active && <Badge status={user.status as Status} />}
                                 
                                 {isHoldPosition ? (
-                                    <span className="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm flex items-center gap-1">
-                                        <span className="text-xs">🔒</span> Held for Upgrade: {formatCurrency(held, currentUser?.currency)}
+                                    <span className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded-full font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5 border border-amber-600 animate-pulse">
+                                        <span className="text-xs">🔒</span> Held for Upgrade: {formatCurrency(held || earned, currentUser?.currency)}
                                     </span>
                                 ) : isOverflow ? (
                                     <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200 flex items-center gap-1">
@@ -491,25 +492,25 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 w-full sm:w-auto text-right pl-9 sm:pl-0">
-                        {earned > 0 && (
+                        {(earned > 0 && !isHoldPosition) && (
                             <div>
                                 <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">{isAllView ? 'Total Earned' : 'Commission'}</p>
                                 <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(earned, currentUser?.currency || 'USD')}</p>
                             </div>
                         )}
                         
-                        {held > 0 && !isHeldView && (
+                        {(held > 0 || isHoldPosition) && !isHeldView && (
                              <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-amber-50 border-amber-100 dark:bg-amber-900/20 dark:border-amber-800'} px-3 py-1 rounded border`}>
                                 <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-amber-800 dark:text-amber-200'}`}>
                                     {isHoldPosition ? 'Reserved for Upgrade' : 'Pending'}
                                 </p>
                                 <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-amber-600 dark:text-amber-400'}`}>
-                                    {formatCurrency(held, currentUser?.currency || 'USD')}
+                                    {formatCurrency(held || earned, currentUser?.currency || 'USD')}
                                 </p>
                             </div>
                         )}
 
-                        {isOverflow && !isHeldView && earned === 0 && (
+                        {isOverflow && !isHeldView && (earned === 0 && held === 0) && (
                             <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-100 dark:border-orange-800">
                                 <p className="text-[10px] uppercase text-orange-800 dark:text-orange-200 font-bold tracking-wider">Missed</p>
                                 <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCurrency(0, currentUser?.currency || 'USD')}</p>
@@ -533,7 +534,7 @@ const Referrals: React.FC = () => {
                                 <div className="border-t border-amber-200 dark:border-amber-800 pt-1 text-[10px] text-amber-600 dark:text-amber-500 font-bold text-right mt-1">Total: {formatCurrency(held, currentUser?.currency)}</div>
                             </div>
                         ) : null}
-                        {earned === 0 && held === 0 && !isOverflow && !isHoldPosition && <span className="text-xs text-gray-400 italic">No commission</span>}
+                        {(earned === 0 && held === 0 && !isOverflow && !isHoldPosition) && <span className="text-xs text-gray-400 italic">No commission</span>}
                     </div>
                 </div>
             </div>
@@ -595,9 +596,9 @@ const Referrals: React.FC = () => {
                             <div className="text-right md:text-center"><span className="block text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span></div>
                         </div>
                         <div className="flex-1 p-3 md:p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span></div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span></div>
-                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-700 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Duration</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedPlanDetails.durationDays === 0 ? 'Lifetime' : `${selectedPlanDetails.durationDays} Days`}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Min Withdraw</span><span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</span></div>
+                            <div className="text-center md:text-left border-r border-gray-100 dark:border-gray-100 last:border-0 px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Direct Comm</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{renderMaxDirectCommission(selectedPlanDetails)}</span></div>
                             <div className="text-center md:text-left px-2"><span className="block text-[10px] uppercase text-gray-400 font-bold tracking-wider mb-1">Indirect</span><div className="flex items-center justify-center md:justify-start gap-1.5"><span className="text-sm font-bold text-purple-600 dark:text-purple-400">{selectedPlanDetails.indirectCommissions.length}</span><span className="text-xs text-gray-500">Levels</span></div></div>
                         </div>
                     </div>
