@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
@@ -362,7 +362,7 @@ interface UserManagementModalProps {
 
 const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose }) => {
     const { state, dispatch } = useData();
-    const { users, transactions, investmentPlans } = state;
+    const { users, transactions, investmentPlans, settings } = state;
 
     const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'network' | 'history'>('profile');
     const [formData, setFormData] = useState<Partial<User>>(
@@ -384,9 +384,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
 
-    // NEW: Manual Plan Activation State
+    // Manual Plan Activation State
     const [activationPlanId, setActivationPlanId] = useState('');
     const [isActivatingPlan, setIsActivatingPlan] = useState(false);
+
+    // NEW: Tree Filter State
+    const [treePlanFilterId, setTreePlanFilterId] = useState('');
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -465,7 +468,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         }
     };
 
-    // NEW: Handle Admin Plan Activation
     const handleManualActivatePlan = async () => {
         if (!user || !activationPlanId) return;
         
@@ -489,15 +491,53 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
 
+    /* FIX: useCallback was missing in the imports from react. Imported it to fix line 494. */
+    const getEquivalentIds = useCallback((planId: string) => {
+        const ids = new Set<string>();
+        if (planId) {
+            ids.add(planId);
+            const group = settings.planEquivalencyGroups?.find(g =>
+                String(g.usdPlanId) === planId ||
+                String(g.pkrPlanId) === planId ||
+                String(g.eurPlanId) === planId
+            );
+            if (group) {
+                if (group.usdPlanId) ids.add(String(group.usdPlanId));
+                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
+                if (group.eurPlanId) ids.add(String(group.eurPlanId));
+            }
+        }
+        return ids;
+    }, [settings.planEquivalencyGroups]);
+
     const genealogyTree = useMemo(() => {
         if (!user) return [];
+        
+        const filterIds = treePlanFilterId ? getEquivalentIds(treePlanFilterId) : null;
+
         const buildGenealogy = (sponsorUsername: string, allUsers: User[]): { user: User, children: any[] }[] => {
             const directReferrals = allUsers.filter(u => u.sponsor === sponsorUsername);
             if (!directReferrals.length) return [];
-            return directReferrals.map(child => ({ user: child, children: buildGenealogy(child.username, allUsers) }));
+            
+            return directReferrals
+                .map(child => {
+                    const children = buildGenealogy(child.username, allUsers);
+                    // If filtering, only show node if child has the plan OR has descendants with the plan
+                    if (filterIds) {
+                        const hasPlan = child.activePlans?.some(p => filterIds.has(String(p.planId)));
+                        const hasEarningFromChild = transactions.some(t => t.userId === user._id && t.sourceUserId === child._id && t.relatedPlanId && filterIds.has(String(t.relatedPlanId)));
+                        
+                        if (hasPlan || hasEarningFromChild || children.length > 0) {
+                            return { user: child, children };
+                        }
+                        return null;
+                    }
+                    return { user: child, children };
+                })
+                .filter((n): n is { user: User, children: any[] } => n !== null);
         };
         return buildGenealogy(user.username, users);
-    }, [user, users]);
+    }, [user, users, treePlanFilterId, getEquivalentIds, transactions]);
 
     const allUserTransactions = useMemo(() => {
         if (!user) return [];
@@ -523,16 +563,16 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         });
     }, [allUserTransactions, historyTypeFilter, historyStatusFilter, historyDateFrom, historyDateTo]);
 
-    // Plans filtered for manual activation based on user's currency
+    const currencyPlans = useMemo(() => {
+        if (!user) return [];
+        return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency);
+    }, [user, investmentPlans]);
+
     const activatablePlans = useMemo(() => {
         if (!user) return [];
         const currentOwnedPlanIds = (user.activePlans || []).map(p => p.planId.toString());
-        return investmentPlans.filter(p => 
-            p.status === 'Active' && 
-            p.currency === user.currency &&
-            !currentOwnedPlanIds.includes(p._id.toString())
-        );
-    }, [user, investmentPlans]);
+        return currencyPlans.filter(p => !currentOwnedPlanIds.includes(p._id.toString()));
+    }, [user, currencyPlans]);
 
     const renderTree = (nodes: { user: User, children: any[] }[]) => (
         <ul className="pl-4 border-l border-gray-200 dark:border-gray-700 space-y-3">
@@ -568,7 +608,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                 </div>
 
                 <div className="flex-grow overflow-y-auto pt-6 space-y-6">
-                    {/* PROFILE & WALLET TAB */}
                     {activeTab === 'profile' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
@@ -614,7 +653,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             )}
                         </div>
                     )}
-                    {/* SECURITY TAB */}
                     {activeTab === 'security' && user && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-4">
@@ -633,20 +671,31 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             </div>
                         </div>
                     )}
-                    {/* NETWORK TAB */}
                     {activeTab === 'network' && user && (
                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                             <div>
+                             <div className="space-y-4">
                                 <h3 className="font-semibold mb-2">Network & Downline</h3>
-                                <p className="mb-4"><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</p>
+                                <p className="text-sm"><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</p>
+                                
+                                <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded border dark:border-gray-600">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Filter Tree by Plan</label>
+                                    <select 
+                                        value={treePlanFilterId} 
+                                        onChange={e => setTreePlanFilterId(e.target.value)}
+                                        className="w-full text-xs rounded border-gray-300 dark:bg-gray-800 dark:border-gray-700"
+                                    >
+                                        <option value="">Show All Network</option>
+                                        {currencyPlans.map(p => <option key={p._id} value={p._id}>{p.name} Tree</option>)}
+                                    </select>
+                                </div>
+
                                 <div className="mt-4">
-                                    <h4 className="font-semibold mb-2">Downline Tree:</h4>
-                                    {renderTree(genealogyTree)}
+                                    <h4 className="font-semibold mb-2 text-sm uppercase tracking-wide text-gray-500">Downline Tree:</h4>
+                                    {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-xs italic text-gray-400">No members found matching filter.</p>}
                                 </div>
                              </div>
                              
                              <div className="space-y-6">
-                                 {/* Current Plans */}
                                  <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
                                     <h4 className="font-semibold mb-3">Active Plans</h4>
                                     {user.activePlans && user.activePlans.length > 0 ? (
@@ -666,12 +715,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     )}
                                  </div>
 
-                                 {/* Manual Activation Form */}
                                  <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
                                     <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-1 flex items-center gap-2">
                                         <span className="text-lg">🛡️</span> Manual Plan Activation
                                     </h4>
-                                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">Assign a plan to the user manually. No funds will be deducted from user's wallet.</p>
+                                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">Assign a plan manually. Commissions will trigger correctly.</p>
                                     
                                     <div className="space-y-3">
                                         <div>
@@ -701,7 +749,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                              </div>
                          </div>
                     )}
-                    {/* HISTORY TAB */}
                     {activeTab === 'history' && user && (
                         <div className="space-y-4">
                             <h3 className="font-semibold">Financial History</h3>
@@ -752,9 +799,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     );
 };
 
-// ... (Sub-components for Bulk Restrictions, MessageUser, DeleteUser remain as they were) ...
-// Note: I'm keeping the original ones from the user's provided file content but they were truncated in the prompt.
-// I'll re-implement the ones needed for the UI to be fully functional.
+// ... (Sub-components remain functional)
 
 interface BulkRestrictionsModalProps {
     allUsers: User[];
@@ -786,6 +831,7 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                 sendNotification
             });
             
+            // Refresh data
             const updatedUsers = await getUsers();
             dispatch({ type: 'SET_USERS', payload: updatedUsers });
             
@@ -898,6 +944,7 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
                 randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined
             });
             
+            // Add new notifications to local state
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
             
             alert(`Message sent to ${result.count} users successfully.`);
