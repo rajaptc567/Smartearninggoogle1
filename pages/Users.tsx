@@ -353,8 +353,9 @@ const Users: React.FC = () => {
     );
 };
 
-// --- UserManagementModal ---
+// --- MODAL COMPONENTS ---
 
+// FIX: Implemented UserManagementModal to handle single user editing and creation
 interface UserManagementModalProps {
     user: User | null;
     onClose: () => void;
@@ -362,445 +363,179 @@ interface UserManagementModalProps {
 
 const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose }) => {
     const { state, dispatch } = useData();
-    const { users, transactions, investmentPlans, settings } = state;
-
-    const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'network' | 'history'>('profile');
-    const [formData, setFormData] = useState<Partial<User>>(
-        user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false } }
-    );
+    const [formData, setFormData] = useState<Partial<User>>(user || {
+        fullName: '',
+        username: '',
+        email: '',
+        phone: '',
+        whatsapp: '',
+        country: countries[0],
+        status: Status.Active,
+        restrictions: {
+            deposit: false,
+            withdrawal: false,
+            transfer: false,
+            earning: false,
+            dispute: false,
+            excludeFromTicker: false
+        }
+    });
+    const [password, setPassword] = useState(''); // Only for new users
     const [isSaving, setIsSaving] = useState(false);
+    const [walletAmount, setWalletAmount] = useState('');
+    const [walletAction, setWalletAction] = useState<'credit' | 'debit'>('credit');
+    const [walletReason, setWalletReason] = useState('Admin adjustment');
+    const [selectedPlanId, setSelectedPlanId] = useState('');
 
-    // Wallet Adjustment State
-    const [walletAdjAmount, setWalletAdjAmount] = useState('');
-    const [walletAdjReason, setWalletAdjReason] = useState('Admin manual adjustment');
-
-    // Security State
-    const [resetLink, setResetLink] = useState('');
-    const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-
-    // Financial History Filter State
-    const [historyTypeFilter, setHistoryTypeFilter] = useState('');
-    const [historyStatusFilter, setHistoryStatusFilter] = useState('');
-    const [historyDateFrom, setHistoryDateFrom] = useState('');
-    const [historyDateTo, setHistoryDateTo] = useState('');
-
-    // Manual Plan Activation State
-    const [activationPlanId, setActivationPlanId] = useState('');
-    const [isActivatingPlan, setIsActivatingPlan] = useState(false);
-
-    // NEW: Tree Filter State
-    const [treePlanFilterId, setTreePlanFilterId] = useState('');
-
-    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name.startsWith('restrictions.')) {
+            const field = name.split('.')[1];
+            setFormData(prev => ({
+                ...prev,
+                restrictions: { ...prev.restrictions!, [field]: (e.target as HTMLInputElement).checked }
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
-    const handleRestrictionsChange = (key: keyof UserRestrictions) => {
-        setFormData(prev => ({
-            ...prev,
-            restrictions: {
-                ...prev.restrictions!,
-                [key]: !prev.restrictions![key]
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        try {
+            if (user) {
+                const updated = await apiUpdateUser(user._id, formData);
+                dispatch({ type: 'UPDATE_USER', payload: updated });
+                alert('User updated successfully');
+            } else {
+                const created = await apiCreateUser({ ...formData, password });
+                dispatch({ type: 'ADD_USER', payload: created });
+                alert('User created successfully');
             }
-        }));
+            onClose();
+        } catch (error) {
+            alert(`Error: ${error instanceof Error ? error.message : 'Failed to save'}`);
+        } finally {
+            setIsSaving(false);
+        }
     };
-    
-    const handleGenerateResetLink = async () => {
+
+    const handleAdjustWallet = async () => {
+        if (!user || !walletAmount) return;
+        const amt = parseFloat(walletAmount);
+        if (isNaN(amt)) return;
+        try {
+            const result = await adjustUserWallet(user._id, {
+                amount: walletAction === 'credit' ? amt : -amt,
+                description: walletReason
+            });
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+            alert('Wallet adjusted');
+            setWalletAmount('');
+        } catch (error) {
+            alert('Failed to adjust wallet');
+        }
+    };
+
+    const handleActivatePlan = async () => {
+        if (!user || !selectedPlanId) return;
+        try {
+            const result = await adminActivatePlan(user._id, selectedPlanId);
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+            alert('Plan activated');
+            setSelectedPlanId('');
+        } catch (error) {
+            alert(`Error: ${error instanceof Error ? error.message : 'Failed to activate plan'}`);
+        }
+    };
+
+    const handleResetPassword = async () => {
         if (!user) return;
-        setIsGeneratingLink(true);
         try {
             const { resetToken } = await adminInitiatePasswordReset(user._id);
             const link = `${window.location.origin}${window.location.pathname}#/reset-password?token=${resetToken}`;
-            setResetLink(link);
+            navigator.clipboard.writeText(link);
+            alert('Password reset link copied to clipboard');
         } catch (error) {
-            console.error(error);
-            alert(`Failed to generate reset link: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsGeneratingLink(false);
+            alert('Failed to generate reset link');
         }
     };
-    
-    const handleWalletAdjustment = async (action: 'credit' | 'debit') => {
-        if (!user) return;
-        const numericAmount = parseFloat(walletAdjAmount);
-        if (isNaN(numericAmount) || numericAmount <= 0) {
-            alert("Please enter a valid positive amount for adjustment.");
-            return;
-        }
-
-        const adjustmentAmount = action === 'credit' ? numericAmount : -numericAmount;
-        
-        setIsSaving(true);
-        try {
-            const result = await adjustUserWallet(user._id, { amount: adjustmentAmount, description: walletAdjReason });
-            dispatch({ type: 'UPDATE_USER', payload: result.user });
-            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
-            setFormData(prev => ({ ...prev, walletBalance: result.user.walletBalance })); // Update local form state
-            alert("Wallet adjusted successfully.");
-            setWalletAdjAmount('');
-        } catch (error) {
-            console.error(error);
-            alert("Failed to adjust wallet.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleSaveChanges = async () => {
-        setIsSaving(true);
-        try {
-            const { _id, ...updateData } = formData;
-            if (user) {
-                const updatedUser = await apiUpdateUser(user._id, updateData);
-                dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-            } else {
-                const newUser = await apiCreateUser({ ...updateData, password: 'password123' } as any);
-                dispatch({ type: 'ADD_USER', payload: newUser });
-            }
-            alert('User details saved successfully!');
-            onClose();
-        } catch (error) {
-            console.error(error);
-            alert("Failed to save user details.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleManualActivatePlan = async () => {
-        if (!user || !activationPlanId) return;
-        
-        setIsActivatingPlan(true);
-        try {
-            const result = await adminActivatePlan(user._id, activationPlanId);
-            dispatch({ type: 'UPDATE_USER', payload: result.user });
-            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
-            setFormData(prev => ({ ...prev, activePlans: result.user.activePlans, walletBalance: result.user.walletBalance }));
-            setActivationPlanId('');
-            alert(`Plan activated successfully for ${user.username}!`);
-        } catch (error) {
-            console.error(error);
-            alert(`Failed to activate plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsActivatingPlan(false);
-        }
-    };
-    
-    const TabButton: React.FC<{ tabId: typeof activeTab, children: React.ReactNode }> = ({ tabId, children }) => (
-        <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
-    );
-
-    /* FIX: useCallback was missing in the imports from react. Imported it to fix line 494. */
-    const getEquivalentIds = useCallback((planId: string) => {
-        const ids = new Set<string>();
-        if (planId) {
-            ids.add(planId);
-            const group = settings.planEquivalencyGroups?.find(g =>
-                String(g.usdPlanId) === planId ||
-                String(g.pkrPlanId) === planId ||
-                String(g.eurPlanId) === planId
-            );
-            if (group) {
-                if (group.usdPlanId) ids.add(String(group.usdPlanId));
-                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
-                if (group.eurPlanId) ids.add(String(group.eurPlanId));
-            }
-        }
-        return ids;
-    }, [settings.planEquivalencyGroups]);
-
-    const genealogyTree = useMemo(() => {
-        if (!user) return [];
-        
-        const filterIds = treePlanFilterId ? getEquivalentIds(treePlanFilterId) : null;
-
-        const buildGenealogy = (sponsorUsername: string, allUsers: User[]): { user: User, children: any[] }[] => {
-            const directReferrals = allUsers.filter(u => u.sponsor === sponsorUsername);
-            if (!directReferrals.length) return [];
-            
-            return directReferrals
-                .map(child => {
-                    const children = buildGenealogy(child.username, allUsers);
-                    // If filtering, only show node if child has the plan OR has descendants with the plan
-                    if (filterIds) {
-                        const hasPlan = child.activePlans?.some(p => filterIds.has(String(p.planId)));
-                        const hasEarningFromChild = transactions.some(t => t.userId === user._id && t.sourceUserId === child._id && t.relatedPlanId && filterIds.has(String(t.relatedPlanId)));
-                        
-                        if (hasPlan || hasEarningFromChild || children.length > 0) {
-                            return { user: child, children };
-                        }
-                        return null;
-                    }
-                    return { user: child, children };
-                })
-                .filter((n): n is { user: User, children: any[] } => n !== null);
-        };
-        return buildGenealogy(user.username, users);
-    }, [user, users, treePlanFilterId, getEquivalentIds, transactions]);
-
-    const allUserTransactions = useMemo(() => {
-        if (!user) return [];
-        return transactions
-            .filter(t => t.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [user, transactions]);
-
-    const filteredUserTransactions = useMemo(() => {
-        return allUserTransactions.filter(t => {
-            if (historyTypeFilter && t.type !== historyTypeFilter) return false;
-            if (historyStatusFilter && (t.status || 'Approved') !== historyStatusFilter) return false;
-            
-            const from = historyDateFrom ? new Date(historyDateFrom) : null;
-            const to = historyDateTo ? new Date(historyDateTo) : null;
-            if (from) from.setHours(0, 0, 0, 0);
-            if (to) to.setHours(23, 59, 59, 999);
-            const itemDate = new Date(t.date);
-            if (from && itemDate < from) return false;
-            if (to && itemDate > to) return false;
-
-            return true;
-        });
-    }, [allUserTransactions, historyTypeFilter, historyStatusFilter, historyDateFrom, historyDateTo]);
-
-    const currencyPlans = useMemo(() => {
-        if (!user) return [];
-        return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency);
-    }, [user, investmentPlans]);
-
-    const activatablePlans = useMemo(() => {
-        if (!user) return [];
-        const currentOwnedPlanIds = (user.activePlans || []).map(p => p.planId.toString());
-        return currencyPlans.filter(p => !currentOwnedPlanIds.includes(p._id.toString()));
-    }, [user, currencyPlans]);
-
-    const renderTree = (nodes: { user: User, children: any[] }[]) => (
-        <ul className="pl-4 border-l border-gray-200 dark:border-gray-700 space-y-3">
-            {nodes.map(node => (
-                <li key={node.user._id} className="text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md">
-                    <div className="flex justify-between items-center">
-                        <p className="font-bold">{node.user.username}</p>
-                        <Badge status={node.user.status as any} />
-                    </div>
-                    <p className="text-xs text-gray-500">Joined: {new Date(node.user.registrationDate).toLocaleDateString()}</p>
-                    <div className="mt-1 text-xs">
-                        <strong>Plans:</strong> {node.user.activePlans && node.user.activePlans.length > 0 
-                            ? node.user.activePlans.map(p => `${p.planName} (${formatCurrency(p.price, node.user.currency)})`).join(', ') 
-                            : 'None'}
-                    </div>
-                    {node.children.length > 0 && <div className="mt-2">{renderTree(node.children)}</div>}
-                </li>
-            ))}
-        </ul>
-    );
 
     return (
-         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-[95vw] max-w-4xl h-[90vh] flex flex-col">
-                <h2 className="text-xl font-bold mb-4">{user ? `Manage User: ${user.username}` : 'Add New User'}</h2>
-                <div className="border-b border-gray-200 dark:border-gray-700">
-                    <nav className="-mb-px flex space-x-4">
-                        <TabButton tabId="profile">Profile & Wallet</TabButton>
-                        {user && <TabButton tabId="security">Security & Restrictions</TabButton>}
-                        {user && <TabButton tabId="network">Network & Plans</TabButton>}
-                        {user && <TabButton tabId="history">Financial History</TabButton>}
-                    </nav>
-                </div>
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-[90vw] max-w-2xl space-y-6">
+                <h3 className="text-xl font-bold">{user ? `Manage User: ${user.username}` : 'Add New User'}</h3>
+                <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input name="fullName" value={formData.fullName} onChange={handleChange} placeholder="Full Name" className="rounded border p-2 dark:bg-gray-700" required />
+                    <input name="username" value={formData.username} onChange={handleChange} placeholder="Username" className="rounded border p-2 dark:bg-gray-700" required />
+                    <input name="email" value={formData.email} onChange={handleChange} placeholder="Email" type="email" className="rounded border p-2 dark:bg-gray-700" required />
+                    <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Phone" className="rounded border p-2 dark:bg-gray-700" required />
+                    {!user && <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password" className="rounded border p-2 dark:bg-gray-700" required />}
+                    <select name="country" value={formData.country} onChange={handleChange} className="rounded border p-2 dark:bg-gray-700">
+                        {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select name="status" value={formData.status} onChange={handleChange} className="rounded border p-2 dark:bg-gray-700">
+                        <option value={Status.Active}>Active</option>
+                        <option value={Status.Blocked}>Blocked</option>
+                        <option value={Status.Paused}>Paused</option>
+                        <option value={Status.Pending}>Pending</option>
+                    </select>
+                    <input name="sponsor" value={formData.sponsor} onChange={handleChange} placeholder="Sponsor Username" className="rounded border p-2 dark:bg-gray-700" />
+                    
+                    <div className="md:col-span-2 space-y-2">
+                        <h4 className="font-bold text-sm">Restrictions</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {Object.keys(formData.restrictions || {}).map(key => (
+                                <label key={key} className="flex items-center space-x-2 text-sm">
+                                    <input type="checkbox" name={`restrictions.${key}`} checked={(formData.restrictions as any)[key]} onChange={handleChange} className="rounded" />
+                                    <span className="capitalize">{key}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <Button type="submit" disabled={isSaving} className="md:col-span-2">{isSaving ? 'Saving...' : 'Save User Info'}</Button>
+                </form>
 
-                <div className="flex-grow overflow-y-auto pt-6 space-y-6">
-                    {activeTab === 'profile' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                               <h3 className="font-semibold">Profile Information</h3>
-                               <input name="fullName" value={formData.fullName || ''} onChange={handleFormChange} placeholder="Full Name" className="w-full rounded-md dark:bg-gray-700" />
-                               <input name="username" value={formData.username || ''} onChange={handleFormChange} placeholder="Username" className="w-full rounded-md dark:bg-gray-700" disabled={!!user} />
-                               <input name="email" value={formData.email || ''} onChange={handleFormChange} placeholder="Email" className="w-full rounded-md dark:bg-gray-700" />
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-gray-500">Phone</label>
-                                        <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">WhatsApp</label>
-                                        <input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} placeholder="WhatsApp Number" className="w-full rounded-md dark:bg-gray-700" />
-                                    </div>
-                                </div>
-                                <select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    <option value="">-- Select country --</option>
-                                    {countries.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <select name="status" value={formData.status} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    {Object.values(Status).filter(s => ['Active', 'Blocked', 'Pending', 'Paused'].includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            {user && (
-                            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-600">
-                                <h3 className="font-semibold">Wallet Management</h3>
-                                <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'PKR')}</p>
-                                <div>
-                                    <label className="text-xs">Adjustment Amount</label>
-                                    <input type="number" value={walletAdjAmount} onChange={(e) => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
-                                </div>
-                                 <div>
-                                    <label className="text-xs">Reason / Description</label>
-                                    <input type="text" value={walletAdjReason} onChange={(e) => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit (+)</Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleWalletAdjustment('debit')} disabled={isSaving}>Debit (-)</Button>
-                                </div>
-                            </div>
-                            )}
+                {user && (
+                    <div className="border-t pt-4 space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" onClick={handleResetPassword}>Copy Password Reset Link</Button>
                         </div>
-                    )}
-                    {activeTab === 'security' && user && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                                <h3 className="font-semibold">Password Reset</h3>
-                                <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink}>{isGeneratingLink ? 'Generating...' : 'Generate Password Reset Link'}</Button>
-                                {resetLink && <div className="text-xs p-2 bg-blue-50 dark:bg-blue-900/50 rounded break-words mt-2">{resetLink}</div>}
-                            </div>
-                            <div className="space-y-2">
-                                <h3 className="font-semibold">Activity Restrictions</h3>
-                                {Object.keys(formData.restrictions || {}).map(key => (
-                                    <label key={key} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                                        <span>Block {key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                                        <input type="checkbox" checked={(formData.restrictions as any)[key]} onChange={() => handleRestrictionsChange(key as keyof UserRestrictions)} />
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {activeTab === 'network' && user && (
-                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                             <div className="space-y-4">
-                                <h3 className="font-semibold mb-2">Network & Downline</h3>
-                                <p className="text-sm"><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</p>
-                                
-                                <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded border dark:border-gray-600">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Filter Tree by Plan</label>
-                                    <select 
-                                        value={treePlanFilterId} 
-                                        onChange={e => setTreePlanFilterId(e.target.value)}
-                                        className="w-full text-xs rounded border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                                    >
-                                        <option value="">Show All Network</option>
-                                        {currencyPlans.map(p => <option key={p._id} value={p._id}>{p.name} Tree</option>)}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
+                                <h4 className="font-bold mb-2">Adjust Wallet</h4>
+                                <div className="flex gap-2 mb-2">
+                                    <select value={walletAction} onChange={e => setWalletAction(e.target.value as any)} className="rounded border p-1 text-sm dark:bg-gray-800">
+                                        <option value="credit">Credit</option>
+                                        <option value="debit">Debit</option>
                                     </select>
+                                    <input type="number" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} placeholder="Amount" className="w-full rounded border p-1 text-sm dark:bg-gray-800" />
                                 </div>
-
-                                <div className="mt-4">
-                                    <h4 className="font-semibold mb-2 text-sm uppercase tracking-wide text-gray-500">Downline Tree:</h4>
-                                    {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-xs italic text-gray-400">No members found matching filter.</p>}
-                                </div>
-                             </div>
-                             
-                             <div className="space-y-6">
-                                 <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
-                                    <h4 className="font-semibold mb-3">Active Plans</h4>
-                                    {user.activePlans && user.activePlans.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {user.activePlans.map((p, i) => (
-                                                <li key={p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-md text-sm flex justify-between items-center shadow-sm">
-                                                    <span>
-                                                        <span className="font-bold">{p.planName}</span>
-                                                        <span className="text-[10px] text-gray-500 block uppercase tracking-wider">Purchased: {new Date(p.purchaseDate).toLocaleDateString()}</span>
-                                                    </span>
-                                                    <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-sm text-gray-500 italic">No plans active.</p>
-                                    )}
-                                 </div>
-
-                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
-                                    <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-1 flex items-center gap-2">
-                                        <span className="text-lg">🛡️</span> Manual Plan Activation
-                                    </h4>
-                                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">Assign a plan manually. Commissions will trigger correctly.</p>
-                                    
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Select {user.currency} Plan</label>
-                                            <select 
-                                                value={activationPlanId} 
-                                                onChange={e => setActivationPlanId(e.target.value)}
-                                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
-                                            >
-                                                <option value="">-- Choose Plan --</option>
-                                                {activatablePlans.map(p => (
-                                                    <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>
-                                                ))}
-                                                {activatablePlans.length === 0 && <option disabled>No other {user.currency} plans available.</option>}
-                                            </select>
-                                        </div>
-                                        <Button 
-                                            onClick={handleManualActivatePlan} 
-                                            disabled={isActivatingPlan || !activationPlanId}
-                                            className="w-full bg-blue-700 hover:bg-blue-800"
-                                            size="sm"
-                                        >
-                                            {isActivatingPlan ? 'Activating...' : 'Activate Plan Now'}
-                                        </Button>
-                                    </div>
-                                 </div>
-                             </div>
-                         </div>
-                    )}
-                    {activeTab === 'history' && user && (
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Financial History</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                                <div><select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                <div><select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Statuses</option>{Object.values(Status).filter(s => ['Approved', 'Pending', 'Rejected'].includes(s)).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                                <div><input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
-                                <div><input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
+                                <input value={walletReason} onChange={e => setWalletReason(e.target.value)} placeholder="Reason" className="w-full rounded border p-1 text-sm dark:bg-gray-800 mb-2" />
+                                <Button size="sm" onClick={handleAdjustWallet} className="w-full">Apply Adjustment</Button>
                             </div>
-                            <div className="max-h-[50vh] overflow-y-auto border dark:border-gray-700 rounded-lg">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
-                                        <tr>
-                                            <th className="p-2">Date</th>
-                                            <th className="p-2">Type</th>
-                                            <th className="p-2">Amount</th>
-                                            <th className="p-2">Status</th>
-                                            <th className="p-2">Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y dark:divide-gray-700">
-                                        {filteredUserTransactions.length > 0 ? filteredUserTransactions.map(tx => (
-                                            <tr key={tx._id}>
-                                                <td className="p-2 whitespace-nowrap">{new Date(tx.date).toLocaleString()}</td>
-                                                <td className="p-2">{tx.type}</td>
-                                                <td className={`p-2 font-mono ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {formatCurrency(tx.amount, tx.currency)}
-                                                </td>
-                                                <td className="p-2"><Badge status={tx.status as Status || Status.Approved} /></td>
-                                                <td className="p-2 max-w-xs truncate" title={tx.description}>{tx.description}</td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={5} className="p-4 text-center text-gray-500">No transactions found.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
+                                <h4 className="font-bold mb-2">Activate Plan (Grant)</h4>
+                                <select value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)} className="w-full rounded border p-1 text-sm dark:bg-gray-800 mb-2">
+                                    <option value="">-- Select Plan --</option>
+                                    {state.investmentPlans.filter(p => p.currency === user.currency && p.status === Status.Active).map(p => (
+                                        <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>
+                                    ))}
+                                </select>
+                                <Button size="sm" onClick={handleActivatePlan} className="w-full">Activate Plan</Button>
                             </div>
                         </div>
-                    )}
-                </div>
-
-                <div className="mt-6 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
-                    <Button type="button" onClick={handleSaveChanges} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Profile Details'}</Button>
-                </div>
+                    </div>
+                )}
             </div>
         </Modal>
     );
 };
 
-// ... (Sub-components remain functional)
-
+// FIX: Implemented BulkRestrictionsModal for batch updates
 interface BulkRestrictionsModalProps {
     allUsers: User[];
     investmentPlans: InvestmentPlan[];
@@ -808,19 +543,28 @@ interface BulkRestrictionsModalProps {
 }
 
 const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers, investmentPlans, onClose }) => {
-    const { dispatch } = useData();
     const [targetType, setTargetType] = useState<'all' | 'plan' | 'single'>('all');
     const [targetIds, setTargetIds] = useState<string[]>([]);
     const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({
-        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
+        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false
     });
     const [action, setAction] = useState<'enable' | 'disable' | 'toggle'>('enable');
     const [sendNotification, setSendNotification] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    const handleToggleId = (id: string) => {
+        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const handleRestrictionToggle = (field: keyof UserRestrictions) => {
+        setRestrictions(prev => ({ ...prev, [field]: !prev[field] }));
+    };
+
     const handleApply = async () => {
-        if (targetType === 'plan' && targetIds.length === 0) return alert('Select at least one plan');
-        
+        if (targetType !== 'all' && targetIds.length === 0) return alert('Please select targets');
+        const selectedCount = Object.values(restrictions).filter(Boolean).length;
+        if (selectedCount === 0) return alert('Please select at least one restriction to update');
+
         setIsProcessing(true);
         try {
             await bulkUpdateUserRestrictions({
@@ -830,87 +574,75 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                 action,
                 sendNotification
             });
-            
-            // Refresh data
-            const updatedUsers = await getUsers();
-            dispatch({ type: 'SET_USERS', payload: updatedUsers });
-            
-            alert('Bulk update completed successfully');
-            onClose();
-        } catch (err: any) {
-            alert(err.message || 'Operation failed');
+            alert('Bulk update completed successfully.');
+            window.location.reload(); // Simple sync
+        } catch (error) {
+            alert('Bulk update failed');
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const toggleRestriction = (key: keyof UserRestrictions) => {
-        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    const togglePlan = (id: string) => {
-        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    };
-
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-[500px] max-w-full space-y-6">
-                <h3 className="text-xl font-bold">Bulk Restrictions Manager</h3>
-                
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">1. Select Target Users</label>
-                    <div className="flex gap-2 mb-3">
-                        <button onClick={() => setTargetType('all')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>All Users</button>
-                        <button onClick={() => setTargetType('plan')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'plan' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>By Plan</button>
+            <div className="p-4 w-[90vw] max-w-lg space-y-4">
+                <h3 className="text-xl font-bold">Bulk Update Restrictions</h3>
+                <div className="space-y-3">
+                    <div>
+                        <label className="block text-sm font-bold mb-1">1. Select Target Group</label>
+                        <select value={targetType} onChange={e => { setTargetType(e.target.value as any); setTargetIds([]); }} className="w-full border rounded p-2 dark:bg-gray-700">
+                            <option value="all">All Users</option>
+                            <option value="plan">By Active Plan</option>
+                        </select>
                     </div>
+
                     {targetType === 'plan' && (
-                        <div className="max-h-40 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
-                            {investmentPlans.map(plan => (
-                                <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
-                                    <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
-                                    <span>{plan.name} ({plan.currency})</span>
+                        <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border p-2 rounded dark:bg-gray-800">
+                            {investmentPlans.map(p => (
+                                <label key={p._id} className="flex items-center space-x-2 text-xs">
+                                    <input type="checkbox" checked={targetIds.includes(p._id)} onChange={() => handleToggleId(p._id)} />
+                                    <span>{p.name}</span>
                                 </label>
                             ))}
                         </div>
                     )}
-                </section>
 
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">2. Select Restrictions to Affect</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Object.keys(restrictions).map(key => (
-                            <label key={key} className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50 cursor-pointer text-sm">
-                                <input type="checkbox" checked={!!(restrictions as any)[key]} onChange={() => toggleRestriction(key as any)} className="rounded" />
-                                <span className="capitalize">{key}</span>
-                            </label>
-                        ))}
+                    <div>
+                        <label className="block text-sm font-bold mb-1">2. Select Restrictions to Update</label>
+                        <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-700 p-3 rounded">
+                            {Object.keys(restrictions).map(key => (
+                                <label key={key} className="flex items-center space-x-2 text-sm">
+                                    <input type="checkbox" checked={(restrictions as any)[key]} onChange={() => handleRestrictionToggle(key as any)} />
+                                    <span className="capitalize">{key}</span>
+                                </label>
+                            ))}
+                        </div>
                     </div>
-                </section>
 
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">3. Action</label>
-                    <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full border rounded p-2 text-sm">
-                        <option value="enable">Enable Restrictions (BLOCK activity)</option>
-                        <option value="disable">Disable Restrictions (ALLOW activity)</option>
-                        <option value="toggle">Invert Current Status</option>
-                    </select>
-                </section>
+                    <div>
+                        <label className="block text-sm font-bold mb-1">3. Action</label>
+                        <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full border rounded p-2 dark:bg-gray-700">
+                            <option value="enable">Enable (Block Activity)</option>
+                            <option value="disable">Disable (Allow Activity)</option>
+                            <option value="toggle">Toggle Current State</option>
+                        </select>
+                    </div>
 
-                <div className="pt-4 border-t flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
-                        <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded" />
-                        Send notification to affected users
+                    <label className="flex items-center space-x-2 text-sm">
+                        <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} />
+                        <span>Send notification to users</span>
                     </label>
-                    <div className="flex gap-2">
-                        <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                        <Button onClick={handleApply} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Apply Bulk Update'}</Button>
-                    </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-2">
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleApply} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Apply Changes'}</Button>
                 </div>
             </div>
         </Modal>
     );
 };
 
+// FIX: Implemented MessageUserModal for single or bulk admin messages
 interface MessageUserModalProps {
     user: User | null;
     allUsers: User[];
@@ -920,99 +652,69 @@ interface MessageUserModalProps {
 
 const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
-    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all' | 'inactive'>(user ? 'single' : 'all');
+    const [targetType, setTargetType] = useState<'single' | 'all' | 'plan' | 'inactive'>(user ? 'single' : 'all');
     const [targetIds, setTargetIds] = useState<string[]>(user ? [user._id] : []);
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isPopup, setIsPopup] = useState(false);
-    const [isSending, setIsSending] = useState(false);
     const [randomCount, setRandomCount] = useState('');
+    const [isSending, setIsSending] = useState(false);
 
-    const handleSend = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!message) return alert('Message is required');
-        
+    const handleSend = async () => {
+        if (!message) return alert('Please enter a message');
         setIsSending(true);
         try {
-            const result = await sendAdminNotification({
-                userId: targetType === 'single' ? targetIds[0] : undefined,
-                targetType: targetType !== 'single' ? targetType : undefined,
-                targetIds: targetType === 'plan' ? targetIds : undefined,
-                subject,
-                message,
-                isPopup,
-                randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined
-            });
-            
-            // Add new notifications to local state
+            const payload: any = { message, subject, isPopup, targetType };
+            if (targetType === 'single' && user) payload.userId = user._id;
+            else if (targetType === 'plan' || targetType === 'single') payload.targetIds = targetIds;
+            if (targetType === 'inactive' && randomCount) payload.randomCount = randomCount;
+
+            const result = await sendAdminNotification(payload);
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
-            
-            alert(`Message sent to ${result.count} users successfully.`);
+            alert(`Message sent to ${result.count} users`);
             onClose();
-        } catch (err: any) {
-            alert(err.message || 'Failed to send message');
+        } catch (error) {
+            alert('Failed to send message');
         } finally {
             setIsSending(false);
         }
     };
 
-    const togglePlan = (id: string) => {
-        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    };
-
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <form onSubmit={handleSend} className="p-4 w-[500px] max-w-full space-y-4">
-                <h3 className="text-xl font-bold">Send Announcement</h3>
-                
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients</label>
-                    {user ? (
-                        <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div>
-                    ) : (
-                        <div className="space-y-3">
-                            <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full border rounded p-2 text-sm">
-                                <option value="all">All Members</option>
-                                <option value="plan">Members of Specific Plans</option>
-                                <option value="inactive">Inactive Members (No active plan)</option>
-                            </select>
-                            {targetType === 'plan' && (
-                                <div className="max-h-32 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
-                                    {investmentPlans.map(plan => (
-                                        <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
-                                            <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
-                                            <span>{plan.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                            {targetType === 'inactive' && (
-                                <input type="number" placeholder="Send to X random inactive users (leave empty for ALL)" value={randomCount} onChange={e => setRandomCount(e.target.value)} className="w-full border rounded p-2 text-sm" />
-                            )}
-                        </div>
-                    )}
+            <div className="p-4 w-[90vw] max-w-lg space-y-4">
+                <h3 className="text-xl font-bold">{user ? `Message User: ${user.username}` : 'Bulk Messaging'}</h3>
+                {!user && (
+                    <select value={targetType} onChange={e => { setTargetType(e.target.value as any); setTargetIds([]); }} className="w-full border rounded p-2 dark:bg-gray-700">
+                        <option value="all">All Users</option>
+                        <option value="plan">By Active Plan</option>
+                        <option value="inactive">Inactive Users</option>
+                    </select>
+                )}
+                {targetType === 'plan' && (
+                    <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border p-2 rounded dark:bg-gray-800">
+                        {investmentPlans.map(p => (
+                            <label key={p._id} className="flex items-center space-x-2 text-xs">
+                                <input type="checkbox" checked={targetIds.includes(p._id)} onChange={() => setTargetIds(prev => prev.includes(p._id) ? prev.filter(id => id !== p._id) : [...prev, p._id])} />
+                                <span>{p.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                )}
+                {targetType === 'inactive' && (
+                    <input type="number" placeholder="Randomly pick X users (Leave empty for all)" value={randomCount} onChange={e => setRandomCount(e.target.value)} className="w-full border rounded p-2 dark:bg-gray-700" />
+                )}
+                <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject (Optional)" className="w-full border rounded p-2 dark:bg-gray-700" />
+                <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Enter your message..." rows={5} className="w-full border rounded p-2 dark:bg-gray-700" />
+                <label className="flex items-center space-x-2 text-sm">
+                    <input type="checkbox" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} />
+                    <span>Show as Popup Alert</span>
+                </label>
+                <div className="mt-6 flex justify-end gap-2">
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleSend} disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button>
                 </div>
-
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label>
-                    <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" />
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label>
-                    <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required />
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <input type="checkbox" id="popup-chk" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded" />
-                    <label htmlFor="popup-chk" className="text-sm font-medium cursor-pointer">Display as urgent POPUP for user</label>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>
-                    <Button type="submit" disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button>
-                </div>
-            </form>
+            </div>
         </Modal>
     );
 };
@@ -1052,117 +754,116 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
         
         const referrals = state.users.filter(u => u.sponsor === user.username);
         
-        const approvedDeposits = userDeposits
-            .filter(d => d.status === Status.Approved)
-            .reduce((sum, d) => sum + d.amount, 0);
+        // Detailed Analytics for Dossier
+        const approvedDeposits = userDeposits.filter(d => d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0);
+        const paidWithdrawals = userWithdrawals.filter(w => w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0);
         
-        const paidWithdrawals = userWithdrawals
-            .filter(w => w.status === Status.Paid)
-            .reduce((sum, w) => sum + w.finalAmount, 0);
+        const commissions = userTx.filter(t => t.type === 'Commission');
+        const approvedComms = commissions.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         
-        const commissions = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved');
-        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
+        // Identify Hold Positions (Pending commissions with specific keywords)
+        const heldComms = commissions.filter(t => t.status === 'Pending' && (t.description.toLowerCase().includes('hold') || t.description.toLowerCase().includes('reserved') || t.description.toLowerCase().includes('position')));
+        const totalHeldAmount = heldComms.reduce((sum, t) => sum + t.amount, 0);
+
+        // Identify Overflow (Rejected commissions with amount 0)
+        const overflowCommsCount = commissions.filter(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('overflow'))).length;
 
         const csvRows: string[][] = [];
-        csvRows.push([`=== COMPREHENSIVE USER DOSSIER: ${user.username} (${user.email}) ===`]);
-        csvRows.push([`Generated on: ${new Date().toLocaleString()}`]);
+        csvRows.push([`=== CRITICAL PRE-DELETION USER DOSSIER: ${user.username} ===`]);
+        csvRows.push([`Exported on: ${new Date().toLocaleString()}`]);
         csvRows.push([]);
         
-        // --- PROFILE SECTION ---
-        csvRows.push(['--- PROFILE INFORMATION ---']);
+        // --- 1. PROFILE & SECURITY ---
+        csvRows.push(['--- 1. CORE PROFILE INFORMATION ---']);
         csvRows.push(['User ID', user._id]);
-        csvRows.push(['Username', user.username]);
         csvRows.push(['Full Name', user.fullName]);
+        csvRows.push(['Username', user.username]);
         csvRows.push(['Email', user.email]);
         csvRows.push(['Phone', user.phone]);
-        csvRows.push(['WhatsApp', user.whatsapp || 'N/A']);
         csvRows.push(['Country', user.country]);
         csvRows.push(['Currency', user.currency]);
         csvRows.push(['Sponsor', user.sponsor || 'N/A']);
-        csvRows.push(['Status', user.status]);
-        csvRows.push(['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
         csvRows.push(['Joined Date', new Date(user.registrationDate).toLocaleString()]);
+        csvRows.push(['Account Status', user.status]);
+        csvRows.push(['Final Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
         csvRows.push([]);
 
-        // --- ANALYTICS SUMMARY ---
-        csvRows.push(['--- FINANCIAL SUMMARY ---']);
-        csvRows.push(['Metric', 'Total Value']);
-        csvRows.push(['Total Approved Deposits', formatCurrency(approvedDeposits, user.currency)]);
-        csvRows.push(['Total Paid Withdrawals', formatCurrency(paidWithdrawals, user.currency)]);
-        csvRows.push(['Total Commission Earned', formatCurrency(totalCommission, user.currency)]);
-        csvRows.push(['Total Direct Referrals', `${referrals.length}`]);
+        // --- 2. FINANCIAL PERFORMANCE ---
+        csvRows.push(['--- 2. FINANCIAL PERFORMANCE SUMMARY ---']);
+        csvRows.push(['Metric', 'Count/Value', 'Status']);
+        csvRows.push(['Total Approved Deposits', formatCurrency(approvedDeposits, user.currency), 'Completed']);
+        csvRows.push(['Total Paid Withdrawals', formatCurrency(paidWithdrawals, user.currency), 'Completed']);
+        csvRows.push(['Total Realized Earnings', formatCurrency(approvedComms, user.currency), 'In Wallet']);
+        csvRows.push(['Held Commissions (For Upgrade)', formatCurrency(totalHeldAmount, user.currency), `${heldComms.length} Slots Reserved`]);
+        csvRows.push(['Missed Commissions (Overflow)', `${overflowCommsCount} Events`, 'Slots Full / Limit Reached']);
         csvRows.push([]);
 
-        // --- ACTIVE PLANS ---
-        csvRows.push(['--- CURRENT ACTIVE PLANS ---']);
+        // --- 3. ACTIVE PLANS ---
+        csvRows.push(['--- 3. MEMBERSHIPS & PLANS ---']);
         if (user.activePlans && user.activePlans.length > 0) {
-            csvRows.push(['Plan Name', 'Price', 'Purchase Date']);
+            csvRows.push(['Plan Name', 'Purchase Price', 'Purchase Date', 'Plan ID']);
             user.activePlans.forEach(p => {
-                csvRows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString()]);
+                csvRows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString(), p.planId]);
             });
         } else {
-            csvRows.push(['None']);
+            csvRows.push(['No active plans owned at time of deletion.']);
         }
         csvRows.push([]);
 
-        // --- REFERRALS ---
-        csvRows.push(['--- DIRECT REFERRALS (DOWNLINE) ---']);
+        // --- 4. REFERRALS ---
+        csvRows.push(['--- 4. DIRECT REFERRAL NETWORK ---']);
         if (referrals.length > 0) {
-            csvRows.push(['Username', 'Full Name', 'Email', 'Joined Date', 'Status']);
+            csvRows.push(['Username', 'Full Name', 'Email', 'Joined Date', 'Status', 'Has Active Plan?']);
             referrals.forEach(ref => {
-                csvRows.push([ref.username, ref.fullName, ref.email, new Date(ref.registrationDate).toLocaleDateString(), ref.status]);
+                const hasPlan = ref.activePlans && ref.activePlans.length > 0 ? 'YES' : 'NO';
+                csvRows.push([ref.username, ref.fullName, ref.email, new Date(ref.registrationDate).toLocaleDateString(), ref.status, hasPlan]);
             });
         } else {
-            csvRows.push(['No referrals found']);
+            csvRows.push(['User had no direct referrals.']);
         }
         csvRows.push([]);
 
-        // --- DEPOSITS ---
-        csvRows.push(['--- DEPOSIT HISTORY ---']);
+        // --- 5. DEPOSIT HISTORY ---
+        csvRows.push(['--- 5. DEPOSIT RECORD ---']);
         if (userDeposits.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Transaction ID', 'Status', 'Date']);
+            csvRows.push(['Date', 'Amount', 'Method', 'Tx ID', 'Status', 'Admin Notes']);
             userDeposits.forEach(d => {
-                csvRows.push([d._id, d.method, formatCurrency(d.amount, d.currency), d.transactionId, d.status, new Date(d.date).toLocaleString()]);
+                csvRows.push([new Date(d.date).toLocaleString(), formatCurrency(d.amount, d.currency), d.method, d.transactionId, d.status, d.adminNotes || '']);
             });
         } else {
-            csvRows.push(['No deposits found']);
+            csvRows.push(['No deposits found.']);
         }
         csvRows.push([]);
 
-        // --- WITHDRAWALS ---
-        csvRows.push(['--- WITHDRAWAL HISTORY ---']);
+        // --- 6. WITHDRAWAL HISTORY ---
+        csvRows.push(['--- 6. WITHDRAWAL RECORD ---']);
         if (userWithdrawals.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Fee', 'Final Amount', 'Status', 'Date']);
+            csvRows.push(['Date', 'Requested Amount', 'Final Payout', 'Fee', 'Method', 'Status', 'Admin Notes']);
             userWithdrawals.forEach(w => {
-                csvRows.push([w._id, w.method, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.status, new Date(w.date).toLocaleString()]);
+                csvRows.push([new Date(w.date).toLocaleString(), formatCurrency(w.amount, w.currency), formatCurrency(w.finalAmount, w.currency), formatCurrency(w.fee, w.currency), w.method, w.status, w.adminNotes || '']);
             });
         } else {
-            csvRows.push(['No withdrawals found']);
+            csvRows.push(['No withdrawals found.']);
         }
         csvRows.push([]);
 
-        // --- TRANSFERS ---
-        csvRows.push(['--- TRANSFER HISTORY (SENT/RECEIVED) ---']);
-        if (userTransfers.length > 0) {
-            csvRows.push(['ID', 'Sender', 'Recipient', 'Amount', 'Fee', 'Total Deducted', 'Status', 'Date']);
-            userTransfers.forEach(t => {
-                csvRows.push([t._id, t.senderName, t.recipientName, formatCurrency(t.amount, t.currency), formatCurrency(t.fee || 0, t.currency), formatCurrency(t.totalDeducted || 0, t.currency), t.status, new Date(t.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No transfers found']);
-        }
-        csvRows.push([]);
-
-        // --- ACTIVITY LOG ---
-        csvRows.push(['--- TRANSACTION LOG (FULL ACTIVITY) ---']);
-        csvRows.push(['Date', 'Type', 'Amount', 'Status', 'Description']);
+        // --- 7. TRANSACTION LEDGER ---
+        csvRows.push(['--- 7. COMPLETE TRANSACTION LEDGER ---']);
+        csvRows.push(['Date', 'Type', 'Amount', 'Status', 'Description', 'Categorization']);
         userTx.forEach(tx => {
+            let cat = 'General';
+            const desc = tx.description.toLowerCase();
+            if (tx.status === 'Pending' && (desc.includes('hold') || desc.includes('reserved') || desc.includes('position'))) cat = 'HOLD POSITION';
+            else if (tx.status === 'Rejected' && tx.amount === 0 && (desc.includes('limit') || desc.includes('overflow'))) cat = 'OVERFLOW (MISSED)';
+            else if (tx.type === 'Commission') cat = 'EARNING';
+
             csvRows.push([
                 new Date(tx.date).toLocaleString(),
                 tx.type,
                 formatCurrency(tx.amount, tx.currency),
                 tx.status || 'N/A',
-                tx.description
+                tx.description,
+                cat
             ]);
         });
 
@@ -1170,7 +871,7 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `Full_User_Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `PERMANENT_RECORD_Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1182,25 +883,26 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
                 <div className="mx-auto w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>
-                <h3 className="text-xl font-bold">Confirm Deletion</h3>
+                <h3 className="text-xl font-bold">Confirm Permanent Deletion</h3>
                 <p className="text-sm text-gray-500">
-                    Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>?
+                    You are about to delete user <strong className="text-gray-900">@{user.username}</strong>. 
                     <br/><br/>
-                    All their deposits, withdrawals, transactions, and notification history will be wiped. <strong>This action is irreversible.</strong>
+                    This will permanently wipe their wallet, network position, plans, and history. <strong>This action cannot be undone.</strong>
                 </p>
                 <div className="pt-2">
                     <button 
                         onClick={handleDownloadDossier}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-bold underline flex items-center justify-center gap-1 mx-auto"
+                        className="p-3 w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-100 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
                     >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Full User Dossier (Referrals, Plans, History)
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        DOWNLOAD COMPREHENSIVE DOSSIER
                     </button>
+                    <p className="text-[10px] text-gray-400 mt-1 italic">Dossier includes Referrals, Deposits, Withdrawals, and Hold/Overflow history.</p>
                 </div>
                 <div className="flex gap-2 pt-4">
                     <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
                     <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>
-                        {isDeleting ? 'Deleting...' : 'Yes, Delete All'}
+                        {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                     </Button>
                 </div>
             </div>
