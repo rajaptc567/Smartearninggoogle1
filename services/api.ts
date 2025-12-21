@@ -1,3 +1,4 @@
+
 // ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
 
@@ -136,6 +137,16 @@ export const purchasePlan = async (userId: string, planId: string): Promise<{ us
 
 export const adminActivatePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/activate-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const adminRemovePlan = async (userId: string, planId: string): Promise<{ user: User }> => {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/remove-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId }),

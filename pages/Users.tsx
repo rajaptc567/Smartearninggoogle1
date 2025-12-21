@@ -6,7 +6,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, adminRemovePlan } from '../services/api';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -486,6 +486,21 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             setIsActivatingPlan(false);
         }
     };
+
+    const handleRemovePlan = async (planId: string) => {
+        if (!user) return;
+        if (!window.confirm("Are you sure you want to remove this plan from the user? This will stop their earnings from this plan.")) return;
+        
+        try {
+            const result = await adminRemovePlan(user._id, planId);
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            setFormData(prev => ({ ...prev, activePlans: result.user.activePlans }));
+            alert("Plan removed successfully.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to remove plan.");
+        }
+    };
     
     const TabButton: React.FC<{ tabId: typeof activeTab, children: React.ReactNode }> = ({ tabId, children }) => (
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
@@ -706,7 +721,16 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                         <span className="font-bold">{p.planName}</span>
                                                         <span className="text-[10px] text-gray-500 block uppercase tracking-wider">Purchased: {new Date(p.purchaseDate).toLocaleDateString()}</span>
                                                     </span>
-                                                    <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
+                                                        <button 
+                                                            onClick={() => handleRemovePlan(p.planId)}
+                                                            className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                            title="Remove plan from user"
+                                                        >
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -799,7 +823,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     );
 };
 
-// ... (Sub-components remain functional)
+// ... existing subcomponents ...
 
 interface BulkRestrictionsModalProps {
     allUsers: User[];

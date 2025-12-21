@@ -1,3 +1,4 @@
+
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -802,6 +803,54 @@ export const adminActivatePlan = async (req, res) => {
         await createLog('Plan Activated', user.username, `Admin manually activated ${plan.name} plan.`, 'admin');
 
         res.status(200).json({ success: true, data: { user, transaction } });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Admin manually removes a plan from a user
+// @route   POST /api/v1/users/:id/remove-plan
+export const adminRemovePlan = async (req, res) => {
+    const { planId } = req.body;
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const planToRemove = user.activePlans.find(p => p.planId.toString() === planId.toString());
+        if (!planToRemove) {
+            return res.status(400).json({ success: false, error: 'User does not own this plan.' });
+        }
+
+        // Remove from Active Plans array
+        user.activePlans = user.activePlans.filter(p => p.planId.toString() !== planId.toString());
+        
+        // Update quick display name if necessary
+        if (user.activePlans.length > 0) {
+            user.activePlan = user.activePlans[user.activePlans.length - 1].planName;
+        } else {
+            user.activePlan = 'None';
+        }
+
+        await user.save();
+
+        await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            currency: user.currency,
+            type: 'Manual Debit',
+            amount: 0,
+            description: `Admin manually revoked ${planToRemove.planName} plan`,
+            status: 'Approved'
+        });
+
+        await Notification.create({
+            userId: user._id,
+            message: `Administrator has manually revoked your ${planToRemove.planName} investment plan.`
+        });
+
+        await createLog('Plan Revoked', user.username, `Admin manually removed ${planToRemove.planName} plan.`, 'admin');
+
+        res.status(200).json({ success: true, data: { user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
