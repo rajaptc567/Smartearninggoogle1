@@ -574,6 +574,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
         let commissionConfig;
+        let referralCount = 0; // Distinct slot count
+
         if (level === 0) { // Direct Commission
             const equivIds = [plan._id.toString()];
             if (settings.planEquivalencyGroups) {
@@ -591,7 +593,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
             // Correctly identify slot number by counting both Approved AND Pending Level 1 transactions
             // This ensures that 'Hold Position' slots (which are Pending) correctly increment the total used count.
-            const referralCount = await Transaction.countDocuments({
+            referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
@@ -600,6 +602,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             });
 
             if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
+                // If the next slot would be a hold position, we actually allow it into the 'used' count
+                // even if it's over the normal 'earning' limit, but for simplicity here, we stick to limit rules.
                 await Notification.create({
                     userId: uplineUser._id,
                     message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
@@ -624,6 +628,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
                 
                 // --- HOLD POSITION LOGIC ---
+                // If this slot is designated as a hold position slot in plan settings
                 if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
                     const nextPlanId = plan.autoUpgrade?.toPlanId;
                     const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));

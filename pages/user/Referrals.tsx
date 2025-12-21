@@ -95,87 +95,13 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    const slotStats = useMemo(() => {
-        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
-        const limit = selectedPlanDetails.directReferralLimit || 0;
-        
-        // Improve slot usage calculation to count relevant Level 1 transactions (Approved or Pending)
-        // instead of just user counts, ensuring consistency with backend logic.
-        const used = transactions.filter(t => 
-            t.userId === currentUser._id && 
-            t.type === 'Commission' && 
-            t.level === 1 && 
-            (t.status === 'Approved' || t.status === 'Pending') &&
-            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false)
-        ).length;
-
-        return { used, limit };
-    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
-
-    const heldCommissionsData = useMemo(() => {
-        if (!currentUser || !selectedPlanId) return { referrals: [], count: 0, stats: new Map() };
-        
-        const filterIds = getEquivalentIds(selectedPlanId);
-        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
-        
-        transactions
-            .filter(t => 
-                t.userId === currentUser._id && 
-                t.type === 'Commission' && 
-                t.status === 'Pending' &&
-                (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) 
-            )
-            .forEach(t => {
-                if (!t.sourceUserId) return;
-                const current = pendingMap.get(t.sourceUserId) || { total: 0, breakdown: [] };
-                current.total += t.amount;
-                let reason = "Pending Review";
-                let missingPlanId = undefined;
-                let missingPlanName = undefined;
-                let isHoldPosition = false;
-
-                // Priority Check: Hold Position
-                if (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')) {
-                    reason = "Auto-Upgrade Reservation";
-                    isHoldPosition = true;
-                } else if (currentUser.restrictions?.earning) {
-                    reason = "Account Restricted";
-                } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
-                    reason = "No Active Plan";
-                } else if (settings.requirePlanMatchForCommission && t.relatedPlanId) {
-                     const reqIds = getEquivalentIds(String(t.relatedPlanId));
-                     const hasMatch = currentUser.activePlans?.some(p => reqIds.has(String(p.planId)));
-                     if (!hasMatch) {
-                         let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
-                         if (settings.planEquivalencyGroups) {
-                             const group = settings.planEquivalencyGroups.find(g => 
-                                String(g.usdPlanId) === String(t.relatedPlanId) || String(g.pkrPlanId) === String(t.relatedPlanId) || String(g.eurPlanId) === String(t.relatedPlanId)
-                             );
-                             if (group) {
-                                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                                 if (group[targetKey]) {
-                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
-                                     if (localPlan) targetPlan = localPlan;
-                                 }
-                             }
-                         }
-                         missingPlanName = targetPlan?.name || 'Required Plan';
-                         missingPlanId = targetPlan?._id;
-                         reason = `Requires Upgrade to ${missingPlanName}`;
-                     }
-                }
-                const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
-                if (existingEntry) {
-                    existingEntry.amount += t.amount;
-                } else {
-                    current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount, isHoldPosition });
-                }
-                pendingMap.set(t.sourceUserId, current);
-            });
-        const heldIds = Array.from(pendingMap.keys());
-        const referrals = users.filter(u => heldIds.includes(u._id));
-        return { referrals, count: referrals.length, stats: pendingMap };
-    }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId]);
+    // 1. Transaction Validation Helper - Improved for robust matching
+    const isTransactionHoldPosition = (t: Transaction) => {
+        const desc = t.description?.toLowerCase() || '';
+        const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
+        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
+        return isHeldStatus && hasKeywords;
+    };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
@@ -190,14 +116,12 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Detect hold position regardless of whether it is approved or pending
-        const isHoldPosition = referralComms.some(t => 
-            (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))
-        );
+        // Priority: Strictly distinguish isHoldPosition vs isOverflow
+        const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
         
-        // Overflow is only TRUE if there's an overflow record AND NO valid commission record (Hold or Approved)
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
         
+        // isOverflow: Only if NOT a hold position and has rejected 0 amount with no valid earnings/holds
         const isOverflow = hasOverflowTx && !isHoldPosition && earned === 0 && held === 0;
         
         let earningSourcePlanId: string | undefined;
@@ -207,66 +131,6 @@ const Referrals: React.FC = () => {
         }
         return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
-
-    const toggleNode = (userId: string) => {
-        setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
-    };
-
-    const handleSponsorClick = (sponsorUsername: string, referralNode: User) => {
-        const sponsor = users.find(u => u.username.toLowerCase() === sponsorUsername.toLowerCase());
-        if (sponsor) {
-            setSelectedSponsor(sponsor);
-            setSelectedReferralForSponsorModal(referralNode);
-            setIsSponsorModalOpen(true);
-        } else {
-            alert(`Sponsor details for @${sponsorUsername} not found.`);
-        }
-    };
-
-    const handleLocateSponsor = () => {
-        if (!selectedSponsor) return;
-        const currentInfo = getCommissionInfoForReferral(selectedSponsor, equivalentPlanIdsForSelected);
-        if (currentInfo.earned > 0) {
-            setHighlightedUserId(selectedSponsor._id);
-            setViewMode('tree');
-            setIsSponsorModalOpen(false);
-            return;
-        }
-        const foundPlan = uniqueActivePlans.find(plan => {
-            const ids = getEquivalentIds(plan.planId);
-            const info = getCommissionInfoForReferral(selectedSponsor, ids);
-            return info.earned > 0;
-        });
-        if (foundPlan) {
-            setIsSponsorModalOpen(false);
-            setSelectedPlanId(foundPlan.planId);
-            setTimeout(() => { setHighlightedUserId(selectedSponsor._id); setViewMode('tree'); }, 100);
-        } else {
-            const isInCurrentTree = allNodes.some(n => n.user._id === selectedSponsor._id);
-            if (isInCurrentTree) {
-                 setHighlightedUserId(selectedSponsor._id);
-                 setViewMode('tree');
-                 setIsSponsorModalOpen(false);
-            } else {
-                 alert("This sponsor does not appear in your earning tree for any active plans.");
-            }
-        }
-    };
-
-    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
-        const comms = plan.directCommissions;
-        if (!comms || comms.length === 0) return 'None';
-        let maxVal = 0;
-        let maxType = 'percentage';
-        comms.forEach(c => {
-            if (c.value > maxVal) {
-                maxVal = c.value;
-                maxType = c.type;
-            }
-        });
-        const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
-        return comms.length > 1 ? `Up to ${formattedVal}` : formattedVal;
-    };
 
     const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
         if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
@@ -345,7 +209,7 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
-            inactiveReferrals: inactiveList, // Fixed ReferenceError here
+            inactiveReferrals: inactiveList, // Corrected reference mapping
             allNodes: nodesList,
             networkStats: { 
                 totalReferrals: nodesList.length,
@@ -356,6 +220,142 @@ const Referrals: React.FC = () => {
             }
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
+
+    // 2. Slot Stats - Synchronized with the visible direct list
+    const slotStats = useMemo(() => {
+        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
+        const limit = selectedPlanDetails.directReferralLimit || 0;
+        
+        // Sync slot count logic with the member list logic (Level 1 Earners + Hold Positions)
+        const used = directEarners.length;
+
+        return { used, limit };
+    }, [currentUser, selectedPlanDetails, directEarners]);
+
+    const heldCommissionsData = useMemo(() => {
+        if (!currentUser || !selectedPlanId) return { referrals: [], count: 0, stats: new Map() };
+        
+        const filterIds = getEquivalentIds(selectedPlanId);
+        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
+        
+        transactions
+            .filter(t => 
+                t.userId === currentUser._id && 
+                t.type === 'Commission' && 
+                t.status === 'Pending' &&
+                (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) 
+            )
+            .forEach(t => {
+                if (!t.sourceUserId) return;
+                const current = pendingMap.get(t.sourceUserId) || { total: 0, breakdown: [] };
+                current.total += t.amount;
+                let reason = "Pending Review";
+                let missingPlanId = undefined;
+                let missingPlanName = undefined;
+                let isHoldPosition = false;
+
+                // Priority Check: Hold Position
+                if (isTransactionHoldPosition(t)) {
+                    reason = "Auto-Upgrade Reservation";
+                    isHoldPosition = true;
+                } else if (currentUser.restrictions?.earning) {
+                    reason = "Account Restricted";
+                } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
+                    reason = "No Active Plan";
+                } else if (settings.requirePlanMatchForCommission && t.relatedPlanId) {
+                     const reqIds = getEquivalentIds(String(t.relatedPlanId));
+                     const hasMatch = currentUser.activePlans?.some(p => reqIds.has(String(p.planId)));
+                     if (!hasMatch) {
+                         let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
+                         if (settings.planEquivalencyGroups) {
+                             const group = settings.planEquivalencyGroups.find(g => 
+                                String(g.usdPlanId) === String(t.relatedPlanId) || String(g.pkrPlanId) === String(t.relatedPlanId) || String(g.eurPlanId) === String(t.relatedPlanId)
+                             );
+                             if (group) {
+                                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
+                                 if (group[targetKey]) {
+                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
+                                     if (localPlan) targetPlan = localPlan;
+                                 }
+                             }
+                         }
+                         missingPlanName = targetPlan?.name || 'Required Plan';
+                         missingPlanId = targetPlan?._id;
+                         reason = `Requires Upgrade to ${missingPlanName}`;
+                     }
+                }
+                const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
+                if (existingEntry) {
+                    existingEntry.amount += t.amount;
+                } else {
+                    current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount, isHoldPosition });
+                }
+                pendingMap.set(t.sourceUserId, current);
+            });
+        const heldIds = Array.from(pendingMap.keys());
+        const referrals = users.filter(u => heldIds.includes(u._id));
+        return { referrals, count: referrals.length, stats: pendingMap };
+    }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId]);
+
+    const toggleNode = (userId: string) => {
+        setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
+    };
+
+    const handleSponsorClick = (sponsorUsername: string, referralNode: User) => {
+        const sponsor = users.find(u => u.username.toLowerCase() === sponsorUsername.toLowerCase());
+        if (sponsor) {
+            setSelectedSponsor(sponsor);
+            setSelectedReferralForSponsorModal(referralNode);
+            setIsSponsorModalOpen(true);
+        } else {
+            alert(`Sponsor details for @${sponsorUsername} not found.`);
+        }
+    };
+
+    const handleLocateSponsor = () => {
+        if (!selectedSponsor) return;
+        const currentInfo = getCommissionInfoForReferral(selectedSponsor, equivalentPlanIdsForSelected);
+        if (currentInfo.earned > 0) {
+            setHighlightedUserId(selectedSponsor._id);
+            setViewMode('tree');
+            setIsSponsorModalOpen(false);
+            return;
+        }
+        const foundPlan = uniqueActivePlans.find(plan => {
+            const ids = getEquivalentIds(plan.planId);
+            const info = getCommissionInfoForReferral(selectedSponsor, ids);
+            return info.earned > 0;
+        });
+        if (foundPlan) {
+            setIsSponsorModalOpen(false);
+            setSelectedPlanId(foundPlan.planId);
+            setTimeout(() => { setHighlightedUserId(selectedSponsor._id); setViewMode('tree'); }, 100);
+        } else {
+            const isInCurrentTree = allNodes.some(n => n.user._id === selectedSponsor._id);
+            if (isInCurrentTree) {
+                 setHighlightedUserId(selectedSponsor._id);
+                 setViewMode('tree');
+                 setIsSponsorModalOpen(false);
+            } else {
+                 alert("This sponsor does not appear in your earning tree for any active plans.");
+            }
+        }
+    };
+
+    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
+        const comms = plan.directCommissions;
+        if (!comms || comms.length === 0) return 'None';
+        let maxVal = 0;
+        let maxType = 'percentage';
+        comms.forEach(c => {
+            if (c.value > maxVal) {
+                maxVal = c.value;
+                maxType = c.type;
+            }
+        });
+        const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+        return comms.length > 1 ? `Up to ${formattedVal}` : formattedVal;
+    };
 
     const sponsorModalDetails = useMemo(() => {
         if (!selectedSponsor || !currentUser) return { sponsorEarnings: 0, displaySourcePlanName: 'N/A', earningSourcePlan: null, sponsorPlanInfo: null, planToView: null, isLinkedPlanEquivalent: false };
@@ -385,6 +385,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
+    // 4. Modified ReferralCardContent with prioritized 'Held for Upgrade' badge
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -414,7 +415,7 @@ const Referrals: React.FC = () => {
             const allApproved = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
             earned = allApproved.reduce((sum, t) => sum + t.amount, 0);
             
-            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && isTransactionHoldPosition(t));
             if (pendingHold) isHoldPosition = true;
             
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
@@ -458,7 +459,7 @@ const Referrals: React.FC = () => {
         const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
-            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHoldPosition ? 'border-l-amber-500 bg-amber-50/10' : isOverflow ? 'border-l-orange-500' : isHeldView ? 'border-l-blue-500 bg-blue-50/5' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
+            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHoldPosition ? 'border-l-amber-500 bg-amber-50/10 shadow-[0_0_15px_-3px_rgba(245,158,11,0.2)]' : isOverflow ? 'border-l-orange-500' : isHeldView ? 'border-l-blue-500 bg-blue-50/5' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
