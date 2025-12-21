@@ -345,12 +345,16 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const currentSlotNum = usedSlots + 1;
             const isHoldSlot = plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlotNum);
 
-            // --- CRITICAL FIX: REORDERED LOGIC ---
+            // --- REFINED LOGIC ---
             // 1. Check if it is a HOLD slot first. If it's a hold slot, it is NOT an overflow,
-            // even if it exceeds the directReferralLimit (though typically admin sets them within or at end of limit).
+            // even if it exceeds the directReferralLimit.
             if (isHoldSlot) {
+                const nextPlanId = plan.autoUpgrade?.toPlanId;
+                const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
+                const upName = nextPlan ? nextPlan.name : 'your next plan';
+                
                 eligibility.status = 'Pending';
-                eligibility.message = 'Held for Upgrade';
+                eligibility.message = `Held for Upgrade: Slot #${currentSlotNum} from ${user.username} reserved for auto-upgrade to ${upName}.`;
             } 
             // 2. ONLY IF NOT A HOLD SLOT, check the overflow limit.
             else if (plan.directReferralLimit > 0 && currentSlotNum > plan.directReferralLimit) {
@@ -362,7 +366,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: 'Slot Limit Reached',
+                    description: `Slot Limit Reached: Slot #${currentSlotNum} from ${user.username} is an overflow.`,
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });
@@ -406,7 +410,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         } else if (eligibility.status === 'Pending') {
             await Notification.create({ 
                 userId: u._id, 
-                message: `${eligibility.message === 'Held for Upgrade' ? 'Commission Held for Upgrade!' : eligibility.message}. Amount reserved: ${u.currency}${finalAmount.toFixed(2)}` 
+                message: `${eligibility.message || 'Commission Held!'}. Amount reserved: ${u.currency}${finalAmount.toFixed(2)}` 
             });
         }
 
