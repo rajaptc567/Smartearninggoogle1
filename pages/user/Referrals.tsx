@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
@@ -99,7 +98,7 @@ const Referrals: React.FC = () => {
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
         // Check for specific keywords defined in backend or specific Hold states
-        const isHeldStatus = t.status === 'Pending';
+        const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
         const hasKeywords = desc.includes('position') || desc.includes('hold commission') || desc.includes('reserved') || desc.includes('upgrade');
         return isHeldStatus && hasKeywords;
     };
@@ -387,7 +386,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // Modified ReferralCardContent with prioritized 'Hold Commission for upgrade' badge and amount visibility
+    // Modified ReferralCardContent with prioritized 'Held for Upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -576,16 +575,16 @@ const Referrals: React.FC = () => {
 
     const renderTreeNode = (node: GenealogyNode & { isSkipped?: boolean }) => {
         if (node.isSkipped) return <React.Fragment key={node.user._id}>{node.children.map(child => renderTreeNode(child))}</React.Fragment>;
-        const isCollapsed = collapsedNodes.has(node.user._id);
+        const iCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
         return (
             <li key={node.user._id} className="relative pl-4 sm:pl-6 pt-2">
                 <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
                 <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
                 <div className="mb-2">
-                    <ReferralCardContent node={node} toggleNode={toggleNode} isCollapsed={isCollapsed} hasChildren={hasChildren} isTree={true} />
+                    <ReferralCardContent node={node} toggleNode={toggleNode} isCollapsed={iCollapsed} hasChildren={hasChildren} isTree={true} />
                 </div>
-                {hasChildren && !isCollapsed && <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">{node.children.map(child => renderTreeNode(child))}</ul>}
+                {hasChildren && !iCollapsed && <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">{node.children.map(child => renderTreeNode(child))}</ul>}
             </li>
         );
     };
@@ -722,7 +721,7 @@ const Referrals: React.FC = () => {
                         <div className="mt-6 space-y-2">
                             <Button onClick={handleLocateSponsor} className="w-full bg-purple-600 hover:bg-purple-700">Locate {selectedSponsor.username} in Tree</Button>
                             {planToView && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(planToView?._id) } }); }} className="w-full bg-green-600 hover:bg-green-700">View Sponsor Plan ({planToView.name})</Button>}
-                            {selectedPlanDetails && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
+                            {selectedPlanDetails && <Button onClick={() => { navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); setIsSponsorModalOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
                             <Button variant="secondary" onClick={() => setIsSponsorModalOpen(false)} className="w-full">Close</Button>
                         </div>
                     </div>

@@ -1,4 +1,3 @@
-
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -599,9 +598,9 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             // Get the full config of the sponsor's matching plan to respect their specific limit/hold settings
             const sponsorPlanConfig = sponsorMatchingActivePlan 
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
-                : plan; // fallback
+                : plan; // fallback to purchased plan if sponsor has no matching active plan
 
-            // Count existing slot occupancy using Approved and Pending (Hold) transactions
+            // Count existing slot occupancy using ONLY Approved and Pending (Hold) transactions
             referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -612,12 +611,11 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
             const currentSlotNum = referralCount + 1;
             const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
-                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
-
-            // --- REFINED HOLD/OVERFLOW LOGIC ---
-            // 1. If it exceeds the hard referral limit AND it is NOT a hold slot, it's Overflow
-            if (limit > 0 && currentSlotNum > limit && !isHoldSlot) {
+            
+            // --- PRIORITY LOGIC ---
+            
+            // 1. CHECK OVERFLOW FIRST (Hard Limit Check)
+            if (limit > 0 && currentSlotNum > limit) {
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -638,7 +636,10 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 continue; 
             }
 
-            // 2. Check if it's a Hold slot (even if it's within the limit or specifically designated)
+            // 2. IF WITHIN LIMIT, CHECK FOR HOLD DESIGNATION
+            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
+                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
+
             if (isHoldSlot) {
                 const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
                 const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
@@ -685,7 +686,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         }
 
         const rawAmount = calculateAmount(commissionConfig, plan.price);
-        if (rawAmount <= 0 && eligibility.status !== 'Pending') {
+        if (rawAmount <= 0 && eligibility.status !== 'Pending') { 
             currentUplineUsername = uplineUser.sponsor;
             continue;
         }
