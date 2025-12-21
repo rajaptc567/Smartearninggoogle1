@@ -636,7 +636,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `Apna plan Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`,
+                    description: `${sponsorPlanConfig?.name || 'Plan'} Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`,
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });

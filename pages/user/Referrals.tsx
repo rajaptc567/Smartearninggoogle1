@@ -98,9 +98,9 @@ const Referrals: React.FC = () => {
     // Robust matching for hold positions
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        // Check for common keywords used in hold transactions
+        // Check for specific keywords defined in backend seeder/logic
         const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
-        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
+        const hasKeywords = desc.includes('position') || desc.includes('hold commission') || desc.includes('reserved') || desc.includes('upgrade');
         return isHeldStatus && hasKeywords;
     };
 
@@ -530,7 +530,7 @@ const Referrals: React.FC = () => {
                         {(held > 0 || isHoldPosition) && !isHeldView && (
                              <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'} px-3 py-1 rounded border`}>
                                 <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-blue-800 dark:text-blue-200'}`}>
-                                    {isHoldPosition ? 'Held for upgrade' : 'Pending'}
+                                    {isHoldPosition ? 'Hold Commission for upgrade' : 'Pending'}
                                 </p>
                                 <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-blue-600 dark:text-blue-400'}`}>
                                     {formatCurrency(held || earned, currentUser?.currency || 'USD')}
@@ -636,7 +636,12 @@ const Referrals: React.FC = () => {
                     </div>
                     <div className="px-4 py-4 bg-blue-50/30 dark:bg-blue-900/10 border-t border-gray-100 dark:border-gray-700">
                         <div className="flex justify-between items-center mb-2"><h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Active Direct Referrals</h4><span className="text-sm font-bold text-blue-600 dark:text-blue-400">Slots: {slotStats.used} / {slotStats.limit === 0 ? '∞' : slotStats.limit} used</span></div>
-                        <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner"><div className={`h-full transition-all duration-1000 ease-out ${slotStats.limit > 0 && slotStats.used >= slotStats.limit ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`} style={{ width: `${slotStats.limit === 0 ? 100 : Math.min(100, (slotStats.used / slotStats.limit) * 100)}%` }}></div></div>
+                        <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden shadow-inner">
+                            <div 
+                                className={`h-full transition-all duration-1000 ease-out ${slotStats.limit > 0 && slotStats.used >= slotStats.limit ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
+                                style={{ width: `${slotStats.limit === 0 ? 100 : Math.min(100, (slotStats.used / slotStats.limit) * 100)}%` }}
+                            ></div>
+                        </div>
                         {slotStats.limit > 0 && slotStats.used >= slotStats.limit && <p className="text-[10px] text-red-500 font-bold mt-2 animate-pulse uppercase">Maximum direct slots reached for this plan level.</p>}
                     </div>
                 </div>
