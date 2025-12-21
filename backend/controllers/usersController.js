@@ -345,9 +345,15 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const currentSlotNum = usedSlots + 1;
             const isHoldSlot = plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlotNum);
 
-            // 1. OVERFLOW LOGIC: Amount 0, status Rejected, description 'Slot Limit Reached'
-            // Triggered ONLY if we exceed the limit AND it's not a hold position
-            if (plan.directReferralLimit > 0 && currentSlotNum > plan.directReferralLimit && !isHoldSlot) {
+            // --- CRITICAL FIX: REORDERED LOGIC ---
+            // 1. Check if it is a HOLD slot first. If it's a hold slot, it is NOT an overflow,
+            // even if it exceeds the directReferralLimit (though typically admin sets them within or at end of limit).
+            if (isHoldSlot) {
+                eligibility.status = 'Pending';
+                eligibility.message = 'Held for Upgrade';
+            } 
+            // 2. ONLY IF NOT A HOLD SLOT, check the overflow limit.
+            else if (plan.directReferralLimit > 0 && currentSlotNum > plan.directReferralLimit) {
                 await Transaction.create({
                     userId: u._id,
                     userName: u.username,
@@ -362,16 +368,10 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 });
                 await Notification.create({
                     userId: u._id,
-                    message: `Overflow! Referral ${user.username} activated ${plan.name} but your direct slots are full.`
+                    message: `Overflow! Referral ${user.username} activated ${plan.name} but your direct slots for this plan level are full.`
                 });
                 currentUpline = u.sponsor;
                 continue; 
-            }
-
-            // 2. HOLD POSITION LOGIC: status Pending, description 'Held for Upgrade'
-            if (isHoldSlot) {
-                eligibility.status = 'Pending';
-                eligibility.message = 'Held for Upgrade';
             }
 
             if (plan.directCommissions?.length > 0) {
