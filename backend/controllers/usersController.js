@@ -574,7 +574,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
         let commissionConfig;
-        let referralCount = 0; // Distinct slot count
+        let usedSlots = 0; 
 
         if (level === 0) { // Direct Commission
             const equivIds = [plan._id.toString()];
@@ -591,9 +591,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // Correctly identify slot number by counting both Approved AND Pending Level 1 transactions
-            // This ensures that 'Hold Position' slots (which are Pending) correctly increment the total used count.
-            referralCount = await Transaction.countDocuments({
+            // Count slots occupied by valid referrals (Approved or Pending)
+            usedSlots = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
@@ -601,9 +600,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 status: { $in: ['Approved', 'Pending'] }
             });
 
-            if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
-                // If the next slot would be a hold position, we actually allow it into the 'used' count
-                // even if it's over the normal 'earning' limit, but for simplicity here, we stick to limit rules.
+            const currentSlotNumber = usedSlots + 1;
+            const isHoldSlot = plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlotNumber);
+
+            // --- REFINED OVERFLOW VS HOLD LOGIC ---
+            // A slot is only 'Overflow' if it is strictly beyond the limit AND not a designated hold slot.
+            if (plan.directReferralLimit > 0 && currentSlotNumber > plan.directReferralLimit && !isHoldSlot) {
                 await Notification.create({
                     userId: uplineUser._id,
                     message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
@@ -624,19 +626,18 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 continue; 
             }
 
-            if (plan.directCommissions && plan.directCommissions.length > 0) {
-                commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
+            // --- HOLD POSITION ASSIGNMENT ---
+            if (isHoldSlot) {
+                const nextPlanId = plan.autoUpgrade?.toPlanId;
+                const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
+                const upName = nextPlan ? nextPlan.name : 'your next plan';
                 
-                // --- HOLD POSITION LOGIC ---
-                // If this slot is designated as a hold position slot in plan settings
-                if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
-                    const nextPlanId = plan.autoUpgrade?.toPlanId;
-                    const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
-                    const upName = nextPlan ? nextPlan.name : 'your next plan';
-                    
-                    eligibility.status = 'Pending';
-                    eligibility.message = `Position Held! Commission from slot #${referralCount + 1} (${user.username}) is reserved for your auto-upgrade to ${upName}.`;
-                }
+                eligibility.status = 'Pending';
+                eligibility.message = `Held for Upgrade: Slot #${currentSlotNumber} from ${user.username} reserved for auto-upgrade to ${upName}.`;
+            }
+
+            if (plan.directCommissions && plan.directCommissions.length > 0) {
+                commissionConfig = usedSlots < plan.directCommissions.length ? plan.directCommissions[usedSlots] : plan.directCommissions[plan.directCommissions.length - 1];
             } else {
                 commissionConfig = { type: 'percentage', value: 0 }; 
             }
@@ -708,9 +709,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             amount: finalCommissionAmount,
             level: level + 1,
             sourceUserId: user._id,
-            description: eligibility.status === 'Pending' && level === 0 && plan.holdPosition?.slots.includes(referralCount + 1) 
-                ? `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade`
-                : `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
+            description: eligibility.message || `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
             status: eligibility.status,
             relatedPlanId: plan._id,
             originalAmount: commissionInPurchaserCurrency,
