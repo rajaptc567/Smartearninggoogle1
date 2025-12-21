@@ -1,3 +1,4 @@
+
 import React from 'react';
 // Import useNavigate from react-router-dom
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +9,7 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, transactions, investmentPlans, settings } = state;
+    const { currentUser, users, investmentPlans, settings } = state;
     // Initialize navigate function using useNavigate hook
     const navigate = useNavigate();
 
@@ -34,15 +35,11 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // 2. Count ACTUAL occupancy based on commissions received
-        // CRITICAL: We must count Approved AND Pending (Held) commissions as valid slot occupants.
-        // Rejected (Overflow) commissions do NOT count.
-        const used = transactions.filter(t => 
-            t.userId === currentUser._id &&
-            t.type === 'Commission' &&
-            t.level === 1 &&
-            (t.status === 'Approved' || t.status === 'Pending') &&
-            (t.relatedPlanId ? equivIds.has(String(t.relatedPlanId)) : false)
+        // 2. Count direct referrals who own any of those plan IDs
+        const used = users.filter(u => 
+            u.sponsor && 
+            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
+            u.activePlans?.some(ap => equivIds.has(ap.planId))
         ).length;
 
         return { used, limit };

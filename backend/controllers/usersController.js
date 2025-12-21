@@ -574,9 +574,9 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
         let commissionConfig;
-        let referralCount = 0; 
+        let referralCount = 0; // Distinct slot count
 
-        if (level === 0) { // Direct Commission Logic
+        if (level === 0) { // Direct Commission
             const equivIds = [plan._id.toString()];
             if (settings.planEquivalencyGroups) {
                 const group = settings.planEquivalencyGroups.find(g => 
@@ -591,17 +591,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // Resolve the sponsor's specific active plan for this equivalency group
-            const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => 
-                equivIds.includes(String(ap.planId))
-            );
-            
-            // Get the full config of the sponsor's matching plan to respect their specific limit/hold settings
-            const sponsorPlanConfig = sponsorMatchingActivePlan 
-                ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
-                : plan; // fallback to purchased plan if sponsor has no matching active plan
-
-            // Count existing slot occupancy using ONLY Approved and Pending (Hold) transactions
+            // Correctly identify slot number by counting both Approved AND Pending Level 1 transactions
+            // This ensures that 'Hold Position' slots (which are Pending) correctly increment the total used count.
             referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -610,13 +601,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 status: { $in: ['Approved', 'Pending'] }
             });
 
-            const currentSlotNum = referralCount + 1;
-            const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            
-            // --- PRIORITY LOGIC ---
-            
-            // 1. CHECK OVERFLOW FIRST (Hard Limit Check)
-            if (limit > 0 && currentSlotNum > limit) {
+            if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
+                // If the next slot would be a hold position, we actually allow it into the 'used' count
+                // even if it's over the normal 'earning' limit, but for simplicity here, we stick to limit rules.
+                await Notification.create({
+                    userId: uplineUser._id,
+                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
+                });
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -625,33 +616,27 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `Slot Limit Reached for ${sponsorPlanConfig?.name || 'Plan'} from ${user.username} - Overflow Slot`,
+                    description: `Direct Limit (${plan.directReferralLimit}) Reached from ${user.username} (${plan.name}) - Overflow Slot`,
                     status: 'Rejected',
                     relatedPlanId: plan._id
-                });
-                await Notification.create({
-                    userId: uplineUser._id,
-                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} slots for this level are full. This is an overflow referral.`
                 });
                 currentUplineUsername = uplineUser.sponsor;
                 continue; 
             }
 
-            // 2. IF WITHIN LIMIT, CHECK FOR HOLD DESIGNATION
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
-                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
-
-            if (isHoldSlot) {
-                const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
-                const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
-                const upName = nextPlan ? nextPlan.name : 'your next plan level';
-                
-                eligibility.status = 'Pending';
-                eligibility.message = `Hold Commission for upgrade: Slot #${currentSlotNum} (${user.username}) reserved for auto-upgrade to ${upName}.`;
-            }
-
             if (plan.directCommissions && plan.directCommissions.length > 0) {
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
+                
+                // --- HOLD POSITION LOGIC ---
+                // If this slot is designated as a hold position slot in plan settings
+                if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
+                    const nextPlanId = plan.autoUpgrade?.toPlanId;
+                    const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
+                    const upName = nextPlan ? nextPlan.name : 'your next plan';
+                    
+                    eligibility.status = 'Pending';
+                    eligibility.message = `Position Held! Commission from slot #${referralCount + 1} (${user.username}) is reserved for your auto-upgrade to ${upName}.`;
+                }
             } else {
                 commissionConfig = { type: 'percentage', value: 0 }; 
             }
@@ -664,7 +649,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             continue;
         }
         
-        // One-time commission check
         if (settings.oneTimeCommissionPerGroup) {
             const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
             const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
@@ -686,39 +670,52 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             }
         }
 
-        const rawAmount = calculateAmount(commissionConfig, plan.price);
-        if (rawAmount <= 0 && eligibility.status !== 'Pending') { 
+        const commissionInPurchaserCurrency = calculateAmount(commissionConfig, plan.price);
+        if (commissionInPurchaserCurrency <= 0) {
             currentUplineUsername = uplineUser.sponsor;
             continue;
         }
 
-        const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
+        const finalCommissionAmount = convertCurrency(commissionInPurchaserCurrency, user.currency, uplineUser.currency);
 
         if (eligibility.status === 'Approved') {
-            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
+            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalCommissionAmount).toFixed(2));
             await uplineUser.save();
-            await Notification.create({ userId: uplineUser._id, message: `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from ${user.username}.` });
+            
+            const previousOverflow = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: user._id, amount: 0, status: 'Rejected', type: 'Commission' });
+            
+            const notifText = previousOverflow
+                ? `🚀 Upgrade Win! You earned ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} because ${user.username} upgraded to '${plan.name}' where you had an available slot!`
+                : `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalCommissionAmount.toFixed(2)} from ${user.username}'s activation of ${plan.name}.`;
+            
+            await Notification.create({ userId: uplineUser._id, message: notifText });
         } else if (eligibility.status === 'Pending') {
             await Notification.create({ 
                 userId: uplineUser._id, 
-                message: `${eligibility.message || 'Commission Held!'}. Amount reserved: ${uplineUser.currency}${finalAmount.toFixed(2)}` 
+                message: `${eligibility.message} Amount reserved: ${uplineUser.currency}${finalCommissionAmount.toFixed(2)}` 
             });
         }
+
+        const currentExchangeRate = (exchangeRates && user.currency && exchangeRates[user.currency.toUpperCase()]) 
+            ? exchangeRates[user.currency.toUpperCase()] 
+            : defaultRates[user.currency.toUpperCase()] || 1;
 
         await Transaction.create({
             userId: uplineUser._id,
             userName: uplineUser.username,
             currency: uplineUser.currency,
             type: 'Commission',
-            amount: finalAmount,
+            amount: finalCommissionAmount,
             level: level + 1,
             sourceUserId: user._id,
-            description: eligibility.message || `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
+            description: eligibility.status === 'Pending' && level === 0 && plan.holdPosition?.slots.includes(referralCount + 1) 
+                ? `Hold Position: Slot #${referralCount + 1} from ${user.username} held for Auto-Upgrade`
+                : `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
             status: eligibility.status,
             relatedPlanId: plan._id,
-            originalAmount: rawAmount,
+            originalAmount: commissionInPurchaserCurrency,
             originalCurrency: user.currency,
-            exchangeRate: exchangeRates[user.currency.toUpperCase()] || 1
+            exchangeRate: currentExchangeRate
         });
         
         currentUplineUsername = uplineUser.sponsor;
@@ -803,72 +800,6 @@ export const adminActivatePlan = async (req, res) => {
         await createLog('Plan Activated', user.username, `Admin manually activated ${plan.name} plan.`, 'admin');
 
         res.status(200).json({ success: true, data: { user, transaction } });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
-};
-
-// @desc    Admin manually removes a plan from a user
-// @route   POST /api/v1/users/:id/remove-plan
-export const adminRemovePlan = async (req, res) => {
-    const { planId } = req.body;
-    try {
-        const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-        const planToRemove = user.activePlans.find(p => p.planId.toString() === planId.toString());
-        if (!planToRemove) {
-            return res.status(400).json({ success: false, error: 'User does not own this plan.' });
-        }
-
-        // 1. "Remove Footprint" Logic: 
-        // Identify all commissions generated by THIS specific user and THIS specific plan.
-        // We mark them as Rejected so they no longer occupy slots in the sponsor's view or count as earnings.
-        await Transaction.updateMany(
-            { 
-                sourceUserId: user._id, 
-                type: 'Commission', 
-                relatedPlanId: planId 
-            },
-            { 
-                $set: { 
-                    status: 'Rejected', 
-                    description: `(REVOKED) ${planToRemove.planName} Commission from ${user.username}` 
-                } 
-            }
-        );
-
-        // 2. Remove the plan from User's Active Plans array
-        user.activePlans = user.activePlans.filter(p => p.planId.toString() !== planId.toString());
-        
-        // Update quick display name if necessary
-        if (user.activePlans.length > 0) {
-            user.activePlan = user.activePlans[user.activePlans.length - 1].planName;
-        } else {
-            user.activePlan = 'None';
-        }
-
-        await user.save();
-
-        // 3. Log the Revocation
-        await Transaction.create({
-            userId: user._id,
-            userName: user.username,
-            currency: user.currency,
-            type: 'Manual Debit',
-            amount: 0,
-            description: `Admin manually revoked ${planToRemove.planName} plan and cleared network footprint.`,
-            status: 'Approved'
-        });
-
-        await Notification.create({
-            userId: user._id,
-            message: `Administrator has manually revoked your ${planToRemove.planName} investment plan. Associated network commissions have been invalidated.`
-        });
-
-        await createLog('Plan Revoked', user.username, `Admin manually removed ${planToRemove.planName} plan and cleared footprint.`, 'admin');
-
-        res.status(200).json({ success: true, data: { user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

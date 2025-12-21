@@ -11,7 +11,6 @@ import {
     adjustWallet,
     purchasePlan,
     adminActivatePlan,
-    adminRemovePlan,
     adminInitiatePasswordReset,
     resetPasswordWithToken,
     userRequestPasswordReset,
@@ -34,7 +33,6 @@ router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
 router.post('/:id/adjust-wallet', adjustWallet);
 router.post('/:id/purchase-plan', purchasePlan);
 router.post('/:id/activate-plan', adminActivatePlan);
-router.post('/:id/remove-plan', adminRemovePlan);
 router.post('/:id/admin-reset-password', adminInitiatePasswordReset);
 
 export default router;
