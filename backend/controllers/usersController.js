@@ -195,7 +195,7 @@ export const adjustWallet = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// HELPER: Refined Commission logic for Hold and Overflow
+// HELPER: Distribute Commissions with refined Hold/Overflow logic
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
     const convert = (amount, from, to) => {
@@ -205,15 +205,16 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const toR = exchangeRates[tK] || defaultRates[tK] || 1;
         return Number(((amount / fromR) * toR).toFixed(2));
     };
+    
     const checkElig = (u, pId) => {
-        if (u.restrictions?.earning) return { status: 'Pending', message: 'Earnings Paused.' };
+        if (u.restrictions?.earning) return { status: 'Pending', message: 'Earnings Paused' };
         if (settings.requirePlanMatchForCommission) {
-            const group = (settings.planEquivalencyGroups || []).find(g => [g.usdPlanId, g.pkrPlanId, g.eurPlanId].includes(String(pId)));
-            const equivIds = group ? [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id)) : [String(pId)];
-            const hasMatch = (u.activePlans || []).some(ap => equivIds.includes(String(ap.planId)));
-            if (!hasMatch) return { status: 'Pending', message: 'Plan Upgrade Required.' };
+            const equivIds = [String(pId)];
+            const group = settings.planEquivalencyGroups?.find(g => [g.usdPlanId, g.pkrPlanId, g.eurPlanId].includes(String(pId)));
+            if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].forEach(id => id && equivIds.push(String(id)));
+            if (!(u.activePlans || []).some(ap => equivIds.includes(String(ap.planId)))) return { status: 'Pending', message: 'Upgrade Required' };
         } else if (settings.requireActivePlanForCommission && (u.activePlans || []).length === 0) {
-            return { status: 'Pending', message: 'No Active Plan.' };
+            return { status: 'Pending', message: 'Active Plan Required' };
         }
         return { status: 'Approved', message: '' };
     };
@@ -224,6 +225,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         if (!upline) break;
         const u = await User.findOne({ username: { $regex: new RegExp(`^${upline}$`, 'i') } });
         if (!u || u.status === 'Blocked') break;
+        
         let elig = checkElig(u, plan._id);
         let config = level === 0 ? plan.directCommissions[0] : indirect[level - 1];
         
@@ -233,17 +235,22 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 const group = settings.planEquivalencyGroups.find(g => [g.usdPlanId, g.pkrPlanId, g.eurPlanId].includes(plan._id.toString()));
                 if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].forEach(id => id && equivIds.push(String(id)));
             }
-            const usedCount = await Transaction.countDocuments({ userId: u._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: { $in: ['Approved', 'Pending'] } });
             
-            // 1. OVERFLOW LOGIC: Amount 0, status Rejected, description 'Slot Limit Reached'
-            if (plan.directReferralLimit > 0 && usedCount >= plan.directReferralLimit) {
+            // Count existing Level 1 commissions for this plan type (slots used)
+            const usedSlots = await Transaction.countDocuments({ 
+                userId: u._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, 
+                status: { $in: ['Approved', 'Pending'] } 
+            });
+
+            // 1. OVERFLOW LOGIC
+            if (plan.directReferralLimit > 0 && usedSlots >= plan.directReferralLimit) {
                 await Transaction.create({ userId: u._id, userName: u.username, currency: u.currency, type: 'Commission', amount: 0, level: 1, sourceUserId: user._id, description: 'Slot Limit Reached', status: 'Rejected', relatedPlanId: plan._id });
-                await Notification.create({ userId: u._id, message: `Overflow! Referral ${user.username} activated ${plan.name} but your slots are full.` });
+                await Notification.create({ userId: u._id, message: `Overflow! Referral ${user.username} activated ${plan.name} but your direct slots are full.` });
                 upline = u.sponsor; continue;
             }
             
-            // 2. HOLD POSITION LOGIC: status Pending, description 'Held for Upgrade'
-            if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(usedCount + 1)) {
+            // 2. HOLD POSITION LOGIC
+            if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(usedSlots + 1)) {
                 elig.status = 'Pending';
                 elig.message = 'Held for Upgrade';
             }
@@ -252,11 +259,14 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         if (!config) { upline = u.sponsor; continue; }
         const rawAmt = config.type === 'percentage' ? (plan.price * config.value) / 100 : config.value;
         const finalAmt = convert(rawAmt, user.currency, u.currency);
+
         if (elig.status === 'Approved') { u.walletBalance = Number((u.walletBalance + finalAmt).toFixed(2)); await u.save(); }
+        
         await Transaction.create({ 
             userId: u._id, userName: u.username, currency: u.currency, type: 'Commission', amount: finalAmt, level: level + 1, sourceUserId: user._id, 
             description: elig.message || `Level ${level + 1} Commission from ${user.username}`, status: elig.status, relatedPlanId: plan._id 
         });
+        
         upline = u.sponsor;
     }
 };
