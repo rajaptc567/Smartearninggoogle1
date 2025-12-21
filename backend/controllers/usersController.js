@@ -614,7 +614,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             
             // Use the sponsor's specific limit and hold config
             const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && sponsorPlanConfig.holdPosition.slots.includes(currentSlotNum);
+            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
+                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
 
             // --- REFINED HOLD/OVERFLOW LOGIC ---
             // 1. If it's a Hold slot, it occupies a slot but is status Pending

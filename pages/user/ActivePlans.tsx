@@ -9,7 +9,7 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, investmentPlans, settings } = state;
+    const { currentUser, transactions, investmentPlans, settings } = state;
     // Initialize navigate function using useNavigate hook
     const navigate = useNavigate();
 
@@ -35,11 +35,14 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // 2. Count direct referrals who own any of those plan IDs
-        const used = users.filter(u => 
-            u.sponsor && 
-            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans?.some(ap => equivIds.has(ap.planId))
+        // 2. Count ACTUAL occupancy based on commissions received (including held/pending)
+        // This ensures hold positions count toward the slot limit
+        const used = transactions.filter(t => 
+            t.userId === currentUser._id &&
+            t.type === 'Commission' &&
+            t.level === 1 &&
+            (t.status === 'Approved' || t.status === 'Pending') &&
+            (t.relatedPlanId ? equivIds.has(String(t.relatedPlanId)) : false)
         ).length;
 
         return { used, limit };

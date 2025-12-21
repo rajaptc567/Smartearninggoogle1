@@ -530,7 +530,7 @@ const Referrals: React.FC = () => {
                         {(held > 0 || isHoldPosition) && !isHeldView && (
                              <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'} px-3 py-1 rounded border`}>
                                 <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-blue-800 dark:text-blue-200'}`}>
-                                    {isHoldPosition ? 'Hold Commission for upgrade' : 'Pending'}
+                                    {isHoldPosition ? 'Held for upgrade' : 'Pending'}
                                 </p>
                                 <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-blue-600 dark:text-blue-400'}`}>
                                     {formatCurrency(held || earned, currentUser?.currency || 'USD')}
