@@ -589,13 +589,14 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
+            // Correctly identify slot number by counting both Approved AND Pending Level 1 transactions
+            // This ensures that 'Hold Position' slots (which are Pending) correctly increment the total used count.
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
                 level: 1,
-                status: 'Approved',
-                amount: { $gt: 0 } 
+                status: { $in: ['Approved', 'Pending'] }
             });
 
             if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
@@ -622,6 +623,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             if (plan.directCommissions && plan.directCommissions.length > 0) {
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
                 
+                // --- HOLD POSITION LOGIC ---
                 if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1)) {
                     const nextPlanId = plan.autoUpgrade?.toPlanId;
                     const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));

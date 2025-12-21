@@ -99,14 +99,18 @@ const Referrals: React.FC = () => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        const used = users.filter(u => 
-            u.sponsor && 
-            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans?.some(ap => equivalentPlanIdsForSelected.has(String(ap.planId)))
+        // Improve slot usage calculation to count relevant Level 1 transactions (Approved or Pending)
+        // instead of just user counts, ensuring consistency with backend logic.
+        const used = transactions.filter(t => 
+            t.userId === currentUser._id && 
+            t.type === 'Commission' && 
+            t.level === 1 && 
+            (t.status === 'Approved' || t.status === 'Pending') &&
+            (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false)
         ).length;
 
         return { used, limit };
-    }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
+    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
 
     const heldCommissionsData = useMemo(() => {
         if (!currentUser || !selectedPlanId) return { referrals: [], count: 0, stats: new Map() };
@@ -186,7 +190,7 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Fix: Detect hold position regardless of whether it is approved or pending
+        // Detect hold position regardless of whether it is approved or pending
         const isHoldPosition = referralComms.some(t => 
             (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))
         );
@@ -294,13 +298,19 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // Priority: If there's a hold position or valid commission, it's NOT an overflow
+            // PRIORITY ORDER:
+            // 1. Hold Position or Active Commission -> Earner List
+            // Refined check ensures Hold Position referrals appear in the main Commission List
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
-            } else if (info.isOverflow && node.level === 1) {
+            } 
+            // 2. Overflow (only if NOT hold position) -> Overflow List
+            else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
-            } else {
+            } 
+            // 3. Others -> Check if they have plans or not
+            else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
                 }
@@ -335,7 +345,7 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
-            inactiveReferrals: inactiveList,
+            inactiveReferrals: inactiveList, // Fixed ReferenceError here
             allNodes: nodesList,
             networkStats: { 
                 totalReferrals: nodesList.length,
@@ -410,7 +420,8 @@ const Referrals: React.FC = () => {
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
             const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
             
-            if (overflowTx && !anySuccess) isOverflow = true;
+            // Correct priority: Only show overflow if NO valid slot-occupying commission exists
+            if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
@@ -447,7 +458,7 @@ const Referrals: React.FC = () => {
         const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
-            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHeldView || isHoldPosition ? 'border-l-amber-500 bg-amber-50/10' : isOverflow ? 'border-l-orange-500' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
+            <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHoldPosition ? 'border-l-amber-500 bg-amber-50/10' : isOverflow ? 'border-l-orange-500' : isHeldView ? 'border-l-blue-500 bg-blue-50/5' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
@@ -471,11 +482,17 @@ const Referrals: React.FC = () => {
                                     <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200 flex items-center gap-1">
                                         <span className="text-xs">⚠️</span> Overflow
                                     </span>
+                                ) : held > 0 ? (
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                                        <span className="text-xs">⏳</span> Held Commission
+                                    </span>
                                 ) : null}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
-                                    <p className="text-amber-600 dark:text-amber-500 font-bold">Action/Upgrade Required</p>
+                                    <p className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
+                                        {isHoldPosition ? '🔒 Auto-Upgrade Reservation' : '💡 Action/Upgrade Required'}
+                                    </p>
                                 ) : isAllView ? (
                                      commissionSourcePlans.length > 0 ? (
                                         <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium flex-wrap">
@@ -509,11 +526,11 @@ const Referrals: React.FC = () => {
                         )}
                         
                         {(held > 0 || isHoldPosition) && !isHeldView && (
-                             <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-amber-50 border-amber-100 dark:bg-amber-900/20 dark:border-amber-800'} px-3 py-1 rounded border`}>
-                                <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-amber-800 dark:text-amber-200'}`}>
+                             <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'} px-3 py-1 rounded border`}>
+                                <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-blue-800 dark:text-blue-200'}`}>
                                     {isHoldPosition ? 'Reserved for Upgrade' : 'Pending'}
                                 </p>
-                                <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-amber-600 dark:text-amber-400'}`}>
+                                <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-blue-600 dark:text-blue-400'}`}>
                                     {formatCurrency(held || earned, currentUser?.currency || 'USD')}
                                 </p>
                             </div>
@@ -526,21 +543,25 @@ const Referrals: React.FC = () => {
                             </div>
                         )}
                         {isHeldView && breakdown.length > 0 ? (
-                            <div className="bg-amber-50 dark:bg-amber-900/10 p-2 rounded border border-amber-100 dark:border-amber-800 space-y-2 w-full sm:w-auto">
+                            <div className={`${isHoldPosition ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-800' : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800'} p-2 rounded border space-y-2 w-full sm:w-auto shadow-sm`}>
                                 {breakdown.map((item, idx) => (
                                     <div key={idx} className="flex flex-col items-end gap-1">
                                         <div className="text-sm flex items-center justify-end gap-2">
-                                            <span className={`text-xs font-medium ${item.isHoldPosition ? 'text-amber-600' : 'text-amber-700 dark:text-amber-400'}`}>
-                                                {item.isHoldPosition ? '🔒 ' : ''}{item.reason}:
+                                            <span className={`text-xs font-medium ${item.isHoldPosition ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>
+                                                {item.isHoldPosition ? '🔒 ' : '⏳ '}{item.reason}:
                                             </span>
-                                            <span className="font-bold text-amber-800 dark:text-amber-300">{formatCurrency(item.amount, currentUser?.currency)}</span>
+                                            <span className={`font-bold ${item.isHoldPosition ? 'text-amber-800 dark:text-amber-300' : 'text-blue-800 dark:text-blue-300'}`}>
+                                                {formatCurrency(item.amount, currentUser?.currency)}
+                                            </span>
                                         </div>
                                         {item.planId && !item.isHoldPosition && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Buy {item.planName}</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
                                         {item.reason === 'No Active Plan' && <button onClick={(e) => { e.stopPropagation(); navigate('/member/plans'); }} className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-1"><span>Activate Earnings</span><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>}
-                                        {item.isHoldPosition && <p className="text-[9px] text-amber-500 italic max-w-[120px]">Automatically reserved for your next plan level upgrade.</p>}
+                                        {item.isHoldPosition && <p className="text-[9px] text-amber-600 dark:text-amber-500 italic max-w-[120px] font-medium leading-tight">Reserved automatically for your next plan level upgrade.</p>}
                                     </div>
                                 ))}
-                                <div className="border-t border-amber-200 dark:border-amber-800 pt-1 text-[10px] text-amber-600 dark:text-amber-500 font-bold text-right mt-1">Total: {formatCurrency(held, currentUser?.currency)}</div>
+                                <div className={`border-t pt-1 text-[10px] font-bold text-right mt-1 ${isHoldPosition ? 'border-amber-200 dark:border-amber-800 text-amber-600' : 'border-blue-200 dark:border-blue-800 text-blue-600'}`}>
+                                    Total: {formatCurrency(held, currentUser?.currency)}
+                                </div>
                             </div>
                         ) : null}
                         {(earned === 0 && held === 0 && !isOverflow && !isHoldPosition) && <span className="text-xs text-gray-400 italic">No commission</span>}
@@ -646,7 +667,7 @@ const Referrals: React.FC = () => {
                     <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Commission List ({directEarners.length + indirectEarners.length})</button>
                     <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Tree View ({genealogyTree.length})</button>
                     <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Overflow & Waiting ({overflowReferrals.length})</button>
-                    <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Held Commissions ({heldCommissionsData.count})</button>
+                    <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-50 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Held Commissions ({heldCommissionsData.count})</button>
                     <button onClick={() => setViewMode('all')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>All Referrals ({allNodes.length})</button>
                     <button onClick={() => setViewMode('inactive')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'inactive' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>Inactive Members ({inactiveReferrals.length})</button>
                 </div>
