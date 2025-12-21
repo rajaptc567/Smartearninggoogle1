@@ -119,7 +119,7 @@ const Referrals: React.FC = () => {
                 t.userId === currentUser._id && 
                 t.type === 'Commission' && 
                 t.status === 'Pending' &&
-                (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) // Allow if related to selected plan OR no related plan (global)
+                (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) 
             )
             .forEach(t => {
                 if (!t.sourceUserId) return;
@@ -130,6 +130,7 @@ const Referrals: React.FC = () => {
                 let missingPlanName = undefined;
                 let isHoldPosition = false;
 
+                // Priority Check: Hold Position
                 if (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')) {
                     reason = "Auto-Upgrade Reservation";
                     isHoldPosition = true;
@@ -185,10 +186,15 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        const isHoldPosition = referralComms.some(t => (t.status === 'Pending' || t.status === 'Approved') && (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold')));
+        // Fix: Detect hold position regardless of whether it is approved or pending
+        const isHoldPosition = referralComms.some(t => 
+            (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'))
+        );
+        
+        // Overflow is only TRUE if there's an overflow record AND NO valid commission record (Hold or Approved)
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
         
-        const isOverflow = !isHoldPosition && hasOverflowTx;
+        const isOverflow = hasOverflowTx && !isHoldPosition && earned === 0 && held === 0;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
@@ -288,13 +294,14 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
+            // Priority: If there's a hold position or valid commission, it's NOT an overflow
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
+            } else if (info.isOverflow && node.level === 1) {
+                overflowList.push(node);
             } else {
-                if (info.isOverflow && node.level === 1) {
-                    overflowList.push(node);
-                } else if (!node.user.activePlans || node.user.activePlans.length === 0) {
+                if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
                 }
             }
@@ -513,7 +520,7 @@ const Referrals: React.FC = () => {
                         )}
 
                         {isOverflow && !isHeldView && (earned === 0 && held === 0) && (
-                            <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-100 dark:border-orange-800">
+                            <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-100 dark:border-amber-800">
                                 <p className="text-[10px] uppercase text-orange-800 dark:text-orange-200 font-bold tracking-wider">Missed</p>
                                 <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCurrency(0, currentUser?.currency || 'USD')}</p>
                             </div>
@@ -593,7 +600,7 @@ const Referrals: React.FC = () => {
             {selectedPlanDetails && (viewMode !== 'held' && viewMode !== 'all') && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6 animate-fade-in">
                     <div className="flex flex-col md:flex-row">
-                        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-row md:flex-col justify-between md:justify-center items-center gap-2 md:w-48 text-center shrink-0">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 flex flex-row md:justify-center items-center gap-2 md:w-48 text-center shrink-0">
                             <div><h3 className="font-bold text-lg text-gray-900 dark:text-white leading-tight">{selectedPlanDetails.name}</h3><div className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-1">Plan Details</div></div>
                             <div className="text-right md:text-center"><span className="block text-xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span></div>
                         </div>
