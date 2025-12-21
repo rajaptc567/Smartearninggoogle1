@@ -41,6 +41,13 @@ const Referrals: React.FC = () => {
 
     const prevPlanId = useRef(selectedPlanId);
 
+    // Handle deep linking to specific tabs (like "held") from the sidebar
+    useEffect(() => {
+        if (location.state && (location.state as any).viewMode) {
+            setViewMode((location.state as any).viewMode);
+        }
+    }, [location.state]);
+
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
@@ -50,11 +57,14 @@ const Referrals: React.FC = () => {
     
     useEffect(() => {
         if (selectedPlanId && selectedPlanId !== prevPlanId.current) {
-            setViewMode('commissions');
+            // Only reset viewMode if we aren't explicitly coming from a deep link
+            if (!(location.state && (location.state as any).viewMode === 'held')) {
+                setViewMode('commissions');
+            }
             setHighlightedUserId(null);
             prevPlanId.current = selectedPlanId;
         }
-    }, [selectedPlanId]);
+    }, [selectedPlanId, location.state]);
 
     useEffect(() => {
         if (highlightedUserId && viewMode === 'tree') {
@@ -94,22 +104,23 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // Robust matching for hold positions based on backend patterns
+    // Robust matching for hold positions using strict pattern matching
     const isTransactionHoldPosition = useCallback((t: Transaction): boolean => {
         if (!t?.description) return false;
+        
         const desc = t.description.toLowerCase();
         
-        // Exact backend patterns for hold positions
+        // Match EXACT backend patterns for hold positions
         const holdPositionPatterns = [
             'hold commission for upgrade',
-            'slot #',
+            'slot #',  // Backend includes "Slot #X" in description
             'reserved for auto-upgrade',
-            'hold commission'
+            'hold: slot'
         ];
         
         const hasHoldKeyword = holdPositionPatterns.some(pattern => desc.includes(pattern));
         
-        // Hold positions are Pending with positive amount representing potential earnings
+        // Hold positions are Pending with positive amount
         return t.status === 'Pending' && t.amount > 0 && hasHoldKeyword;
     }, []);
 
@@ -126,26 +137,25 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Priority check: Is any transaction explicitly a Hold Position?
+        // CRITICAL FIX: Check for hold position FIRST with strict criteria
         const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
         
-        // True overflow only if: Rejected, 0 amount, and NOT a hold position
-        const hasOverflowTx = referralComms.some(t => 
+        // True overflow only if: Rejected, 0 amount, overflow keywords, AND not a hold position
+        const hasOverflowTransaction = referralComms.some(t => 
             t.status === 'Rejected' && 
             t.amount === 0 && 
-            (t.description?.toLowerCase().includes('limit') || 
-             t.description?.toLowerCase().includes('full') || 
-             t.description?.toLowerCase().includes('overflow'))
+            (t.description?.toLowerCase().includes('overflow') || 
+             t.description?.toLowerCase().includes('slot limit') ||
+             t.description?.toLowerCase().includes('limit reached'))
         );
         
-        const isOverflow = hasOverflowTx && !isHoldPosition && earned === 0 && held === 0;
+        const isOverflow = hasOverflowTransaction && !isHoldPosition && earned === 0 && held === 0;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
-            const bestTx = referralComms.find(t => t.status === 'Approved' || (t.status === 'Pending' && isTransactionHoldPosition(t))) || referralComms[0];
+            const bestTx = referralComms.find(t => t.status === 'Approved' || isTransactionHoldPosition(t)) || referralComms[0];
             earningSourcePlanId = bestTx.relatedPlanId?.toString();
         }
-        
         return { earned, held, isHoldPosition, isOverflow, earningSourcePlanId };
     }, [currentUser, transactions, isTransactionHoldPosition]);
 
@@ -179,17 +189,22 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // PRIORITY ORDER:
-            // 1. Hold Position OR Earned Amount -> Earner List
-            if (info.isHoldPosition || info.earned > 0 || info.held > 0) {
+            // PRIORITY CATEGORIZATION:
+            // 1. HOLD POSITIONS go to commission list (priority check)
+            if (info.isHoldPosition) {
+                if (node.level === 1) directEarnersList.push(node);
+                else indirectEarnersList.push(node);
+            }
+            // 2. Normal earned/held commissions
+            else if (info.earned > 0 || info.held > 0) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } 
-            // 2. True Overflow (Rejected 0 amount) -> Overflow List
+            // 3. TRUE OVERFLOW (only if not hold position and no commissions)
             else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
             } 
-            // 3. Others -> Check if they have plans or not
+            // 4. Inactive referrals
             else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
@@ -211,7 +226,7 @@ const Referrals: React.FC = () => {
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                const isRelevant = info.isHoldPosition || info.earned > 0 || info.held > 0;
+                const isRelevant = info.earned > 0 || info.held > 0 || info.isHoldPosition;
                 const filteredChildren = filterRecursive(node.children);
                 if (isRelevant) return { ...node, children: filteredChildren };
                 else if (filteredChildren.length > 0) return { ...node, children: filteredChildren, isSkipped: true } as any; 
@@ -240,15 +255,21 @@ const Referrals: React.FC = () => {
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
-        // Occupied slots = Earned + Hold Positions at level 1
+        
+        // Count used slots by looking at direct earners (which now includes hold positions)
         const used = directEarners.length;
+
         return { used, limit };
     }, [currentUser, selectedPlanDetails, directEarners]);
 
     const heldCommissionsData = useMemo(() => {
-        if (!currentUser || !selectedPlanId) return { referrals: [], count: 0, stats: new Map() };
+        if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
         
-        const filterIds = getEquivalentIds(selectedPlanId);
+        // When viewMode is 'held', we might be looking at commissions for ALL plans (from sidebar link)
+        // or just the selected one.
+        const isSidebarDeepLink = location.state && (location.state as any).viewMode === 'held';
+        const filterIds = selectedPlanId ? getEquivalentIds(selectedPlanId) : new Set<string>();
+
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean }[] }>();
         
         transactions
@@ -256,13 +277,14 @@ const Referrals: React.FC = () => {
                 t.userId === currentUser._id && 
                 t.type === 'Commission' && 
                 t.status === 'Pending' &&
-                (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) 
+                (isSidebarDeepLink ? true : (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true)) 
             )
             .forEach(t => {
                 if (!t.sourceUserId) return;
                 const current = pendingMap.get(t.sourceUserId) || { total: 0, breakdown: [] };
                 current.total += t.amount;
                 
+                // CRITICAL: Check if this is a hold position
                 const isHold = isTransactionHoldPosition(t);
                 let reason = "Pending Review";
                 let missingPlanId = undefined;
@@ -285,8 +307,9 @@ const Referrals: React.FC = () => {
                              );
                              if (group) {
                                  const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                                 if (group[targetKey]) {
-                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
+                                 const targetId = (group as any)[targetKey];
+                                 if (targetId) {
+                                     const localPlan = investmentPlans.find(p => p._id === String(targetId));
                                      if (localPlan) targetPlan = localPlan;
                                  }
                              }
@@ -296,7 +319,6 @@ const Referrals: React.FC = () => {
                          reason = `Requires Upgrade to ${missingPlanName}`;
                      }
                 }
-                
                 const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
                 if (existingEntry) {
                     existingEntry.amount += t.amount;
@@ -308,7 +330,7 @@ const Referrals: React.FC = () => {
         const heldIds = Array.from(pendingMap.keys());
         const referrals = users.filter(u => heldIds.includes(u._id));
         return { referrals, count: referrals.length, stats: pendingMap };
-    }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId, isTransactionHoldPosition]);
+    }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId, isTransactionHoldPosition, location.state]);
 
     const toggleNode = (userId: string) => {
         setCollapsedNodes(prev => { const newSet = new Set(prev); if (newSet.has(userId)) newSet.delete(userId); else newSet.add(userId); return newSet; });
@@ -433,7 +455,7 @@ const Referrals: React.FC = () => {
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
             const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || (t.status === 'Pending' && isTransactionHoldPosition(t))));
             
-            if (overflowTx && !anySuccess) isOverflow = true;
+            if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
