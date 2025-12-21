@@ -35,8 +35,9 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // 2. Count ACTUAL occupancy based on commissions received (including held/pending)
-        // This ensures hold positions count toward the slot limit
+        // 2. Count ACTUAL occupancy based on commissions received
+        // CRITICAL: We must count Approved AND Pending (Held) commissions as valid slot occupants.
+        // Rejected (Overflow) commissions do NOT count.
         const used = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&

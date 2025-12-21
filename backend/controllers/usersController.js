@@ -591,12 +591,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // Resolve the sponsor's specific active plan to check THEIR limits and hold slots
+            // Resolve the sponsor's specific active plan for this equivalency group
             const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => 
                 equivIds.includes(String(ap.planId))
             );
             
-            // Get the full config of that specific plan to respect the sponsor's unique settings
+            // Get the full config of the sponsor's matching plan to respect their specific limit/hold settings
             const sponsorPlanConfig = sponsorMatchingActivePlan 
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
                 : plan; // fallback
@@ -612,9 +612,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
             const currentSlotNum = referralCount + 1;
             const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            
-            // CHECK OVERFLOW FIRST: If currentSlotNum is greater than the limit, it's Overflow
-            if (limit > 0 && currentSlotNum > limit) {
+            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
+                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
+
+            // --- REFINED HOLD/OVERFLOW LOGIC ---
+            // 1. If it exceeds the hard referral limit AND it is NOT a hold slot, it's Overflow
+            if (limit > 0 && currentSlotNum > limit && !isHoldSlot) {
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -635,10 +638,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 continue; 
             }
 
-            // CHECK HOLD POSITION: If within limit, check if this specific slot is a hold slot
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
-                               (sponsorPlanConfig.holdPosition.slots || []).includes(currentSlotNum);
-
+            // 2. Check if it's a Hold slot (even if it's within the limit or specifically designated)
             if (isHoldSlot) {
                 const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
                 const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
