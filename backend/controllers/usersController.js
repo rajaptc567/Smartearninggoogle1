@@ -345,18 +345,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const currentSlotNum = usedSlots + 1;
             const isHoldSlot = plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlotNum);
 
-            // --- REFINED LOGIC ---
-            // 1. Check if it is a HOLD slot first. If it's a hold slot, it is NOT an overflow,
-            // even if it exceeds the directReferralLimit.
+            // --- REFINED HOLD/OVERFLOW LOGIC ---
+            // 1. Check if it's a Hold slot FIRST. If so, it occupies a slot but is Pending.
             if (isHoldSlot) {
-                const nextPlanId = plan.autoUpgrade?.toPlanId;
-                const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
-                const upName = nextPlan ? nextPlan.name : 'your next plan';
-                
                 eligibility.status = 'Pending';
-                eligibility.message = `Held for Upgrade: Slot #${currentSlotNum} from ${user.username} reserved for auto-upgrade to ${upName}.`;
+                eligibility.message = 'Held for Upgrade';
             } 
-            // 2. ONLY IF NOT A HOLD SLOT, check the overflow limit.
+            // 2. Only if NOT a Hold slot, check if it exceeds the hard referral limit.
             else if (plan.directReferralLimit > 0 && currentSlotNum > plan.directReferralLimit) {
                 await Transaction.create({
                     userId: u._id,
@@ -366,13 +361,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `Slot Limit Reached: Slot #${currentSlotNum} from ${user.username} is an overflow.`,
+                    description: 'Slot Limit Reached',
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });
                 await Notification.create({
                     userId: u._id,
-                    message: `Overflow! Referral ${user.username} activated ${plan.name} but your direct slots for this plan level are full.`
+                    message: `Overflow! Referral ${user.username} activated ${plan.name} but your direct slots are full.`
                 });
                 currentUpline = u.sponsor;
                 continue; 
@@ -410,7 +405,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         } else if (eligibility.status === 'Pending') {
             await Notification.create({ 
                 userId: u._id, 
-                message: `${eligibility.message || 'Commission Held!'}. Amount reserved: ${u.currency}${finalAmount.toFixed(2)}` 
+                message: `${eligibility.message === 'Held for Upgrade' ? 'Commission Held for Upgrade!' : eligibility.message}. Amount reserved: ${u.currency}${finalAmount.toFixed(2)}` 
             });
         }
 
