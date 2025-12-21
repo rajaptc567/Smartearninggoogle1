@@ -591,16 +591,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // REFINED: Get the sponsor's actual configuration for this slot limit
-            const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => 
-                equivIds.includes(String(ap.planId))
-            );
-            
-            // Get the full config of that plan to respect the sponsor's own limit and hold settings
-            const sponsorPlanConfig = sponsorMatchingActivePlan 
-                ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
-                : plan; // fallback to purchased plan if none found
-
             // Count existing slot occupancy using Approved and Pending (Hold) transactions
             referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
@@ -611,16 +601,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             });
 
             const currentSlotNum = referralCount + 1;
-            
-            // Use the sponsor's specific limit and hold config
-            const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && 
-                               (sponsorPlanConfig.holdPosition.slots || []).map(Number).includes(Number(currentSlotNum));
+            const isHoldSlot = plan.holdPosition?.enabled && (plan.holdPosition.slots || []).includes(currentSlotNum);
 
             // --- REFINED HOLD/OVERFLOW LOGIC ---
             // 1. If it's a Hold slot, it occupies a slot but is status Pending
             if (isHoldSlot) {
-                const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
+                const nextPlanId = plan.autoUpgrade?.toPlanId;
                 const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
                 const upName = nextPlan ? nextPlan.name : 'your next plan level';
                 
@@ -628,7 +614,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 eligibility.message = `Hold Commission for upgrade: Slot #${currentSlotNum} (${user.username}) reserved for auto-upgrade to ${upName}.`;
             } 
             // 2. Only if NOT a Hold slot, check if it exceeds the hard referral limit.
-            else if (limit > 0 && referralCount >= limit) {
+            else if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -637,20 +623,19 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `${sponsorPlanConfig?.name || 'Plan'} Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`,
+                    description: `Slot Limit Reached for ${plan.name} from ${user.username} - Overflow Slot`,
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });
                 await Notification.create({
                     userId: uplineUser._id,
-                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
+                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this level are full. This is an overflow referral.`
                 });
                 currentUplineUsername = uplineUser.sponsor;
                 continue; 
             }
 
-            // Calculate commission value
-            if (plan.directCommissions?.length > 0) {
+            if (plan.directCommissions && plan.directCommissions.length > 0) {
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
             } else {
                 commissionConfig = { type: 'percentage', value: 0 }; 
@@ -664,7 +649,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             continue;
         }
         
-        // One-time check
+        // One-time commission check
         if (settings.oneTimeCommissionPerGroup) {
             const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
             const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
@@ -687,7 +672,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         }
 
         const rawAmount = calculateAmount(commissionConfig, plan.price);
-        if (rawAmount <= 0) {
+        if (rawAmount <= 0 && eligibility.status !== 'Pending') { // Allow 0 for Pending holds if necessary
             currentUplineUsername = uplineUser.sponsor;
             continue;
         }

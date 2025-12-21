@@ -98,9 +98,9 @@ const Referrals: React.FC = () => {
     // Robust matching for hold positions
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        // Check for specific keywords defined in backend seeder/logic
+        // Check for common keywords used in hold transactions
         const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
-        const hasKeywords = desc.includes('position') || desc.includes('hold commission') || desc.includes('reserved') || desc.includes('upgrade');
+        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
         return isHeldStatus && hasKeywords;
     };
 
@@ -386,7 +386,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // Modified ReferralCardContent with prioritized 'Hold Commission for upgrade' badge and amount visibility
+    // Modified ReferralCardContent with prioritized 'Held for Upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
