@@ -98,9 +98,9 @@ const Referrals: React.FC = () => {
     // Robust matching for hold positions
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        // Check for common keywords used in hold transactions
+        // Check for specific keywords defined in backend
         const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
-        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
+        const hasKeywords = desc.includes('position') || desc.includes('hold commission') || desc.includes('reserved') || desc.includes('upgrade');
         return isHeldStatus && hasKeywords;
     };
 
@@ -386,7 +386,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // Modified ReferralCardContent with prioritized 'Held for Upgrade' badge and amount visibility
+    // Modified ReferralCardContent with prioritized 'Hold Commission for upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -721,7 +721,7 @@ const Referrals: React.FC = () => {
                         <div className="mt-6 space-y-2">
                             <Button onClick={handleLocateSponsor} className="w-full bg-purple-600 hover:bg-purple-700">Locate {selectedSponsor.username} in Tree</Button>
                             {planToView && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(planToView?._id) } }); }} className="w-full bg-green-600 hover:bg-green-700">View Sponsor Plan ({planToView.name})</Button>}
-                            {selectedPlanDetails && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
+                            {selectedPlanDetails && <Button onClick={() => { navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); setIsSponsorModalOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
                             <Button variant="secondary" onClick={() => setIsSponsorModalOpen(false)} className="w-full">Close</Button>
                         </div>
                     </div>
