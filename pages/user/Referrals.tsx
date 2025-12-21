@@ -165,7 +165,7 @@ const Referrals: React.FC = () => {
             
             // PRIORITY ORDER:
             // 1. Hold Position or Active Commission -> Earner List
-            // Refined check ensures Hold Position referrals appear in the main Commission List
+            // Refined check ensures Hold Position referrals appear in the main Commission List (Earners)
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
@@ -257,7 +257,7 @@ const Referrals: React.FC = () => {
 
                 // Priority Check: Hold Position
                 if (isTransactionHoldPosition(t)) {
-                    reason = "Auto-Upgrade Reservation";
+                    reason = "Hold Commission for upgrade";
                     isHoldPosition = true;
                 } else if (currentUser.restrictions?.earning) {
                     reason = "Account Restricted";
@@ -386,7 +386,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // Modified ReferralCardContent with prioritized 'Held for Upgrade' badge and amount visibility
+    // Modified ReferralCardContent with prioritized 'Hold Commission for upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -478,7 +478,7 @@ const Referrals: React.FC = () => {
                                 
                                 {isHoldPosition ? (
                                     <span className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded-full font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5 border border-amber-600 animate-pulse">
-                                        <span className="text-xs">🔒</span> Held for Upgrade: {formatCurrency(held || earned, currentUser?.currency)}
+                                        <span className="text-xs">🔒</span> Hold Commission for upgrade
                                     </span>
                                 ) : isOverflow ? (
                                     <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200 flex items-center gap-1">
@@ -493,7 +493,7 @@ const Referrals: React.FC = () => {
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {isHeldView ? (
                                     <p className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
-                                        {isHoldPosition ? '🔒 Auto-Upgrade Reservation' : '💡 Action/Upgrade Required'}
+                                        {isHoldPosition ? '🔒 Hold Commission for upgrade' : '💡 Action/Upgrade Required'}
                                     </p>
                                 ) : isAllView ? (
                                      commissionSourcePlans.length > 0 ? (
@@ -503,7 +503,7 @@ const Referrals: React.FC = () => {
                                         </p>
                                      ) : (
                                          <p className="text-gray-400">
-                                             {isHoldPosition ? 'Commission Held for Auto-Upgrade' : isOverflow ? 'Missed (Slot Limit Reached)' : 'No commission generated'}
+                                             {isHoldPosition ? 'Hold Commission for upgrade' : isOverflow ? 'Missed (Slot Limit Reached)' : 'No commission generated'}
                                          </p>
                                      )
                                 ) : (
@@ -513,7 +513,7 @@ const Referrals: React.FC = () => {
                                             <span>Qualifying Plan: {sourcePlan.name}</span>
                                             {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent)</span>}
                                         </p>
-                                    ) : <p className="text-gray-400">{isHoldPosition ? 'Commission Reserved for Auto-Upgrade' : isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
+                                    ) : <p className="text-gray-400">{isHoldPosition ? 'Hold Commission for upgrade' : isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
                                 )}
                                 {user.sponsor && <p className="flex items-center gap-1"><span>Via:</span><button onClick={() => handleSponsorClick(user.sponsor!, user)} className="text-blue-500 hover:underline font-medium">@{user.sponsor}</button></p>}
                             </div>
@@ -530,7 +530,7 @@ const Referrals: React.FC = () => {
                         {(held > 0 || isHoldPosition) && !isHeldView && (
                              <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'} px-3 py-1 rounded border`}>
                                 <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-blue-800 dark:text-blue-200'}`}>
-                                    {isHoldPosition ? 'Reserved for Upgrade' : 'Pending'}
+                                    {isHoldPosition ? 'Held for upgrade' : 'Pending'}
                                 </p>
                                 <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-blue-600 dark:text-blue-400'}`}>
                                     {formatCurrency(held || earned, currentUser?.currency || 'USD')}
