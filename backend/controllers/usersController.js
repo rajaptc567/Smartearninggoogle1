@@ -589,35 +589,39 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // FIX: Count BOTH Approved and Pending transactions to correctly identify slot number
+            // Fix: Count Approved, Pending, AND Hold Position transactions to correctly identify slot number
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
                 level: 1,
-                status: { $in: ['Approved', 'Pending'] },
-                amount: { $gt: 0 } 
+                status: { $in: ['Approved', 'Pending'] }
             });
 
             if (plan.directReferralLimit > 0 && referralCount >= plan.directReferralLimit) {
-                await Notification.create({
-                    userId: uplineUser._id,
-                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
-                });
-                await Transaction.create({
-                    userId: uplineUser._id,
-                    userName: uplineUser.username,
-                    currency: uplineUser.currency,
-                    type: 'Commission',
-                    amount: 0,
-                    level: 1,
-                    sourceUserId: user._id,
-                    description: `Direct Limit (${plan.directReferralLimit}) Reached from ${user.username} (${plan.name}) - Overflow Slot`,
-                    status: 'Rejected',
-                    relatedPlanId: plan._id
-                });
-                currentUplineUsername = uplineUser.sponsor;
-                continue; 
+                // Determine if this is a hold slot that was just filled, or actual overflow
+                const isHoldSlot = plan.holdPosition?.enabled && plan.holdPosition.slots.includes(referralCount + 1);
+
+                if (!isHoldSlot) {
+                    await Notification.create({
+                        userId: uplineUser._id,
+                        message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${plan.directReferralLimit} slots for this plan level are full. This is an overflow referral.`
+                    });
+                    await Transaction.create({
+                        userId: uplineUser._id,
+                        userName: uplineUser.username,
+                        currency: uplineUser.currency,
+                        type: 'Commission',
+                        amount: 0,
+                        level: 1,
+                        sourceUserId: user._id,
+                        description: `Direct Limit (${plan.directReferralLimit}) Reached from ${user.username} (${plan.name}) - Overflow Slot`,
+                        status: 'Rejected',
+                        relatedPlanId: plan._id
+                    });
+                    currentUplineUsername = uplineUser.sponsor;
+                    continue; 
+                }
             }
 
             if (plan.directCommissions && plan.directCommissions.length > 0) {
