@@ -95,9 +95,10 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // 1. Transaction Validation Helper - Improved for robust matching
+    // Robust matching for hold positions
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
+        // Check for common keywords used in hold transactions
         const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
         const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
         return isHeldStatus && hasKeywords;
@@ -209,7 +210,7 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
-            inactiveReferrals: inactiveList, // Corrected reference mapping
+            inactiveReferrals: inactiveList,
             allNodes: nodesList,
             networkStats: { 
                 totalReferrals: nodesList.length,
@@ -221,7 +222,7 @@ const Referrals: React.FC = () => {
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
-    // 2. Slot Stats - Synchronized with the visible direct list
+    // Slot Stats - Synchronized with the visible direct list
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
@@ -370,7 +371,7 @@ const Referrals: React.FC = () => {
             const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === String(earningSourcePlan._id) || String(g.pkrPlanId) === String(earningSourcePlan._id) || String(g.eurPlanId) === String(earningSourcePlan._id));
             if (group) {
                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                const targetId = group[targetKey];
+                const targetId = (group as any)[targetKey];
                 if (targetId) {
                     const equivPlan = investmentPlans.find(p => p._id === String(targetId));
                     if (equivPlan) {
@@ -385,7 +386,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // 4. Modified ReferralCardContent with prioritized 'Held for Upgrade' badge
+    // Modified ReferralCardContent with prioritized 'Held for Upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -421,7 +422,7 @@ const Referrals: React.FC = () => {
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
             const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
             
-            // Correct priority: Only show overflow if NO valid slot-occupying commission exists
+            // Priority: Only show overflow if NO valid slot-occupying commission exists
             if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
@@ -433,7 +434,7 @@ const Referrals: React.FC = () => {
                      const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === id || String(g.pkrPlanId) === id || String(g.eurPlanId) === id);
                     if (group) {
                         const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                        const targetId = group[targetKey];
+                        const targetId = (group as any)[targetKey];
                         if (targetId && String(targetId) !== id) {
                              const equivPlan = investmentPlans.find(p => p._id === String(targetId));
                              if (equivPlan) displayName = `${plan.name} (Equiv to ${equivPlan.name})`;
