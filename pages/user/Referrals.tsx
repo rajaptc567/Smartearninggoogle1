@@ -108,10 +108,11 @@ const Referrals: React.FC = () => {
         return { used, limit };
     }, [currentUser, selectedPlanDetails, users, equivalentPlanIdsForSelected]);
 
-    // 1. Transaction Validation Helper
+    // 1. Improved Transaction Validation Helper
     const isTransactionHoldPosition = (t: Transaction) => {
+        const desc = t.description?.toLowerCase() || '';
         return (t.status === 'Pending' || t.status === 'Approved') && 
-               (t.description.toLowerCase().includes('position') || t.description.toLowerCase().includes('hold'));
+               (desc.includes('position') || desc.includes('hold'));
     };
 
     const heldCommissionsData = useMemo(() => {
@@ -136,7 +137,7 @@ const Referrals: React.FC = () => {
                 let missingPlanName = undefined;
                 let isHoldPosition = false;
 
-                // Priority Check: Hold Position
+                // Priority Check: Hold Position / Auto-Upgrade
                 if (isTransactionHoldPosition(t)) {
                     reason = "Auto-Upgrade Reservation";
                     isHoldPosition = true;
@@ -166,6 +167,7 @@ const Referrals: React.FC = () => {
                          reason = `Requires Upgrade to ${missingPlanName}`;
                      }
                 }
+                
                 const existingEntry = current.breakdown.find(b => b.reason === reason && b.planId === missingPlanId);
                 if (existingEntry) {
                     existingEntry.amount += t.amount;
@@ -179,7 +181,7 @@ const Referrals: React.FC = () => {
         return { referrals, count: referrals.length, stats: pendingMap };
     }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId]);
 
-    // 2. Fix getCommissionInfoForReferral
+    // 2. Fix getCommissionInfoForReferral to ensure proper list grouping
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
         
@@ -191,9 +193,10 @@ const Referrals: React.FC = () => {
         );
 
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+        // Note: Sum all pending regardless of type for the 'held' total
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Strictly distinguish isHoldPosition vs isOverflow
+        // strictly distinguish isHoldPosition vs isOverflow
         const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
         
         const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
