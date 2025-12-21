@@ -95,15 +95,12 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // Transaction Validation Helper
+    // 1. Transaction Validation Helper - Improved for robust matching
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        return (t.status === 'Pending' || t.status === 'Approved') && (
-            desc.includes('position') || 
-            desc.includes('hold') || 
-            desc.includes('reserved') || 
-            desc.includes('held for upgrade')
-        );
+        const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
+        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
+        return isHeldStatus && hasKeywords;
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
@@ -119,9 +116,13 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Detection Logic
+        // Priority: Strictly distinguish isHoldPosition vs isOverflow
         const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
-        const isOverflow = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+        
+        const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+        
+        // isOverflow: Only if NOT a hold position and has rejected 0 amount with no valid earnings/holds
+        const isOverflow = hasOverflowTx && !isHoldPosition && earned === 0 && held === 0;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
@@ -161,13 +162,19 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // PRIORITY: Hold Position sits in EARNER list, not overflow
+            // PRIORITY ORDER:
+            // 1. Hold Position or Active Commission -> Earner List
+            // Refined check ensures Hold Position referrals appear in the main Commission List
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
-            } else if (info.isOverflow && node.level === 1) {
+            } 
+            // 2. Overflow (only if NOT hold position) -> Overflow List
+            else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
-            } else {
+            } 
+            // 3. Others -> Check if they have plans or not
+            else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
                 }
@@ -202,7 +209,7 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
-            inactiveReferrals: inactiveList, 
+            inactiveReferrals: inactiveList, // Corrected reference mapping
             allNodes: nodesList,
             networkStats: { 
                 totalReferrals: nodesList.length,
@@ -214,10 +221,14 @@ const Referrals: React.FC = () => {
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
+    // 2. Slot Stats - Synchronized with the visible direct list
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
+        
+        // Sync slot count logic with the member list logic (Level 1 Earners + Hold Positions)
         const used = directEarners.length;
+
         return { used, limit };
     }, [currentUser, selectedPlanDetails, directEarners]);
 
@@ -243,6 +254,7 @@ const Referrals: React.FC = () => {
                 let missingPlanName = undefined;
                 let isHoldPosition = false;
 
+                // Priority Check: Hold Position
                 if (isTransactionHoldPosition(t)) {
                     reason = "Auto-Upgrade Reservation";
                     isHoldPosition = true;
@@ -254,7 +266,7 @@ const Referrals: React.FC = () => {
                      const reqIds = getEquivalentIds(String(t.relatedPlanId));
                      const hasMatch = currentUser.activePlans?.some(p => reqIds.has(String(p.planId)));
                      if (!hasMatch) {
-                         let targetPlan = investmentPlans.find(p => p._id.toString() === String(t.relatedPlanId));
+                         let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
                          if (settings.planEquivalencyGroups) {
                              const group = settings.planEquivalencyGroups.find(g => 
                                 String(g.usdPlanId) === String(t.relatedPlanId) || String(g.pkrPlanId) === String(t.relatedPlanId) || String(g.eurPlanId) === String(t.relatedPlanId)
@@ -262,7 +274,7 @@ const Referrals: React.FC = () => {
                              if (group) {
                                  const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
                                  if (group[targetKey]) {
-                                     const localPlan = investmentPlans.find(p => p._id.toString() === String(group[targetKey]));
+                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
                                      if (localPlan) targetPlan = localPlan;
                                  }
                              }
@@ -334,7 +346,7 @@ const Referrals: React.FC = () => {
         const comms = plan.directCommissions;
         if (!comms || comms.length === 0) return 'None';
         let maxVal = 0;
-        let maxType: 'percentage' | 'fixed' = 'percentage';
+        let maxType = 'percentage';
         comms.forEach(c => {
             if (c.value > maxVal) {
                 maxVal = c.value;
@@ -350,7 +362,7 @@ const Referrals: React.FC = () => {
         const allCommissionsFromSponsor = transactions.filter(t => t.userId === currentUser._id && t.type === 'Commission' && t.sourceUserId === selectedSponsor._id && t.status === 'Approved');
         const sponsorEarnings = allCommissionsFromSponsor.reduce((sum, t) => sum + t.amount, 0);
         const lastCommission = [...allCommissionsFromSponsor].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id.toString() === String(lastCommission.relatedPlanId)) : null;
+        const earningSourcePlan = lastCommission?.relatedPlanId ? investmentPlans.find(p => p._id === String(lastCommission.relatedPlanId)) : null;
         let displaySourcePlanName = earningSourcePlan?.name || 'Unknown Plan';
         let planToView = earningSourcePlan;
         let isLinkedPlanEquivalent = false;
@@ -358,9 +370,9 @@ const Referrals: React.FC = () => {
             const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === String(earningSourcePlan._id) || String(g.pkrPlanId) === String(earningSourcePlan._id) || String(g.eurPlanId) === String(earningSourcePlan._id));
             if (group) {
                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                const targetId = (group as any)[targetKey];
+                const targetId = group[targetKey];
                 if (targetId) {
-                    const equivPlan = investmentPlans.find(p => p._id.toString() === String(targetId));
+                    const equivPlan = investmentPlans.find(p => p._id === String(targetId));
                     if (equivPlan) {
                         planToView = equivPlan;
                         if (selectedPlanId === String(targetId)) isLinkedPlanEquivalent = true;
@@ -373,6 +385,7 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
+    // 4. Modified ReferralCardContent with prioritized 'Held for Upgrade' badge
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -408,20 +421,21 @@ const Referrals: React.FC = () => {
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
             const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
             
-            if (overflowTx && !anySuccess) isOverflow = true;
+            // Correct priority: Only show overflow if NO valid slot-occupying commission exists
+            if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
             commissionSourcePlans = Array.from(planIds).map(id => {
-                const plan = investmentPlans.find(p => p._id.toString() === id);
+                const plan = investmentPlans.find(p => p._id === id);
                 if (!plan) return 'Unknown Plan';
                 let displayName = plan.name;
                 if (currentUser && plan.currency !== currentUser.currency && settings.planEquivalencyGroups) {
                      const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === id || String(g.pkrPlanId) === id || String(g.eurPlanId) === id);
                     if (group) {
                         const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                        const targetId = (group as any)[targetKey];
+                        const targetId = group[targetKey];
                         if (targetId && String(targetId) !== id) {
-                             const equivPlan = investmentPlans.find(p => p._id.toString() === String(targetId));
+                             const equivPlan = investmentPlans.find(p => p._id === String(targetId));
                              if (equivPlan) displayName = `${plan.name} (Equiv to ${equivPlan.name})`;
                         }
                     }
@@ -441,8 +455,8 @@ const Referrals: React.FC = () => {
         const cardBorderClass = isDirect ? 'border-l-blue-500' : 'border-l-purple-500';
         const levelBadgeColor = isDirect ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
         const isHighlighted = highlightedUserId === user._id;
-        const sourcePlan = earningSourcePlanId ? investmentPlans.find(p => p._id.toString() === String(earningSourcePlanId)) : null;
-        const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id.toString() !== selectedPlanDetails._id.toString();
+        const sourcePlan = earningSourcePlanId ? investmentPlans.find(p => p._id === String(earningSourcePlanId)) : null;
+        const isEquivalent = sourcePlan && selectedPlanDetails && sourcePlan._id !== selectedPlanDetails._id;
 
         return (
             <div id={`node-${user._id}`} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${isHighlighted ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : 'border-gray-200 dark:border-gray-700'} border-l-4 ${isHoldPosition ? 'border-l-amber-500 bg-amber-50/10 shadow-[0_0_15px_-3px_rgba(245,158,11,0.2)]' : isOverflow ? 'border-l-orange-500' : isHeldView ? 'border-l-blue-500 bg-blue-50/5' : isAllView ? 'border-l-indigo-500' : cardBorderClass} transition-all duration-200 hover:shadow-md`}>
@@ -463,7 +477,7 @@ const Referrals: React.FC = () => {
                                 
                                 {isHoldPosition ? (
                                     <span className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded-full font-bold uppercase tracking-wider shadow-sm flex items-center gap-1.5 border border-amber-600 animate-pulse">
-                                        <span className="text-xs">🔒</span> Held for Upgrade
+                                        <span className="text-xs">🔒</span> Held for Upgrade: {formatCurrency(held || earned, currentUser?.currency)}
                                     </span>
                                 ) : isOverflow ? (
                                     <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200 flex items-center gap-1">
@@ -487,7 +501,9 @@ const Referrals: React.FC = () => {
                                             <span>Purchased: {commissionSourcePlans.join(', ')}</span>
                                         </p>
                                      ) : (
-                                         <p className="text-gray-400">No commission generated</p>
+                                         <p className="text-gray-400">
+                                             {isHoldPosition ? 'Commission Held for Auto-Upgrade' : isOverflow ? 'Missed (Slot Limit Reached)' : 'No commission generated'}
+                                         </p>
                                      )
                                 ) : (
                                     sourcePlan ? (
@@ -496,26 +512,35 @@ const Referrals: React.FC = () => {
                                             <span>Qualifying Plan: {sourcePlan.name}</span>
                                             {isEquivalent && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 whitespace-nowrap" title={`Matched via equivalency to your ${selectedPlanDetails?.name} plan`}>(Equivalent)</span>}
                                         </p>
-                                    ) : <p className="text-gray-400">{isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
+                                    ) : <p className="text-gray-400">{isHoldPosition ? 'Commission Reserved for Auto-Upgrade' : isOverflow ? 'Slots full for this plan level' : 'No qualifying purchase'}</p>
                                 )}
                                 {user.sponsor && <p className="flex items-center gap-1"><span>Via:</span><button onClick={() => handleSponsorClick(user.sponsor!, user)} className="text-blue-500 hover:underline font-medium">@{user.sponsor}</button></p>}
                             </div>
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 w-full sm:w-auto text-right pl-9 sm:pl-0">
-                        {isOverflow ? (
+                        {(earned > 0 && !isHoldPosition) && (
                             <div>
+                                <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">{isAllView ? 'Total Earned' : 'Commission'}</p>
+                                <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(earned, currentUser?.currency || 'USD')}</p>
+                            </div>
+                        )}
+                        
+                        {(held > 0 || isHoldPosition) && !isHeldView && (
+                             <div className={`${isHoldPosition ? 'bg-amber-100 border-amber-300' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'} px-3 py-1 rounded border`}>
+                                <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-900' : 'text-blue-800 dark:text-blue-200'}`}>
+                                    {isHoldPosition ? 'Reserved for Upgrade' : 'Pending'}
+                                </p>
+                                <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-700' : 'text-blue-600 dark:text-blue-400'}`}>
+                                    {formatCurrency(held || earned, currentUser?.currency || 'USD')}
+                                </p>
+                            </div>
+                        )}
+
+                        {isOverflow && !isHeldView && (earned === 0 && held === 0) && (
+                            <div className="bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded border border-orange-100 dark:border-amber-800">
                                 <p className="text-[10px] uppercase text-orange-800 dark:text-orange-200 font-bold tracking-wider">Missed</p>
                                 <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCurrency(0, currentUser?.currency || 'USD')}</p>
-                            </div>
-                        ) : (earned > 0 || held > 0 || isHoldPosition) && (
-                            <div>
-                                <p className={`text-[10px] uppercase font-bold tracking-wider ${isHoldPosition ? 'text-amber-800 dark:text-amber-300' : 'text-gray-400'}`}>
-                                    {isHoldPosition ? 'Reserved for Upgrade' : isAllView ? 'Total Earned' : 'Commission'}
-                                </p>
-                                <p className={`text-lg font-bold ${isHoldPosition ? 'text-amber-600' : 'text-green-600 dark:text-green-400'}`}>
-                                    {formatCurrency(isHeldView ? held : (earned || held), currentUser?.currency || 'USD')}
-                                </p>
                             </div>
                         )}
                         {isHeldView && breakdown.length > 0 ? (
