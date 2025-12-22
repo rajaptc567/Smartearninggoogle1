@@ -115,10 +115,7 @@ const InvestmentPlans: React.FC = () => {
         const activePlansInView = investmentPlans.filter(p => p.currency === currencyFilter && p.status === 'Active');
         const planIdsInView = activePlansInView.map(p => p._id);
         
-        // We only care about the order of plans currently in the active set for this currency
         const currentCurrencyOrder = localManualOrder.filter(id => planIdsInView.includes(id));
-        
-        // Add any active plans not in the manual order yet
         const missingIds = planIdsInView.filter(id => !currentCurrencyOrder.includes(id));
         const fullCurrencyOrder = [...currentCurrencyOrder, ...missingIds];
 
@@ -132,13 +129,10 @@ const InvestmentPlans: React.FC = () => {
             [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
         }
 
-        // Merge back into global manual order: Remove these IDs from the old global list and prepend the new sorted list
         const otherCurrencyIds = localManualOrder.filter(id => !planIdsInView.includes(id));
         setLocalManualOrder([...newOrder, ...otherCurrencyIds]);
     };
 
-    // --- Rule Management Handlers ---
-    
     const handleOpenRuleModal = (plan: InvestmentPlan) => {
         setManagingRulePlan(plan);
         setIsRuleModalOpen(true);
@@ -158,7 +152,6 @@ const InvestmentPlans: React.FC = () => {
             alert("Failed to toggle rule status.");
         }
     };
-
 
     const renderDirectCommissionSummary = (plan: InvestmentPlan) => {
         const comms = plan.directCommissions;
@@ -191,7 +184,6 @@ const InvestmentPlans: React.FC = () => {
                 return matchesCurrency && matchesStatus;
             });
 
-        // Apply visual sort for admin view
         list.sort((a, b) => {
             if (priceSort === 'low-high') return a.price - b.price;
             if (priceSort === 'high-low') return b.price - a.price;
@@ -232,7 +224,6 @@ const InvestmentPlans: React.FC = () => {
                 </div>
             </div>
 
-            {/* NEW: Global Display Sequence Settings */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8 border border-blue-100 dark:border-blue-900">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
@@ -405,11 +396,9 @@ const InvestmentPlans: React.FC = () => {
     );
 };
 
-// --- Icons ---
 const ChevronUpIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
 const ChevronDownIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
 
-// --- PlanRuleModal Component ---
 interface PlanRuleModalProps {
     plan: InvestmentPlan;
     existingRule?: Rule;
@@ -984,7 +973,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic">Requires 'Direct Referral Limit' > 0</p>
+                                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic">Requires 'Direct Referral Limit' &gt; 0</p>
                                     )}
                                 </>
                             )}
