@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
