@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
@@ -210,13 +211,21 @@ const Referrals: React.FC = () => {
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
-    // ENHANCED: AUTO UPGRADE PROGRESS LOGIC
+    const slotStats = useMemo(() => {
+        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
+        const limit = selectedPlanDetails.directReferralLimit || 0;
+        const used = directEarners.length;
+        return { used, limit };
+    }, [currentUser, selectedPlanDetails, directEarners]);
+
+    // --- ENHANCED: AUTO UPGRADE PROGRESS LOGIC ---
     const upgradeProgress = useMemo(() => {
         if (!currentUser || !selectedPlanDetails?.autoUpgrade?.enabled || !selectedPlanDetails?.autoUpgrade?.toPlanId) return null;
         
         const targetPlan = investmentPlans.find(p => p._id === selectedPlanDetails.autoUpgrade?.toPlanId);
         if (!targetPlan) return null;
 
+        // Scoping held funds strictly to the CURRENTLY VIEWED plan track
         const contextIds = getEquivalentIds(selectedPlanId);
 
         const heldAmountForThisTrack = transactions
@@ -309,6 +318,21 @@ const Referrals: React.FC = () => {
         setHighlightedUserId(selectedSponsor._id);
         setViewMode('tree');
         setIsSponsorModalOpen(false);
+    };
+
+    const renderMaxDirectCommission = (plan: InvestmentPlan) => {
+        const comms = plan.directCommissions;
+        if (!comms || comms.length === 0) return 'None';
+        let maxVal = 0;
+        let maxType = 'percentage';
+        comms.forEach(c => {
+            if (c.value > maxVal) {
+                maxVal = c.value;
+                maxType = c.type;
+            }
+        });
+        const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
+        return comms.length > 1 ? `Up to ${formattedVal}` : formattedVal;
     };
 
     const ReferralCardContent: React.FC<{
