@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
@@ -618,7 +617,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
             showDuration: true, 
             showMinWithdraw: true, 
             showDirectCommission: true, 
-            showIndirectCommission: true,
+            showIndirectCommission: true, 
             showDirectReferrals: true 
         }
     } : defaultPlan;
@@ -984,7 +983,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic">Requires 'Direct Referral Limit' > 0</p>
+                                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic">Requires 'Direct Referral Limit' &gt; 0</p>
                                     )}
                                 </>
                             )}
