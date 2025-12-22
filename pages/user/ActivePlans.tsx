@@ -8,7 +8,7 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, transactions, investmentPlans, settings } = state;
+    const { currentUser, transactions, investmentPlans, settings } = state;
     const navigate = useNavigate();
 
     if (!currentUser) {

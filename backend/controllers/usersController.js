@@ -29,7 +29,7 @@ const getEquivalentIds = (planId, settings, allPlans) => {
     return ids;
 };
 
-// --- NEW HELPER: CHECK AND TRIGGER AUTO UPGRADE ---
+// --- HELPER: CHECK AND TRIGGER AUTO UPGRADE ---
 const checkAndTriggerAutoUpgrade = async (user, sourcePlan, settings, allPlans) => {
     if (!sourcePlan.autoUpgrade?.enabled || !sourcePlan.autoUpgrade?.toPlanId) return;
 
@@ -129,8 +129,7 @@ const distributeCommissions = async (buyer, plan) => {
 
         let commissionConfig = null;
         if (level === 1) {
-            // CRITICAL FIX: Only count Approved or Pending commissions as "Slots"
-            // This ensures Rejected/Overflow records don't increment the slot count.
+            // FIX: Only count Approved or Pending commissions as "Slots"
             const slotOccupyingTransactions = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
@@ -157,7 +156,6 @@ const distributeCommissions = async (buyer, plan) => {
                         relatedPlanId: plan._id
                     });
                 }
-                // Stop processing commissions for this sponsor at this level
                 currentSponsorName = sponsor.sponsor;
                 level++;
                 continue;
@@ -171,7 +169,6 @@ const distributeCommissions = async (buyer, plan) => {
             }
             commissionConfig = plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)];
         } else {
-            // Indirect levels
             commissionConfig = plan.indirectCommissions[level - 2];
         }
 
@@ -208,7 +205,6 @@ const distributeCommissions = async (buyer, plan) => {
                 await sponsor.save();
             }
 
-            // --- TRIGGER AUTO UPGRADE CHECK ---
             if (isHoldPosition) {
                 await checkAndTriggerAutoUpgrade(sponsor, plan, settings, allPlans);
             }
