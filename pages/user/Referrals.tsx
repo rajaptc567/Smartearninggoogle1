@@ -98,10 +98,9 @@ const Referrals: React.FC = () => {
     // Robust matching for hold positions
     const isTransactionHoldPosition = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        // Check for common keywords used in hold transactions
-        const isHeldStatus = t.status === 'Pending' || t.status === 'Approved';
-        const hasKeywords = desc.includes('position') || desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade');
-        return isHeldStatus && hasKeywords;
+        // Check for specific keywords used by the new backend logic
+        return (t.status === 'Pending' || t.status === 'Approved') && 
+               (desc.includes('hold') || desc.includes('reserved') || desc.includes('upgrade') || desc.includes('slot #'));
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
@@ -164,17 +163,13 @@ const Referrals: React.FC = () => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
             // PRIORITY ORDER:
-            // 1. Hold Position or Active Commission -> Earner List
-            // Refined check ensures Hold Position referrals appear in the main Commission List (Earners)
             if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
             } 
-            // 2. Overflow (only if NOT hold position) -> Overflow List
             else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
             } 
-            // 3. Others -> Check if they have plans or not
             else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push(node);
@@ -222,14 +217,10 @@ const Referrals: React.FC = () => {
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
-    // Slot Stats - Synchronized with the visible direct list
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
-        
-        // Sync slot count logic with the member list logic (Level 1 Earners + Hold Positions)
         const used = directEarners.length;
-
         return { used, limit };
     }, [currentUser, selectedPlanDetails, directEarners]);
 
@@ -255,7 +246,6 @@ const Referrals: React.FC = () => {
                 let missingPlanName = undefined;
                 let isHoldPosition = false;
 
-                // Priority Check: Hold Position
                 if (isTransactionHoldPosition(t)) {
                     reason = "Hold Commission for upgrade";
                     isHoldPosition = true;
@@ -274,8 +264,8 @@ const Referrals: React.FC = () => {
                              );
                              if (group) {
                                  const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                                 if (group[targetKey]) {
-                                     const localPlan = investmentPlans.find(p => p._id === String(group[targetKey]));
+                                 if ((group as any)[targetKey]) {
+                                     const localPlan = investmentPlans.find(p => p._id === String((group as any)[targetKey]));
                                      if (localPlan) targetPlan = localPlan;
                                  }
                              }
@@ -371,12 +361,11 @@ const Referrals: React.FC = () => {
             const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === String(earningSourcePlan._id) || String(g.pkrPlanId) === String(earningSourcePlan._id) || String(g.eurPlanId) === String(earningSourcePlan._id));
             if (group) {
                 const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                const targetId = (group as any)[targetKey];
-                if (targetId) {
-                    const equivPlan = investmentPlans.find(p => p._id === String(targetId));
+                if ((group as any)[targetKey]) {
+                    const equivPlan = investmentPlans.find(p => p._id === String((group as any)[targetKey]));
                     if (equivPlan) {
                         planToView = equivPlan;
-                        if (selectedPlanId === String(targetId)) isLinkedPlanEquivalent = true;
+                        if (selectedPlanId === String((group as any)[targetKey])) isLinkedPlanEquivalent = true;
                     }
                 }
             }
@@ -386,7 +375,6 @@ const Referrals: React.FC = () => {
 
     const { sponsorEarnings, displaySourcePlanName, earningSourcePlan, planToView, isLinkedPlanEquivalent } = sponsorModalDetails;
 
-    // Modified ReferralCardContent with prioritized 'Hold Commission for upgrade' badge and amount visibility
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
         toggleNode?: (userId: string) => void;
@@ -422,7 +410,6 @@ const Referrals: React.FC = () => {
             const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
             const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
             
-            // Priority: Only show overflow if NO valid slot-occupying commission exists
             if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
 
             const planIds = new Set(allApproved.map(t => String(t.relatedPlanId)).filter(Boolean));
@@ -434,9 +421,8 @@ const Referrals: React.FC = () => {
                      const group = settings.planEquivalencyGroups.find(g => String(g.usdPlanId) === id || String(g.pkrPlanId) === id || String(g.eurPlanId) === id);
                     if (group) {
                         const targetKey = `${currentUser.currency.toLowerCase()}PlanId` as keyof typeof group;
-                        const targetId = (group as any)[targetKey];
-                        if (targetId && String(targetId) !== id) {
-                             const equivPlan = investmentPlans.find(p => p._id === String(targetId));
+                        if ((group as any)[targetKey] && String((group as any)[targetKey]) !== id) {
+                             const equivPlan = investmentPlans.find(p => p._id === String((group as any)[targetKey]));
                              if (equivPlan) displayName = `${plan.name} (Equiv to ${equivPlan.name})`;
                         }
                     }
@@ -575,16 +561,16 @@ const Referrals: React.FC = () => {
 
     const renderTreeNode = (node: GenealogyNode & { isSkipped?: boolean }) => {
         if (node.isSkipped) return <React.Fragment key={node.user._id}>{node.children.map(child => renderTreeNode(child))}</React.Fragment>;
-        const isCollapsed = collapsedNodes.has(node.user._id);
+        const iCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
         return (
             <li key={node.user._id} className="relative pl-4 sm:pl-6 pt-2">
                 <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
                 <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-2"></div>
                 <div className="mb-2">
-                    <ReferralCardContent node={node} toggleNode={toggleNode} isCollapsed={isCollapsed} hasChildren={hasChildren} isTree={true} />
+                    <ReferralCardContent node={node} toggleNode={toggleNode} isCollapsed={iCollapsed} hasChildren={hasChildren} isTree={true} />
                 </div>
-                {hasChildren && !isCollapsed && <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">{node.children.map(child => renderTreeNode(child))}</ul>}
+                {hasChildren && !iCollapsed && <ul className="border-l border-gray-200 dark:border-gray-700 ml-2 pl-2">{node.children.map(child => renderTreeNode(child))}</ul>}
             </li>
         );
     };
@@ -716,7 +702,7 @@ const Referrals: React.FC = () => {
                         <div className="mt-6 space-y-2">
                             <Button onClick={handleLocateSponsor} className="w-full bg-purple-600 hover:bg-purple-700">Locate {selectedSponsor.username} in Tree</Button>
                             {planToView && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(planToView?._id) } }); }} className="w-full bg-green-600 hover:bg-green-700">View Sponsor Plan ({planToView.name})</Button>}
-                            {selectedPlanDetails && <Button onClick={() => { setIsSponsorModalOpen(false); navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
+                            {selectedPlanDetails && <Button onClick={() => { navigate('/member/plans', { state: { highlightPlanId: String(selectedPlanDetails._id) } }); setIsSponsorModalOpen(false); }} className="w-full bg-blue-600 hover:bg-blue-700">View My {selectedPlanDetails.name} Plan</Button>}
                             <Button variant="secondary" onClick={() => setIsSponsorModalOpen(false)} className="w-full">Close</Button>
                         </div>
                     </div>

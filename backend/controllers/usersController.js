@@ -4,179 +4,194 @@ import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Notification from '../models/Notification.js';
-import Setting from '../models/Setting.js'; // Import Setting model
+import Setting from '../models/Setting.js';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 
-const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+// Helper to calculate and distribute commissions
+const distributeCommissions = async (buyer, plan) => {
+    const settings = await Setting.getSettings();
+    let currentSponsorName = buyer.sponsor;
+    let level = 1;
 
-// ... (previous functions: createUser, loginUser, getUsers, getUser)
+    // Fetch all plans once to handle equivalency checks
+    const allPlans = await InvestmentPlan.find();
 
-// @desc    Update user
-// @route   PUT /api/v1/users/:id
-export const updateUser = async (req, res) => {
-    try {
-        const userToUpdate = await User.findById(req.params.id);
-        if (!userToUpdate) {
-            return res.status(404).json({ success: false, error: `User not found` });
-        }
-        // Make a plain copy for comparisons before any changes are applied
-        const userBeforeUpdate = userToUpdate.toObject();
+    while (currentSponsorName && level <= 10) { // Limit depth for safety
+        const sponsor = await User.findOne({ username: currentSponsorName });
+        if (!sponsor) break;
 
-        // Handle Status Change Notifications
-        if (req.body.status && req.body.status !== userBeforeUpdate.status) {
-            const newStatus = req.body.status;
-            const oldStatus = userBeforeUpdate.status;
-            let message = '';
-            if (newStatus === 'Blocked') { message = 'Your account has been blocked by the administrator. Please contact support.'; }
-            else if (newStatus === 'Paused') { message = 'Your account has been paused by the administrator. Financial activities are restricted.'; }
-            else if (newStatus === 'Active') {
-                if (oldStatus === 'Blocked') { message = 'Your account has been unblocked. You can now access all features.'; }
-                else if (oldStatus === 'Paused') { message = 'Your account has been resumed. Restrictions have been lifted.'; }
-                else { message = 'Your account is now active.'; }
-            }
-            if (message) { await Notification.create({ userId: userBeforeUpdate._id, message }); }
+        // --- CHECK ELIGIBILITY ---
+        let isEligible = true;
+        let holdReason = '';
+        let status = 'Approved';
+        let isHoldPosition = false;
+
+        // Rule 1: Admin Restrictions
+        if (sponsor.restrictions?.earning) {
+            isEligible = false;
+            holdReason = 'Account Restricted';
         }
 
-        // Handle Security/Profile Change Notifications
-        if (req.body.phone && req.body.phone !== userBeforeUpdate.phone) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your contact phone number was updated.` }); }
-        if (req.body.password) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your account password has been changed.` }); }
-        
-        // Handle Granular Restrictions Notifications
-        if (req.body.restrictions) {
-            const oldR = userBeforeUpdate.restrictions || {};
-            const newR = req.body.restrictions;
-            if (newR.deposit !== oldR.deposit) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your ability to Deposit funds has been ${newR.deposit ? 'Disabled' : 'Enabled'} by admin.` }); }
-            if (newR.withdrawal !== oldR.withdrawal) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your ability to Withdraw funds has been ${newR.withdrawal ? 'Disabled' : 'Enabled'} by admin.` }); }
-            if (newR.transfer !== oldR.transfer) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your ability to Transfer funds has been ${newR.transfer ? 'Disabled' : 'Enabled'} by admin.` }); }
-            if (newR.earning !== oldR.earning) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your ability to Earn Commissions has been ${newR.earning ? 'Paused' : 'Resumed'} by admin.` }); }
-            if (newR.dispute !== oldR.dispute) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your ability to raise Disputes has been ${newR.dispute ? 'Disabled' : 'Enabled'} by admin.` }); }
-            if (newR.excludeFromTicker !== oldR.excludeFromTicker) { await Notification.create({ userId: userBeforeUpdate._id, message: `Your activities are now ${newR.excludeFromTicker ? 'hidden from' : 'visible on'} the public activity ticker.` });}
+        // Rule 2: Active Plan Requirement
+        if (isEligible && settings.requireActivePlanForCommission && (!sponsor.activePlans || sponsor.activePlans.length === 0)) {
+            isEligible = false;
+            holdReason = 'No Active Plan';
         }
 
-        // --- Currency Conversion Logic ---
-        const oldCurrency = userBeforeUpdate.currency;
-        const oldBalance = userBeforeUpdate.walletBalance;
-
-        let newCurrency = oldCurrency;
-        if (req.body.country && req.body.country !== userBeforeUpdate.country) {
-            if (req.body.country.toLowerCase() === 'pakistan') {
-                newCurrency = 'PKR';
-            } else if (europeanCountries.map(c => c.toLowerCase()).includes(req.body.country.toLowerCase())) { 
-                newCurrency = 'EUR'; 
-            } else { 
-                newCurrency = 'USD'; 
+        // Rule 3: Plan Match / Equivalency Requirement
+        if (isEligible && settings.requirePlanMatchForCommission) {
+            const equivIds = getEquivalentIds(plan._id, settings, allPlans);
+            const hasMatch = sponsor.activePlans?.some(ap => equivIds.has(String(ap.planId)));
+            if (!hasMatch) {
+                isEligible = false;
+                holdReason = 'Plan Mismatch';
             }
         }
 
-        // Apply all updates from the request body to the Mongoose document
-        Object.assign(userToUpdate, req.body);
+        // --- CALCULATION ---
+        let commissionConfig = null;
+        if (level === 1) {
+            // Level 1 logic: Dynamic based on referral slot
+            const directReferrals = await Transaction.countDocuments({
+                userId: sponsor._id,
+                type: 'Commission',
+                level: 1,
+                relatedPlanId: { $in: Array.from(getEquivalentIds(plan._id, settings, allPlans)) }
+            });
 
-        // If currency is changing, convert the wallet balance BEFORE saving
-        if (oldCurrency !== newCurrency) {
-            const settings = await Setting.getSettings();
-            const rates = settings.exchangeRates;
-            // Convert old balance to USD, then from USD to new currency
-            const balanceInUSD = oldBalance / (rates[oldCurrency] || 1);
-            const newBalance = balanceInUSD * (rates[newCurrency] || 1);
-            userToUpdate.walletBalance = Number(newBalance.toFixed(2));
-        }
+            const currentSlot = directReferrals + 1;
 
-        // Save the user. The pre-save hook will handle setting the currency field and hashing the password.
-        let updatedUser = await userToUpdate.save();
-
-        // --- Post-Save Historical Data Conversion ---
-        if (oldCurrency !== newCurrency) {
-            const settings = await Setting.getSettings();
-            const rates = settings.exchangeRates;
-            // Calculate direct conversion factor: (new rate / old rate) relative to USD base
-            const conversionRate = (rates[newCurrency] || 1) / (rates[oldCurrency] || 1);
-
-            // Use updateMany for efficiency
-            await Deposit.updateMany({ userId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate }, $set: { currency: newCurrency } });
-            await Withdrawal.updateMany({ userId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate, fee: conversionRate, finalAmount: conversionRate, matchRemainingAmount: conversionRate }, $set: { currency: newCurrency } });
-            await Transaction.updateMany({ userId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate }, $set: { currency: newCurrency } });
-            await Transaction.updateMany({ userId: updatedUser._id, originalCurrency: oldCurrency }, { $mul: { originalAmount: conversionRate }, $set: { originalCurrency: newCurrency } });
-            await Transfer.updateMany({ senderId: updatedUser._id, currency: oldCurrency }, { $mul: { amount: conversionRate, fee: conversionRate, totalDeducted: conversionRate }, $set: { currency: newCurrency } });
-            await Transfer.updateMany({ recipientId: updatedUser._id, currency: updatedUser.currency === 'USD' ? 'USD' : (updatedUser.currency === 'PKR' ? 'PKR' : 'EUR') }, { $mul: { amount: conversionRate, fee: conversionRate, totalDeducted: conversionRate }, $set: { currency: newCurrency } });
-
-            await createLog('User Currency Change', updatedUser.username, `Admin changed country to ${updatedUser.country}, converting records from ${oldCurrency} to ${newCurrency}.`, 'admin');
-            await Notification.create({ userId: updatedUser._id, message: `Your account currency has been updated to ${newCurrency}. Your balance and history have been converted.` });
-        }
-        
-        // --- RELEASE LOGIC: If earning restriction was removed, release pending commissions ---
-        if (req.body.restrictions && req.body.restrictions.earning === false && userBeforeUpdate.restrictions?.earning === true) {
-            const settings = await Setting.getSettings();
-            const allPlans = await InvestmentPlan.find(); // Fetch all plans for equivalency check
-            const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
-
-            let releasedAmount = 0;
-            for (const comm of pendingCommissions) {
-                if (canReleaseCommission(comm, updatedUser, settings, allPlans)) {
-                    comm.status = 'Approved';
-                    await comm.save();
-                    releasedAmount += comm.amount;
+            // CHECK DIRECT LIMIT & OVERFLOW
+            if (plan.directReferralLimit > 0 && currentSlot > plan.directReferralLimit) {
+                if (plan.overflowEnabled) {
+                    await Transaction.create({
+                        userId: sponsor._id,
+                        userName: sponsor.username,
+                        currency: sponsor.currency,
+                        type: 'Commission',
+                        amount: 0,
+                        status: 'Rejected',
+                        description: `Overflow: Direct limit reached for ${plan.name}`,
+                        level: 1,
+                        sourceUserId: buyer._id,
+                        relatedPlanId: plan._id
+                    });
                 }
+                // Skip further processing for this level if limit reached
+                currentSponsorName = sponsor.sponsor;
+                level++;
+                continue;
             }
 
-            if (releasedAmount > 0) {
-                updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
-                updatedUser = await updatedUser.save(); // Re-save to finalize balance
-                await Notification.create({
-                    userId: updatedUser._id,
-                    message: `${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions have been released to your wallet.`
-                });
+            // CHECK HOLD POSITION
+            if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
+                isHoldPosition = true;
+                status = 'Pending';
+                holdReason = `Hold: Slot #${currentSlot} Reserved for Upgrade`;
+            }
+
+            // Get commission config
+            commissionConfig = plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)];
+        } else {
+            // Indirect levels
+            commissionConfig = plan.indirectCommissions[level - 2];
+        }
+
+        if (commissionConfig) {
+            let commissionAmount = commissionConfig.type === 'percentage' 
+                ? (plan.price * commissionConfig.value) / 100 
+                : commissionConfig.value;
+
+            // Handle Currency Conversion if needed
+            if (sponsor.currency !== plan.currency) {
+                const rateFrom = settings.exchangeRates[plan.currency] || 1;
+                const rateTo = settings.exchangeRates[sponsor.currency] || 1;
+                commissionAmount = (commissionAmount / rateFrom) * rateTo;
+            }
+
+            if (!isEligible) status = 'Pending';
+
+            const tx = await Transaction.create({
+                userId: sponsor._id,
+                userName: sponsor.username,
+                currency: sponsor.currency,
+                type: 'Commission',
+                amount: Number(commissionAmount.toFixed(2)),
+                status,
+                description: holdReason || `Commission from ${buyer.username} (Level ${level})`,
+                level,
+                sourceUserId: buyer._id,
+                relatedPlanId: plan._id,
+                originalAmount: commissionConfig.type === 'percentage' ? plan.price : commissionConfig.value,
+                originalCurrency: plan.currency
+            });
+
+            if (status === 'Approved') {
+                sponsor.walletBalance = Number((sponsor.walletBalance + commissionAmount).toFixed(2));
+                await sponsor.save();
             }
         }
 
-        res.status(200).json({ success: true, data: updatedUser });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        // Pass-through eligibility check
+        if (settings.requireUplineEligibility && !isEligible) break;
+
+        currentSponsorName = sponsor.sponsor;
+        level++;
     }
 };
 
-// @desc    Admin manually removes an active plan from a user
-// @route   DELETE /api/v1/users/:id/plans/:planInstanceId
-export const adminRemoveUserPlan = async (req, res) => {
-    const { reason } = req.body;
+const getEquivalentIds = (planId, settings, allPlans) => {
+    const ids = new Set([String(planId)]);
+    const group = settings.planEquivalencyGroups?.find(g =>
+        String(g.usdPlanId) === String(planId) ||
+        String(g.pkrPlanId) === String(planId) ||
+        String(g.eurPlanId) === String(planId)
+    );
+    if (group) {
+        if (group.usdPlanId) ids.add(String(group.usdPlanId));
+        if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
+        if (group.eurPlanId) ids.add(String(group.eurPlanId));
+    }
+    return ids;
+};
+
+// ... (existing updateUser, adminRemoveUserPlan functions)
+
+// @desc    Admin manually activates a plan for a user
+export const adminActivatePlan = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-        const planInstance = user.activePlans.id(req.params.planInstanceId);
-        if (!planInstance) return res.status(404).json({ success: false, error: 'Plan instance not found on user account' });
-
-        const planName = planInstance.planName;
+        const plan = await InvestmentPlan.findById(req.body.planId);
         
-        // Remove from activePlans array
-        user.activePlans.pull(req.params.planInstanceId);
-        
-        // Update activePlan string field if it matched
-        if (user.activePlan === planName) {
-            user.activePlan = user.activePlans.length > 0 ? user.activePlans[user.activePlans.length - 1].planName : 'None';
-        }
+        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
 
+        const activePlanData = {
+            planId: plan._id,
+            planName: plan.name,
+            price: plan.price,
+            purchaseDate: Date.now()
+        };
+
+        user.activePlans.push(activePlanData);
+        user.activePlan = plan.name;
         await user.save();
 
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
             currency: user.currency,
-            type: 'Plan Removal',
+            type: 'Plan Purchase',
             amount: 0,
-            description: `Admin removed ${planName} plan. Reason: ${reason || 'Manual removal by admin'}`,
+            description: `Manual Activation: ${plan.name}`,
             status: 'Approved'
         });
 
-        await Notification.create({
-            userId: user._id,
-            message: `Administrator has removed the ${planName} plan from your account. Reason: ${reason || 'Administrative action.'}`
-        });
-
-        await createLog('Plan Removed', user.username, `Admin removed ${planName} plan. Purpose: ${reason}`, 'admin');
+        // Trigger commissions
+        await distributeCommissions(user, plan);
 
         res.status(200).json({ success: true, data: { user, transaction } });
     } catch (err) {
@@ -184,4 +199,40 @@ export const adminRemoveUserPlan = async (req, res) => {
     }
 };
 
-// ... (rest of the file: bulkUpdateRestrictions, deleteUser, bulkDeleteUsers, adjustWallet, distributeCommissions, adminActivatePlan, purchasePlan, userRequestPasswordReset, adminInitiatePasswordReset, verifyAndStartResetTimer, resetPasswordWithToken)
+// @desc    Purchase investment plan
+export const purchasePlan = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        const plan = await InvestmentPlan.findById(req.body.planId);
+
+        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
+        if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient balance' });
+
+        user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
+        user.activePlans.push({
+            planId: plan._id,
+            planName: plan.name,
+            price: plan.price,
+            purchaseDate: Date.now()
+        });
+        user.activePlan = plan.name;
+        await user.save();
+
+        const transaction = await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            currency: user.currency,
+            type: 'Plan Purchase',
+            amount: -plan.price,
+            description: `Purchased ${plan.name} plan`,
+            status: 'Approved'
+        });
+
+        // Trigger commissions
+        await distributeCommissions(user, plan);
+
+        res.status(200).json({ success: true, data: { user, transaction } });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};

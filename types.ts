@@ -130,6 +130,7 @@ export interface InvestmentPlan {
     description: string;
     status: Status | 'Active' | 'Disabled';
     directReferralLimit: number;
+    overflowEnabled: boolean;
     directCommissions: Commission[];
     indirectCommissions: Commission[];
     commissionDeductions?: {

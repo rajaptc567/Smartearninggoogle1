@@ -55,6 +55,10 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: Number,
         default: 0, // 0 for unlimited
     },
+    overflowEnabled: {
+        type: Boolean,
+        default: true,
+    },
     directCommissions: [CommissionSchema], // Updated to array
     indirectCommissions: [CommissionSchema],
     commissionDeductions: {
