@@ -27,6 +27,7 @@ export interface UserRestrictions {
 }
 
 export interface ActivePlan {
+    _id?: string;
     planId: string;
     planName: string;
     price: number;

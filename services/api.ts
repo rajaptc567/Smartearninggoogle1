@@ -1,4 +1,4 @@
-// ... existing imports ...
+
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
 
 // The base URL of your backend API is determined at runtime.
@@ -139,6 +139,16 @@ export const adminActivatePlan = async (userId: string, planId: string): Promise
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const adminRemoveUserPlan = async (userId: string, planInstanceId: string, reason: string): Promise<{ user: User; transaction: Transaction }> => {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/plans/${planInstanceId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
     });
     const result = await handleResponse(response);
     return result.data;

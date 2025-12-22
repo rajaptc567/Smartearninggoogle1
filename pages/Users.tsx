@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, ActivePlan } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, adminRemoveUserPlan } from '../services/api';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -391,6 +391,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     // NEW: Tree Filter State
     const [treePlanFilterId, setTreePlanFilterId] = useState('');
 
+    // NEW: Plan Removal State
+    const [planToRemove, setPlanToRemove] = useState<ActivePlan | null>(null);
+    const [removalReason, setRemovalReason] = useState('Incorrect assignment');
+    const [isRemovingPlan, setIsRemovingPlan] = useState(false);
+
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -486,12 +491,30 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             setIsActivatingPlan(false);
         }
     };
+
+    const handleConfirmRemovePlan = async () => {
+        if (!user || !planToRemove || !planToRemove._id) return;
+        
+        setIsRemovingPlan(true);
+        try {
+            const result = await adminRemoveUserPlan(user._id, planToRemove._id, removalReason);
+            dispatch({ type: 'UPDATE_USER', payload: result.user });
+            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
+            setFormData(prev => ({ ...prev, activePlans: result.user.activePlans, activePlan: result.user.activePlan }));
+            setPlanToRemove(null);
+            alert(`Plan "${planToRemove.planName}" removed from user account.`);
+        } catch (error) {
+            console.error(error);
+            alert(`Failed to remove plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsRemovingPlan(false);
+        }
+    };
     
     const TabButton: React.FC<{ tabId: typeof activeTab, children: React.ReactNode }> = ({ tabId, children }) => (
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
 
-    /* FIX: useCallback was missing in the imports from react. Imported it to fix line 494. */
     const getEquivalentIds = useCallback((planId: string) => {
         const ids = new Set<string>();
         if (planId) {
@@ -701,12 +724,21 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     {user.activePlans && user.activePlans.length > 0 ? (
                                         <ul className="space-y-2">
                                             {user.activePlans.map((p, i) => (
-                                                <li key={p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-md text-sm flex justify-between items-center shadow-sm">
+                                                <li key={p._id || p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-md text-sm flex justify-between items-center shadow-sm">
                                                     <span>
                                                         <span className="font-bold">{p.planName}</span>
                                                         <span className="text-[10px] text-gray-500 block uppercase tracking-wider">Purchased: {new Date(p.purchaseDate).toLocaleDateString()}</span>
                                                     </span>
-                                                    <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
+                                                        <button 
+                                                            onClick={() => { setRemovalReason('Administrative correction'); setPlanToRemove(p); }} 
+                                                            className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                                                            title="Remove this plan"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        </button>
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -795,11 +827,43 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     <Button type="button" onClick={handleSaveChanges} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Profile Details'}</Button>
                 </div>
             </div>
+            
+            {/* PLAN REMOVAL CONFIRMATION MODAL */}
+            {planToRemove && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-75">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full shadow-2xl">
+                        <h3 className="text-lg font-bold text-red-600 mb-2">Remove Active Plan?</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            You are removing the <strong>{planToRemove.planName}</strong> plan from <strong>{user?.username}</strong>. 
+                            This action will be logged and the user will be notified.
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purpose of Removal</label>
+                                <textarea 
+                                    className="w-full rounded border dark:bg-gray-700 dark:border-gray-600 text-sm p-2"
+                                    rows={2}
+                                    placeholder="e.g., Refunded, User requested change, Administrative error..."
+                                    value={removalReason}
+                                    onChange={e => setRemovalReason(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="secondary" className="flex-1" onClick={() => setPlanToRemove(null)} disabled={isRemovingPlan}>Cancel</Button>
+                                <Button variant="danger" className="flex-1" onClick={handleConfirmRemovePlan} disabled={isRemovingPlan}>
+                                    {isRemovingPlan ? 'Removing...' : 'Confirm Removal'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Modal>
     );
 };
 
-// ... (Sub-components remain functional)
+// --- BulkRestrictionsModal ---
 
 interface BulkRestrictionsModalProps {
     allUsers: User[];
@@ -808,20 +872,24 @@ interface BulkRestrictionsModalProps {
 }
 
 const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers, investmentPlans, onClose }) => {
-    const { dispatch } = useData();
-    const [targetType, setTargetType] = useState<'all' | 'plan' | 'single'>('all');
+    const [targetType, setTargetType] = useState<'plan' | 'all' | 'single'>('plan');
     const [targetIds, setTargetIds] = useState<string[]>([]);
-    const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({
-        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
-    });
-    const [action, setAction] = useState<'enable' | 'disable' | 'toggle'>('enable');
+    const [action, setAction] = useState<'enable' | 'disable' | 'toggle'>('disable');
+    const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({ deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false });
     const [sendNotification, setSendNotification] = useState(true);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleToggleRestriction = (key: keyof UserRestrictions) => {
+        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const handleApply = async () => {
-        if (targetType === 'plan' && targetIds.length === 0) return alert('Select at least one plan');
-        
-        setIsProcessing(true);
+        if (targetType !== 'all' && targetIds.length === 0) {
+            alert("Please select at least one target.");
+            return;
+        }
+
+        setIsSaving(true);
         try {
             await bulkUpdateUserRestrictions({
                 targetType,
@@ -830,86 +898,82 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                 action,
                 sendNotification
             });
-            
-            // Refresh data
-            const updatedUsers = await getUsers();
-            dispatch({ type: 'SET_USERS', payload: updatedUsers });
-            
-            alert('Bulk update completed successfully');
+            alert('Bulk restrictions applied successfully! Please refresh the page to see changes.');
             onClose();
-        } catch (err: any) {
-            alert(err.message || 'Operation failed');
+        } catch (error) {
+            console.error(error);
+            alert('Failed to apply bulk restrictions.');
         } finally {
-            setIsProcessing(false);
+            setIsSaving(false);
         }
-    };
-
-    const toggleRestriction = (key: keyof UserRestrictions) => {
-        setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    const togglePlan = (id: string) => {
-        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-[500px] max-w-full space-y-6">
-                <h3 className="text-xl font-bold">Bulk Restrictions Manager</h3>
+            <div className="p-4 w-96 space-y-4">
+                <h3 className="text-lg font-bold">Bulk User Restrictions</h3>
                 
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">1. Select Target Users</label>
-                    <div className="flex gap-2 mb-3">
-                        <button onClick={() => setTargetType('all')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>All Users</button>
-                        <button onClick={() => setTargetType('plan')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'plan' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>By Plan</button>
-                    </div>
-                    {targetType === 'plan' && (
-                        <div className="max-h-40 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
-                            {investmentPlans.map(plan => (
-                                <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
-                                    <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
-                                    <span>{plan.name} ({plan.currency})</span>
-                                </label>
-                            ))}
-                        </div>
-                    )}
-                </section>
+                <div>
+                    <label className="text-xs font-bold uppercase text-gray-500">Target Audience</label>
+                    <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full rounded border p-2 dark:bg-gray-700 mt-1">
+                        <option value="plan">Users of Specific Plan(s)</option>
+                        <option value="all">All Users</option>
+                    </select>
+                </div>
 
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">2. Select Restrictions to Affect</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Object.keys(restrictions).map(key => (
-                            <label key={key} className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50 cursor-pointer text-sm">
-                                <input type="checkbox" checked={!!(restrictions as any)[key]} onChange={() => toggleRestriction(key as any)} className="rounded" />
-                                <span className="capitalize">{key}</span>
+                {targetType === 'plan' && (
+                    <div className="max-h-32 overflow-y-auto border rounded p-2 dark:bg-gray-700">
+                        {investmentPlans.map(plan => (
+                            <label key={plan._id} className="flex items-center gap-2 mb-1">
+                                <input 
+                                    type="checkbox" 
+                                    checked={targetIds.includes(plan._id)} 
+                                    onChange={() => setTargetIds(prev => prev.includes(plan._id) ? prev.filter(id => id !== plan._id) : [...prev, plan._id])} 
+                                />
+                                <span className="text-sm">{plan.name}</span>
                             </label>
                         ))}
                     </div>
-                </section>
+                )}
 
-                <section>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">3. Action</label>
-                    <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full border rounded p-2 text-sm">
-                        <option value="enable">Enable Restrictions (BLOCK activity)</option>
-                        <option value="disable">Disable Restrictions (ALLOW activity)</option>
-                        <option value="toggle">Invert Current Status</option>
-                    </select>
-                </section>
-
-                <div className="pt-4 border-t flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
-                        <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded" />
-                        Send notification to affected users
-                    </label>
-                    <div className="flex gap-2">
-                        <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                        <Button onClick={handleApply} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Apply Bulk Update'}</Button>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-bold uppercase text-gray-500">Action</label>
+                        <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full rounded border p-2 dark:bg-gray-700 mt-1">
+                            <option value="disable">Restrict (Disable)</option>
+                            <option value="enable">Unrestrict (Enable)</option>
+                            <option value="toggle">Toggle State</option>
+                        </select>
                     </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-gray-500">Flags to Modify</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {Object.keys(restrictions).map(key => (
+                            <label key={key} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded text-xs">
+                                <input type="checkbox" checked={(restrictions as any)[key]} onChange={() => handleToggleRestriction(key as any)} />
+                                <span>{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <label className="flex items-center gap-2 mt-4">
+                    <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} />
+                    <span className="text-sm">Notify users of this change</span>
+                </label>
+
+                <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+                    <Button onClick={handleApply} disabled={isSaving}>{isSaving ? 'Processing...' : 'Apply Changes'}</Button>
                 </div>
             </div>
         </Modal>
     );
 };
+
+// --- MessageUserModal ---
 
 interface MessageUserModalProps {
     user: User | null;
@@ -920,287 +984,147 @@ interface MessageUserModalProps {
 
 const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
-    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all' | 'inactive'>(user ? 'single' : 'all');
+    const [targetType, setTargetType] = useState<'single' | 'all' | 'plan' | 'inactive'>(user ? 'single' : 'all');
     const [targetIds, setTargetIds] = useState<string[]>(user ? [user._id] : []);
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isPopup, setIsPopup] = useState(false);
-    const [isSending, setIsSending] = useState(false);
     const [randomCount, setRandomCount] = useState('');
+    const [isSending, setIsSending] = useState(false);
 
-    const handleSend = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!message) return alert('Message is required');
-        
+    const handleSend = async () => {
+        if (!message) return alert("Please enter a message");
         setIsSending(true);
         try {
-            const result = await sendAdminNotification({
+            const payload = {
                 userId: targetType === 'single' ? targetIds[0] : undefined,
                 targetType: targetType !== 'single' ? targetType : undefined,
-                targetIds: targetType === 'plan' ? targetIds : undefined,
+                targetIds: targetType === 'plan' ? targetIds : (targetType === 'single' ? [targetIds[0]] : undefined),
                 subject,
                 message,
                 isPopup,
                 randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined
-            });
-            
-            // Add new notifications to local state
-            dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
-            
-            alert(`Message sent to ${result.count} users successfully.`);
+            };
+            const result = await sendAdminNotification(payload);
+            // Result.data is an array of created notifications
+            if (result.data && Array.isArray(result.data)) {
+                dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
+            }
+            alert(`Message sent successfully to ${result.count || 'targeted'} user(s)!`);
             onClose();
-        } catch (err: any) {
-            alert(err.message || 'Failed to send message');
+        } catch (error) {
+            console.error(error);
+            alert('Failed to send message.');
         } finally {
             setIsSending(false);
         }
     };
 
-    const togglePlan = (id: string) => {
-        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    };
-
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <form onSubmit={handleSend} className="p-4 w-[500px] max-w-full space-y-4">
-                <h3 className="text-xl font-bold">Send Announcement</h3>
+            <div className="p-4 w-[500px] space-y-4">
+                <h3 className="text-lg font-bold">{user ? `Message User: ${user.username}` : 'Send Bulk Message'}</h3>
                 
+                {!user && (
                 <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients</label>
-                    {user ? (
-                        <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div>
-                    ) : (
-                        <div className="space-y-3">
-                            <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full border rounded p-2 text-sm">
-                                <option value="all">All Members</option>
-                                <option value="plan">Members of Specific Plans</option>
-                                <option value="inactive">Inactive Members (No active plan)</option>
-                            </select>
-                            {targetType === 'plan' && (
-                                <div className="max-h-32 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
-                                    {investmentPlans.map(plan => (
-                                        <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
-                                            <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
-                                            <span>{plan.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                            {targetType === 'inactive' && (
-                                <input type="number" placeholder="Send to X random inactive users (leave empty for ALL)" value={randomCount} onChange={e => setRandomCount(e.target.value)} className="w-full border rounded p-2 text-sm" />
-                            )}
-                        </div>
-                    )}
+                    <label className="text-xs font-bold uppercase text-gray-500">Recipients</label>
+                    <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full rounded border p-2 dark:bg-gray-700 mt-1">
+                        <option value="all">All Users</option>
+                        <option value="plan">Users by Active Plan</option>
+                        <option value="inactive">Inactive Users (No Plan)</option>
+                    </select>
+                </div>
+                )}
+
+                {targetType === 'plan' && (
+                    <div className="max-h-32 overflow-y-auto border rounded p-2 dark:bg-gray-700">
+                        {investmentPlans.map(plan => (
+                            <label key={plan._id} className="flex items-center gap-2 mb-1">
+                                <input 
+                                    type="checkbox" 
+                                    checked={targetIds.includes(plan._id)} 
+                                    onChange={() => setTargetIds(prev => prev.includes(plan._id) ? prev.filter(id => id !== plan._id) : [...prev, plan._id])} 
+                                />
+                                <span className="text-sm">{plan.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                )}
+
+                {targetType === 'inactive' && (
+                    <div>
+                        <label className="text-xs font-bold uppercase text-gray-500">Random Limit (Optional)</label>
+                        <input type="number" value={randomCount} onChange={e => setRandomCount(e.target.value)} placeholder="Leave blank for all inactive" className="w-full rounded border p-2 dark:bg-gray-700 mt-1" />
+                        <p className="text-[10px] text-gray-400 mt-1">If set, the message will be sent to a random selection of up to X inactive users.</p>
+                    </div>
+                )}
+
+                <div>
+                    <label className="text-xs font-bold uppercase text-gray-500">Subject</label>
+                    <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Message Subject" className="w-full rounded border p-2 dark:bg-gray-700 mt-1" />
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label>
-                    <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" />
+                    <label className="text-xs font-bold uppercase text-gray-500">Message Content</label>
+                    <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} className="w-full rounded border p-2 dark:bg-gray-700 mt-1" placeholder="Type your message here..." />
                 </div>
 
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label>
-                    <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required />
-                </div>
+                <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} />
+                    <span className="text-sm font-semibold">Force Display as Popup on User Login</span>
+                </label>
 
-                <div className="flex items-center gap-2">
-                    <input type="checkbox" id="popup-chk" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded" />
-                    <label htmlFor="popup-chk" className="text-sm font-medium cursor-pointer">Display as urgent POPUP for user</label>
+                <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="secondary" onClick={onClose} disabled={isSending}>Cancel</Button>
+                    <Button onClick={handleSend} disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button>
                 </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>
-                    <Button type="submit" disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button>
-                </div>
-            </form>
+            </div>
         </Modal>
     );
 };
 
+// --- DeleteUserModal ---
+
 interface DeleteUserModalProps {
     user: User;
     onClose: () => void;
-    onConfirmDelete: (userId: string) => Promise<void>;
+    onConfirmDelete: (userId: string) => void;
 }
 
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
-    const { state } = useData();
-    const [isDeleting, setIsDeleting] = useState(false);
+    const [confirmName, setConfirmName] = useState('');
     
-    const handleConfirm = async () => {
-        setIsDeleting(true);
-        await onConfirmDelete(user._id);
-        setIsDeleting(false);
-    };
-
-    const handleDownloadDossier = () => {
-        const userTx = state.transactions
-            .filter(t => t.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userDeposits = state.deposits
-            .filter(d => d.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userWithdrawals = state.withdrawals
-            .filter(w => w.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userTransfers = state.transfers
-            .filter(t => t.senderId === user._id || t.recipientId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const referrals = state.users.filter(u => u.sponsor === user.username);
-        
-        const approvedDeposits = userDeposits
-            .filter(d => d.status === Status.Approved)
-            .reduce((sum, d) => sum + d.amount, 0);
-        
-        const paidWithdrawals = userWithdrawals
-            .filter(w => w.status === Status.Paid)
-            .reduce((sum, w) => sum + w.finalAmount, 0);
-        
-        const commissions = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved');
-        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
-
-        const csvRows: string[][] = [];
-        csvRows.push([`=== COMPREHENSIVE USER DOSSIER: ${user.username} (${user.email}) ===`]);
-        csvRows.push([`Generated on: ${new Date().toLocaleString()}`]);
-        csvRows.push([]);
-        
-        // --- PROFILE SECTION ---
-        csvRows.push(['--- PROFILE INFORMATION ---']);
-        csvRows.push(['User ID', user._id]);
-        csvRows.push(['Username', user.username]);
-        csvRows.push(['Full Name', user.fullName]);
-        csvRows.push(['Email', user.email]);
-        csvRows.push(['Phone', user.phone]);
-        csvRows.push(['WhatsApp', user.whatsapp || 'N/A']);
-        csvRows.push(['Country', user.country]);
-        csvRows.push(['Currency', user.currency]);
-        csvRows.push(['Sponsor', user.sponsor || 'N/A']);
-        csvRows.push(['Status', user.status]);
-        csvRows.push(['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
-        csvRows.push(['Joined Date', new Date(user.registrationDate).toLocaleString()]);
-        csvRows.push([]);
-
-        // --- ANALYTICS SUMMARY ---
-        csvRows.push(['--- FINANCIAL SUMMARY ---']);
-        csvRows.push(['Metric', 'Total Value']);
-        csvRows.push(['Total Approved Deposits', formatCurrency(approvedDeposits, user.currency)]);
-        csvRows.push(['Total Paid Withdrawals', formatCurrency(paidWithdrawals, user.currency)]);
-        csvRows.push(['Total Commission Earned', formatCurrency(totalCommission, user.currency)]);
-        csvRows.push(['Total Direct Referrals', `${referrals.length}`]);
-        csvRows.push([]);
-
-        // --- ACTIVE PLANS ---
-        csvRows.push(['--- CURRENT ACTIVE PLANS ---']);
-        if (user.activePlans && user.activePlans.length > 0) {
-            csvRows.push(['Plan Name', 'Price', 'Purchase Date']);
-            user.activePlans.forEach(p => {
-                csvRows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['None']);
-        }
-        csvRows.push([]);
-
-        // --- REFERRALS ---
-        csvRows.push(['--- DIRECT REFERRALS (DOWNLINE) ---']);
-        if (referrals.length > 0) {
-            csvRows.push(['Username', 'Full Name', 'Email', 'Joined Date', 'Status']);
-            referrals.forEach(ref => {
-                csvRows.push([ref.username, ref.fullName, ref.email, new Date(ref.registrationDate).toLocaleDateString(), ref.status]);
-            });
-        } else {
-            csvRows.push(['No referrals found']);
-        }
-        csvRows.push([]);
-
-        // --- DEPOSITS ---
-        csvRows.push(['--- DEPOSIT HISTORY ---']);
-        if (userDeposits.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Transaction ID', 'Status', 'Date']);
-            userDeposits.forEach(d => {
-                csvRows.push([d._id, d.method, formatCurrency(d.amount, d.currency), d.transactionId, d.status, new Date(d.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No deposits found']);
-        }
-        csvRows.push([]);
-
-        // --- WITHDRAWALS ---
-        csvRows.push(['--- WITHDRAWAL HISTORY ---']);
-        if (userWithdrawals.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Fee', 'Final Amount', 'Status', 'Date']);
-            userWithdrawals.forEach(w => {
-                csvRows.push([w._id, w.method, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.status, new Date(w.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No withdrawals found']);
-        }
-        csvRows.push([]);
-
-        // --- TRANSFERS ---
-        csvRows.push(['--- TRANSFER HISTORY (SENT/RECEIVED) ---']);
-        if (userTransfers.length > 0) {
-            csvRows.push(['ID', 'Sender', 'Recipient', 'Amount', 'Fee', 'Total Deducted', 'Status', 'Date']);
-            userTransfers.forEach(t => {
-                csvRows.push([t._id, t.senderName, t.recipientName, formatCurrency(t.amount, t.currency), formatCurrency(t.fee || 0, t.currency), formatCurrency(t.totalDeducted || 0, t.currency), t.status, new Date(t.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No transfers found']);
-        }
-        csvRows.push([]);
-
-        // --- ACTIVITY LOG ---
-        csvRows.push(['--- TRANSACTION LOG (FULL ACTIVITY) ---']);
-        csvRows.push(['Date', 'Type', 'Amount', 'Status', 'Description']);
-        userTx.forEach(tx => {
-            csvRows.push([
-                new Date(tx.date).toLocaleString(),
-                tx.type,
-                formatCurrency(tx.amount, tx.currency),
-                tx.status || 'N/A',
-                tx.description
-            ]);
-        });
-
-        const csvContent = csvRows.map(e => e.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Full_User_Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-96 text-center space-y-4">
-                <div className="mx-auto w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                </div>
-                <h3 className="text-xl font-bold">Confirm Deletion</h3>
-                <p className="text-sm text-gray-500">
-                    Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>?
-                    <br/><br/>
-                    All their deposits, withdrawals, transactions, and notification history will be wiped. <strong>This action is irreversible.</strong>
+            <div className="p-4 w-96 space-y-4">
+                <h3 className="text-lg font-bold text-red-600">Permanently Delete User?</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                    You are about to delete <strong>{user.fullName} (@{user.username})</strong>. This action is <strong>irreversible</strong> and will delete:
                 </p>
+                <ul className="list-disc list-inside text-xs text-red-500 space-y-1">
+                    <li>Account Profile & Login Access</li>
+                    <li>Wallet Balance & Full Financial History</li>
+                    <li>All Deposit and Withdrawal Records</li>
+                    <li>Referral link associations</li>
+                </ul>
                 <div className="pt-2">
-                    <button 
-                        onClick={handleDownloadDossier}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-bold underline flex items-center justify-center gap-1 mx-auto"
-                    >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Full User Dossier (Referrals, Plans, History)
-                    </button>
+                    <label className="text-xs font-bold uppercase text-gray-500">Type username "{user.username}" to confirm</label>
+                    <input 
+                        className="w-full border-2 border-red-200 rounded p-2 dark:bg-gray-700 mt-1 focus:border-red-500 outline-none" 
+                        value={confirmName} 
+                        onChange={e => setConfirmName(e.target.value)} 
+                        placeholder={user.username}
+                    />
                 </div>
                 <div className="flex gap-2 pt-4">
-                    <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
-                    <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>
-                        {isDeleting ? 'Deleting...' : 'Yes, Delete All'}
+                    <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+                    <Button 
+                        variant="danger" 
+                        className="flex-1" 
+                        disabled={confirmName !== user.username} 
+                        onClick={() => onConfirmDelete(user._id)}
+                    >
+                        Delete Forever
                     </Button>
                 </div>
             </div>
