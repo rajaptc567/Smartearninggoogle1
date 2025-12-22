@@ -236,7 +236,6 @@ const InvestmentPlans: React.FC = () => {
                                 </div>
                             </div>
                             
-                            {/* Snippet fix: Ensuring formData variables and handleHoldSlotChange are accessible in scope */}
                             {formData.directReferralLimit! > 0 ? (
                                 <div className="flex flex-wrap gap-2">
                                     {Array.from({ length: formData.directReferralLimit! }, (_, i) => i + 1).map(slot => (
@@ -247,7 +246,7 @@ const InvestmentPlans: React.FC = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic bg-red-50 dark:bg-red-900/20 p-2 rounded">Requires 'Direct Referral Limit' > 0 to configure slots</p>
+                                <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic bg-red-50 dark:bg-red-900/20 p-2 rounded">Requires 'Direct Referral Limit' &gt; 0 to configure slots</p>
                             )}
 
                             {formData.holdPosition?.enabled && (
@@ -283,5 +282,4 @@ const InvestmentPlans: React.FC = () => {
     );
 };
 
-// Fix: Default export required by App.tsx
 export default InvestmentPlans;
