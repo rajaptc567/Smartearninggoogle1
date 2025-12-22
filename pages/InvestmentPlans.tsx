@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
@@ -343,7 +344,6 @@ const InvestmentPlans: React.FC = () => {
                                     <span className="font-semibold">Indirect Levels: </span> 
                                     {plan.indirectCommissions.length}
                                 </li>
-                                <li><span className="font-semibold">Overflow:</span> {plan.overflowEnabled ? <span className="text-green-600">Enabled</span> : <span className="text-red-500">Disabled</span>}</li>
                             </ul>
                             
                             <p className="text-xs text-gray-500 mt-4 mb-4 line-clamp-2">{plan.description}</p>
@@ -583,7 +583,6 @@ const defaultPlan: Partial<InvestmentPlan> = {
     status: Status.Active,
     description: '',
     directReferralLimit: 0,
-    overflowEnabled: true,
     directCommissions: [{ ...defaultCommission }], 
     indirectCommissions: [],
     commissionDeductions: {
@@ -617,7 +616,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
             showDuration: true, 
             showMinWithdraw: true, 
             showDirectCommission: true, 
-            showIndirectCommission: true, 
+            showIndirectCommission: true,
             showDirectReferrals: true 
         }
     } : defaultPlan;
@@ -644,11 +643,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
          if(name === 'holdPosition.enabled') {
             const checked = (e.target as HTMLInputElement).checked;
             setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, enabled: checked }}));
-            return;
-        }
-        if(name === 'overflowEnabled') {
-            const checked = (e.target as HTMLInputElement).checked;
-            setFormData(prev => ({ ...prev, overflowEnabled: checked }));
             return;
         }
 
@@ -815,11 +809,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Direct Referral Limit (0 = Unlimited)</label>
                             <input type="number" name="directReferralLimit" value={formData.directReferralLimit || ''} onChange={handleChange} placeholder="Limit" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
-                        <div className="flex items-center space-x-2 pt-6">
-                            <input type="checkbox" name="overflowEnabled" checked={formData.overflowEnabled} onChange={handleChange} className="rounded" />
-                            <label className="text-sm font-medium">Enable Overflow Records</label>
-                        </div>
-                        <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                        <select name="status" value={formData.status} onChange={handleChange} className="md:col-start-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                             <option value={Status.Active}>Active</option>
                             <option value={Status.Disabled}>Disabled</option>
                         </select>
@@ -965,28 +955,22 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                 </select>
                             )}
                         </div>
-                         <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-900">
-                            <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-bold text-amber-800 dark:text-amber-200 text-sm">Hold Position Configuration</h4>
-                                <ToggleSwitch checked={formData.holdPosition?.enabled} onChange={() => setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, enabled: !prev!.holdPosition!.enabled } }))} size="sm" />
-                            </div>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 mb-3 leading-tight">Commissions from selected direct referral slots will be held as 'Pending' to fund the next plan upgrade.</p>
-                            {formData.holdPosition?.enabled && (
-                                <>
-                                    {formData.directReferralLimit! > 0 ? (
-                                        <div className="flex flex-wrap gap-2">
-                                            {Array.from({ length: formData.directReferralLimit! }, (_, i) => i + 1).map(slot => (
-                                                <label key={slot} className={`flex items-center justify-center w-8 h-8 rounded border text-xs font-bold cursor-pointer transition-colors ${formData.holdPosition?.slots?.includes(slot) ? 'bg-amber-500 border-amber-600 text-white' : 'bg-white dark:bg-gray-800 border-gray-300 text-gray-500 hover:border-amber-400'}`}>
-                                                    <input type="checkbox" className="sr-only" checked={formData.holdPosition?.slots?.includes(slot)} onChange={e => handleHoldSlotChange(slot, e.target.checked)} />
-                                                    {slot}
-                                                </label>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest italic">Requires 'Direct Referral Limit' &gt; 0</p>
-                                    )}
-                                </>
+                         <div>
+                            <label className="flex items-center space-x-2"><input type="checkbox" name="holdPosition.enabled" checked={formData.holdPosition?.enabled} onChange={handleChange} /> <span>Hold Position Commission</span></label>
+                            {formData.holdPosition?.enabled && formData.directReferralLimit! > 0 && (
+                                <div className="mt-2 p-2 border rounded-md dark:border-gray-700">
+                                    <p className="text-xs mb-2">Select referral slots whose commission will be held for upgrade:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Array.from({ length: formData.directReferralLimit! }, (_, i) => i + 1).map(slot => (
+                                            <label key={slot} className="flex items-center space-x-1 text-sm p-1 bg-gray-100 dark:bg-gray-900 rounded">
+                                                <input type="checkbox" checked={formData.holdPosition?.slots?.includes(slot)} onChange={e => handleHoldSlotChange(slot, e.target.checked)} />
+                                                <span>{slot}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
+                             {formData.holdPosition?.enabled && formData.directReferralLimit === 0 && <p className="text-xs text-red-500 mt-1">Set a Direct Referral Limit to enable hold positions.</p>}
                         </div>
                     </div>
                 </fieldset>

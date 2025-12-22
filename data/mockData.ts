@@ -47,8 +47,6 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         description: 'High return plan specifically for PKR users.',
         status: Status.Active,
         directReferralLimit: 0,
-        // FIX: Added missing overflowEnabled property to satisfy InvestmentPlan interface
-        overflowEnabled: true,
         directCommissions: [{ type: 'percentage', value: 7 }],
         indirectCommissions: [{ type: 'percentage', value: 2 }, { type: 'percentage', value: 1 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
@@ -65,8 +63,6 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         description: 'Elite plan for European investors.',
         status: Status.Active,
         directReferralLimit: 0,
-        // FIX: Added missing overflowEnabled property to satisfy InvestmentPlan interface
-        overflowEnabled: true,
         directCommissions: [{ type: 'percentage', value: 10 }],
         indirectCommissions: [{ type: 'percentage', value: 3 }, { type: 'percentage', value: 2 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
