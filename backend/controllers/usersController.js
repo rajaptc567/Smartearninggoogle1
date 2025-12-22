@@ -29,6 +29,69 @@ const getEquivalentIds = (planId, settings, allPlans) => {
     return ids;
 };
 
+// --- NEW HELPER: CHECK AND TRIGGER AUTO UPGRADE ---
+const checkAndTriggerAutoUpgrade = async (user, sourcePlan, settings, allPlans) => {
+    if (!sourcePlan.autoUpgrade?.enabled || !sourcePlan.autoUpgrade?.toPlanId) return;
+
+    // Identify the context (this plan and its equivalents)
+    const contextIds = Array.from(getEquivalentIds(sourcePlan._id, settings, allPlans));
+
+    // 1. Calculate total "Hold" funds for this user within this specific plan context
+    const heldTransactions = await Transaction.find({
+        userId: user._id,
+        type: 'Commission',
+        status: 'Pending',
+        relatedPlanId: { $in: contextIds },
+        description: { $regex: /Hold:/ }
+    });
+
+    const totalHeld = heldTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    // 2. Fetch the target plan
+    const targetPlan = await InvestmentPlan.findById(sourcePlan.autoUpgrade.toPlanId);
+    if (!targetPlan) return;
+
+    // 3. If held amount >= target plan price, upgrade!
+    if (totalHeld >= targetPlan.price) {
+        // Activate Plan
+        user.activePlans.push({
+            planId: targetPlan._id,
+            planName: targetPlan.name,
+            price: targetPlan.price,
+            purchaseDate: Date.now()
+        });
+        user.activePlan = targetPlan.name;
+        await user.save();
+
+        // Mark all these held transactions as "Approved" so they aren't counted again
+        for (const tx of heldTransactions) {
+            tx.status = 'Approved';
+            tx.description = tx.description.replace('Hold:', 'Used for Upgrade:');
+            await tx.save();
+        }
+
+        // Log the upgrade
+        await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            currency: user.currency,
+            type: 'Plan Purchase',
+            amount: 0, 
+            description: `Auto-Upgrade to ${targetPlan.name} (Funded by held commissions)`,
+            status: 'Approved'
+        });
+
+        await Notification.create({
+            userId: user._id,
+            subject: '🚀 Account Upgraded!',
+            message: `Congratulations! Your held commissions reached ${user.currency} ${targetPlan.price.toFixed(2)} and you have been automatically upgraded to the ${targetPlan.name} plan.`,
+            isPopup: true
+        });
+        
+        await createLog('Auto-Upgrade', user.username, `Upgraded to ${targetPlan.name} via held funds`, 'system');
+    }
+};
+
 // Helper to calculate and distribute commissions
 const distributeCommissions = async (buyer, plan) => {
     const settings = await Setting.getSettings();
@@ -66,15 +129,19 @@ const distributeCommissions = async (buyer, plan) => {
 
         let commissionConfig = null;
         if (level === 1) {
-            const directReferrals = await Transaction.countDocuments({
+            // CRITICAL FIX: Only count Approved or Pending commissions as "Slots"
+            // This ensures Rejected/Overflow records don't increment the slot count.
+            const slotOccupyingTransactions = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
                 level: 1,
+                status: { $in: ['Approved', 'Pending'] },
                 relatedPlanId: { $in: Array.from(getEquivalentIds(plan._id, settings, allPlans)) }
             });
 
-            const currentSlot = directReferrals + 1;
+            const currentSlot = slotOccupyingTransactions + 1;
 
+            // CHECK OVERFLOW
             if (plan.directReferralLimit > 0 && currentSlot > plan.directReferralLimit) {
                 if (plan.overflowEnabled) {
                     await Transaction.create({
@@ -84,17 +151,19 @@ const distributeCommissions = async (buyer, plan) => {
                         type: 'Commission',
                         amount: 0,
                         status: 'Rejected',
-                        description: `Overflow: Direct limit reached for ${plan.name}`,
+                        description: `Overflow: Direct limit (${plan.directReferralLimit}) reached for ${plan.name}`,
                         level: 1,
                         sourceUserId: buyer._id,
                         relatedPlanId: plan._id
                     });
                 }
+                // Stop processing commissions for this sponsor at this level
                 currentSponsorName = sponsor.sponsor;
                 level++;
                 continue;
             }
 
+            // CHECK HOLD POSITION
             if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
                 isHoldPosition = true;
                 status = 'Pending';
@@ -102,6 +171,7 @@ const distributeCommissions = async (buyer, plan) => {
             }
             commissionConfig = plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)];
         } else {
+            // Indirect levels
             commissionConfig = plan.indirectCommissions[level - 2];
         }
 
@@ -116,7 +186,7 @@ const distributeCommissions = async (buyer, plan) => {
                 commissionAmount = (commissionAmount / rateFrom) * rateTo;
             }
 
-            if (!isEligible) status = 'Pending';
+            if (!isEligible && !isHoldPosition) status = 'Pending';
 
             await Transaction.create({
                 userId: sponsor._id,
@@ -136,6 +206,11 @@ const distributeCommissions = async (buyer, plan) => {
             if (status === 'Approved') {
                 sponsor.walletBalance = Number((sponsor.walletBalance + commissionAmount).toFixed(2));
                 await sponsor.save();
+            }
+
+            // --- TRIGGER AUTO UPGRADE CHECK ---
+            if (isHoldPosition) {
+                await checkAndTriggerAutoUpgrade(sponsor, plan, settings, allPlans);
             }
         }
         if (settings.requireUplineEligibility && !isEligible) break;
@@ -241,7 +316,7 @@ export const purchasePlan = async (req, res) => {
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient balance' });
 
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price });
+        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: Date.now() });
         user.activePlan = plan.name;
         await user.save();
 
@@ -268,7 +343,7 @@ export const adminActivatePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found' });
 
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price });
+        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: Date.now() });
         user.activePlan = plan.name;
         await user.save();
 

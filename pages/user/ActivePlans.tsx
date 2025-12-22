@@ -1,6 +1,5 @@
 
 import React from 'react';
-// Import useNavigate from react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
@@ -9,8 +8,7 @@ import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, users, investmentPlans, settings } = state;
-    // Initialize navigate function using useNavigate hook
+    const { currentUser, users, transactions, investmentPlans, settings } = state;
     const navigate = useNavigate();
 
     if (!currentUser) {
@@ -23,7 +21,7 @@ const ActivePlans: React.FC = () => {
         const plan = investmentPlans.find(p => p._id === planId);
         const limit = plan?.directReferralLimit || 0;
         
-        // 1. Identify all equivalent plan IDs for this row
+        // 1. Identify all equivalent plan IDs for this row track
         const equivIds = new Set<string>();
         equivIds.add(planId);
         const group = settings.planEquivalencyGroups?.find(g =>
@@ -35,11 +33,14 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // 2. Count direct referrals who own any of those plan IDs
-        const used = users.filter(u => 
-            u.sponsor && 
-            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
-            u.activePlans?.some(ap => equivIds.has(ap.planId))
+        // 2. Count direct referrals who triggered a commission (Approved OR Pending/Held) 
+        // in this plan context. This is the only way to accurately count "Occupied Slots".
+        const used = transactions.filter(t => 
+            t.userId === currentUser._id && 
+            t.type === 'Commission' && 
+            t.level === 1 &&
+            t.status !== 'Rejected' && // Ignore overflow
+            t.relatedPlanId && equivIds.has(String(t.relatedPlanId))
         ).length;
 
         return { used, limit };
@@ -68,7 +69,7 @@ const ActivePlans: React.FC = () => {
                                                 {limit > 0 && used >= limit && <span className="text-red-500 animate-pulse">Full</span>}
                                                 {limit === 0 && <span className="text-blue-500">Unlimited</span>}
                                             </div>
-                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden shadow-inner">
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden shadow-inner border border-gray-100 dark:border-gray-600">
                                                 <div 
                                                     className={`h-full transition-all duration-700 ease-out ${limit > 0 && used >= limit ? 'bg-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
                                                     style={{ width: `${percent}%` }}
