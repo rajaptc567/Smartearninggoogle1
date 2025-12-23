@@ -31,14 +31,12 @@ const Referrals: React.FC = () => {
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
     const [viewMode, setViewMode] = useState<'commissions' | 'inactive' | 'overflow' | 'all'>('commissions');
 
-    // Auto-select first plan on load
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
         }
     }, [uniqueActivePlans, selectedPlanId]);
     
-    // Find all equivalent IDs (USD/PKR/EUR) for the selected plan track
     const equivalentPlanIdsForSelected = useMemo(() => {
         const ids = new Set<string>();
         if (selectedPlanId) {
@@ -62,11 +60,10 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // Helper to get detailed activity status for any user in the network
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
-        if (!currentUser) return { earned: 0, held: 0, hasActivity: false, isHoldPosition: false, isOverflow: false };
+    // Helper to get activity status: Transactional Activity OR Presence of an Active Plan
+    const getReferralActivityInfo = useCallback((referral: User, contextPlanIds: Set<string>) => {
+        if (!currentUser) return { earned: 0, held: 0, hasActivity: false, isHoldPosition: false, isOverflow: false, isManuallyActive: false };
         
-        // Find ALL commission transactions from this specific referral for the current plan track
         const referralComms = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
@@ -77,33 +74,18 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         
-        // Activity = Anyone who generated money (Approved) OR is currently in a Hold position (Pending)
-        const hasActivity = referralComms.some(t => t.status === 'Approved' || t.status === 'Pending');
-        
+        const hasCommActivity = referralComms.some(t => t.status === 'Approved' || t.status === 'Pending');
         const isHoldPosition = referralComms.some(t => t.status === 'Pending' && t.description.toLowerCase().includes('hold'));
         const isOverflow = referralComms.some(t => t.status === 'Rejected' && t.description.toLowerCase().includes('limit'));
         
-        return { earned, held, hasActivity, isHoldPosition, isOverflow };
+        // FIX: Also count as active if they have ANY plan active (Admin Manual Activation case)
+        const isManuallyActive = referral.activePlans && referral.activePlans.length > 0;
+        const hasActivity = hasCommActivity || isManuallyActive;
+
+        return { earned, held, hasActivity, isHoldPosition, isOverflow, isManuallyActive };
     }, [currentUser, transactions]);
 
-    // Calculate slot usage correctly
-    const slotStats = useMemo(() => {
-        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0, transactions: [] };
-        const limit = selectedPlanDetails.directReferralLimit || 0;
-        
-        // We count Level 1 commissions that are either Approved (Paid) or Pending (Held)
-        const validSlotTransactions = transactions.filter(t => 
-            t.userId === currentUser._id && 
-            t.type === 'Commission' && 
-            t.level === 1 &&
-            (t.status === 'Approved' || t.status === 'Pending') &&
-            t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
-        ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        return { used: validSlotTransactions.length, limit, transactions: validSlotTransactions };
-    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
-
-    // Categorize every direct referral into one of the three tabs
+    // Build categorical lists
     const networkData = useMemo(() => {
         if (!currentUser) return { directEarners: [], indirectEarners: [], inactiveReferrals: [], overflowReferrals: [], allNodes: [] };
 
@@ -132,7 +114,7 @@ const Referrals: React.FC = () => {
         const overflowList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
-            const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            const info = getReferralActivityInfo(node.user, equivalentPlanIdsForSelected);
             
             if (info.hasActivity) {
                 if (node.level === 1) directList.push(node);
@@ -140,7 +122,6 @@ const Referrals: React.FC = () => {
             } else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
             } else if (node.level === 1) {
-                // Anyone else at Level 1 with no commission and no overflow is inactive
                 inactiveList.push(node);
             }
         });
@@ -152,7 +133,14 @@ const Referrals: React.FC = () => {
             overflowReferrals: overflowList,
             allNodes: nodesList
         };
-    }, [currentUser, users, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
+    }, [currentUser, users, equivalentPlanIdsForSelected, getReferralActivityInfo]);
+
+    // Count slots based on people in the 'directList' (Paid, Held, or Manually Active)
+    const slotStats = useMemo(() => {
+        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
+        const limit = selectedPlanDetails.directReferralLimit || 0;
+        return { used: networkData.directEarners.length, limit };
+    }, [currentUser, selectedPlanDetails, networkData.directEarners]);
 
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
@@ -160,14 +148,14 @@ const Referrals: React.FC = () => {
         const { user } = node;
         const level = 'level' in node ? node.level : undefined;
         
-        const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
+        const info = getReferralActivityInfo(user, equivalentPlanIdsForSelected);
         const isHoldPosition = info.isHoldPosition;
         const isOverflow = info.isOverflow;
         const isDirect = level === 1;
         const isInactive = !isOverflow && !info.hasActivity;
 
         return (
-            <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-md border-l-4 p-4 transition-all duration-200 hover:shadow-lg ${isInactive ? 'border-gray-300' : isOverflow ? 'border-amber-400 opacity-70' : isHoldPosition ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-900/10' : 'border-blue-500'}`}>
+            <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-md border-l-4 p-4 transition-all duration-200 hover:shadow-lg ${isInactive ? 'border-gray-300 opacity-80' : isOverflow ? 'border-amber-400 opacity-70' : isHoldPosition ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-900/10' : 'border-blue-500'}`}>
                 <div className="flex items-start gap-4">
                     <div className={`mt-1 flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${isHoldPosition ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>
                         {user.fullName.charAt(0)}
@@ -179,15 +167,16 @@ const Referrals: React.FC = () => {
                                 <p className="text-xs text-gray-500 truncate">{user.fullName}</p>
                             </div>
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                {isInactive ? <Badge status={Status.Pending} /> : !isOverflow && <Badge status={Status.Active} />}
-                                {!isDirect && level && <span className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 rounded font-bold uppercase">Lvl {level}</span>}
+                                <Badge status={user.status} />
+                                {!isDirect && level && <span className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 rounded font-bold uppercase tracking-tighter">Lvl {level}</span>}
                                 {isHoldPosition && (
                                     <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 shadow-sm">
                                         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                        Hold
+                                        Hold Slot
                                     </span>
                                 )}
-                                {isOverflow && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase">Full Limit</span>}
+                                {isOverflow && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase tracking-tight">Limit Reached</span>}
+                                {info.isManuallyActive && !info.earned && !info.held && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold uppercase tracking-tight">Manual Activation</span>}
                             </div>
                         </div>
                         <div className="mt-3 text-xs text-gray-500 flex justify-between items-center border-t dark:border-gray-700 pt-2">
@@ -197,10 +186,10 @@ const Referrals: React.FC = () => {
                                 {info.held > 0 && (
                                     <div className="flex flex-col items-end">
                                         <p className="font-bold text-indigo-600 dark:text-indigo-400">🔒 {formatCurrency(info.held, currentUser?.currency)}</p>
-                                        <span className="text-[9px] text-gray-400 uppercase font-black">Reserved</span>
+                                        <span className="text-[9px] text-gray-400 uppercase font-black tracking-tighter">Reserved</span>
                                     </div>
                                 )}
-                                {isInactive && <span className="text-[10px] text-gray-400 font-bold uppercase">No Activity</span>}
+                                {isInactive && <span className="text-[10px] text-gray-400 font-bold uppercase">No Plan/Activity</span>}
                             </div>
                         </div>
                     </div>
@@ -234,19 +223,19 @@ const Referrals: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">Rate</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Rate</p>
                                 <p className="text-sm font-bold text-green-600">{selectedPlanDetails?.directCommissions?.[0]?.value || 0}%</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">Network</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Network</p>
                                 <p className="text-sm font-bold text-purple-600">{selectedPlanDetails?.indirectCommissions?.length || 0} Lvl</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">Direct Slots</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Direct Slots</p>
                                 <p className="text-sm font-bold text-blue-600">{slotStats.used} / {slotStats.limit || '∞'}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">Upgrade</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Upgrade</p>
                                 <p className="text-sm font-bold text-indigo-600">{selectedPlanDetails?.autoUpgrade?.enabled ? 'Auto' : 'N/A'}</p>
                             </div>
                         </div>
@@ -277,16 +266,16 @@ const Referrals: React.FC = () => {
                                 <div className="h-full bg-blue-500 w-full" />
                             )}
                         </div>
-                        <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase pt-1">
-                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Earnings Slot</span>
-                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Hold/Upgrade Slot</span>
+                        <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase pt-1 tracking-tighter">
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Wallet Earnings Slot</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Hold/Upgrade Fund Slot</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="flex flex-wrap gap-4 mb-6">
                     <div className="w-full sm:w-auto">
-                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-2">Selected Plan Track</label>
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-2">Track Strategy By Plan</label>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                             {uniqueActivePlans.map(p => (
                                 <button 
@@ -308,7 +297,7 @@ const Referrals: React.FC = () => {
                             onClick={() => setViewMode(mode)}
                             className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all whitespace-nowrap ${viewMode === mode ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                         >
-                            {mode === 'commissions' ? 'Commissions' : mode === 'inactive' ? 'Inactive' : mode === 'overflow' ? 'Missed (Overflow)' : 'Full List'}
+                            {mode === 'commissions' ? 'Active Network' : mode === 'inactive' ? 'Not Active' : mode === 'overflow' ? 'Missed (Overflow)' : 'Full List'}
                         </button>
                      ))}
                 </div>
@@ -317,7 +306,7 @@ const Referrals: React.FC = () => {
                     <div className="space-y-8 animate-fade-in">
                         <section>
                             <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <span className="w-2 h-4 bg-blue-500 rounded-sm"></span> Referrals with Activity
+                                <span className="w-2 h-4 bg-blue-500 rounded-sm"></span> Real Active Members (Slots Occupied)
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {networkData.directEarners.map(node => (
@@ -328,7 +317,7 @@ const Referrals: React.FC = () => {
                                 ))}
                                 {networkData.directEarners.length === 0 && networkData.indirectEarners.length === 0 && (
                                     <div className="col-span-full py-12 text-center bg-gray-50 dark:bg-gray-900/30 rounded-2xl border-2 border-dashed dark:border-gray-700">
-                                        <p className="text-gray-500 italic">No commission activity found for this plan track.</p>
+                                        <p className="text-gray-500 italic">No active referrals found for this track.</p>
                                     </div>
                                 )}
                             </div>
@@ -339,10 +328,10 @@ const Referrals: React.FC = () => {
                 {viewMode === 'inactive' && (
                     <div className="space-y-4 animate-fade-in">
                         <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <span className="w-2 h-4 bg-gray-400 rounded-sm"></span> Registered (No Trigger Yet)
+                            <span className="w-2 h-4 bg-gray-400 rounded-sm"></span> Registered (Zero Plan Active)
                         </h3>
                         <p className="text-xs text-gray-500 mb-6 bg-gray-50 dark:bg-gray-900/40 p-3 rounded-lg border dark:border-gray-700 italic">
-                            These direct referrals have joined via your link, but have not yet triggered a commission for you.
+                            These direct referrals have joined but have not purchased any plan yet. They do not occupy a slot.
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {networkData.inactiveReferrals.map(node => (
@@ -380,14 +369,14 @@ const Referrals: React.FC = () => {
                 
                 {viewMode === 'all' && (
                     <div className="space-y-4 animate-fade-in">
-                        <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Full Downline (All Generations)</h3>
+                        <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Full Downline Analysis</h3>
                         <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 dark:bg-gray-900 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b dark:border-gray-700">
                                     <tr>
                                         <th className="px-6 py-4">Username</th>
                                         <th className="px-6 py-4">Generation</th>
-                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Activity</th>
                                         <th className="px-6 py-4 text-right">Joined</th>
                                     </tr>
                                 </thead>
@@ -400,7 +389,9 @@ const Referrals: React.FC = () => {
                                                     Level {node.level}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4"><Badge status={node.user.activePlans?.length ? Status.Active : Status.Pending} /></td>
+                                            <td className="px-6 py-4">
+                                                <Badge status={node.user.activePlans?.length ? Status.Active : Status.Pending} />
+                                            </td>
                                             <td className="px-6 py-4 text-right text-xs text-gray-400">{new Date(node.user.registrationDate).toLocaleDateString()}</td>
                                         </tr>
                                     ))}
