@@ -27,6 +27,7 @@ export interface UserRestrictions {
 }
 
 export interface ActivePlan {
+    _id?: string;
     planId: string;
     planName: string;
     price: number;
@@ -129,6 +130,11 @@ export interface InvestmentPlan {
     description: string;
     status: Status | 'Active' | 'Disabled';
     directReferralLimit: number;
+    overflowEnabled: boolean;
+    holdPosition?: {
+        enabled: boolean;
+        slots: number[];
+    };
     directCommissions: Commission[];
     indirectCommissions: Commission[];
     commissionDeductions?: {
@@ -139,10 +145,6 @@ export interface InvestmentPlan {
     autoUpgrade?: {
         enabled: boolean;
         toPlanId?: string;
-    };
-    holdPosition?: {
-        enabled: boolean;
-        slots: number[];
     };
     customFeatures?: string[];
     displayConfig?: {

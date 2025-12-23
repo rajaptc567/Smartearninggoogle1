@@ -55,7 +55,15 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: Number,
         default: 0, // 0 for unlimited
     },
-    directCommissions: [CommissionSchema], // Updated to array
+    overflowEnabled: {
+        type: Boolean,
+        default: false, // If true, record 0-amount commissions after limit reached
+    },
+    holdPosition: {
+        enabled: { type: Boolean, default: false },
+        slots: { type: [Number], default: [] } // e.g. [4, 5] means 4th and 5th commissions are held
+    },
+    directCommissions: [CommissionSchema],
     indirectCommissions: [CommissionSchema],
     commissionDeductions: {
         afterMaxPayout: CommissionSchema,
@@ -65,10 +73,6 @@ const InvestmentPlanSchema = new mongoose.Schema({
     autoUpgrade: {
         enabled: { type: Boolean, default: false },
         toPlanId: { type: String },
-    },
-    holdPosition: {
-        enabled: { type: Boolean, default: false },
-        slots: [Number],
     },
     customFeatures: {
         type: [String],
