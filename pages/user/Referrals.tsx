@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
@@ -7,6 +6,7 @@ import Button from '../../components/ui/Button';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ShareButtons from '../../components/ui/ShareButtons';
 import Modal from '../../components/ui/Modal';
+import Table from '../../components/ui/Table';
 
 interface GenealogyNode {
     user: User;
@@ -18,6 +18,7 @@ const Referrals: React.FC = () => {
     const { state } = useData();
     const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
+    const location = useLocation();
     
     const uniqueActivePlans = useMemo(() => {
         if (!currentUser || !currentUser.activePlans) return [];
@@ -30,7 +31,7 @@ const Referrals: React.FC = () => {
     }, [currentUser]);
 
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'held' | 'all' | 'inactive'>('commissions');
+    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'all'>('commissions');
 
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
@@ -84,8 +85,8 @@ const Referrals: React.FC = () => {
         return { earned, held, status: referralComms[0]?.status, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
 
-    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [] };
+    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, allNodes } = useMemo(() => {
+        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], allNodes: [] };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
             const directReferrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
@@ -109,7 +110,6 @@ const Referrals: React.FC = () => {
         const directEarnersList: GenealogyNode[] = [];
         const indirectEarnersList: GenealogyNode[] = [];
         const overflowList: GenealogyNode[] = [];
-        const inactiveList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
@@ -118,8 +118,6 @@ const Referrals: React.FC = () => {
                 else indirectEarnersList.push(node);
             } else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
-            } else if (!node.user.activePlans?.length) {
-                inactiveList.push(node);
             }
         });
 
@@ -128,7 +126,6 @@ const Referrals: React.FC = () => {
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
-            inactiveReferrals: inactiveList,
             allNodes: nodesList
         };
     }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
@@ -136,11 +133,11 @@ const Referrals: React.FC = () => {
     const slotStats = useMemo(() => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
-        // Used slots should count anyone who has generated an approved/pending commission or an overflow record
         const usedCount = transactions.filter(t => 
             t.userId === currentUser._id && 
             t.type === 'Commission' && 
             t.level === 1 &&
+            t.status !== 'Rejected' &&
             t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
         ).length;
         return { used: usedCount, limit };
@@ -185,125 +182,136 @@ const Referrals: React.FC = () => {
         );
     };
 
-    if (!currentUser) return <div className="p-10 text-center">Loading network...</div>;
-
-    const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Commission Network</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Track earnings and auto-upgrade progress from your team.</p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => navigate('/member/transactions')}>Earnings Log</Button>
-                    <Button variant="primary" size="sm" onClick={() => navigate('/member/plans')}>Upgrade Plan</Button>
-                </div>
-            </div>
-
-            {/* Plan Selector */}
-            <div className="bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm border dark:border-gray-700 flex overflow-x-auto gap-2">
-                {uniqueActivePlans.map(plan => (
-                    <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`flex-1 min-w-[150px] py-2.5 px-4 rounded-lg text-sm font-bold transition-all border ${selectedPlanId === plan.planId ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-transparent border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{plan.planName}</button>
-                ))}
-            </div>
-
-            {selectedPlanDetails && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-xl overflow-hidden animate-fade-in">
-                    <div className="flex flex-col lg:flex-row">
-                        <div className="p-8 bg-gray-50 dark:bg-gray-900 border-b lg:border-b-0 lg:border-r dark:border-gray-700 lg:w-64 flex flex-col justify-center items-center text-center">
-                            <span className="text-[10px] font-black uppercase text-blue-500 tracking-[0.2em] mb-2">Active Package</span>
-                            <h3 className="font-black text-2xl text-gray-900 dark:text-white leading-tight mb-2">{selectedPlanDetails.name}</h3>
-                            <span className="text-xl font-bold text-blue-600">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
-                        </div>
-                        <div className="flex-1 p-8">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-                                <div><span className="block text-[10px] uppercase text-gray-500 font-black mb-1">Commission</span><span className="text-sm font-bold text-green-500">{selectedPlanDetails.directCommissions[0]?.value}% Direct</span></div>
-                                <div><span className="block text-[10px] uppercase text-gray-500 font-black mb-1">Network</span><span className="text-sm font-bold text-purple-500">{selectedPlanDetails.indirectCommissions.length} Levels</span></div>
-                                <div><span className="block text-[10px] uppercase text-gray-500 font-black mb-1">Direct Slots</span><span className="text-sm font-bold text-blue-500">{slotStats.used} / {slotStats.limit || '∞'}</span></div>
-                                <div><span className="block text-[10px] uppercase text-gray-500 font-black mb-1">Auto-Upgrade</span><span className={`text-sm font-bold ${selectedPlanDetails.autoUpgrade?.enabled ? 'text-amber-500' : 'text-gray-500'}`}>{selectedPlanDetails.autoUpgrade?.enabled ? 'Active' : 'Disabled'}</span></div>
-                            </div>
-                            
-                            {/* Visual Slot Capacity Indicator */}
-                            {selectedPlanDetails.directReferralLimit > 0 && (
-                                <div className="space-y-3">
-                                    <div className="flex justify-between items-end">
-                                        <span className="text-xs font-bold text-gray-500 uppercase">Referral Capacity</span>
-                                        <span className="text-xs font-mono font-bold text-blue-600">{Math.round((slotStats.used / selectedPlanDetails.directReferralLimit) * 100)}% Used</span>
-                                    </div>
-                                    <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full flex overflow-hidden shadow-inner p-0.5">
-                                        {Array.from({ length: selectedPlanDetails.directReferralLimit }).map((_, i) => {
-                                            const slotNum = i + 1;
-                                            const isHold = selectedPlanDetails.holdPosition?.enabled && selectedPlanDetails.holdPosition.slots.includes(slotNum);
-                                            const isUsed = slotNum <= slotStats.used;
-                                            return (
-                                                <div 
-                                                    key={i} 
-                                                    className={`h-full flex-1 rounded-sm mx-0.5 transition-all duration-500 ${
-                                                        !isUsed ? 'bg-gray-200 dark:bg-gray-600' : 
-                                                        isHold ? 'bg-amber-400' : 'bg-blue-500'
-                                                    }`}
-                                                    title={isHold ? `Slot ${slotNum}: Held for Upgrade` : `Slot ${slotNum}: Active Earning`}
-                                                />
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex gap-4 text-[10px] font-bold uppercase text-gray-400">
-                                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-blue-500 rounded-full"></span> Earnings Slot</span>
-                                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-amber-400 rounded-full"></span> Upgrade Slot</span>
-                                    </div>
-                                </div>
-                            )}
+        <div className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">My Referral Network</h2>
+                <div className="flex flex-wrap gap-4 mb-6">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Plan Track</label>
+                        <select 
+                            value={selectedPlanId} 
+                            onChange={(e) => setSelectedPlanId(e.target.value)}
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm"
+                        >
+                            {uniqueActivePlans.map(p => (
+                                <option key={p.planId} value={p.planId}>{p.planName}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">View Mode</label>
+                        <div className="flex gap-2">
+                             {(['commissions', 'tree', 'overflow', 'all'] as const).map(mode => (
+                                 <Button 
+                                    key={mode} 
+                                    variant={viewMode === mode ? 'primary' : 'secondary'} 
+                                    size="sm" 
+                                    onClick={() => setViewMode(mode)}
+                                    className="capitalize"
+                                >
+                                    {mode}
+                                </Button>
+                             ))}
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* View Mode Tabs */}
-            <div className="flex bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm w-fit border dark:border-gray-700">
-                {(['commissions', 'overflow', 'inactive'] as const).map(mode => (
-                    <button key={mode} onClick={() => setViewMode(mode)} className={`px-5 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${viewMode === mode ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>{mode}</button>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {viewMode === 'commissions' && (
-                    <>
-                        {directEarners.length > 0 || indirectEarners.length > 0 ? (
-                            [...directEarners, ...indirectEarners].map(node => <ReferralCardContent key={node.user._id} node={node} />)
-                        ) : (
-                            <div className="col-span-full py-20 text-center bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed dark:border-gray-700">
-                                <p className="text-gray-500 font-bold">No active commissions for this plan yet.</p>
+                    <div className="space-y-8 animate-fade-in">
+                        <section>
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <span className="text-blue-500">🔵</span> Direct Referrals (Level 1)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {directEarners.map(node => (
+                                    <ReferralCardContent key={node.user._id} node={node} />
+                                ))}
+                                {directEarners.length === 0 && <p className="text-sm text-gray-500 italic">No direct referrals for this plan track.</p>}
                             </div>
-                        )}
-                    </>
+                        </section>
+                        <section>
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <span className="text-purple-500">🟣</span> Indirect Network (Level 2+)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {indirectEarners.map(node => (
+                                    <ReferralCardContent key={node.user._id} node={node} />
+                                ))}
+                                {indirectEarners.length === 0 && <p className="text-sm text-gray-500 italic">No indirect referrals for this plan track.</p>}
+                            </div>
+                        </section>
+                    </div>
                 )}
+
+                {viewMode === 'tree' && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg overflow-x-auto min-h-[400px]">
+                        <div className="space-y-4">
+                            <h3 className="text-center font-bold text-gray-500 uppercase tracking-widest text-xs">Hierarchy View</h3>
+                            <div className="flex flex-col items-center">
+                                <div className="p-4 bg-blue-600 text-white rounded-lg font-bold mb-8">YOU ({currentUser.username})</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                                    {genealogyTree.map(node => (
+                                        <div key={node.user._id} className="flex flex-col items-center">
+                                            <div className="w-px h-8 bg-gray-300 dark:bg-gray-700"></div>
+                                            <div className="p-3 bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg text-sm text-center shadow-md">
+                                                <div className="font-bold">@{node.user.username}</div>
+                                                <div className="text-[10px] text-gray-400">Direct</div>
+                                            </div>
+                                            {node.children.length > 0 && (
+                                                <div className="mt-4 flex flex-col items-center">
+                                                    <div className="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                                                    <div className="text-[10px] text-gray-500 mb-1">+{node.children.length} Indirect</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                {genealogyTree.length === 0 && <p className="text-gray-400 italic">No direct referrals found.</p>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {viewMode === 'overflow' && (
-                    <>
-                        {overflowReferrals.length > 0 ? (
-                            overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />)
-                        ) : (
-                            <div className="col-span-full py-20 text-center bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed dark:border-gray-700">
-                                <p className="text-gray-500 font-bold">You have no missed commissions (Overflow).</p>
-                            </div>
-                        )}
-                    </>
+                    <div className="space-y-4 animate-fade-in">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <span className="text-amber-500">⚠️</span> Overflow Referrals (Limit Exceeded)
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">These users joined via your link but you reached the direct referral limit for this plan ({slotStats.limit}). No commission was generated from these signups.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {overflowReferrals.map(node => (
+                                <ReferralCardContent key={node.user._id} node={node} />
+                            ))}
+                            {overflowReferrals.length === 0 && <p className="text-sm text-gray-500 italic">No overflow records for this plan.</p>}
+                        </div>
+                    </div>
                 )}
-                {viewMode === 'inactive' && (
-                    <>
-                        {inactiveReferrals.length > 0 ? (
-                            inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />)
-                        ) : (
-                            <div className="col-span-full py-20 text-center bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed dark:border-gray-700">
-                                <p className="text-gray-500 font-bold">All your referrals have active plans!</p>
-                            </div>
-                        )}
-                    </>
+                
+                {viewMode === 'all' && (
+                    <div className="space-y-4 animate-fade-in">
+                        <h3 className="text-lg font-bold">Full Network List</h3>
+                        <Table headers={['Username', 'Full Name', 'Level', 'Status', 'Joined Date']}>
+                            {allNodes.map(node => (
+                                <tr key={node.user._id} className="text-gray-700 dark:text-gray-400">
+                                    <td className="px-4 py-3 font-semibold">@{node.user.username}</td>
+                                    <td className="px-4 py-3 text-sm">{node.user.fullName}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${node.level === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>Level {node.level}</span>
+                                    </td>
+                                    <td className="px-4 py-3"><Badge status={node.user.activePlans?.length ? Status.Active : Status.Pending} /></td>
+                                    <td className="px-4 py-3 text-xs">{new Date(node.user.registrationDate).toLocaleDateString()}</td>
+                                </tr>
+                            ))}
+                        </Table>
+                    </div>
                 )}
             </div>
-            
-            <ShareButtons url={referralLink} title="Join SmartEarning and grow your network!" />
+
+            <ShareButtons url={`${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`} title="Join me on SmartEarning and start earning today!" />
+            <div ref={chatEndRef} />
         </div>
     );
 };
