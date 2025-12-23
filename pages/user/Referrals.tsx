@@ -31,7 +31,7 @@ const Referrals: React.FC = () => {
     }, [currentUser]);
 
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'all'>('commissions');
+    const [viewMode, setViewMode] = useState<'commissions' | 'overflow' | 'all'>('commissions');
 
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
@@ -66,8 +66,8 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; isHoldPosition?: boolean, isOverflow?: boolean } => {
-        if (!currentUser) return { earned: 0, held: 0 };
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
+        if (!currentUser) return { earned: 0, held: 0, hasActivity: false, isHoldPosition: false, isOverflow: false };
         
         const referralComms = transactions.filter(t => 
             t.userId === currentUser._id &&
@@ -76,17 +76,40 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
+        if (referralComms.length === 0) return { earned: 0, held: 0, hasActivity: false, isHoldPosition: false, isOverflow: false };
+
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        
+        // A user has activity if they have ANY commission record that isn't overflow-rejected
+        const hasActivity = referralComms.some(t => t.status === 'Approved' || t.status === 'Pending');
         
         const isHoldPosition = referralComms.some(t => t.status === 'Pending' && t.description.toLowerCase().includes('hold'));
         const isOverflow = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && t.description.toLowerCase().includes('limit'));
         
-        return { earned, held, status: referralComms[0]?.status, isHoldPosition, isOverflow };
+        return { earned, held, hasActivity, isHoldPosition, isOverflow };
     }, [currentUser, transactions]);
 
-    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], allNodes: [] };
+    const slotStats = useMemo(() => {
+        if (!currentUser || !selectedPlanDetails) return { used: 0, paid: 0, held: 0, limit: 0 };
+        const limit = selectedPlanDetails.directReferralLimit || 0;
+        
+        const validComms = transactions.filter(t => 
+            t.userId === currentUser._id && 
+            t.type === 'Commission' && 
+            t.level === 1 &&
+            t.status !== 'Rejected' &&
+            t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
+        );
+
+        const paidCount = validComms.filter(t => t.status === 'Approved').length;
+        const heldCount = validComms.filter(t => t.status === 'Pending').length;
+
+        return { used: validComms.length, paid: paidCount, held: heldCount, limit };
+    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
+
+    const { directEarners, indirectEarners, overflowReferrals, allNodes } = useMemo(() => {
+        if (!currentUser) return { directEarners: [], indirectEarners: [], overflowReferrals: [], allNodes: [] };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
             const directReferrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
@@ -107,41 +130,27 @@ const Referrals: React.FC = () => {
         };
         flatten(fullGenealogyTree);
 
-        const directEarnersList: GenealogyNode[] = [];
-        const indirectEarnersList: GenealogyNode[] = [];
+        const directList: GenealogyNode[] = [];
+        const indirectList: GenealogyNode[] = [];
         const overflowList: GenealogyNode[] = [];
 
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-            if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
-                if (node.level === 1) directEarnersList.push(node);
-                else indirectEarnersList.push(node);
+            if (info.hasActivity) {
+                if (node.level === 1) directList.push(node);
+                else indirectList.push(node);
             } else if (info.isOverflow && node.level === 1) {
                 overflowList.push(node);
             }
         });
 
         return {
-            genealogyTree: fullGenealogyTree,
-            directEarners: directEarnersList,
-            indirectEarners: indirectEarnersList,
+            directEarners: directList,
+            indirectEarners: indirectList,
             overflowReferrals: overflowList,
             allNodes: nodesList
         };
-    }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
-
-    const slotStats = useMemo(() => {
-        if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
-        const limit = selectedPlanDetails.directReferralLimit || 0;
-        const usedCount = transactions.filter(t => 
-            t.userId === currentUser._id && 
-            t.type === 'Commission' && 
-            t.level === 1 &&
-            t.status !== 'Rejected' &&
-            t.relatedPlanId && equivalentPlanIdsForSelected.has(String(t.relatedPlanId))
-        ).length;
-        return { used: usedCount, limit };
-    }, [currentUser, selectedPlanDetails, transactions, equivalentPlanIdsForSelected]);
+    }, [currentUser, users, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
     const ReferralCardContent: React.FC<{
         node: { user: User, level?: number };
@@ -155,26 +164,40 @@ const Referrals: React.FC = () => {
         const isDirect = level === 1;
 
         return (
-            <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-md border-l-4 p-4 transition-all duration-200 hover:shadow-lg ${isOverflow ? 'border-amber-400' : isHoldPosition ? 'border-indigo-400' : 'border-blue-500'}`}>
+            <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-md border-l-4 p-4 transition-all duration-200 hover:shadow-lg ${isOverflow ? 'border-amber-400 opacity-60' : isHoldPosition ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-900/10' : 'border-blue-500'}`}>
                 <div className="flex items-start gap-4">
-                    <div className="mt-1 flex-shrink-0 w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 font-bold text-lg">{user.fullName.charAt(0)}</div>
-                    <div className="flex-grow">
+                    <div className={`mt-1 flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${isHoldPosition ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+                        {user.fullName.charAt(0)}
+                    </div>
+                    <div className="flex-grow min-w-0">
                         <div className="flex justify-between items-start mb-1">
-                            <div>
-                                <h4 className="font-bold text-gray-900 dark:text-white">@{user.username}</h4>
-                                <p className="text-xs text-gray-500">{user.fullName}</p>
+                            <div className="truncate">
+                                <h4 className="font-bold text-gray-900 dark:text-white truncate">@{user.username}</h4>
+                                <p className="text-xs text-gray-500 truncate">{user.fullName}</p>
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                                {isDirect && <Badge status={Status.Active} />}
-                                {!isDirect && level && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold uppercase">Level {level}</span>}
-                                {isHoldPosition && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">Upgrade Slot</span>}
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                {isDirect && !isOverflow && <Badge status={Status.Active} />}
+                                {!isDirect && level && <span className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 rounded font-bold uppercase">Level {level}</span>}
+                                {isHoldPosition && (
+                                    <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 shadow-sm">
+                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                        Upgrade Fund
+                                    </span>
+                                )}
                                 {isOverflow && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold uppercase">Limit Missed</span>}
                             </div>
                         </div>
-                        <div className="mt-3 text-xs text-gray-500 flex justify-between items-center">
+                        <div className="mt-3 text-xs text-gray-500 flex justify-between items-center border-t dark:border-gray-700 pt-2">
                             <span>Joined {new Date(user.registrationDate).toLocaleDateString()}</span>
-                            {info.earned > 0 && <span className="font-bold text-green-600">+{formatCurrency(info.earned, currentUser?.currency)}</span>}
-                            {info.held > 0 && <span className="font-bold text-blue-600">⏳ {formatCurrency(info.held, currentUser?.currency)}</span>}
+                            <div className="text-right">
+                                {info.earned > 0 && <p className="font-bold text-green-600 dark:text-green-400">+{formatCurrency(info.earned, currentUser?.currency)}</p>}
+                                {info.held > 0 && (
+                                    <div className="flex flex-col items-end">
+                                        <p className="font-bold text-indigo-600 dark:text-indigo-400">🔒 {formatCurrency(info.held, currentUser?.currency)}</p>
+                                        <span className="text-[9px] text-gray-400 uppercase font-black">Reserved</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -182,136 +205,189 @@ const Referrals: React.FC = () => {
         );
     };
 
-    const chatEndRef = useRef<HTMLDivElement>(null);
+    const capacityPercent = slotStats.limit > 0 ? Math.min(100, (slotStats.used / slotStats.limit) * 100) : 100;
 
     return (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">My Referral Network</h2>
-                <div className="flex flex-wrap gap-4 mb-6">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-100 dark:border-gray-700">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Select Plan Track</label>
-                        <select 
-                            value={selectedPlanId} 
-                            onChange={(e) => setSelectedPlanId(e.target.value)}
-                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm"
-                        >
-                            {uniqueActivePlans.map(p => (
-                                <option key={p.planId} value={p.planId}>{p.planName}</option>
-                            ))}
-                        </select>
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Commission Network</h2>
+                        <p className="text-sm text-gray-500">Track earnings and auto-upgrade progress from your team.</p>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">View Mode</label>
-                        <div className="flex gap-2">
-                             {(['commissions', 'tree', 'overflow', 'all'] as const).map(mode => (
-                                 <Button 
-                                    key={mode} 
-                                    variant={viewMode === mode ? 'primary' : 'secondary'} 
-                                    size="sm" 
-                                    onClick={() => setViewMode(mode)}
-                                    className="capitalize"
-                                >
-                                    {mode}
-                                </Button>
-                             ))}
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <Button variant="secondary" size="sm" onClick={() => navigate('/member/transactions')}>Earnings Log</Button>
+                        <Button size="sm" onClick={() => navigate('/member/plans')}>Upgrade Plan</Button>
+                    </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border dark:border-gray-700 mb-8">
+                    <div className="flex flex-wrap gap-4 justify-between items-end mb-6">
+                        <div className="space-y-1">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Package</label>
+                            <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400">{selectedPlanDetails?.name || 'Loading...'}</h3>
+                            <p className="text-2xl font-black text-gray-800 dark:text-white">{formatCurrency(selectedPlanDetails?.price, currentUser?.currency)}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase">Commission</p>
+                                <p className="text-sm font-bold text-green-600">{selectedPlanDetails?.directCommissions?.[0]?.value || 0}% Direct</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase">Network</p>
+                                <p className="text-sm font-bold text-purple-600">{selectedPlanDetails?.indirectCommissions?.length || 0} Levels</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase">Direct Slots</p>
+                                <p className="text-sm font-bold text-blue-600">{slotStats.used} / {slotStats.limit || '∞'}</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-gray-400 uppercase">Auto-Upgrade</p>
+                                <p className="text-sm font-bold text-indigo-600">{selectedPlanDetails?.autoUpgrade?.enabled ? 'Active' : 'N/A'}</p>
+                            </div>
                         </div>
                     </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                            <span>Referral Capacity</span>
+                            <span className={capacityPercent >= 100 ? 'text-red-500' : 'text-blue-500'}>{capacityPercent.toFixed(0)}% Used</span>
+                        </div>
+                        <div className="flex h-3 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner">
+                             {selectedPlanDetails?.directReferralLimit ? (
+                                Array.from({ length: selectedPlanDetails.directReferralLimit }).map((_, i) => {
+                                    const slotNum = i + 1;
+                                    const isHold = selectedPlanDetails.holdPosition?.enabled && selectedPlanDetails.holdPosition.slots.includes(slotNum);
+                                    const isUsed = slotNum <= slotStats.used;
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            className={`h-full flex-1 border-r last:border-0 dark:border-gray-900 transition-colors duration-500 ${
+                                                !isUsed ? 'bg-transparent' : 
+                                                isHold ? 'bg-indigo-500' : 'bg-blue-500'
+                                            }`}
+                                        />
+                                    );
+                                })
+                            ) : (
+                                <div className="h-full bg-blue-500 w-full" />
+                            )}
+                        </div>
+                        <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase pt-1">
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Earnings Slot</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500"></span> Upgrade Fund Slot</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 mb-6">
+                    <div className="w-full sm:w-auto">
+                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-2">Selected Plan Track</label>
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                            {uniqueActivePlans.map(p => (
+                                <button 
+                                    key={p.planId} 
+                                    onClick={() => setSelectedPlanId(p.planId)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${selectedPlanId === p.planId ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-blue-400'}`}
+                                >
+                                    {p.planName}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex bg-gray-100 dark:bg-gray-700/50 p-1 rounded-xl border dark:border-gray-600 w-full sm:w-max mb-8">
+                     {(['commissions', 'overflow', 'all'] as const).map(mode => (
+                         <button 
+                            key={mode} 
+                            onClick={() => setViewMode(mode)}
+                            className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === mode ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                        >
+                            {mode === 'commissions' ? 'Commissions' : mode === 'overflow' ? 'Missed (Overflow)' : 'Full List'}
+                        </button>
+                     ))}
                 </div>
 
                 {viewMode === 'commissions' && (
                     <div className="space-y-8 animate-fade-in">
                         <section>
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <span className="text-blue-500">🔵</span> Direct Referrals (Level 1)
+                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-2 h-4 bg-blue-500 rounded-sm"></span> Referrals with Activity
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {directEarners.map(node => (
                                     <ReferralCardContent key={node.user._id} node={node} />
                                 ))}
-                                {directEarners.length === 0 && <p className="text-sm text-gray-500 italic">No direct referrals for this plan track.</p>}
-                            </div>
-                        </section>
-                        <section>
-                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <span className="text-purple-500">🟣</span> Indirect Network (Level 2+)
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {indirectEarners.map(node => (
                                     <ReferralCardContent key={node.user._id} node={node} />
                                 ))}
-                                {indirectEarners.length === 0 && <p className="text-sm text-gray-500 italic">No indirect referrals for this plan track.</p>}
+                                {directEarners.length === 0 && indirectEarners.length === 0 && (
+                                    <div className="col-span-full py-12 text-center bg-gray-50 dark:bg-gray-900/30 rounded-2xl border-2 border-dashed dark:border-gray-700">
+                                        <p className="text-gray-500 italic">No commission activity found for this plan track.</p>
+                                    </div>
+                                )}
                             </div>
                         </section>
-                    </div>
-                )}
-
-                {viewMode === 'tree' && (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg overflow-x-auto min-h-[400px]">
-                        <div className="space-y-4">
-                            <h3 className="text-center font-bold text-gray-500 uppercase tracking-widest text-xs">Hierarchy View</h3>
-                            <div className="flex flex-col items-center">
-                                <div className="p-4 bg-blue-600 text-white rounded-lg font-bold mb-8">YOU ({currentUser.username})</div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                                    {genealogyTree.map(node => (
-                                        <div key={node.user._id} className="flex flex-col items-center">
-                                            <div className="w-px h-8 bg-gray-300 dark:bg-gray-700"></div>
-                                            <div className="p-3 bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg text-sm text-center shadow-md">
-                                                <div className="font-bold">@{node.user.username}</div>
-                                                <div className="text-[10px] text-gray-400">Direct</div>
-                                            </div>
-                                            {node.children.length > 0 && (
-                                                <div className="mt-4 flex flex-col items-center">
-                                                    <div className="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
-                                                    <div className="text-[10px] text-gray-500 mb-1">+{node.children.length} Indirect</div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                {genealogyTree.length === 0 && <p className="text-gray-400 italic">No direct referrals found.</p>}
-                            </div>
-                        </div>
                     </div>
                 )}
 
                 {viewMode === 'overflow' && (
                     <div className="space-y-4 animate-fade-in">
-                        <h3 className="text-lg font-bold flex items-center gap-2">
-                            <span className="text-amber-500">⚠️</span> Overflow Referrals (Limit Exceeded)
+                        <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <span className="w-2 h-4 bg-amber-500 rounded-sm"></span> Overflow Records
                         </h3>
-                        <p className="text-sm text-gray-500 mb-4">These users joined via your link but you reached the direct referral limit for this plan ({slotStats.limit}). No commission was generated from these signups.</p>
+                        <p className="text-xs text-gray-500 mb-6 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-100 dark:border-amber-900/30">
+                            These users joined via your link, but your direct referral limit was already reached ({slotStats.limit}). No commission was generated. <strong>Upgrade to a higher plan to increase capacity!</strong>
+                        </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {overflowReferrals.map(node => (
                                 <ReferralCardContent key={node.user._id} node={node} />
                             ))}
-                            {overflowReferrals.length === 0 && <p className="text-sm text-gray-500 italic">No overflow records for this plan.</p>}
+                            {overflowReferrals.length === 0 && (
+                                <div className="col-span-full py-12 text-center bg-gray-50 dark:bg-gray-900/30 rounded-2xl border-2 border-dashed dark:border-gray-700">
+                                    <p className="text-gray-500 italic">No missed commissions found.</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
                 
                 {viewMode === 'all' && (
                     <div className="space-y-4 animate-fade-in">
-                        <h3 className="text-lg font-bold">Full Network List</h3>
-                        <Table headers={['Username', 'Full Name', 'Level', 'Status', 'Joined Date']}>
-                            {allNodes.map(node => (
-                                <tr key={node.user._id} className="text-gray-700 dark:text-gray-400">
-                                    <td className="px-4 py-3 font-semibold">@{node.user.username}</td>
-                                    <td className="px-4 py-3 text-sm">{node.user.fullName}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${node.level === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>Level {node.level}</span>
-                                    </td>
-                                    <td className="px-4 py-3"><Badge status={node.user.activePlans?.length ? Status.Active : Status.Pending} /></td>
-                                    <td className="px-4 py-3 text-xs">{new Date(node.user.registrationDate).toLocaleDateString()}</td>
-                                </tr>
-                            ))}
-                        </Table>
+                        <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Full Downline (All Generations)</h3>
+                        <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 dark:bg-gray-900 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b dark:border-gray-700">
+                                    <tr>
+                                        <th className="px-6 py-4">Username</th>
+                                        <th className="px-6 py-4">Generation</th>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4 text-right">Joined</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y dark:divide-gray-700 bg-white dark:bg-gray-800">
+                                    {allNodes.map(node => (
+                                        <tr key={node.user._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">@{node.user.username}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${node.level === 1 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
+                                                    Level {node.level}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4"><Badge status={node.user.activePlans?.length ? Status.Active : Status.Pending} /></td>
+                                            <td className="px-6 py-4 text-right text-xs text-gray-400">{new Date(node.user.registrationDate).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {allNodes.length === 0 && <p className="p-8 text-center text-gray-500 italic bg-white dark:bg-gray-800">No members found in your network.</p>}
+                        </div>
                     </div>
                 )}
             </div>
 
-            <ShareButtons url={`${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`} title="Join me on SmartEarning and start earning today!" />
-            <div ref={chatEndRef} />
+            <ShareButtons url={`${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`} title="Join my team on SmartEarning and start growing your assets today!" />
         </div>
     );
 };
