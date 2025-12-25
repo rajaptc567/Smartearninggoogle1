@@ -302,7 +302,7 @@ const Users: React.FC = () => {
                                                 : 'None'}
                                         </td>
                                         <td className="px-4 py-3 text-xs">
-                                           <Badge status={user.status} />
+                                           <Badge status={user.status as any} />
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <div className="flex items-center space-x-2 flex-wrap gap-y-2">
@@ -387,17 +387,17 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         
         user.activePlans?.forEach(ap => {
             const plan = investmentPlans.find(p => p._id === ap.planId);
-            if (!plan?.holdPosition?.enabled) return;
-            
+            // Show summary if plan has ANY held commissions in ledger, even if holdPosition isn't strictly enabled now
             const relatedHeld = transactions.filter(t => 
                 t.userId === user._id && 
-                t.status === 'Pending' && 
-                String(t.relatedPlanId) === String(ap.planId) &&
-                t.description.toLowerCase().includes('hold commission')
+                (t.status === 'hold_upgrade' || t.status === 'hold_slot') && 
+                String(t.relatedPlanId) === String(ap.planId)
             );
 
+            if (relatedHeld.length === 0) return;
+
             const totalHeld = relatedHeld.reduce((s, tx) => s + tx.amount, 0);
-            const targetPlan = investmentPlans.find(p => p._id === plan.autoUpgrade?.toPlanId);
+            const targetPlan = investmentPlans.find(p => p._id === plan?.autoUpgrade?.toPlanId);
 
             summary.push({
                 planId: ap.planId,
@@ -678,7 +678,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     )}
                     {activeTab === 'strategy' && user && (
                         <div className="space-y-6 animate-fade-in">
-                            <h3 className="font-bold text-gray-400 uppercase text-xs">Upgrade Funds (Holding Strategy)</h3>
+                            <h3 className="font-bold text-gray-400 uppercase text-xs">MLM Strategy & Escrow (Audit View)</h3>
                             {upgradeFundSummary.length > 0 ? upgradeFundSummary.map(item => (
                                 <div key={item.planId} className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-sm overflow-hidden">
                                     <div className="p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
@@ -689,7 +689,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         </div>
                                         <div className="text-right">
                                             <div className="text-2xl font-black text-indigo-600">{formatCurrency(item.totalHeld, user.currency)}</div>
-                                            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Total Held</p>
+                                            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Total Held in Escrow</p>
                                             {item.targetPrice && (
                                                 <div className="mt-1 w-32 ml-auto h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                                     <div 
@@ -702,9 +702,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     </div>
                                     <div className="p-4 border-t dark:border-gray-700">
                                         <div className="mb-3 flex justify-between items-center">
-                                             <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Source Tracking Ledger</h5>
+                                             <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Escrowed Slot Ledger</h5>
                                              {item.totalHeld > 0 && (
-                                                <Button size="sm" onClick={() => handleManualUpgrade(item.planId)} disabled={isSaving}>Force Upgrade Now</Button>
+                                                <Button size="sm" variant="success" onClick={() => handleManualUpgrade(item.planId)} disabled={isSaving}>Unlock & Force Upgrade</Button>
                                             )}
                                         </div>
                                         <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
@@ -712,8 +712,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                 <thead className="bg-gray-50 dark:bg-gray-900 text-gray-400 uppercase font-black border-b dark:border-gray-700">
                                                     <tr>
                                                         <th className="p-2">Referral</th>
-                                                        <th className="p-2 text-center">Slot</th>
-                                                        <th className="p-2 text-center">Amount Held</th>
+                                                        <th className="p-2 text-center">Genealogy Slot</th>
+                                                        <th className="p-2 text-center">Held Status</th>
+                                                        <th className="p-2 text-center">Amount</th>
                                                         <th className="p-2 text-right">Timestamp</th>
                                                     </tr>
                                                 </thead>
@@ -722,12 +723,15 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                         <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                                             <td className="p-2 font-bold">@{tx.userName}</td>
                                                             <td className="p-2 text-center">
-                                                                <span className="bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-[10px]">
-                                                                    #{tx.description.match(/Slot #(\d+)/)?.[1] || '??'}
+                                                                <span className="bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-[10px] font-mono">
+                                                                    #{tx.slot_index || '??'}
                                                                 </span>
                                                             </td>
+                                                            <td className="p-2 text-center">
+                                                                <Badge status={tx.status as any} />
+                                                            </td>
                                                             <td className="p-2 text-center font-bold text-indigo-600">{formatCurrency(tx.amount, tx.currency)}</td>
-                                                            <td className="p-2 text-right text-gray-400">{new Date(tx.date).toLocaleString()}</td>
+                                                            <td className="p-2 text-right text-gray-400 font-mono">{new Date(tx.date).toLocaleDateString()}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -736,7 +740,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     </div>
                                 </div>
                             )) : (
-                                <p className="p-8 text-center text-gray-400 italic text-sm">No hold-strategy plans found for this user.</p>
+                                <div className="p-12 text-center bg-gray-50 dark:bg-gray-900/50 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                    <p className="text-gray-400 italic text-sm">No escrowed funds found for this user.</p>
+                                </div>
                             )}
                         </div>
                     )}
@@ -852,7 +858,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         <div className="space-y-4 animate-fade-in">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
                                 <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                                <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700"><option value="">All Status</option>{['Approved', 'Pending', 'Rejected'].map(s=><option key={s} value={s}>{s}</option>)}</select>
+                                <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700"><option value="">All Status</option>{['Approved', 'Pending', 'Rejected', 'hold_slot', 'hold_upgrade', 'overflow'].map(s=><option key={s} value={s}>{s}</option>)}</select>
                                 <input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700" />
                                 <input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700" />
                             </div>
@@ -1171,7 +1177,7 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
         <Modal isOpen={true} onClose={onClose}>
             <div className="p-4 w-96 text-center space-y-4">
                 <div className="mx-auto w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>
                 <h3 className="text-xl font-bold">Confirm Deletion</h3>
                 <p className="text-sm text-gray-500">Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>?</p>

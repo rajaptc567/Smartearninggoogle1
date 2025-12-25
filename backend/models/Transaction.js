@@ -38,11 +38,27 @@ const TransactionSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
+        enum: ['Pending', 'Approved', 'Rejected', 'hold_slot', 'hold_upgrade', 'overflow'],
+        default: 'Approved'
     },
     relatedPlanId: {
         type: mongoose.Schema.ObjectId,
         ref: 'InvestmentPlan'
+    },
+    // MLM Internal Audit Fields
+    slot_index: {
+        type: Number,
+    },
+    required_plan_id: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'InvestmentPlan'
+    },
+    hold_reason: {
+        type: String,
+    },
+    unlock_on_upgrade: {
+        type: Boolean,
+        default: false
     },
     // For multi-currency commission tracking
     originalAmount: {
