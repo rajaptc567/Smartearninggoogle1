@@ -32,13 +32,13 @@ const TransactionSchema = new mongoose.Schema({
     level: {
         type: Number,
     },
-    sourceUserId: { // The user who triggered the transaction (e.g., plan purchaser)
+    sourceUserId: { // The user who triggered the transaction
         type: mongoose.Schema.ObjectId,
         ref: 'User'
     },
     status: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected', 'hold_slot', 'hold_upgrade', 'overflow'],
+        enum: ['Pending', 'Approved', 'Rejected', 'hold_upgrade', 'hold_slot', 'overflow'],
         default: 'Approved'
     },
     relatedPlanId: {
@@ -47,6 +47,9 @@ const TransactionSchema = new mongoose.Schema({
     },
     // MLM Internal Audit Fields
     slot_index: {
+        type: Number,
+    },
+    original_amount: {
         type: Number,
     },
     required_plan_id: {
@@ -59,20 +62,17 @@ const TransactionSchema = new mongoose.Schema({
     unlock_on_upgrade: {
         type: Boolean,
         default: false
-    },
-    // For multi-currency commission tracking
-    originalAmount: {
-        type: Number,
-    },
-    originalCurrency: {
-        type: String,
-        enum: ['EUR', 'PKR', 'USD'],
-    },
-    exchangeRate: {
-        type: Number,
     }
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
+});
+
+// Safety check to prevent regression: Prevent zeroing of held funds
+TransactionSchema.pre('save', function(next) {
+    if (['Approved', 'hold_upgrade', 'hold_slot'].includes(this.status) && this.amount <= 0 && this.type === 'Commission') {
+        return next(new Error('Commission amount must be positive for Approved or Held statuses.'));
+    }
+    next();
 });
 
 export default mongoose.model('Transaction', TransactionSchema);

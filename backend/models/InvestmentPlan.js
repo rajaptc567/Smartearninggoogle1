@@ -55,7 +55,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
         type: Number,
         default: 0, // 0 for unlimited
     },
-    directCommissions: [CommissionSchema], // Updated to array
+    directCommissions: [CommissionSchema],
     indirectCommissions: [CommissionSchema],
     commissionDeductions: {
         afterMaxPayout: CommissionSchema,
@@ -69,6 +69,10 @@ const InvestmentPlanSchema = new mongoose.Schema({
     holdPosition: {
         enabled: { type: Boolean, default: false },
         slots: [Number],
+    },
+    hold_slots: {
+        type: [Number],
+        default: []
     },
     customFeatures: {
         type: [String],
@@ -85,8 +89,6 @@ const InvestmentPlanSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Ensure a unique compound index on name and currency
 InvestmentPlanSchema.index({ name: 1, currency: 1 }, { unique: true });
-
 
 export default mongoose.model('InvestmentPlan', InvestmentPlanSchema);

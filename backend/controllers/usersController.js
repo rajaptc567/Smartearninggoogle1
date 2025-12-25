@@ -11,9 +11,7 @@ import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 
-const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
-
-// Helper to get all IDs in the same equivalency group
+// Helper to get equivalent IDs for plan tracks
 const getEquivalentIds = (planId, settings) => {
     const ids = new Set([String(planId)]);
     if (settings.planEquivalencyGroups) {
@@ -31,53 +29,51 @@ const getEquivalentIds = (planId, settings) => {
     return ids;
 };
 
-// @desc    Unlock Escrowed Commissions after upgrade
-const unlockHeldCommissions = async (user) => {
+// @desc    Unlock Escrowed Commissions after upgrade (Atomic Process)
+const unlockHeldCommissions = async (user, newPlanId) => {
     try {
         const settings = await Setting.getSettings();
         
-        // Find all held commissions for this user
+        // Find all commissions held for this user
         const heldCommissions = await Transaction.find({
             userId: user._id,
             status: { $in: ['hold_upgrade', 'hold_slot'] }
         });
 
-        let totalUnlocked = 0;
-        const userPlanIds = user.activePlans.map(p => String(p.planId));
+        let totalUnlockedAmount = 0;
+        const userActivePlanIds = user.activePlans.map(ap => String(ap.planId));
 
-        for (const tx of heldCommissions) {
-            if (!tx.required_plan_id) continue;
-
-            const equivIds = getEquivalentIds(tx.required_plan_id, settings);
-            const hasRequiredPlan = userPlanIds.some(id => equivIds.has(id));
+        for (let tx of heldCommissions) {
+            const requiredIds = getEquivalentIds(tx.required_plan_id, settings);
+            const hasRequiredPlan = userActivePlanIds.some(id => requiredIds.has(id));
 
             if (hasRequiredPlan) {
-                // UNLOCK
+                // Update status and credit balance
                 tx.status = 'Approved';
-                tx.description = tx.description.replace('Held:', 'Unlocked:').replace('Hold:', 'Unlocked:');
-                tx.hold_reason = `Unlocked by upgrade to ${user.activePlans[user.activePlans.length-1].planName}`;
+                tx.description = `Unlocked: ${tx.description}`;
+                tx.hold_reason = `Unlocked by upgrade to plan matching ${tx.required_plan_id}`;
                 await tx.save();
 
                 user.walletBalance = Number((user.walletBalance + tx.amount).toFixed(2));
-                totalUnlocked += tx.amount;
+                totalUnlockedAmount += tx.amount;
 
-                await Notification.create({
-                    userId: user._id,
-                    message: `Unlocked: ${user.currency} ${tx.amount.toFixed(2)} commission has been added to your balance.`
-                });
+                await createLog('Commission Unlocked', user.username, `Tx ${tx._id} released by upgrade`, 'system');
             }
         }
 
-        if (totalUnlocked > 0) {
+        if (totalUnlockedAmount > 0) {
             await user.save();
-            await createLog('Commission Unlock', user.username, `Unlocked total of ${user.currency} ${totalUnlocked.toFixed(2)} via upgrade`, 'system');
+            await Notification.create({
+                userId: user._id,
+                message: `Congratulations! Your upgrade released ${user.currency} ${totalUnlockedAmount.toFixed(2)} in held commissions.`
+            });
         }
     } catch (err) {
-        console.error('Failed to unlock commissions:', err.message);
+        console.error('Commission Unlock Error:', err.message);
     }
 };
 
-// @desc    Distribute MLM Commissions with Refined Audit Logic
+// @desc    Distribute MLM Commissions with Mandatory Decision Tree
 const distributeCommissions = async (buyer, plan) => {
     const settings = await Setting.getSettings();
     let currentSponsorName = buyer.sponsor;
@@ -89,7 +85,7 @@ const distributeCommissions = async (buyer, plan) => {
 
         const trackIds = getEquivalentIds(plan._id, settings);
 
-        // Authoritative plan for sequence/limit checks
+        // 1. Identify Authoritative Plan for this Track
         let sponsorPlanTrack = plan; 
         if (sponsor.activePlans && sponsor.activePlans.length > 0) {
             const matchingActivePlanEntry = sponsor.activePlans
@@ -102,21 +98,21 @@ const distributeCommissions = async (buyer, plan) => {
             }
         }
 
-        // 1. Determine Slot Index (Linear Genealogy Position)
-        // Only Approved and Held statuses occupy a slot. Overflow/Rejected do NOT.
+        // 2. Determine Slot Index (Mandatory sequence preservation)
+        // Count transactions where status is approved, hold_slot, or hold_upgrade
         let targetIndex = 0;
         if (level === 1) {
-            const occupiedSlotsCount = await Transaction.countDocuments({
+            const occupiedSlots = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
                 level: 1,
                 relatedPlanId: { $in: Array.from(trackIds) },
                 status: { $in: ['Approved', 'hold_slot', 'hold_upgrade'] }
             });
-            targetIndex = occupiedSlotsCount + 1;
+            targetIndex = occupiedSlots + 1;
         }
 
-        // 2. Calculate Potential Amount
+        // 3. Calculate Commission Configuration
         const commConfig = level === 1 
             ? sponsorPlanTrack.directCommissions[Math.min(targetIndex - 1, sponsorPlanTrack.directCommissions.length - 1)]
             : sponsorPlanTrack.indirectCommissions[level - 2];
@@ -136,16 +132,17 @@ const distributeCommissions = async (buyer, plan) => {
             amount = (amount / (rates[plan.currency] || 1)) * (rates[sponsor.currency] || 1);
         }
 
-        // 3. THE MANDATORY DECISION ENGINE
+        // 4. THE DECISION ENGINE (Linear Audit Order)
         let finalStatus = 'Approved';
-        let finalAmount = Number(amount.toFixed(2));
         let holdReason = '';
-        let exitChain = false;
 
-        // A. Check Strategy Hold (Slot-Based Escrow)
-        const isSlotHold = level === 1 && sponsorPlanTrack.holdPosition?.enabled && sponsorPlanTrack.holdPosition.slots.includes(targetIndex);
-        
-        // B. Check Eligibility Hold
+        // Step A: Check Slot Strategy Hold
+        const isSlotHold = level === 1 && (
+            (sponsorPlanTrack.holdPosition?.enabled && sponsorPlanTrack.holdPosition.slots.includes(targetIndex)) ||
+            (sponsorPlanTrack.hold_slots && sponsorPlanTrack.hold_slots.includes(targetIndex))
+        );
+
+        // Step B: Check Eligibility Hold
         let isEligible = true;
         if (sponsor.restrictions?.earning) {
             isEligible = false;
@@ -154,49 +151,51 @@ const distributeCommissions = async (buyer, plan) => {
             const hasMatch = sponsor.activePlans?.some(ap => trackIds.has(String(ap.planId)));
             if (!hasMatch) {
                 isEligible = false;
-                holdReason = 'Plan Upgrade Required';
+                holdReason = 'Higher Plan Required';
             }
         }
 
-        // ESCROW PATH (Hold Decision BEFORE Overflow)
+        // 5. THE ESCROW PATH (Lossless Priority)
         if (isSlotHold || !isEligible) {
             finalStatus = isSlotHold ? 'hold_slot' : 'hold_upgrade';
-            holdReason = isSlotHold ? `Hold: Slot #${targetIndex} reserved for upgrade` : `Hold: ${holdReason}`;
-            // Slot is preserved, amount is preserved, skip overflow check
+            holdReason = isSlotHold ? `🔒 Held – Slot #${targetIndex} Reserved` : `🔒 Held – Upgrade Required`;
+            
+            await Transaction.create({
+                userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
+                type: 'Commission', amount: Number(amount.toFixed(2)), original_amount: Number(amount.toFixed(2)),
+                status: finalStatus, description: `Held commission from ${buyer.username} (Level ${level})`,
+                level, sourceUserId: buyer._id, relatedPlanId: plan._id,
+                slot_index: level === 1 ? targetIndex : undefined,
+                required_plan_id: plan._id, hold_reason: holdReason, unlock_on_upgrade: true
+            });
+            
+            // Exit chain logic if needed, but important to skip overflow check
         } 
-        // OVERFLOW PATH (Only if NOT held)
+        // 6. THE OVERFLOW PATH (Last Resort)
         else if (level === 1 && sponsorPlanTrack.directReferralLimit > 0 && targetIndex > sponsorPlanTrack.directReferralLimit) {
-            finalStatus = 'overflow';
-            finalAmount = 0;
-            holdReason = `Overflow: Limit reached for ${sponsorPlanTrack.name} (Slot #${targetIndex})`;
+            await Transaction.create({
+                userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
+                type: 'Commission', amount: 0, original_amount: Number(amount.toFixed(2)),
+                status: 'overflow', description: `Overflow: Limit reached for ${sponsorPlanTrack.name} (Slot #${targetIndex})`,
+                level, sourceUserId: buyer._id, relatedPlanId: plan._id,
+                slot_index: targetIndex, hold_reason: 'Direct limit exceeded'
+            });
         }
+        // 7. APPROVAL
+        else {
+            await Transaction.create({
+                userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
+                type: 'Commission', amount: Number(amount.toFixed(2)), original_amount: Number(amount.toFixed(2)),
+                status: 'Approved', description: `Commission from ${buyer.username} (Level ${level})`,
+                level, sourceUserId: buyer._id, relatedPlanId: plan._id,
+                slot_index: level === 1 ? targetIndex : undefined
+            });
 
-        // 4. Commit to Ledger
-        await Transaction.create({
-            userId: sponsor._id, 
-            userName: sponsor.username, 
-            currency: sponsor.currency,
-            type: 'Commission', 
-            amount: finalAmount, 
-            status: finalStatus,
-            description: holdReason || `Commission from ${buyer.username} (Level ${level})`,
-            level, 
-            sourceUserId: buyer._id, 
-            relatedPlanId: plan._id,
-            slot_index: level === 1 ? targetIndex : undefined,
-            required_plan_id: plan._id,
-            hold_reason: holdReason,
-            unlock_on_upgrade: finalStatus.startsWith('hold_'),
-            originalAmount: baseAmount,
-            originalCurrency: plan.currency
-        });
-
-        if (finalStatus === 'Approved') {
-            sponsor.walletBalance = Number((sponsor.walletBalance + finalAmount).toFixed(2));
+            sponsor.walletBalance = Number((sponsor.walletBalance + amount).toFixed(2));
             await sponsor.save();
         }
 
-        // Stop chain if upline eligibility is required and this sponsor failed
+        // Stop chain if upline eligibility is mandatory and failed
         if (settings.requireUplineEligibility && !isEligible && finalStatus !== 'overflow') break;
         
         currentSponsorName = sponsor.sponsor;
@@ -204,81 +203,51 @@ const distributeCommissions = async (buyer, plan) => {
     }
 };
 
-// @desc    Admin manually upgrades user using held funds
-// @route   POST /api/v1/users/upgrade-from-hold
-export const manualUpgradeFromHold = async (req, res) => {
+export const purchasePlan = async (req, res) => {
     try {
-        const { userId, fromPlanId } = req.body;
-        const user = await User.findById(userId);
-        const sourcePlan = await InvestmentPlan.findById(fromPlanId);
+        const user = await User.findById(req.params.id);
+        const plan = await InvestmentPlan.findById(req.body.planId);
+        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
+        if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient balance' });
         
-        if (!user || !sourcePlan || !sourcePlan.autoUpgrade?.toPlanId) {
-            return res.status(404).json({ success: false, error: 'User, Plan, or Upgrade target not found' });
-        }
-
-        const targetPlan = await InvestmentPlan.findById(sourcePlan.autoUpgrade.toPlanId);
-
-        // Fetch pending hold commissions for this track
-        const heldTxs = await Transaction.find({
-            userId: user._id,
-            status: { $in: ['hold_upgrade', 'hold_slot'] },
-            relatedPlanId: fromPlanId
-        });
-
-        // Mark as Used
-        for (let tx of heldTxs) {
-            tx.status = 'Approved';
-            tx.description = tx.description.replace('Hold', 'Used').replace('Held', 'Used');
-            await tx.save();
-        }
-
-        user.activePlans.push({
-            planId: targetPlan._id,
-            planName: targetPlan.name,
-            price: targetPlan.price,
-            purchaseDate: new Date()
-        });
-        
+        user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
+        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         await user.save();
-        await unlockHeldCommissions(user); // Trigger recursive unlock for other tracks
 
         await Transaction.create({
             userId: user._id, userName: user.username, currency: user.currency,
-            type: 'Plan Purchase', amount: 0, status: 'Approved',
-            description: `Upgrade Activation: ${targetPlan.name} (Using held funds)`
+            type: 'Plan Purchase', amount: -plan.price, status: 'Approved', description: `Purchased ${plan.name} plan`
         });
 
-        await Notification.create({
-            userId: user._id,
-            message: `Congratulations! You have been upgraded to ${targetPlan.name}.`,
-            isPopup: true
-        });
+        // Trigger lossless commission distribution
+        await distributeCommissions(user, plan);
 
-        await createLog('Admin Upgrade Forced', user.username, `Migrated from ${sourcePlan.name} to ${targetPlan.name}`, req.body.adminUsername || 'admin');
+        // Trigger unlock process for upline/self holds
+        await unlockHeldCommissions(user, plan._id);
 
-        res.status(200).json({ success: true, data: user });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
+        res.status(200).json({ success: true, data: { user } });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// @desc    Admin removes a specific user plan instance
-// @route   DELETE /api/v1/users/:id/plans/:planInstanceId
-export const adminRemoveUserPlan = async (req, res) => {
+export const adminActivatePlan = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        const plan = await InvestmentPlan.findById(req.body.planId);
+        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
         
-        // Remove specific plan instance while keeping historical data intact
-        user.activePlans = user.activePlans.filter(p => String(p._id) !== String(req.params.planInstanceId));
+        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         await user.save();
 
-        await createLog('Plan Instance Deleted', user.username, `Admin deleted plan instance ${req.params.planInstanceId}`, 'admin');
-        
-        res.status(200).json({ success: true, data: user });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
+        await Transaction.create({
+            userId: user._id, userName: user.username, currency: user.currency,
+            type: 'Plan Purchase', amount: 0, status: 'Approved', description: `Manual Activation: ${plan.name}`
+        });
+
+        await distributeCommissions(user, plan);
+        await unlockHeldCommissions(user, plan._id);
+
+        res.status(200).json({ success: true, data: { user } });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
 export const getUsers = async (req, res) => {
@@ -353,50 +322,6 @@ export const adjustWallet = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-export const purchasePlan = async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id);
-        const plan = await InvestmentPlan.findById(req.body.planId);
-        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
-        if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient balance' });
-        user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
-        await user.save();
-        
-        const transaction = await Transaction.create({
-            userId: user._id, userName: user.username, currency: user.currency,
-            type: 'Plan Purchase', amount: -plan.price, status: 'Approved', description: `Purchased ${plan.name} plan`
-        });
-
-        // NEW: Check for unlocked commissions BEFORE calculating new ones
-        await unlockHeldCommissions(user);
-
-        await distributeCommissions(user, plan);
-        res.status(200).json({ success: true, data: { user, transaction } });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
-};
-
-export const adminActivatePlan = async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id);
-        const plan = await InvestmentPlan.findById(req.body.planId);
-        if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found' });
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
-        await user.save();
-
-        const transaction = await Transaction.create({
-            userId: user._id, userName: user.username, currency: user.currency,
-            type: 'Plan Purchase', amount: 0, status: 'Approved', description: `Manual Activation: ${plan.name}`
-        });
-
-        // NEW: Unlock commissions
-        await unlockHeldCommissions(user);
-
-        await distributeCommissions(user, plan);
-        res.status(200).json({ success: true, data: { user, transaction } });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
-};
-
 export const adminInitiatePasswordReset = async (req, res) => {
     try {
         const token = randomBytes(20).toString('hex');
@@ -446,4 +371,54 @@ export const bulkUpdateRestrictions = async (req, res) => {
         await User.updateMany({ _id: { $in: targetIds } }, update);
         res.status(200).json({ success: true });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const manualUpgradeFromHold = async (req, res) => {
+    try {
+        const { userId, fromPlanId } = req.body;
+        const user = await User.findById(userId);
+        const sourcePlan = await InvestmentPlan.findById(fromPlanId);
+        
+        if (!user || !sourcePlan || !sourcePlan.autoUpgrade?.toPlanId) {
+            return res.status(404).json({ success: false, error: 'User, Plan, or Upgrade target not found' });
+        }
+
+        const targetPlan = await InvestmentPlan.findById(sourcePlan.autoUpgrade.toPlanId);
+
+        // Mark relevant hold commissions as Approved (Manual Force)
+        await Transaction.updateMany({
+            userId: user._id,
+            status: { $in: ['hold_upgrade', 'hold_slot'] },
+            required_plan_id: fromPlanId
+        }, {
+            status: 'Approved',
+            hold_reason: 'Forced by Admin'
+        });
+
+        user.activePlans.push({
+            planId: targetPlan._id,
+            planName: targetPlan.name,
+            price: targetPlan.price,
+            purchaseDate: new Date()
+        });
+        
+        await user.save();
+        await unlockHeldCommissions(user, targetPlan._id);
+
+        res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const adminRemoveUserPlan = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        user.activePlans = user.activePlans.filter(p => String(p._id) !== String(req.params.planInstanceId));
+        await user.save();
+        res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
 };

@@ -8,12 +8,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import ShareButtons from '../../components/ui/ShareButtons';
 import Modal from '../../components/ui/Modal';
 
-interface GenealogyNode {
-    user: User;
-    children: GenealogyNode[];
-    level: number;
-}
-
 const Referrals: React.FC = () => {
     const { state } = useData();
     const { currentUser, users, transactions, settings, investmentPlans } = state;
@@ -66,7 +60,7 @@ const Referrals: React.FC = () => {
     }, [selectedPlanId, investmentPlans]);
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
-        if (!currentUser) return { earned: 0, held: 0, status: '', slot: null };
+        if (!currentUser) return { earned: 0, held: 0, status: '', slot: null, reason: '', targetPlanName: '' };
         
         const referralComms = transactions.filter(t => 
             t.userId === currentUser._id &&
@@ -75,24 +69,37 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
+        // Find the most relevant transaction for slot/status logic
+        const bestTx = referralComms.find(t => ['Approved', 'hold_slot', 'hold_upgrade'].includes(t.status)) || referralComms[0];
+
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
-        const held = referralComms.filter(t => t.status === 'hold_slot' || t.status === 'hold_upgrade').reduce((sum, t) => sum + t.amount, 0);
-        const bestTx = referralComms[0];
+        const held = referralComms.filter(t => ['hold_slot', 'hold_upgrade'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
         
+        let targetPlanName = '';
+        // If it's held, find what plan the user actually needs
+        if (bestTx && (bestTx.status === 'hold_slot' || bestTx.status === 'hold_upgrade')) {
+            // Check for required_plan_id on transaction (MLM safe engine field)
+            const reqId = (bestTx as any).required_plan_id;
+            if (reqId) {
+                const plan = investmentPlans.find(p => p._id === String(reqId));
+                if (plan) targetPlanName = plan.name;
+            }
+        }
+
         return { 
             earned, 
             held, 
             status: bestTx?.status || '', 
             slot: (bestTx as any)?.slot_index || null,
-            description: bestTx?.description || ''
+            description: bestTx?.description || '',
+            reason: (bestTx as any)?.hold_reason || '',
+            targetPlanName
         };
-    }, [currentUser, transactions]);
+    }, [currentUser, transactions, investmentPlans]);
 
     const { directEarners, indirectEarners, overflowReferrals, heldReferrals, slotStats } = useMemo(() => {
         if (!currentUser) return { directEarners: [], indirectEarners: [], overflowReferrals: [], heldReferrals: [], slotStats: { used: 0, limit: 0 } };
 
-        const allRefs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase());
-        
         const directs: any[] = [];
         const indirects: any[] = [];
         const overflows: any[] = [];
@@ -107,7 +114,7 @@ const Referrals: React.FC = () => {
             if (info.status === 'Approved') {
                 if (isDirect) directs.push({ user: u, info });
                 else indirects.push({ user: u, info });
-            } else if (info.status === 'hold_slot' || info.status === 'hold_upgrade') {
+            } else if (info.status.startsWith('hold_')) {
                 held.push({ user: u, info });
             } else if (info.status === 'overflow') {
                 overflows.push({ user: u, info });
@@ -115,7 +122,7 @@ const Referrals: React.FC = () => {
         });
 
         const limit = selectedPlanDetails?.directReferralLimit || 0;
-        // Slots are consumed by Approved and Held transactions
+        // Slots are reserved by Approved and Held transactions
         const used = directs.length + held.filter(h => h.user.sponsor?.toLowerCase() === currentUser.username.toLowerCase()).length;
 
         return { directEarners: directs, indirectEarners: indirects, overflowReferrals: overflows, heldReferrals: held, slotStats: { used, limit } };
@@ -127,29 +134,46 @@ const Referrals: React.FC = () => {
         const isOverflow = info.status === 'overflow';
 
         return (
-            <div className={`relative bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm transition-all hover:shadow-md ${isHold ? 'border-amber-400 bg-amber-50/5' : isOverflow ? 'border-gray-300 opacity-75' : 'border-gray-200'}`}>
+            <div className={`relative bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm transition-all hover:shadow-md ${isHold ? 'border-amber-400 bg-amber-50/5 ring-1 ring-amber-400/20' : isOverflow ? 'border-gray-300 opacity-75' : 'border-gray-200'}`}>
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${isHold ? 'bg-amber-500' : isOverflow ? 'bg-gray-400' : 'bg-blue-600'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm ${isHold ? 'bg-amber-500' : isOverflow ? 'bg-gray-400' : 'bg-blue-600'}`}>
                             {user.username.charAt(0).toUpperCase()}
                         </div>
                         <div>
                             <h4 className="font-bold text-gray-900 dark:text-white">@{user.username}</h4>
                             <div className="flex gap-2 items-center mt-1">
                                 <Badge status={info.status} />
-                                {info.slot && <span className="text-[10px] font-mono bg-gray-100 dark:bg-gray-700 px-1.5 rounded">Slot #{info.slot}</span>}
+                                {info.slot && <span className="text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded border dark:border-gray-600">Slot #{info.slot}</span>}
                             </div>
                         </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Commission</p>
+                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">COMMISSION</p>
                         <p className={`text-lg font-black ${isHold ? 'text-amber-600' : isOverflow ? 'text-gray-400' : 'text-green-600'}`}>
-                            {formatCurrency(isHold ? info.held : isOverflow ? 0 : info.earned, currentUser?.currency)}
+                            {formatCurrency(isHold ? info.held : (isOverflow ? 0 : info.earned), currentUser?.currency)}
                         </p>
-                        {isHold && <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center justify-end gap-1">🔒 Upgrade Req.</span>}
+                        {isHold && (
+                            <div className="flex flex-col items-end">
+                                <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center justify-end gap-1">
+                                    🔒 UPGRADE REQ.
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
-                {info.description && <p className="mt-3 text-[11px] text-gray-500 italic border-t dark:border-gray-700 pt-2">{info.description}</p>}
+                {(isHold || info.reason || info.description) && (
+                    <div className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 italic border-t dark:border-gray-700 pt-2 flex flex-col gap-1">
+                        <p>
+                            {info.reason || info.description || (info.slot ? `Hold: Slot #${info.slot} reserved for upgrade` : 'Commission held for plan upgrade')}
+                        </p>
+                        {isHold && info.targetPlanName && (
+                            <p className="text-blue-600 dark:text-blue-400 font-bold not-italic">
+                                Action Required: <span className="underline">Upgrade to {info.targetPlanName}</span> to claim these funds.
+                            </p>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -163,7 +187,7 @@ const Referrals: React.FC = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">MLM Earning Network</h1>
                     <p className="text-sm text-gray-500">View your genealogy slots, held escrow, and contribution limits.</p>
                 </div>
-                <div className="flex bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700">
+                <div className="flex bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700 shadow-sm">
                     {uniqueActivePlans.map(plan => (
                         <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${selectedPlanId === plan.planId ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>{plan.planName}</button>
                     ))}
@@ -174,7 +198,7 @@ const Referrals: React.FC = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col md:flex-row">
                     <div className="p-6 bg-gray-50 dark:bg-gray-900/50 md:w-64 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r dark:border-gray-700">
                         <div className="text-3xl font-black text-blue-600 mb-1">{slotStats.used} / {slotStats.limit || '∞'}</div>
-                        <div className="text-[10px] font-bold uppercase text-gray-400 tracking-widest">Occupied Slots</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400 tracking-widest">Reserved Slots</div>
                     </div>
                     <div className="flex-1 p-6">
                         <div className="flex justify-between items-end mb-2">
@@ -184,17 +208,32 @@ const Referrals: React.FC = () => {
                         <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
                             <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all duration-1000" style={{ width: `${slotStats.limit === 0 ? 100 : Math.min(100, (slotStats.used / slotStats.limit) * 100)}%` }}></div>
                         </div>
-                        <p className="mt-3 text-xs text-gray-500">Slots are reserved by active earnings and held commissions. Once slots are full, next direct referrals will trigger <strong className="text-red-500">Overflow</strong> logic.</p>
+                        <p className="mt-3 text-xs text-gray-500 italic">
+                            * Slots are reserved for both <span className="font-bold">Paid</span> and <span className="font-bold text-amber-600">Held</span> commissions.
+                        </p>
                     </div>
                 </div>
             )}
 
             <div className="flex gap-2 border-b dark:border-gray-700 pb-px overflow-x-auto no-scrollbar">
-                {(['commissions', 'held', 'overflow'] as const).map(mode => (
-                    <button key={mode} onClick={() => setViewMode(mode)} className={`px-6 py-3 text-sm font-bold capitalize transition-all border-b-2 ${viewMode === mode ? 'border-blue-600 text-blue-600 bg-blue-50/50 dark:bg-blue-900/10' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                        {mode === 'held' ? `🔒 Escrow (${heldReferrals.length})` : mode === 'overflow' ? `⚠️ Lost Earning (${overflowReferrals.length})` : `Team contributors`}
-                    </button>
-                ))}
+                <button 
+                    onClick={() => setViewMode('commissions')} 
+                    className={`px-6 py-3 text-sm font-bold transition-all border-b-2 ${viewMode === 'commissions' ? 'border-blue-600 text-blue-600 bg-blue-50/50 dark:bg-blue-900/10' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    Active Contributors
+                </button>
+                <button 
+                    onClick={() => setViewMode('held')} 
+                    className={`px-6 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-1 ${viewMode === 'held' ? 'border-amber-600 text-amber-600 bg-amber-50/50 dark:bg-amber-900/10' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    <span className="mb-0.5">🔒</span> Escrow ({heldReferrals.length})
+                </button>
+                <button 
+                    onClick={() => setViewMode('overflow')} 
+                    className={`px-6 py-3 text-sm font-bold transition-all border-b-2 flex items-center gap-1 ${viewMode === 'overflow' ? 'border-red-600 text-red-600 bg-red-50/50 dark:bg-red-900/10' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                >
+                    <span className="mb-0.5">⚠️</span> Missed ({overflowReferrals.length})
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
@@ -202,19 +241,19 @@ const Referrals: React.FC = () => {
                     <>
                         {directEarners.map((d, i) => <ReferralCard key={i} data={d} />)}
                         {indirectEarners.map((d, i) => <ReferralCard key={i} data={d} />)}
-                        {directEarners.length + indirectEarners.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic">No contributors found in this track.</div>}
+                        {directEarners.length + indirectEarners.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic border-2 border-dashed rounded-xl">No active contributors found in this track.</div>}
                     </>
                 )}
                 {viewMode === 'held' && (
                     <>
                         {heldReferrals.map((d, i) => <ReferralCard key={i} data={d} />)}
-                        {heldReferrals.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic">No held commissions. Upgrade to claim potential earnings!</div>}
+                        {heldReferrals.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic border-2 border-dashed rounded-xl">No held commissions. Level up to claim potential earnings!</div>}
                     </>
                 )}
                 {viewMode === 'overflow' && (
                     <>
                         {overflowReferrals.map((d, i) => <ReferralCard key={i} data={d} />)}
-                        {overflowReferrals.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic">No overflow recorded. All your slots were valid at join time.</div>}
+                        {overflowReferrals.length === 0 && <div className="col-span-full py-20 text-center text-gray-500 italic border-2 border-dashed rounded-xl">No missed earnings. You are within your direct slot limits.</div>}
                     </>
                 )}
             </div>
