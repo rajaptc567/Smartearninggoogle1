@@ -41,6 +41,23 @@ const distributeCommissions = async (buyer, plan) => {
         const sponsor = await User.findOne({ username: { $regex: new RegExp(`^${currentSponsorName}$`, 'i') } });
         if (!sponsor || sponsor.status === 'Blocked') break;
 
+        const equivIds = getEquivalentIds(plan._id, settings);
+
+        // --- NEW: Sponsoring Context Determination ---
+        // Find which plan of the sponsor applies to this commission track.
+        // We look for the sponsor's matching active plan with the highest price/limit.
+        let effectiveSponsorPlan = plan; // Default fallback to buyer's plan settings
+        if (sponsor.activePlans && sponsor.activePlans.length > 0) {
+            const matchingActivePlanEntry = sponsor.activePlans
+                .filter(ap => equivIds.has(String(ap.planId)))
+                .sort((a, b) => b.price - a.price)[0];
+            
+            if (matchingActivePlanEntry) {
+                const fullPlanDetails = await InvestmentPlan.findById(matchingActivePlanEntry.planId);
+                if (fullPlanDetails) effectiveSponsorPlan = fullPlanDetails;
+            }
+        }
+
         let status = 'Approved';
         let holdReason = '';
         let isEligible = true;
@@ -50,7 +67,7 @@ const distributeCommissions = async (buyer, plan) => {
             holdReason = 'Account restricted';
         }
 
-        const equivIds = getEquivalentIds(plan._id, settings);
+        // Use purchaser's plan group for match check
         if (isEligible && settings.requirePlanMatchForCommission) {
             const hasMatch = sponsor.activePlans?.some(ap => equivIds.has(String(ap.planId)));
             if (!hasMatch) {
@@ -61,21 +78,23 @@ const distributeCommissions = async (buyer, plan) => {
 
         let currentSlot = 0;
         if (level === 1) {
+            // FIX: Count ALL commissions (Approved, Pending, and Rejected Overflow) 
+            // to correctly track slot occupancy. Status filter removed for count.
             const existingCommsCount = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
                 level: 1,
                 relatedPlanId: { $in: Array.from(equivIds) },
-                status: { $in: ['Approved', 'Pending'] },
                 description: { $not: /Used for Upgrade/i }
             });
             currentSlot = existingCommsCount + 1;
 
-            if (plan.directReferralLimit > 0 && currentSlot > plan.directReferralLimit) {
+            // USE effectiveSponsorPlan.directReferralLimit (Sponsor's tier limit)
+            if (effectiveSponsorPlan.directReferralLimit > 0 && currentSlot > effectiveSponsorPlan.directReferralLimit) {
                 await Transaction.create({
                     userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
                     type: 'Commission', amount: 0, status: 'Rejected',
-                    description: `Overflow: Limit reached for ${plan.name} (Slot #${currentSlot})`,
+                    description: `Overflow: Limit reached for ${effectiveSponsorPlan.name} (Slot #${currentSlot})`,
                     level: 1, sourceUserId: buyer._id, relatedPlanId: plan._id
                 });
                 currentSponsorName = sponsor.sponsor;
@@ -83,18 +102,22 @@ const distributeCommissions = async (buyer, plan) => {
                 continue;
             }
 
-            if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
+            // USE effectiveSponsorPlan.holdPosition (Sponsor's strategy)
+            if (effectiveSponsorPlan.holdPosition?.enabled && effectiveSponsorPlan.holdPosition.slots.includes(currentSlot)) {
                 status = 'Pending';
                 holdReason = `Hold Commission: Slot #${currentSlot} Reserved for Auto-Upgrade`;
             }
         }
 
+        // Use effectiveSponsorPlan config for commission value determination
         const commConfig = level === 1 
-            ? plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)]
-            : plan.indirectCommissions[level - 2];
+            ? effectiveSponsorPlan.directCommissions[Math.min(currentSlot - 1, effectiveSponsorPlan.directCommissions.length - 1)]
+            : effectiveSponsorPlan.indirectCommissions[level - 2];
 
         if (commConfig) {
+            // Commission amount is based on what the BUYER paid (plan.price)
             let amount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
+            
             if (sponsor.currency !== plan.currency) {
                 const rates = settings.exchangeRates;
                 amount = (amount / (rates[plan.currency] || 1)) * (rates[sponsor.currency] || 1);

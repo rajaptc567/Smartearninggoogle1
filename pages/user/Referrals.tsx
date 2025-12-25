@@ -227,11 +227,12 @@ const Referrals: React.FC = () => {
         if (!currentUser || !selectedPlanDetails) return { used: 0, limit: 0 };
         const limit = selectedPlanDetails.directReferralLimit || 0;
         
-        // Sync slot count logic with the member list logic (Level 1 Earners + Hold Positions)
-        const used = directEarners.length;
+        // FIX: Include overflow referrals in the 'used' count for the progress bar.
+        // This ensures the header stats (e.g. 5/6 used) correctly reflect all slots used in that track.
+        const used = directEarners.length + overflowReferrals.length;
 
         return { used, limit };
-    }, [currentUser, selectedPlanDetails, directEarners]);
+    }, [currentUser, selectedPlanDetails, directEarners, overflowReferrals]);
 
     const heldCommissionsData = useMemo(() => {
         if (!currentUser || !selectedPlanId) return { referrals: [], count: 0, stats: new Map() };
@@ -347,7 +348,7 @@ const Referrals: React.FC = () => {
         const comms = plan.directCommissions;
         if (!comms || comms.length === 0) return 'None';
         let maxVal = 0;
-        let maxType = 'percentage';
+        let maxType: 'percentage' | 'fixed' = 'percentage';
         comms.forEach(c => {
             if (c.value > maxVal) {
                 maxVal = c.value;
