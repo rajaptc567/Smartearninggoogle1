@@ -29,7 +29,7 @@ const getEquivalentIds = (planId, settings) => {
     return ids;
 };
 
-// Helper to calculate and distribute commissions
+// @desc    Distribute MLM Commissions with Slot-Based Hold/Overflow Logic
 const distributeCommissions = async (buyer, plan) => {
     const settings = await Setting.getSettings();
     let currentSponsorName = buyer.sponsor;
@@ -44,41 +44,43 @@ const distributeCommissions = async (buyer, plan) => {
         let status = 'Approved';
         let currentSlot = 0;
 
-        // Eligibility Checks
+        // 1. ELIGIBILITY CHECKS
         if (sponsor.restrictions?.earning) {
             isEligible = false;
-            holdReason = 'Account Restricted';
+            holdReason = 'Account restricted by Admin';
         }
 
         if (isEligible && settings.requireActivePlanForCommission && (!sponsor.activePlans || sponsor.activePlans.length === 0)) {
             isEligible = false;
-            holdReason = 'No Active Plan';
+            holdReason = 'No active plan found';
         }
 
+        const equivIds = getEquivalentIds(plan._id, settings);
         if (isEligible && settings.requirePlanMatchForCommission) {
-            const equivIds = getEquivalentIds(plan._id, settings);
             const hasMatch = sponsor.activePlans?.some(ap => equivIds.has(String(ap.planId)));
             if (!hasMatch) {
                 isEligible = false;
-                holdReason = 'Plan Mismatch';
+                holdReason = 'Plan mismatch: You must own this plan track';
             }
         }
 
-        let commissionConfig = null;
+        // 2. SLOT CALCULATION (LEVEL 1 ONLY)
         if (level === 1) {
-            // Count total successful/held commissions on this equivalent track to find the Slot #
-            const equivIds = getEquivalentIds(plan._id, settings);
+            // CRITICAL: Count only transactions that occupy a slot (Approved or Pending-Hold)
+            // Exclude Rejected/Overflow/Already Used for Upgrade
             const existingCommsCount = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
                 level: 1,
-                relatedPlanId: { $in: Array.from(equivIds) }
+                relatedPlanId: { $in: Array.from(equivIds) },
+                status: { $in: ['Approved', 'Pending'] },
+                description: { $not: /Used for Upgrade/ } 
             });
 
             currentSlot = existingCommsCount + 1;
             const limit = plan.directReferralLimit || 0;
 
-            // OVERFLOW LOGIC
+            // 3. OVERFLOW LOGIC
             if (limit > 0 && currentSlot > limit) {
                 if (plan.overflowEnabled) {
                     await Transaction.create({
@@ -93,40 +95,54 @@ const distributeCommissions = async (buyer, plan) => {
                         sourceUserId: buyer._id,
                         relatedPlanId: plan._id
                     });
+                    
+                    await Notification.create({
+                        userId: sponsor._id,
+                        message: `Limit reached! You missed a commission from @${buyer.username} because your ${plan.name} is full.`
+                    });
                 }
+                // Break the chain for this level but allow chain to continue to upline if applicable
                 currentSponsorName = sponsor.sponsor;
                 level++;
                 continue;
             }
 
-            // HOLD POSITION LOGIC
+            // 4. HOLD POSITION LOGIC (UPGRADE FUND)
             if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
                 status = 'Pending';
                 holdReason = `Hold Commission: Slot #${currentSlot} Reserved for Auto-Upgrade`;
+                
+                await Notification.create({
+                    userId: sponsor._id,
+                    message: `Your commission for Slot #${currentSlot} has been held for your ${plan.name} upgrade fund.`
+                });
             }
-
-            commissionConfig = plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)];
-        } else {
-            commissionConfig = plan.indirectCommissions[level - 2];
         }
+
+        // 5. COMMISSION CALCULATION
+        let commissionConfig = level === 1 
+            ? plan.directCommissions[Math.min(currentSlot - 1, plan.directCommissions.length - 1)]
+            : plan.indirectCommissions[level - 2];
 
         if (commissionConfig) {
             let commissionAmount = commissionConfig.type === 'percentage' 
                 ? (plan.price * commissionConfig.value) / 100 
                 : commissionConfig.value;
 
+            // Handle Cross-Currency
             if (sponsor.currency !== plan.currency) {
                 const rateFrom = settings.exchangeRates[plan.currency] || 1;
                 const rateTo = settings.exchangeRates[sponsor.currency] || 1;
                 commissionAmount = (commissionAmount / rateFrom) * rateTo;
             }
 
-            if (!isEligible && !holdReason) {
+            // Forced Pending for Eligibility
+            if (!isEligible && status !== 'Pending') {
                 status = 'Pending';
-                holdReason = `Held: Eligibility Criteria Not Met (Level ${level})`;
+                holdReason = `Held: Eligibility Criteria Not Met (${holdReason})`;
             }
 
-            const desc = holdReason || `Commission from ${buyer.username} (Level ${level}${level === 1 ? `, Slot #${currentSlot}` : ''})`;
+            const finalDesc = holdReason || `Commission from ${buyer.username} (Level ${level}${level === 1 ? `, Slot #${currentSlot}` : ''})`;
 
             await Transaction.create({
                 userId: sponsor._id,
@@ -135,7 +151,7 @@ const distributeCommissions = async (buyer, plan) => {
                 type: 'Commission',
                 amount: Number(commissionAmount.toFixed(2)),
                 status,
-                description: desc,
+                description: finalDesc,
                 level,
                 sourceUserId: buyer._id,
                 relatedPlanId: plan._id,
@@ -149,6 +165,7 @@ const distributeCommissions = async (buyer, plan) => {
             }
         }
 
+        // Pass-through logic: stop if upline is ineligible and chain is restricted
         if (settings.requireUplineEligibility && !isEligible) break;
 
         currentSponsorName = sponsor.sponsor;
@@ -156,6 +173,7 @@ const distributeCommissions = async (buyer, plan) => {
     }
 };
 
+// @desc    Admin-forced Upgrade using Held Commissions
 export const manualUpgradeFromHold = async (req, res) => {
     try {
         const { userId, fromPlanId } = req.body;
@@ -167,23 +185,23 @@ export const manualUpgradeFromHold = async (req, res) => {
         }
 
         if (!sourcePlan.autoUpgrade?.enabled || !sourcePlan.autoUpgrade?.toPlanId) {
-            return res.status(400).json({ success: false, error: 'This plan is not configured for auto-upgrade.' });
+            return res.status(400).json({ success: false, error: 'This plan track is not configured for automatic upgrades.' });
         }
 
         const targetPlan = await InvestmentPlan.findById(sourcePlan.autoUpgrade.toPlanId);
-        if (!targetPlan) return res.status(404).json({ success: false, error: 'Target upgrade plan not found.' });
+        if (!targetPlan) return res.status(404).json({ success: false, error: 'Target upgrade plan missing.' });
 
-        // 1. Gather all pending 'Hold' commissions for this user and plan
+        // 1. Identify all 'Hold' commissions for this specific user/track
         const heldTransactions = await Transaction.find({
             userId: user._id,
             status: 'Pending',
             relatedPlanId: fromPlanId,
-            description: { $regex: /Hold Commission/ }
+            description: { $regex: /Hold Commission/i }
         });
 
-        const totalHeld = heldTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        const totalValue = heldTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
-        // 2. Activate Plan
+        // 2. Perform Migration
         user.activePlans.push({
             planId: targetPlan._id,
             planName: targetPlan.name,
@@ -191,24 +209,24 @@ export const manualUpgradeFromHold = async (req, res) => {
             purchaseDate: new Date()
         });
 
-        // 3. Update transactions to show they were used
+        // 3. Mark Hold items as consumed
         for (const tx of heldTransactions) {
             tx.status = 'Approved';
-            tx.description = tx.description.replace('Hold Commission:', 'Used for Upgrade:');
+            tx.description = tx.description.replace(/Hold Commission:/i, 'Used for Upgrade:');
             await tx.save();
         }
 
         await user.save();
 
-        // 4. Create Activation Record
-        const upgradeTx = await Transaction.create({
+        // 4. Record $0 Activation for History Audit
+        const upgradeAuditTx = await Transaction.create({
             userId: user._id,
             userName: user.username,
             currency: user.currency,
             type: 'Plan Purchase',
             amount: 0,
             status: 'Approved',
-            description: `Upgrade Activation: ${targetPlan.name} (Using ${user.currency}${totalHeld.toFixed(2)} held funds)`
+            description: `Upgrade Activation: ${targetPlan.name} (Using ${user.currency}${totalValue.toFixed(2)} held funds)`
         });
 
         await Notification.create({
@@ -217,9 +235,9 @@ export const manualUpgradeFromHold = async (req, res) => {
             isPopup: true
         });
 
-        await createLog('Manual Upgrade Triggered', user.username, `Upgraded from ${sourcePlan.name} to ${targetPlan.name}`, req.body.adminUsername || 'admin');
+        await createLog('Admin Upgrade Forced', user.username, `Migrated from ${sourcePlan.name} to ${targetPlan.name}`, req.body.adminUsername || 'admin');
 
-        res.status(200).json({ success: true, data: { user, transaction: upgradeTx } });
+        res.status(200).json({ success: true, data: { user, transaction: upgradeAuditTx } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

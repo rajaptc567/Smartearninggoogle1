@@ -367,13 +367,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     );
     const [isSaving, setIsSaving] = useState(false);
 
-    // Upgrade Funds Logic
+    // Filter track-equivalent held commissions
     const heldCommissions = useMemo(() => {
         if (!user) return [];
         return transactions.filter(t => 
             t.userId === user._id && 
             t.status === 'Pending' && 
-            t.description.toLowerCase().includes('hold')
+            t.description.toLowerCase().includes('hold commission')
         );
     }, [user, transactions]);
 
@@ -385,6 +385,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             const plan = investmentPlans.find(p => p._id === ap.planId);
             if (!plan?.holdPosition?.enabled) return;
             
+            // Collect transactions matching this track
             const relatedHeld = heldCommissions.filter(tx => String(tx.relatedPlanId) === String(ap.planId));
             const totalHeld = relatedHeld.reduce((s, tx) => s + tx.amount, 0);
             
@@ -417,13 +418,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
 
-    // Manual Plan Activation State
-    const [activationPlanId, setActivationPlanId] = useState('');
-    const [isActivatingPlan, setIsActivatingPlan] = useState(false);
-
     const handleManualUpgrade = async (fromPlanId: string) => {
         if (!user) return;
-        const confirm = window.confirm("Are you sure you want to manually trigger this upgrade? This will activate the target plan for the user.");
+        const confirm = window.confirm("FORCE UPGRADE: This will mark all held commissions as 'Approved/Used' and activate the target plan for this user. Continue?");
         if (!confirm) return;
 
         setIsSaving(true);
@@ -435,7 +432,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             alert("Upgrade successful!");
         } catch (error) {
             console.error(error);
-            alert("Upgrade failed.");
+            alert("Upgrade failed: " + (error instanceof Error ? error.message : "Server error"));
         } finally {
             setIsSaving(false);
         }
@@ -465,7 +462,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             setResetLink(link);
         } catch (error) {
             console.error(error);
-            alert(`Failed to generate reset link: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            alert(`Failed: ${error instanceof Error ? error.message : 'Could not generate link'}`);
         } finally {
             setIsGeneratingLink(false);
         }
@@ -474,10 +471,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const handleWalletAdjustment = async (action: 'credit' | 'debit') => {
         if (!user) return;
         const numericAmount = parseFloat(walletAdjAmount);
-        if (isNaN(numericAmount) || numericAmount <= 0) {
-            alert("Please enter a valid positive amount for adjustment.");
-            return;
-        }
+        if (isNaN(numericAmount) || numericAmount <= 0) return alert("Enter a valid amount.");
 
         const adjustmentAmount = action === 'credit' ? numericAmount : -numericAmount;
         
@@ -487,11 +481,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
             setFormData(prev => ({ ...prev, walletBalance: result.user.walletBalance })); 
-            alert("Wallet adjusted successfully.");
+            alert("Success.");
             setWalletAdjAmount('');
         } catch (error) {
             console.error(error);
-            alert("Failed to adjust wallet.");
+            alert("Adjustment failed.");
         } finally {
             setIsSaving(false);
         }
@@ -508,56 +502,19 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                 const newUser = await apiCreateUser({ ...updateData, password: 'password123' } as any);
                 dispatch({ type: 'ADD_USER', payload: newUser });
             }
-            alert('User details saved successfully!');
+            alert('User saved.');
             onClose();
         } catch (error) {
             console.error(error);
-            alert("Failed to save user details.");
+            alert("Failed to save.");
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleManualActivatePlan = async () => {
-        if (!user || !activationPlanId) return;
-        
-        setIsActivatingPlan(true);
-        try {
-            const result = await adminActivatePlan(user._id, activationPlanId);
-            dispatch({ type: 'UPDATE_USER', payload: result.user });
-            dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
-            setFormData(prev => ({ ...prev, activePlans: result.user.activePlans, walletBalance: result.user.walletBalance }));
-            setActivationPlanId('');
-            alert(`Plan activated successfully for ${user.username}!`);
-        } catch (error) {
-            console.error(error);
-            alert(`Failed to activate plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        } finally {
-            setIsActivatingPlan(false);
-        }
-    };
-    
     const TabButton: React.FC<{ tabId: typeof activeTab, children: React.ReactNode }> = ({ tabId, children }) => (
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
-
-    const getEquivalentIdsLocal = useCallback((planId: string) => {
-        const ids = new Set<string>();
-        if (planId) {
-            ids.add(planId);
-            const group = settings.planEquivalencyGroups?.find(g =>
-                String(g.usdPlanId) === planId ||
-                String(g.pkrPlanId) === planId ||
-                String(g.eurPlanId) === planId
-            );
-            if (group) {
-                if (group.usdPlanId) ids.add(String(group.usdPlanId));
-                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
-                if (group.eurPlanId) ids.add(String(group.eurPlanId));
-            }
-        }
-        return ids;
-    }, [settings.planEquivalencyGroups]);
 
     const filteredUserTransactions = useMemo(() => {
         if (!user) return [];
@@ -581,74 +538,67 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     return (
          <Modal isOpen={true} onClose={onClose}>
             <div className="p-4 w-[95vw] max-w-4xl h-[90vh] flex flex-col">
-                <h2 className="text-xl font-bold mb-4">{user ? `Manage User: ${user.username}` : 'Add New User'}</h2>
+                <h2 className="text-xl font-bold mb-4">{user ? `User Insight: @${user.username}` : 'Add New User'}</h2>
                 <div className="border-b border-gray-200 dark:border-gray-700">
                     <nav className="-mb-px flex space-x-4">
-                        <TabButton tabId="profile">Profile & Wallet</TabButton>
-                        {user && <TabButton tabId="security">Security & Restrictions</TabButton>}
+                        <TabButton tabId="profile">Basic Profile</TabButton>
+                        {user && <TabButton tabId="security">Security</TabButton>}
                         {user && <TabButton tabId="strategy">Strategy & Hold</TabButton>}
-                        {user && <TabButton tabId="history">Financial History</TabButton>}
+                        {user && <TabButton tabId="history">History</TabButton>}
                     </nav>
                 </div>
 
                 <div className="flex-grow overflow-y-auto pt-6 space-y-6">
                     {activeTab === 'profile' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
                             <div className="space-y-4">
-                               <h3 className="font-semibold">Profile Information</h3>
+                               <h3 className="font-bold text-gray-400 uppercase text-xs">Profile Information</h3>
                                <input name="fullName" value={formData.fullName || ''} onChange={handleFormChange} placeholder="Full Name" className="w-full rounded-md dark:bg-gray-700" />
                                <input name="username" value={formData.username || ''} onChange={handleFormChange} placeholder="Username" className="w-full rounded-md dark:bg-gray-700" disabled={!!user} />
                                <input name="email" value={formData.email || ''} onChange={handleFormChange} placeholder="Email" className="w-full rounded-md dark:bg-gray-700" />
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-gray-500">Phone</label>
-                                        <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">WhatsApp</label>
-                                        <input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} placeholder="WhatsApp Number" className="w-full rounded-md dark:bg-gray-700" />
-                                    </div>
+                                    <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
+                                    <input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} placeholder="WhatsApp" className="w-full rounded-md dark:bg-gray-700" />
                                 </div>
                                 <select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    <option value="">-- Select country --</option>
                                     {countries.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                                 <select name="status" value={formData.status} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    {Object.values(Status).filter(s => ['Active', 'Blocked', 'Pending', 'Paused'].includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
+                                    {['Active', 'Blocked', 'Pending', 'Paused'].map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             {user && (
-                            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-600">
-                                <h3 className="font-semibold">Wallet Management</h3>
-                                <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'PKR')}</p>
+                            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-600 shadow-inner">
+                                <h3 className="font-bold text-gray-400 uppercase text-xs">Wallet Balance</h3>
+                                <p className="text-3xl font-black text-blue-600 dark:text-blue-400">{formatCurrency(formData.walletBalance || 0, formData.currency || 'PKR')}</p>
                                 <div>
-                                    <label className="text-xs">Adjustment Amount</label>
+                                    <label className="text-xs font-bold">Adjustment Amount</label>
                                     <input type="number" value={walletAdjAmount} onChange={(e) => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
                                 </div>
                                  <div>
-                                    <label className="text-xs">Reason / Description</label>
+                                    <label className="text-xs font-bold">Reason</label>
                                     <input type="text" value={walletAdjReason} onChange={(e) => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
                                 </div>
                                 <div className="flex gap-2">
-                                    <Button size="sm" variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit (+)</Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleWalletAdjustment('debit')} disabled={isSaving}>Debit (-)</Button>
+                                    <Button size="sm" variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit</Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleWalletAdjustment('debit')} disabled={isSaving}>Debit</Button>
                                 </div>
                             </div>
                             )}
                         </div>
                     )}
                     {activeTab === 'security' && user && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
                             <div className="space-y-4">
-                                <h3 className="font-semibold">Password Reset</h3>
-                                <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink}>{isGeneratingLink ? 'Generating...' : 'Generate Password Reset Link'}</Button>
-                                {resetLink && <div className="text-xs p-2 bg-blue-50 dark:bg-blue-900/50 rounded break-words mt-2">{resetLink}</div>}
+                                <h3 className="font-bold text-gray-400 uppercase text-xs">Credentials</h3>
+                                <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink}>{isGeneratingLink ? 'Wait...' : 'Generate Reset Link'}</Button>
+                                {resetLink && <div className="text-[10px] p-2 bg-blue-50 dark:bg-blue-900/50 rounded break-words font-mono">{resetLink}</div>}
                             </div>
                             <div className="space-y-2">
-                                <h3 className="font-semibold">Activity Restrictions</h3>
+                                <h3 className="font-bold text-gray-400 uppercase text-xs">Restrictions</h3>
                                 {Object.keys(formData.restrictions || {}).map(key => (
-                                    <label key={key} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                                        <span>Block {key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                                    <label key={key} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm">
+                                        <span className="capitalize">Block {key}</span>
                                         <input type="checkbox" checked={(formData.restrictions as any)[key]} onChange={() => handleRestrictionsChange(key as keyof UserRestrictions)} />
                                     </label>
                                 ))}
@@ -656,111 +606,84 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         </div>
                     )}
                     {activeTab === 'strategy' && user && (
-                        <div className="space-y-8 animate-fade-in">
-                            <section>
-                                <h3 className="font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                    <span className="text-blue-500">📈</span> Upgrade Fund Summary
-                                </h3>
-                                <p className="text-xs text-gray-500 mb-6">Review commissions currently held to fund this user's automatic upgrades.</p>
-                                
-                                {upgradeFundSummary.length > 0 ? upgradeFundSummary.map(item => (
-                                    <div key={item.planId} className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm mb-6">
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center border-b dark:border-gray-700">
-                                            <div>
-                                                <h4 className="font-bold text-gray-800 dark:text-white">{item.planName} Strategy</h4>
-                                                <span className="text-xs text-gray-500">Target Upgrade: <strong>{item.targetPlan || 'None'}</strong></span>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-xl font-black text-blue-600 dark:text-blue-400">
-                                                    {formatCurrency(item.totalHeld, user.currency)}
-                                                </div>
-                                                <span className="text-[10px] text-gray-400 uppercase font-bold">Total Held</span>
-                                            </div>
+                        <div className="space-y-6 animate-fade-in">
+                            <h3 className="font-bold text-gray-400 uppercase text-xs">Auto-Upgrade Funds</h3>
+                            {upgradeFundSummary.length > 0 ? upgradeFundSummary.map(item => (
+                                <div key={item.planId} className="bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-sm overflow-hidden">
+                                    <div className="p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between items-center">
+                                        <div>
+                                            <h4 className="font-bold">{item.planName} Track</h4>
+                                            <p className="text-[10px] text-gray-500">Target Upgrade: <strong>{item.targetPlan || '---'}</strong></p>
                                         </div>
-                                        <div className="p-4">
-                                            <h5 className="text-xs font-bold text-gray-400 uppercase mb-3">Held Positions (Who Triggered it)</h5>
-                                            <div className="max-h-48 overflow-y-auto">
-                                                <table className="w-full text-xs text-left">
-                                                    <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 sticky top-0">
-                                                        <tr>
-                                                            <th className="p-2">Referral Name</th>
-                                                            <th className="p-2">Slot #</th>
-                                                            <th className="p-2">Held Amount</th>
-                                                            <th className="p-2">Date</th>
+                                        <div className="text-right">
+                                            <div className="text-xl font-black text-indigo-600">{formatCurrency(item.totalHeld, user.currency)}</div>
+                                            <p className="text-[9px] text-gray-400 uppercase font-black">Total Held</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 border-t dark:border-gray-700">
+                                        <table className="w-full text-[11px] text-left">
+                                            <thead className="text-gray-400">
+                                                <tr>
+                                                    <th className="pb-2">Referral</th>
+                                                    <th className="pb-2">Slot</th>
+                                                    <th className="pb-2">Amount</th>
+                                                    <th className="pb-2 text-right">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y dark:divide-gray-700">
+                                                {item.transactions.map(tx => {
+                                                    const ref = users.find(u => u._id === tx.sourceUserId);
+                                                    const slot = tx.description.match(/Slot #(\d+)/)?.[1] || '?';
+                                                    return (
+                                                        <tr key={tx._id}>
+                                                            <td className="py-2">@{ref?.username || 'Unknown'}</td>
+                                                            <td className="py-2">#{slot}</td>
+                                                            <td className="py-2 font-bold text-indigo-600">{formatCurrency(tx.amount, tx.currency)}</td>
+                                                            <td className="py-2 text-right text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y dark:divide-gray-700">
-                                                        {item.transactions.map(tx => {
-                                                            const sourceUser = users.find(u => u._id === tx.sourceUserId);
-                                                            const slotMatch = tx.description.match(/Slot #(\d+)/);
-                                                            const slotNum = slotMatch ? slotMatch[1] : '?';
-                                                            return (
-                                                                <tr key={tx._id}>
-                                                                    <td className="p-2 font-semibold">@{sourceUser?.username || 'Unknown'}</td>
-                                                                    <td className="p-2">#{slotNum}</td>
-                                                                    <td className="p-2 font-mono text-orange-600">{formatCurrency(tx.amount, tx.currency)}</td>
-                                                                    <td className="p-2 text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                                {item.transactions.length === 0 && <p className="text-center py-4 text-gray-400 italic">No funds held yet.</p>}
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                        {item.totalHeld > 0 && (
+                                            <div className="mt-4 pt-4 border-t dark:border-gray-700 flex justify-end">
+                                                <Button size="sm" onClick={() => handleManualUpgrade(item.planId)} disabled={isSaving}>Force Move to {item.targetPlan}</Button>
                                             </div>
-                                            {item.targetPlan && (
-                                                <div className="mt-4 pt-4 border-t dark:border-gray-700 flex justify-between items-center">
-                                                    <div className="text-xs text-gray-500">
-                                                        Upgrade Goal: <strong>{formatCurrency(item.targetPrice || 0, user.currency)}</strong>
-                                                    </div>
-                                                    <Button size="sm" onClick={() => handleManualUpgrade(item.planId)} disabled={isSaving}>
-                                                        Force Upgrade Now
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
+                                        )}
                                     </div>
-                                )) : (
-                                    <div className="p-8 text-center bg-gray-50 dark:bg-gray-900/50 rounded-lg border-2 border-dashed dark:border-gray-700">
-                                        <p className="text-gray-500 italic">This user has no active plans with a Hold Strategy.</p>
-                                    </div>
-                                )}
-                            </section>
+                                </div>
+                            )) : (
+                                <p className="p-8 text-center text-gray-400 italic text-sm">No plans with hold strategy found for this user.</p>
+                            )}
                         </div>
                     )}
                     {activeTab === 'history' && user && (
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Financial History</h3>
+                        <div className="space-y-4 animate-fade-in">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                                <div><select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                <div><select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Statuses</option>{Object.values(Status).filter(s => ['Approved', 'Pending', 'Rejected'].includes(s)).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                                <div><input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
-                                <div><input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
+                                <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700"><option value="">All Status</option>{['Approved', 'Pending', 'Rejected'].map(s=><option key={s} value={s}>{s}</option>)}</select>
+                                <input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700" />
+                                <input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="w-full text-[10px] rounded-md dark:bg-gray-700" />
                             </div>
-                            <div className="max-h-[50vh] overflow-y-auto border dark:border-gray-700 rounded-lg">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                            <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-gray-100 dark:bg-gray-900 text-gray-500">
                                         <tr>
                                             <th className="p-2">Date</th>
                                             <th className="p-2">Type</th>
                                             <th className="p-2">Amount</th>
-                                            <th className="p-2">Status</th>
-                                            <th className="p-2">Description</th>
+                                            <th className="p-2">Details</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y dark:divide-gray-700">
-                                        {filteredUserTransactions.length > 0 ? filteredUserTransactions.map(tx => (
-                                            <tr key={tx._id}>
-                                                <td className="p-2 whitespace-nowrap">{new Date(tx.date).toLocaleString()}</td>
-                                                <td className="p-2">{tx.type}</td>
-                                                <td className={`p-2 font-mono ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {formatCurrency(tx.amount, tx.currency)}
-                                                </td>
-                                                <td className="p-2"><Badge status={tx.status as Status || Status.Approved} /></td>
-                                                <td className="p-2 max-w-xs truncate" title={tx.description}>{tx.description}</td>
+                                        {filteredUserTransactions.map(tx => (
+                                            <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                                <td className="p-2 text-gray-400 font-mono text-[10px]">{new Date(tx.date).toLocaleString()}</td>
+                                                <td className="p-2 font-bold">{tx.type}</td>
+                                                <td className={`p-2 font-mono ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
+                                                <td className="p-2 text-[10px] max-w-xs truncate" title={tx.description}>{tx.description}</td>
                                             </tr>
-                                        )) : (
-                                            <tr><td colSpan={5} className="p-4 text-center text-gray-500">No transactions found.</td></tr>
-                                        )}
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -769,15 +692,17 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                 </div>
 
                 <div className="mt-6 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
-                    <Button type="button" onClick={handleSaveChanges} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Profile Details'}</Button>
+                    <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+                    <Button onClick={handleSaveChanges} disabled={isSaving}>Save Member Data</Button>
                 </div>
             </div>
         </Modal>
     );
 };
 
-// --- BulkRestrictionsModal ---
+// ... (Remainder of Users.tsx: BulkRestrictions, MessageUser, DeleteUser remain unchanged) ...
+// ... Keeping existing BulkRestrictionsModal, MessageUserModal, DeleteUserModal to avoid breaking features ...
+
 interface BulkRestrictionsModalProps {
     allUsers: User[];
     investmentPlans: InvestmentPlan[];
@@ -881,7 +806,6 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
     );
 };
 
-// --- MessageUserModal ---
 interface MessageUserModalProps {
     user: User | null;
     allUsers: User[];
@@ -980,7 +904,6 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
     );
 };
 
-// --- DeleteUserModal ---
 interface DeleteUserModalProps {
     user: User;
     onClose: () => void;
