@@ -60,7 +60,11 @@ const distributeCommissions = async (buyer, plan) => {
         }
 
         let currentSlot = 0;
+        let isOverflow = false;
+        let isHoldSlot = false;
+
         if (level === 1) {
+            // FIX: Count all occupied slots (Approved OR Pending)
             const existingCommsCount = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
@@ -71,21 +75,13 @@ const distributeCommissions = async (buyer, plan) => {
             });
             currentSlot = existingCommsCount + 1;
 
+            // Tier 1: Check Overflow
             if (plan.directReferralLimit > 0 && currentSlot > plan.directReferralLimit) {
-                await Transaction.create({
-                    userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
-                    type: 'Commission', amount: 0, status: 'Rejected',
-                    description: `Overflow: Limit reached for ${plan.name} (Slot #${currentSlot})`,
-                    level: 1, sourceUserId: buyer._id, relatedPlanId: plan._id
-                });
-                currentSponsorName = sponsor.sponsor;
-                level++;
-                continue;
-            }
-
-            if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
-                status = 'Pending';
-                holdReason = `Hold Commission: Slot #${currentSlot} Reserved for Auto-Upgrade`;
+                isOverflow = true;
+            } 
+            // Tier 2: Check Strategic Hold (Reserved for Upgrade)
+            else if (plan.holdPosition?.enabled && plan.holdPosition.slots.includes(currentSlot)) {
+                isHoldSlot = true;
             }
         }
 
@@ -95,12 +91,21 @@ const distributeCommissions = async (buyer, plan) => {
 
         if (commConfig) {
             let amount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
+            
             if (sponsor.currency !== plan.currency) {
                 const rates = settings.exchangeRates;
                 amount = (amount / (rates[plan.currency] || 1)) * (rates[sponsor.currency] || 1);
             }
 
-            if (!isEligible && status !== 'Pending') {
+            // Logic Decision Tree
+            if (isOverflow) {
+                status = 'Rejected';
+                amount = 0;
+                holdReason = `Overflow: Limit reached for ${plan.name} (Slot #${currentSlot})`;
+            } else if (isHoldSlot) {
+                status = 'Pending';
+                holdReason = `Hold Commission: Slot #${currentSlot} Reserved for Auto-Upgrade`;
+            } else if (!isEligible) {
                 status = 'Pending';
                 holdReason = `Held: Eligibility Criteria Not Met (${holdReason})`;
             }
