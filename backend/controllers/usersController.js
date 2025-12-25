@@ -13,7 +13,7 @@ import Transfer from '../models/Transfer.js';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
-// Helper to get equivalent plan IDs
+// Helper to get all IDs in the same equivalency group
 const getEquivalentIds = (planId, settings) => {
     const ids = new Set([String(planId)]);
     if (settings.planEquivalencyGroups) {
@@ -31,7 +31,7 @@ const getEquivalentIds = (planId, settings) => {
     return ids;
 };
 
-// @desc    Distribute MLM Commissions with Slot-Based Logic
+// @desc    Distribute MLM Commissions with Refined Audit Logic
 const distributeCommissions = async (buyer, plan) => {
     const settings = await Setting.getSettings();
     let currentSponsorName = buyer.sponsor;
@@ -41,20 +41,19 @@ const distributeCommissions = async (buyer, plan) => {
         const sponsor = await User.findOne({ username: { $regex: new RegExp(`^${currentSponsorName}$`, 'i') } });
         if (!sponsor || sponsor.status === 'Blocked') break;
 
-        const equivIds = getEquivalentIds(plan._id, settings);
+        const trackIds = getEquivalentIds(plan._id, settings);
 
-        // --- NEW: Sponsoring Context Determination ---
-        // Find which plan of the sponsor applies to this commission track.
-        // We look for the sponsor's matching active plan with the highest price/limit.
-        let effectiveSponsorPlan = plan; // Default fallback to buyer's plan settings
+        // 1. Identify the Sponsor's authoritative plan for this track
+        // We pick the sponsor's matching plan with the highest price/limit to avoid false overflows
+        let sponsorPlanTrack = plan; // Fallback to buyer's plan settings if sponsor has no match
         if (sponsor.activePlans && sponsor.activePlans.length > 0) {
             const matchingActivePlanEntry = sponsor.activePlans
-                .filter(ap => equivIds.has(String(ap.planId)))
+                .filter(ap => trackIds.has(String(ap.planId)))
                 .sort((a, b) => b.price - a.price)[0];
             
             if (matchingActivePlanEntry) {
-                const fullPlanDetails = await InvestmentPlan.findById(matchingActivePlanEntry.planId);
-                if (fullPlanDetails) effectiveSponsorPlan = fullPlanDetails;
+                const fullDetails = await InvestmentPlan.findById(matchingActivePlanEntry.planId);
+                if (fullDetails) sponsorPlanTrack = fullDetails;
             }
         }
 
@@ -62,86 +61,87 @@ const distributeCommissions = async (buyer, plan) => {
         let holdReason = '';
         let isEligible = true;
 
-        if (sponsor.restrictions?.earning) {
-            isEligible = false;
-            holdReason = 'Account restricted';
-        }
-
-        // Use purchaser's plan group for match check
-        if (isEligible && settings.requirePlanMatchForCommission) {
-            const hasMatch = sponsor.activePlans?.some(ap => equivIds.has(String(ap.planId)));
-            if (!hasMatch) {
-                isEligible = false;
-                holdReason = 'Plan mismatch';
-            }
-        }
-
+        // 2. Determine Slot Index
+        // Count ALL transactions (Approved, Pending, Rejected) to maintain correct slot sequence
         let currentSlot = 0;
         if (level === 1) {
-            // FIX: Count ALL commissions (Approved, Pending, and Rejected Overflow) 
-            // to correctly track slot occupancy. Status filter removed for count.
             const existingCommsCount = await Transaction.countDocuments({
                 userId: sponsor._id,
                 type: 'Commission',
                 level: 1,
-                relatedPlanId: { $in: Array.from(equivIds) },
+                relatedPlanId: { $in: Array.from(trackIds) },
                 description: { $not: /Used for Upgrade/i }
             });
             currentSlot = existingCommsCount + 1;
-
-            // USE effectiveSponsorPlan.directReferralLimit (Sponsor's tier limit)
-            if (effectiveSponsorPlan.directReferralLimit > 0 && currentSlot > effectiveSponsorPlan.directReferralLimit) {
-                await Transaction.create({
-                    userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
-                    type: 'Commission', amount: 0, status: 'Rejected',
-                    description: `Overflow: Limit reached for ${effectiveSponsorPlan.name} (Slot #${currentSlot})`,
-                    level: 1, sourceUserId: buyer._id, relatedPlanId: plan._id
-                });
-                currentSponsorName = sponsor.sponsor;
-                level++;
-                continue;
-            }
-
-            // USE effectiveSponsorPlan.holdPosition (Sponsor's strategy)
-            if (effectiveSponsorPlan.holdPosition?.enabled && effectiveSponsorPlan.holdPosition.slots.includes(currentSlot)) {
-                status = 'Pending';
-                holdReason = `Hold Commission: Slot #${currentSlot} Reserved for Auto-Upgrade`;
-            }
         }
 
-        // Use effectiveSponsorPlan config for commission value determination
+        // 3. Calculate Commission Amount (based on what was PAID by the buyer)
         const commConfig = level === 1 
-            ? effectiveSponsorPlan.directCommissions[Math.min(currentSlot - 1, effectiveSponsorPlan.directCommissions.length - 1)]
-            : effectiveSponsorPlan.indirectCommissions[level - 2];
+            ? sponsorPlanTrack.directCommissions[Math.min(currentSlot - 1, sponsorPlanTrack.directCommissions.length - 1)]
+            : sponsorPlanTrack.indirectCommissions[level - 2];
 
-        if (commConfig) {
-            // Commission amount is based on what the BUYER paid (plan.price)
-            let amount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
-            
-            if (sponsor.currency !== plan.currency) {
-                const rates = settings.exchangeRates;
-                amount = (amount / (rates[plan.currency] || 1)) * (rates[sponsor.currency] || 1);
+        if (!commConfig) {
+            currentSponsorName = sponsor.sponsor;
+            level++;
+            continue;
+        }
+
+        let amount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
+        
+        // Currency conversion
+        if (sponsor.currency !== plan.currency) {
+            const rates = settings.exchangeRates;
+            amount = (amount / (rates[plan.currency] || 1)) * (rates[sponsor.currency] || 1);
+        }
+
+        // 4. THE DECISION ENGINE (Linear Audit Order)
+        
+        // A. Check Overflow (Strict Denial)
+        if (level === 1 && sponsorPlanTrack.directReferralLimit > 0 && currentSlot > sponsorPlanTrack.directReferralLimit) {
+            status = 'Rejected';
+            amount = 0;
+            holdReason = `Overflow: Limit reached for ${sponsorPlanTrack.name} (Slot #${currentSlot})`;
+        } 
+        // B. Check Strategy Hold (Slot-Based Upgrade Strategy)
+        else if (level === 1 && sponsorPlanTrack.holdPosition?.enabled && sponsorPlanTrack.holdPosition.slots.includes(currentSlot)) {
+            status = 'Pending';
+            holdReason = `Hold Commission for upgrade: Slot #${currentSlot} Reserved`;
+        }
+        // C. Check General Eligibility (Restrictions & Account Status)
+        else {
+            if (sponsor.restrictions?.earning) {
+                isEligible = false;
+                holdReason = 'Account Restricted';
+            } else if (settings.requirePlanMatchForCommission) {
+                const hasMatch = sponsor.activePlans?.some(ap => trackIds.has(String(ap.planId)));
+                if (!hasMatch) {
+                    isEligible = false;
+                    holdReason = 'Plan Mismatch: Requires equivalent plan';
+                }
             }
 
-            if (!isEligible && status !== 'Pending') {
+            if (!isEligible) {
                 status = 'Pending';
-                holdReason = `Held: Eligibility Criteria Not Met (${holdReason})`;
-            }
-
-            await Transaction.create({
-                userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
-                type: 'Commission', amount: Number(amount.toFixed(2)), status,
-                description: holdReason || `Commission from ${buyer.username} (Level ${level})`,
-                level, sourceUserId: buyer._id, relatedPlanId: plan._id
-            });
-
-            if (status === 'Approved') {
-                sponsor.walletBalance = Number((sponsor.walletBalance + amount).toFixed(2));
-                await sponsor.save();
+                holdReason = `Held: ${holdReason}`;
             }
         }
 
-        if (settings.requireUplineEligibility && !isEligible) break;
+        // 5. Commit to Ledger
+        await Transaction.create({
+            userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
+            type: 'Commission', amount: Number(amount.toFixed(2)), status,
+            description: holdReason || `Commission from ${buyer.username} (Level ${level})`,
+            level, sourceUserId: buyer._id, relatedPlanId: plan._id
+        });
+
+        if (status === 'Approved') {
+            sponsor.walletBalance = Number((sponsor.walletBalance + amount).toFixed(2));
+            await sponsor.save();
+        }
+
+        // Stop chain if upline eligibility is required and this sponsor failed
+        if (settings.requireUplineEligibility && !isEligible && status !== 'Rejected') break;
+        
         currentSponsorName = sponsor.sponsor;
         level++;
     }
@@ -172,7 +172,7 @@ export const manualUpgradeFromHold = async (req, res) => {
         // Mark as Used
         for (let tx of heldTxs) {
             tx.status = 'Approved';
-            tx.description = tx.description.replace('Hold Commission:', 'Used for Upgrade:');
+            tx.description = tx.description.replace('Hold Commission for upgrade:', 'Used for Upgrade:');
             await tx.save();
         }
 
