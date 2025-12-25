@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema({
     currency: {
         type: String,
         enum: ['EUR', 'PKR', 'USD'],
-        required: true,
+        required: [true, 'Currency is required'],
     },
     walletBalance: {
         type: Number,
@@ -82,25 +82,30 @@ const UserSchema = new mongoose.Schema({
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });
 
-// Corrected pre-save hook for password hashing and data migration
-UserSchema.pre('save', async function(next) {
-    // Data Migration for country if it's missing (for very old docs)
+// Logic moved here to trigger BEFORE validation checks for 'required' fields
+UserSchema.pre('validate', function(next) {
+    // Data Migration for country if it's missing (for very old docs or incomplete registration data)
     if (!this.country) {
-        this.country = 'Pakistan'; // Assign a sensible default to Pakistan
+        this.country = 'Pakistan'; 
     }
 
-    // Auto-update currency IF country is modified OR if currency is missing.
-    if (this.isModified('country') || !this.currency) {
-        if (this.country.toLowerCase() === 'pakistan') {
+    // Auto-update currency IF it's a new user OR if country changed OR if currency is missing.
+    if (this.isNew || this.isModified('country') || !this.currency) {
+        const countryLower = this.country.toLowerCase();
+        
+        if (countryLower === 'pakistan') {
              this.currency = 'PKR';
-        } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+        } else if (europeanCountries.some(c => c.toLowerCase() === countryLower)) {
             this.currency = 'EUR';
         } else {
             // Default to USD for rest of world
             this.currency = 'USD';
         }
     }
-    
+    next();
+});
+
+UserSchema.pre('save', async function(next) {
     // Password Hashing
     if (this.isModified('password')) {
         const salt = await bcrypt.genSalt(10);
