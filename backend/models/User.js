@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema({
     currency: {
         type: String,
         enum: ['EUR', 'PKR', 'USD'],
-        required: true,
+        required: [true, 'Currency is required'],
     },
     walletBalance: {
         type: Number,
@@ -52,7 +52,7 @@ const UserSchema = new mongoose.Schema({
     },
     activePlan: {
         type: String,
-        default: 'None', // Kept for backward compatibility/quick display of latest plan
+        default: 'None',
     },
     activePlans: [{
         planId: { type: mongoose.Schema.ObjectId, ref: 'InvestmentPlan' },
@@ -82,35 +82,35 @@ const UserSchema = new mongoose.Schema({
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
 });
 
-// Corrected pre-save hook for password hashing and data migration
-UserSchema.pre('save', async function(next) {
-    // Data Migration for country if it's missing (for very old docs)
+// Logic that modifies fields required for validation must happen in 'pre-validate'
+UserSchema.pre('validate', function(next) {
     if (!this.country) {
-        this.country = 'Pakistan'; // Assign a sensible default to Pakistan
+        this.country = 'Pakistan';
     }
 
-    // Auto-update currency IF country is modified OR if currency is missing.
+    // Auto-update currency based on country if not explicitly provided
     if (this.isModified('country') || !this.currency) {
-        if (this.country.toLowerCase() === 'pakistan') {
+        const countryLower = this.country.toLowerCase();
+        if (countryLower === 'pakistan') {
              this.currency = 'PKR';
-        } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+        } else if (europeanCountries.some(c => c.toLowerCase() === countryLower)) {
             this.currency = 'EUR';
         } else {
-            // Default to USD for rest of world
             this.currency = 'USD';
         }
     }
-    
-    // Password Hashing
+    next();
+});
+
+// Sensitive operations like password hashing should happen in 'pre-save'
+UserSchema.pre('save', async function(next) {
     if (this.isModified('password')) {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
     }
-
     next();
 });
 
-// Method to match entered password to hashed password in database
 UserSchema.methods.matchPassword = async function(enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };

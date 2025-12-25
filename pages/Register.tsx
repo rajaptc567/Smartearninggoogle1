@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { User, Status, countries } from '../types';
+import { User, Status, countries, Currency } from '../types';
 import { createUser as apiCreateUser } from '../services/api';
+
+const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
 const Register: React.FC = () => {
     const navigate = useNavigate();
@@ -19,12 +21,12 @@ const Register: React.FC = () => {
         country: '',
         sponsor: '',
         password: '',
+        currency: 'USD' as Currency,
     });
     const [isSponsorFromUrl, setIsSponsorFromUrl] = useState(false);
     const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
 
     useEffect(() => {
-        // Parse sponsor from URL hash for HashRouter compatibility
         const hash = window.location.hash;
         const queryIndex = hash.indexOf('?');
         if (queryIndex !== -1) {
@@ -38,17 +40,33 @@ const Register: React.FC = () => {
         }
     }, []);
 
+    const getCurrencyForCountry = (countryName: string): Currency => {
+        const lower = countryName.toLowerCase();
+        if (lower === 'pakistan') return 'PKR';
+        if (europeanCountries.some(c => c.toLowerCase() === lower)) return 'EUR';
+        return 'USD';
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData(prev => {
+            const updated = { ...prev, [name]: value };
+            if (name === 'country') {
+                updated.currency = getCurrencyForCountry(value);
+            }
+            return updated;
+        });
     };
 
     const handleCountrySelect = (countryName: string) => {
-        setFormData(prev => ({ ...prev, country: countryName }));
+        setFormData(prev => ({ 
+            ...prev, 
+            country: countryName,
+            currency: getCurrencyForCountry(countryName)
+        }));
         setIsCountryDropdownOpen(false);
     };
 
-    // Filter countries based on input
     const filteredCountries = countries.filter(c => 
         c.toLowerCase().includes(formData.country.toLowerCase())
     );
@@ -56,7 +74,6 @@ const Register: React.FC = () => {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Client-side validation to check if sponsor exists, if one is provided
         if (formData.sponsor) {
             const sponsorExists = state.users.some(user => user.username.toLowerCase() === formData.sponsor.toLowerCase());
             if (!sponsorExists) {
@@ -72,16 +89,10 @@ const Register: React.FC = () => {
 
         try {
             const createdUser = await apiCreateUser(newUserPayload);
-
-            // Add the new user to the global state
             dispatch({ type: 'ADD_USER', payload: createdUser });
-            
-            // Set the new user as the currently logged-in user
             dispatch({ type: 'SET_CURRENT_USER', payload: createdUser });
-
             alert('Registration successful! Redirecting to your dashboard...');
             navigate('/member');
-
         } catch (error) {
             console.error("Registration failed:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -90,60 +101,69 @@ const Register: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 py-12">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 py-12 px-4">
+            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-xl dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
-                    <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Create Your Account</h2>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Join us and start your earning journey today.</p>
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl mx-auto mb-4 flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-500/30">S</div>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">SmartEarning</h1>
+                    <h2 className="mt-2 text-lg text-gray-500 dark:text-gray-400">Join the global network</h2>
                 </div>
                 <form className="space-y-4" onSubmit={handleRegister}>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                           <label htmlFor="fullName"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
-                           <input id="fullName" name="fullName" type="text" value={formData.fullName} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                           <label htmlFor="fullName" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Full Name</label>
+                           <input id="fullName" name="fullName" type="text" value={formData.fullName} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                         <div>
-                           <label htmlFor="username"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">User Name</label>
-                           <input id="username" name="username" type="text" value={formData.username} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                           <label htmlFor="username" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">User Name</label>
+                           <input id="username" name="username" type="text" value={formData.username} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                      </div>
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
-                        <input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        <label htmlFor="email" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email address</label>
+                        <input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="phone"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mobile Number</label>
-                            <input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                            <label htmlFor="phone" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Mobile Number</label>
+                            <input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                          <div>
-                            <label htmlFor="whatsapp"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">WhatsApp Number</label>
-                            <input id="whatsapp" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                            <label htmlFor="whatsapp" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">WhatsApp</label>
+                            <input id="whatsapp" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                         </div>
                      </div>
                       <div className="relative">
-                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
-                        <input
-                            type="text"
-                            id="country"
-                            name="country"
-                            value={formData.country}
-                            onChange={(e) => { handleChange(e); setIsCountryDropdownOpen(true); }}
-                            onFocus={() => setIsCountryDropdownOpen(true)}
-                            onBlur={() => setTimeout(() => setIsCountryDropdownOpen(false), 200)}
-                            placeholder="Type to search or enter country"
-                            className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            autoComplete="off"
-                            required
-                        />
+                        <label htmlFor="country" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Country</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                id="country"
+                                name="country"
+                                value={formData.country}
+                                onChange={(e) => { handleChange(e); setIsCountryDropdownOpen(true); }}
+                                onFocus={() => setIsCountryDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setIsCountryDropdownOpen(false), 200)}
+                                placeholder="Start typing country..."
+                                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                autoComplete="off"
+                                required
+                            />
+                            {formData.country && (
+                                <div className="absolute right-3 top-2.5">
+                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-sm">
+                                        {formData.currency}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                         {isCountryDropdownOpen && filteredCountries.length > 0 && (
-                            <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            <ul className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto">
                                 {filteredCountries.map(c => (
                                     <li 
                                         key={c}
-                                        className="px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer text-sm dark:text-gray-200"
-                                        onMouseDown={() => handleCountrySelect(c)} // Use onMouseDown to trigger before onBlur
+                                        className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer text-sm dark:text-gray-200 border-b last:border-0 dark:border-gray-600 transition-colors"
+                                        onMouseDown={() => handleCountrySelect(c)}
                                     >
                                         {c}
                                     </li>
@@ -152,7 +172,7 @@ const Register: React.FC = () => {
                         )}
                     </div>
                      <div>
-                        <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username (Optional)</label>
+                        <label htmlFor="sponsor" className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Sponsor (Optional)</label>
                         <input 
                             id="sponsor" 
                             name="sponsor" 
@@ -160,23 +180,24 @@ const Register: React.FC = () => {
                             value={formData.sponsor} 
                             onChange={handleChange} 
                             readOnly={isSponsorFromUrl}
-                            className={`w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white ${isSponsorFromUrl && 'cursor-not-allowed bg-gray-100 dark:bg-gray-700/50'}`}
+                            placeholder="Username of who referred you"
+                            className={`w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none ${isSponsorFromUrl && 'bg-gray-100 dark:bg-gray-700/50 cursor-not-allowed opacity-80'}`}
                         />
                     </div>
                     <div>
-                        <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                        <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        <label htmlFor="password"  className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Password</label>
+                        <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                     <div className="pt-4">
-                        <Button type="submit" size="lg" className="w-full">
+                        <Button type="submit" size="lg" className="w-full py-3 shadow-lg shadow-blue-500/20">
                             Create Account
                         </Button>
                     </div>
                 </form>
                 <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-                    Already have an account?{' '}
-                    <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
-                        Sign in
+                    Already a member?{' '}
+                    <Link to="/login" className="font-bold text-blue-600 hover:text-blue-500 dark:text-blue-400">
+                        Sign in here
                     </Link>
                 </p>
             </div>
