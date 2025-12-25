@@ -1,18 +1,21 @@
+
 import React from 'react';
+// Import useNavigate from react-router-dom
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-// FIX: Added missing import for Button component
-import Button from '../../components/ui/Button';
 import { Status, formatCurrency } from '../../types';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
-    const { currentUser, transactions, investmentPlans, settings } = state;
+    const { currentUser, users, investmentPlans, settings } = state;
+    // Initialize navigate function using useNavigate hook
     const navigate = useNavigate();
 
-    if (!currentUser) return <div>Loading...</div>;
+    if (!currentUser) {
+        return <div>Loading...</div>;
+    }
 
     const activePlans = currentUser.activePlans || [];
 
@@ -20,6 +23,7 @@ const ActivePlans: React.FC = () => {
         const plan = investmentPlans.find(p => p._id === planId);
         const limit = plan?.directReferralLimit || 0;
         
+        // 1. Identify all equivalent plan IDs for this row
         const equivIds = new Set<string>();
         equivIds.add(planId);
         const group = settings.planEquivalencyGroups?.find(g =>
@@ -31,84 +35,62 @@ const ActivePlans: React.FC = () => {
             if (group.eurPlanId) equivIds.add(group.eurPlanId);
         }
 
-        // Count only slot-occupying commissions (Approved or Pending-Hold)
-        const used = transactions.filter(t => 
-            t.userId === currentUser._id && 
-            t.type === 'Commission' && 
-            t.level === 1 &&
-            t.relatedPlanId && equivIds.has(String(t.relatedPlanId)) &&
-            (t.status === 'Approved' || t.status === 'Pending') &&
-            !t.description.includes('Used for Upgrade')
+        // 2. Count direct referrals who own any of those plan IDs
+        const used = users.filter(u => 
+            u.sponsor && 
+            u.sponsor.toLowerCase() === currentUser.username.toLowerCase() && 
+            u.activePlans?.some(ap => equivIds.has(ap.planId))
         ).length;
 
-        const nextSlotNum = used + 1;
-        const isNextSlotHold = plan?.holdPosition?.enabled && plan.holdPosition.slots.includes(nextSlotNum);
-        const isNearOverflow = limit > 0 && nextSlotNum >= limit;
-
-        return { used, limit, plan, nextSlotNum, isNextSlotHold, isNearOverflow };
+        return { used, limit };
     };
 
     return (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-100 dark:border-gray-700">
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Portfolio Tracking</h2>
+            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">My Active Plans</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">Below is a list of all investment plans currently active on your account.</p>
+
                 {activePlans.length > 0 ? (
-                    <Table headers={['Plan Track', 'Entry Value', 'Referral Slots Status', 'Purchase Date', 'Track Status']}>
+                    <Table headers={['Plan Name', 'Price', 'Direct Slots Progress', 'Purchase Date', 'Status']}>
                         {activePlans.map((plan, index) => {
-                            const { used, limit, plan: planDetails, isNextSlotHold, isNearOverflow } = getSlotUsage(plan.planId);
+                            const { used, limit } = getSlotUsage(plan.planId);
+                            const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 100;
                             
                             return (
-                                <tr key={`${plan.planId}-${index}`} className="group hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                    <td className="px-4 py-6">
-                                        <div className="font-bold text-blue-600 dark:text-blue-400">{plan.planName}</div>
-                                        <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">Direct L1 Track</div>
-                                    </td>
-                                    <td className="px-4 py-6 font-bold">{formatCurrency(plan.price, currentUser.currency)}</td>
-                                    <td className="px-4 py-6 min-w-[280px]">
-                                        <div className="flex flex-col gap-2.5">
-                                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-gray-400">
-                                                <span>{used} / {limit === 0 ? '∞' : limit} Slots</span>
-                                                <div className="flex gap-2">
-                                                    {isNextSlotHold && <span className="text-indigo-500 animate-pulse">Next: UPGRADE</span>}
-                                                    {isNearOverflow && used < limit && <span className="text-amber-500">Nearing Capacity</span>}
-                                                    {limit > 0 && used >= limit && <span className="text-red-500 font-black">TRACK FULL</span>}
-                                                </div>
+                                <tr key={`${plan.planId}-${index}`} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                    <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">{plan.planName}</td>
+                                    <td className="px-4 py-3 font-medium">{formatCurrency(plan.price, currentUser.currency)}</td>
+                                    <td className="px-4 py-3 min-w-[200px]">
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                                <span>{used} / {limit === 0 ? '∞' : limit} used</span>
+                                                {limit > 0 && used >= limit && <span className="text-red-500 animate-pulse">Full</span>}
+                                                {limit === 0 && <span className="text-blue-500">Unlimited</span>}
                                             </div>
-                                            <div className="flex h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner p-0.5 border border-gray-200 dark:border-gray-600">
-                                                {limit > 0 ? (
-                                                    Array.from({ length: limit }).map((_, i) => {
-                                                        const slotNum = i + 1;
-                                                        const isHold = planDetails?.holdPosition?.enabled && planDetails.holdPosition.slots.includes(slotNum);
-                                                        const isUsed = slotNum <= used;
-                                                        return (
-                                                            <div 
-                                                                key={i} 
-                                                                className={`h-full flex-1 border-r last:border-0 dark:border-gray-800 transition-all duration-300 first:rounded-l-full last:rounded-r-full ${
-                                                                    !isUsed ? 'bg-transparent' : 
-                                                                    isHold ? 'bg-gradient-to-t from-indigo-600 to-indigo-400' : 'bg-gradient-to-t from-blue-600 to-blue-400'
-                                                                }`}
-                                                            />
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <div className="h-full bg-blue-500 w-full rounded-full" />
-                                                )}
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden shadow-inner">
+                                                <div 
+                                                    className={`h-full transition-all duration-700 ease-out ${limit > 0 && used >= limit ? 'bg-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-600'}`}
+                                                    style={{ width: `${percent}%` }}
+                                                ></div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-6 text-sm text-gray-500">{new Date(plan.purchaseDate).toLocaleDateString()}</td>
-                                    <td className="px-4 py-6">
-                                        <Badge status={Status.Active} />
-                                    </td>
+                                    <td className="px-4 py-3 text-sm">{new Date(plan.purchaseDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                                    <td className="px-4 py-3"><Badge status={Status.Active} /></td>
                                 </tr>
                             );
                         })}
                     </Table>
                 ) : (
-                    <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl bg-gray-50/50 dark:bg-gray-900/20">
-                        <div className="text-4xl mb-4">💼</div>
-                        <p className="text-gray-500 font-medium mb-4">You don't have any active investment plans yet.</p>
-                        <Button onClick={() => navigate('/member/plans')}>Browse Investment Plans</Button>
+                    <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+                        <p className="text-gray-500 dark:text-gray-400 text-lg">You do not have any active plans yet.</p>
+                        <button 
+                            onClick={() => navigate('/member/plans')} 
+                            className="mt-4 text-blue-600 hover:underline font-semibold"
+                        >
+                            Browse Investment Plans
+                        </button>
                     </div>
                 )}
             </div>

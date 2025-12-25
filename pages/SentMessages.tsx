@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
 import { Notification, User } from '../types';
@@ -5,18 +6,14 @@ import Button from '../components/ui/Button';
 
 // Icons
 const ReadIcon = () => (
-    // FIX: Removed 'title' prop from SVG to comply with SVGProps<SVGSVGElement> and added <title> element for accessibility
-    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <title>Read by user</title>
+    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Read by user">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" transform="translate(3,0)" className="opacity-50" />
     </svg>
 );
 
 const UnreadIcon = () => (
-    // FIX: Removed 'title' prop from SVG to comply with SVGProps<SVGSVGElement> and added <title> element for accessibility
-    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <title>Unread</title>
+    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Unread">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
     </svg>
 );
@@ -192,7 +189,7 @@ const SentMessages: React.FC = () => {
                 <div className="w-full md:w-1/3 border-r dark:border-gray-700 overflow-y-auto bg-white dark:bg-gray-800">
                     <div className="p-3 border-b dark:border-gray-700 flex items-center bg-gray-50 dark:bg-gray-900/50 sticky top-0 z-10">
                         <input 
-                            type="checkbox" 
+                            type="checkbox"
                             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             checked={filteredMessages.length > 0 && selectedMessageIds.length === filteredMessages.length}
                             onChange={handleSelectAll}
@@ -205,7 +202,7 @@ const SentMessages: React.FC = () => {
                             return (
                                 <div
                                     key={msg._id}
-                                    className={`p-4 cursor-pointer border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-start gap-3 transition-colors ${selectedMessageId === msg._id ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
+                                    className={`p-4 cursor-pointer border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-start gap-3 transition-colors ${selectedMessageId === msg._id ? 'bg-blue-50 dark:bg-blue-900/30 border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'}`}
                                 >
                                     <input 
                                         type="checkbox" 

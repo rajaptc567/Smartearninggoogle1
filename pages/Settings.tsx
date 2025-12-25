@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -30,8 +31,7 @@ const Settings: React.FC = () => {
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
     const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
-    // FIX: Cast incomingRates to any to allow dynamic property access safely during initialization
-    const incomingRates = (settings.exchangeRates || {}) as any;
+    const incomingRates = settings.exchangeRates || {};
 
     const mergedRates = {
         USD: incomingRates.USD || defaultRates.USD,
@@ -41,8 +41,7 @@ const Settings: React.FC = () => {
 
     setLocalSettings(prev => ({
         ...settings,
-        // FIX: Ensure all required fields of transferConfig are present during initialization to match Settings type
-        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [], allowCrossCurrency: false },
+        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
         exchangeRates: mergedRates,
         homepageVideoUrl: settings.homepageVideoUrl || '',
         homepageContent: {
