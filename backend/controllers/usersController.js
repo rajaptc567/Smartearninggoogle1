@@ -116,7 +116,7 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
 };
 
 /**
- * CORE COMMISSION PIPELINE
+ * CORE COMMISSION PIPELINE (v1.10.13 - FIXED EXECUTION ORDER)
  */
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
@@ -209,7 +209,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // 1. CALCULATE SLOT NUMBER FIRST (Include Pending for proper usage tracking)
+            // 1. CALCULATE SLOT NUMBER FIRST (MANDATORY: Include Pending to count reserved spots)
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -223,13 +223,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const sponsorPlanConfig = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
             const activePlanDoc = sponsorPlanConfig ? allPlans.find(p => p._id.toString() === String(sponsorPlanConfig.planId)) : plan;
 
-            // 2. HOLD CHECK (MUST COME FIRST)
+            // 2. HOLD CHECK (MUST COME FIRST - Hold overrides Overflow)
             isHoldSlot = activePlanDoc?.holdPosition?.enabled && activePlanDoc.holdPosition.slots.includes(slotNum);
 
-            // 3. OVERFLOW CHECK (ONLY IF NOT HOLD)
+            // 3. OVERFLOW CHECK (ONLY IF NOT A HOLD SLOT)
             if (!isHoldSlot) {
                 const limit = activePlanDoc?.directReferralLimit || 0;
-                if (limit > 0 && referralCount >= limit) {
+                if (limit > 0 && slotNum > limit) {
                     isOverflow = true;
                 }
             }
@@ -258,7 +258,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             commissionConfig = (plan.indirectCommissions || [])[level - 1];
         }
 
-        // Apply One-Time Check
+        // Apply One-Time Check (unless recurring rights)
         if (settings.oneTimeCommissionPerGroup) {
             const hasRecurring = (uplineUser.activePlans || []).some(p => (settings.recurringCommissionPlanIds || []).includes(String(p.planId)));
             if (!hasRecurring) {
@@ -274,15 +274,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
 
         if (isHoldSlot) {
-            // Priority: Hold funds regardless of other eligibility (except blocks)
+            // HOLD logic: Add to held balance and check auto-upgrade
             uplineUser.heldBalance = Number((uplineUser.heldBalance + finalAmount).toFixed(2));
             
-            // Check Auto-Upgrade
             const upgradeToId = plan.autoUpgrade?.toPlanId;
             const upgradePlan = allPlans.find(p => p._id.toString() === String(upgradeToId));
             if (upgradePlan && uplineUser.heldBalance >= upgradePlan.price) {
                 uplineUser.heldBalance = Number((uplineUser.heldBalance - upgradePlan.price).toFixed(2));
-                // Recurse upgrade logic
                 await executePlanPurchase(uplineUser, upgradePlan, 'auto', settings, exchangeRates, defaultRates, allPlans);
             }
         } else if (eligibility.status === 'Approved') {
