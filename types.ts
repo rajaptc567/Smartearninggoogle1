@@ -1,4 +1,3 @@
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -43,6 +42,7 @@ export interface User {
     country: string;
     currency: Currency;
     walletBalance: number;
+    heldBalance: number; // Reserved for auto-upgrades
     activePlan?: string;
     activePlans?: ActivePlan[];
     status: Status | 'Active' | 'Blocked' | 'Pending' | 'Paused';
@@ -170,6 +170,7 @@ export interface Transaction {
     originalAmount?: number;
     originalCurrency?: Currency;
     exchangeRate?: number;
+    isHoldPosition?: boolean; // Flag to identify funds reserved for auto-upgrade
 }
 
 export interface Rule {

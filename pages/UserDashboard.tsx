@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
@@ -70,7 +67,7 @@ const UserDashboard: React.FC = () => {
     
     const [visibleWidgets, setVisibleWidgets] = useState({
       balance: true, deposits: true, commission: true, withdrawals: true,
-      pending: true, referrals: true, plan: true, monthly: true, breakdown: true
+      pending: true, referrals: true, plan: true, monthly: true, breakdown: true, held: true
     });
     const [showCustomize, setShowCustomize] = useState(false);
 
@@ -146,9 +143,7 @@ const UserDashboard: React.FC = () => {
     );
     
      const NetworkSummaryCard = () => {
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
         return (
@@ -218,6 +213,7 @@ const UserDashboard: React.FC = () => {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
+                    {visibleWidgets.held && <StatCard title="Held for Upgrade" value={formatCurrency(currentUser.heldBalance, currentUser.currency)} icon={<ClockIcon />} color="bg-amber-500" />}
                     {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
                     {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
                     {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}

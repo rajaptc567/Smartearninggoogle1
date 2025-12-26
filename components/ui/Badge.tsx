@@ -1,12 +1,14 @@
 
+
 import React from 'react';
 import { Status } from '../../types';
 
 interface BadgeProps {
-  status: Status | 'Enabled' | 'Disabled' | 'hold_slot' | 'hold_upgrade' | 'overflow';
+  status: Status | 'Enabled' | 'Disabled';
 }
 
-const statusColors: { [key: string]: string } = {
+// FIX: Added 'Matching' and 'Paused' status to support all possible Status enum values.
+const statusColors: { [key in Status | 'Enabled' | 'Disabled']: string } = {
   [Status.Active]: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   [Status.Pending]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   [Status.Blocked]: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
@@ -21,16 +23,12 @@ const statusColors: { [key: string]: string } = {
   [Status.Resolved]: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   [Status.Closed]: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   'Enabled': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'hold_slot': 'bg-amber-100 text-amber-800 border border-amber-200 font-bold',
-  'hold_upgrade': 'bg-orange-100 text-orange-800 border border-orange-200 font-bold',
-  'overflow': 'bg-gray-200 text-gray-600 border border-gray-300 italic'
 };
 
 const Badge: React.FC<BadgeProps> = ({ status }) => {
-  const displayLabel = status.replace('_', ' ').toUpperCase();
   return (
-    <span className={`px-2 py-1 text-[10px] font-medium rounded-full ${statusColors[status] || 'bg-gray-100'}`}>
-      {displayLabel}
+    <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status]}`}>
+      {status}
     </span>
   );
 };
