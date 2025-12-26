@@ -20,6 +20,13 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
     // 1. Update User Plan State
     user.activePlan = plan.name;
     if (!user.activePlans) user.activePlans = [];
+    
+    // Check if user already has this exact plan active to prevent duplicates
+    const alreadyOwns = user.activePlans.some(p => p.planId.toString() === plan._id.toString());
+    if (alreadyOwns) {
+        throw new Error(`User already has the ${plan.name} plan active.`);
+    }
+
     user.activePlans.push({
         planId: plan._id,
         planName: plan.name,
@@ -35,10 +42,10 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
         logAmount = -plan.price;
         logDescription = `Purchased ${plan.name} plan`;
     } else if (triggerType === 'auto') {
-        logAmount = 0; // Already deducted from heldBalance elsewhere or treated as internal movement
+        logAmount = 0; // Funds were already in heldBalance, handled as internal transition
         logDescription = `Automated upgrade to ${plan.name} from reserved funds`;
     } else if (triggerType === 'admin') {
-        logAmount = 0; // Admin activations are usually complimentary/external payment
+        logAmount = 0; 
         logDescription = `Plan ${plan.name} manually activated by Administrator`;
     }
 
@@ -61,13 +68,13 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
     // 4. SAVE USER STATE
     await user.save();
 
-    // 5. RELEASE HELD COMMISSIONS (Requirement Logic)
+    // 5. RECONCILIATION: Release Standard Held Commissions
     // If this new plan satisfies a "Require Plan Match" or "Active Plan" rule for pending commissions
-    const heldCommissions = await Transaction.find({ userId: user._id, type: 'Commission', status: 'Pending' });
-    if (heldCommissions.length > 0) {
+    const pendingCommissions = await Transaction.find({ userId: user._id, type: 'Commission', status: 'Pending' });
+    if (pendingCommissions.length > 0) {
         let totalReleased = 0;
-        for (const comm of heldCommissions) {
-            // EXCLUDE "Hold Position" items - they belong to heldBalance reservoir, not unlocking logic
+        for (const comm of pendingCommissions) {
+            // EXCLUDE "Hold Position" items - they stay in heldBalance reservoir for THE NEXT upgrade
             if (comm.isHoldPosition !== true && canReleaseCommission(comm, user, settings, allPlans)) {
                 comm.status = 'Approved';
                 await comm.save();
@@ -79,20 +86,298 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
             await user.save(); 
             await Notification.create({
                 userId: user._id,
-                message: `Activation of ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in held commissions.`
+                message: `Activation of ${plan.name} has unlocked ${user.currency}${totalReleased.toFixed(2)} in previously held commissions.`
             });
         }
     }
 
     // 6. DISTRIBUTE UPLINE COMMISSIONS
-    // This is the core "logic of plan purchase" requested for manual activation
+    // This triggers the full pipeline for the sponsors
     await distributeCommissions(user, plan, settings, exchangeRates, defaultRates, allPlans);
 
     return { user, transaction };
 };
 
-// ... createUser, loginUser, getUsers, getUser (unchanged) ...
+/**
+ * CORE COMMISSION PIPELINE
+ * Processes commissions through Slotting, Hold Position, Overflow, and Eligibility checks.
+ */
+const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
+    if (!user.sponsor) return;
 
+    // Helper for multi-currency conversion using USD as base
+    const convertCurrency = (amount, from, to) => {
+        if (!from || !to) return amount;
+        const fromKey = from.toUpperCase();
+        const toKey = to.toUpperCase();
+        if (fromKey === toKey) return Number(amount.toFixed(2));
+        
+        const getRate = (curr) => {
+            const r = exchangeRates[curr];
+            if (r !== undefined && r !== null && r !== 0) return r;
+            return defaultRates[curr] || 1;
+        };
+
+        const fromRate = getRate(fromKey);
+        const toRate = getRate(toKey);
+        if (fromRate === 0) return 0;
+
+        const amountInUSD = amount / fromRate;
+        const convertedAmount = amountInUSD * toRate;
+        return Number(convertedAmount.toFixed(2));
+    };
+    
+    const calculateRawCommission = (commissionConfig, planPrice) => {
+        if (!commissionConfig) return 0;
+        const value = parseFloat(commissionConfig.value);
+        if (isNaN(value)) return 0;
+        return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
+    };
+
+    const checkSponsorEligibility = (uplineUser, purchasePlanId) => {
+        if (uplineUser.restrictions && uplineUser.restrictions.earning) {
+            return { status: 'Pending', message: `Commission Held! Your earnings are currently paused by the administrator.` };
+        }
+        
+        if (settings.requirePlanMatchForCommission) {
+            const referralPlanId = String(purchasePlanId);
+            const group = (settings.planEquivalencyGroups || []).find(g => 
+                String(g.usdPlanId) === referralPlanId ||
+                String(g.pkrPlanId) === referralPlanId || 
+                String(g.eurPlanId) === referralPlanId
+            );
+            
+            let hasEquivalentPlan = false;
+            let targetPlanId = referralPlanId;
+
+            if (group) {
+                const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+                const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => String(p.planId));
+                hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
+                
+                const currencyKey = `${uplineUser.currency.toLowerCase()}PlanId`;
+                if (group[currencyKey]) targetPlanId = group[currencyKey];
+                else if (group.usdPlanId) targetPlanId = group.usdPlanId;
+            } else {
+                hasEquivalentPlan = (uplineUser.activePlans || []).some(p => String(p.planId) === referralPlanId);
+            }
+
+            if (!hasEquivalentPlan) {
+                const targetPlan = allPlans.find(p => p._id.toString() === String(targetPlanId));
+                const requiredPlanName = targetPlan ? `${targetPlan.name} (${targetPlan.currency})` : 'the required equivalent plan';
+                return { status: 'Pending', message: `Commission Held! Purchase ${requiredPlanName} to release commission earned from ${user.username}.` };
+            }
+        } else if (settings.requireActivePlanForCommission) {
+            const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
+            if (!hasAnyPlan) return { status: 'Pending', message: `Commission Held! Purchase any plan to activate your earnings from ${user.username}.` };
+        }
+        return { status: 'Approved', message: '' };
+    };
+
+    let currentUplineUsername = user.sponsor;
+    const indirectLevelsCount = plan.indirectCommissions?.length || 0;
+    const totalLevelsToProcess = 1 + indirectLevelsCount;
+    let isPreviousUplineEligible = true;
+
+    for (let level = 0; level < totalLevelsToProcess; level++) {
+        if (!currentUplineUsername) break;
+        
+        const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
+        if (!uplineUser || uplineUser.status === 'Blocked') break;
+
+        // Pass-through rule check
+        if (settings.requireUplineEligibility && level > 0 && !isPreviousUplineEligible) break;
+        
+        let eligibility = checkSponsorEligibility(uplineUser, plan._id);
+        isPreviousUplineEligible = (eligibility.status === 'Approved');
+
+        let commissionConfig;
+        let isHoldSlot = false;
+
+        // PHASE A: Level 1 (Direct) Slotting & Hold Position
+        if (level === 0) { 
+            // 1. Identify Slot Number
+            const equivIds = [plan._id.toString()];
+            if (settings.planEquivalencyGroups) {
+                const group = settings.planEquivalencyGroups.find(g => 
+                    String(g.usdPlanId) === plan._id.toString() || 
+                    String(g.pkrPlanId) === plan._id.toString() || 
+                    String(g.eurPlanId) === plan._id.toString()
+                );
+                if (group) {
+                    if (group.usdPlanId) equivIds.push(String(group.usdPlanId));
+                    if (group.pkrPlanId) equivIds.push(String(group.pkrPlanId));
+                    if (group.eurPlanId) equivIds.push(String(group.eurPlanId));
+                }
+            }
+
+            const referralCount = await Transaction.countDocuments({
+                userId: uplineUser._id,
+                type: 'Commission',
+                relatedPlanId: { $in: equivIds },
+                level: 1,
+                status: { $in: ['Approved', 'Pending'] }
+            });
+
+            const currentSlotNum = referralCount + 1;
+
+            // 2. Hold Position Check (Priority 1)
+            // Identify which plan configuration determines the hold position (Equivalency check)
+            const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+            const planConfigForSponsor = sponsorMatchingActivePlan 
+                ? allPlans.find(p => p._id.toString() === String(sponsorMatchingActivePlan.planId))
+                : plan;
+
+            isHoldSlot = planConfigForSponsor?.holdPosition?.enabled && planConfigForSponsor.holdPosition.slots.includes(currentSlotNum);
+
+            // 3. LOOPHOLE PREVENTION: Override hold if user already owns the upgrade
+            if (isHoldSlot) {
+                const nextPlanId = planConfigForSponsor.autoUpgrade?.toPlanId;
+                if (nextPlanId) {
+                    const alreadyHasUpgrade = (uplineUser.activePlans || []).some(p => p.planId.toString() === nextPlanId.toString());
+                    if (alreadyHasUpgrade) {
+                        isHoldSlot = false; // Bypass savings reservoir
+                        eligibility.message = `Direct Slot #${currentSlotNum} Commission from ${user.username}`;
+                    } else {
+                        const upgradePlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
+                        eligibility.status = 'Pending';
+                        eligibility.message = `Hold Commission for upgrade: Slot #${currentSlotNum} (${user.username}) reserved for auto-upgrade to ${upgradePlan?.name || 'next level'}.`;
+                    }
+                }
+            }
+            
+            // 4. OVERFLOW CHECK (Priority 2) - Only if NOT a hold slot
+            else {
+                const limit = planConfigForSponsor?.directReferralLimit || 0;
+                if (limit > 0 && referralCount >= limit) {
+                    await Transaction.create({
+                        userId: uplineUser._id,
+                        userName: uplineUser.username,
+                        currency: uplineUser.currency,
+                        type: 'Commission',
+                        amount: 0,
+                        level: 1,
+                        sourceUserId: user._id,
+                        description: `Plan Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) reached.`,
+                        status: 'Rejected',
+                        relatedPlanId: plan._id
+                    });
+                    await Notification.create({
+                        userId: uplineUser._id,
+                        message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
+                    });
+                    currentUplineUsername = uplineUser.sponsor;
+                    continue; 
+                }
+            }
+
+            // Select config based on slot number (or use last available)
+            if (plan.directCommissions?.length > 0) {
+                commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
+            } else {
+                commissionConfig = { type: 'percentage', value: 0 }; 
+            }
+        } 
+        // Level 2+ Logic
+        else { 
+            commissionConfig = (plan.indirectCommissions || [])[level - 1];
+        }
+
+        if (!commissionConfig) {
+            currentUplineUsername = uplineUser.sponsor;
+            continue;
+        }
+
+        // ONE-TIME COMMISSION CHECK
+        if (settings.oneTimeCommissionPerGroup) {
+            const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
+            const hasRecurringRights = (uplineUser.activePlans || []).some(p => exceptionPlanIds.includes(String(p.planId)));
+
+            if (!hasRecurringRights) {
+                const existing = await Transaction.findOne({
+                    userId: uplineUser._id,
+                    sourceUserId: user._id,
+                    type: 'Commission',
+                    status: 'Approved',
+                    amount: { $gt: 0 }
+                });
+                if (existing) {
+                    currentUplineUsername = uplineUser.sponsor;
+                    continue;
+                }
+            }
+        }
+
+        // Calculation & Conversion
+        const rawAmount = calculateRawCommission(commissionConfig, plan.price);
+        if (rawAmount <= 0) {
+            currentUplineUsername = uplineUser.sponsor;
+            continue;
+        }
+
+        const finalConvertedAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
+
+        // PHASE E: Balance Update & Auto-Upgrade Trigger
+        if (eligibility.status === 'Approved') {
+            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalConvertedAmount).toFixed(2));
+            await Notification.create({ 
+                userId: uplineUser._id, 
+                message: `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalConvertedAmount.toFixed(2)} from ${user.username}.` 
+            });
+        } 
+        else if (eligibility.status === 'Pending') {
+            if (isHoldSlot) {
+                // ADD TO RESERVOIR
+                uplineUser.heldBalance = Number((uplineUser.heldBalance + finalConvertedAmount).toFixed(2));
+                
+                // CHECK AUTO-UPGRADE
+                const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+                const planConfig = sponsorMatchingActivePlan ? allPlans.find(p => p._id.toString() === String(sponsorMatchingActivePlan.planId)) : null;
+
+                if (planConfig?.autoUpgrade?.enabled) {
+                    const toId = planConfig.autoUpgrade.toPlanId;
+                    const upgradePlan = allPlans.find(p => p._id.toString() === String(toId));
+                    
+                    if (upgradePlan && uplineUser.heldBalance >= upgradePlan.price) {
+                        uplineUser.heldBalance = Number((uplineUser.heldBalance - upgradePlan.price).toFixed(2));
+                        // Recursively activate the new plan for the sponsor
+                        await executePlanPurchase(uplineUser, upgradePlan, 'auto', settings, exchangeRates, defaultRates, allPlans);
+                        await createLog('Auto-Upgrade', uplineUser.username, `Auto-upgraded to ${upgradePlan.name} using reserved funds.`, 'system');
+                    }
+                }
+            }
+            
+            await Notification.create({ 
+                userId: uplineUser._id, 
+                message: `${eligibility.message || 'Commission Held!'}. Amount reserved: ${uplineUser.currency}${finalConvertedAmount.toFixed(2)}` 
+            });
+        }
+
+        await Transaction.create({
+            userId: uplineUser._id,
+            userName: uplineUser.username,
+            currency: uplineUser.currency,
+            type: 'Commission',
+            amount: finalConvertedAmount,
+            level: level + 1,
+            sourceUserId: user._id,
+            description: eligibility.message || `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
+            status: eligibility.status,
+            relatedPlanId: plan._id,
+            originalAmount: rawAmount,
+            originalCurrency: user.currency,
+            exchangeRate: exchangeRates[user.currency.toUpperCase()] || 1,
+            isHoldPosition: isHoldSlot 
+        });
+        
+        await uplineUser.save();
+        currentUplineUsername = uplineUser.sponsor;
+    }
+};
+
+// @desc    Register a new user
+// @route   POST /api/v1/users
+// @access  Public
 export const createUser = async (req, res, next) => {
     try {
         const { fullName, username, email, password, phone, sponsor, country } = req.body;
@@ -155,6 +440,9 @@ export const createUser = async (req, res, next) => {
     }
 };
 
+// @desc    Auth user & get token
+// @route   POST /api/v1/users/login
+// @access  Public
 export const loginUser = async (req, res, next) => {
     const { email, password } = req.body;
     try {
@@ -200,37 +488,6 @@ export const getUser = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     }
 };
-
-const canReleaseCommission = (commission, user, settings, allPlans) => {
-    let canRelease = true;
-    
-    if (settings.requirePlanMatchForCommission && commission.relatedPlanId) {
-        const referralPlanId = String(commission.relatedPlanId);
-        const group = (settings.planEquivalencyGroups || []).find(g => 
-            String(g.usdPlanId) === referralPlanId ||
-            String(g.pkrPlanId) === referralPlanId || 
-            String(g.eurPlanId) === referralPlanId
-        );
-
-        let hasEquivalentPlan = false;
-        if (group) {
-            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
-            const sponsorActivePlanIds = (user.activePlans || []).map(p => String(p.planId));
-            hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
-        } else {
-            hasEquivalentPlan = (user.activePlans || []).some(p => String(p.planId) === referralPlanId);
-        }
-        if (!hasEquivalentPlan) canRelease = false;
-
-    } else if (settings.requireActivePlanForCommission) {
-        const hasAnyPlan = user.activePlans && user.activePlans.length > 0;
-        if (!hasAnyPlan) canRelease = false;
-    }
-
-    return canRelease;
-};
-
-// ... updateUser, bulkUpdateRestrictions, deleteUser, bulkDeleteUsers, adjustWallet (unchanged) ...
 
 export const updateUser = async (req, res) => {
     try {
@@ -525,293 +782,7 @@ export const adjustWallet = async (req, res) => {
 }
 
 /**
- * CORE COMMISSION LOGIC
- * Strict Pipeline:
- * 1. Identify Slot Number
- * 2. Hold Position Check (Savings mode)
- * 3. Already Upgraded Check (Bypass savings if goal met)
- * 4. Overflow/Limit Check
- * 5. Eligibility & Conversion
- * 6. Balance/Reservoir Update
- * 7. Auto-Upgrade Execution
- */
-const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
-    if (!user.sponsor) return;
-
-    const convertCurrency = (amount, from, to) => {
-        if (!from || !to) return amount;
-        const fromKey = from.toUpperCase();
-        const toKey = to.toUpperCase();
-        if (fromKey === toKey) return Number(amount.toFixed(2));
-        
-        const getRate = (curr) => {
-            const r = exchangeRates[curr];
-            if (r !== undefined && r !== null && r !== 0) return r;
-            return defaultRates[curr] || 1;
-        };
-
-        const fromRate = getRate(fromKey);
-        const toRate = getRate(toKey);
-        if (fromRate === 0) return 0;
-
-        const amountInUSD = amount / fromRate;
-        const convertedAmount = amountInUSD * toRate;
-        return Number(convertedAmount.toFixed(2));
-    };
-    
-    const calculateAmount = (commissionConfig, planPrice) => {
-        if (!commissionConfig) return 0;
-        const value = parseFloat(commissionConfig.value);
-        if (isNaN(value)) return 0;
-        return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
-    };
-
-    const checkEligibility = (uplineUser, purchasePlanId) => {
-        let status = 'Approved', message = '';
-        if (uplineUser.restrictions && uplineUser.restrictions.earning) {
-            return { status: 'Pending', message: `Commission Held! Your earnings are currently paused by the administrator.` };
-        }
-        
-        if (settings.requirePlanMatchForCommission) {
-            const referralPlanId = String(purchasePlanId);
-            const group = (settings.planEquivalencyGroups || []).find(g => 
-                String(g.usdPlanId) === referralPlanId ||
-                String(g.pkrPlanId) === referralPlanId || 
-                String(g.eurPlanId) === referralPlanId
-            );
-            
-            let hasEquivalentPlan = false;
-            let targetPlanId = referralPlanId;
-
-            if (group) {
-                const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
-                const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => String(p.planId));
-                hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
-                const currencyKey = `${uplineUser.currency.toLowerCase()}PlanId`;
-                if (group[currencyKey]) targetPlanId = group[currencyKey];
-                else if (group.usdPlanId) targetPlanId = group.usdPlanId;
-            } else {
-                hasEquivalentPlan = (uplineUser.activePlans || []).some(p => String(p.planId) === referralPlanId);
-            }
-
-            if (!hasEquivalentPlan) {
-                const targetPlan = allPlans.find(p => p._id.toString() === String(targetPlanId));
-                const requiredPlanName = targetPlan ? `${targetPlan.name} (${targetPlan.currency})` : 'the required equivalent plan';
-                return { status: 'Pending', message: `Commission Held! Purchase ${requiredPlanName} to release commission earned from ${user.username}.` };
-            }
-        } else if (settings.requireActivePlanForCommission) {
-            const hasAnyPlan = (uplineUser.activePlans || []).length > 0;
-            if (!hasAnyPlan) return { status: 'Pending', message: `Commission Held! Purchase any plan to activate your earnings from ${user.username}.` };
-        }
-        return { status, message };
-    };
-
-    let currentUplineUsername = user.sponsor;
-    const indirectCommissionLevels = plan.indirectCommissions || [];
-    const totalCommissionLevels = 1 + indirectCommissionLevels.length;
-    let isPreviousUplineEligible = true;
-
-    for (let level = 0; level < totalCommissionLevels; level++) {
-        if (!currentUplineUsername) break;
-        const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
-        if (!uplineUser || uplineUser.status === 'Blocked') break;
-
-        if (settings.requireUplineEligibility && level > 0 && !isPreviousUplineEligible) break;
-        
-        let eligibility = checkEligibility(uplineUser, plan._id);
-        isPreviousUplineEligible = (eligibility.status === 'Approved');
-
-        let commissionConfig;
-        let referralCount = 0; 
-        let isHoldSlot = false;
-
-        if (level === 0) { 
-            const equivIds = [plan._id.toString()];
-            if (settings.planEquivalencyGroups) {
-                const group = settings.planEquivalencyGroups.find(g => 
-                    String(g.usdPlanId) === plan._id.toString() || 
-                    String(g.pkrPlanId) === plan._id.toString() || 
-                    String(g.eurPlanId) === plan._id.toString()
-                );
-                if (group) {
-                    if (group.usdPlanId) equivIds.push(String(group.usdPlanId));
-                    if (group.pkrPlanId) equivIds.push(String(group.pkrPlanId));
-                    if (group.eurPlanId) equivIds.push(String(group.eurPlanId));
-                }
-            }
-
-            const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => 
-                equivIds.includes(String(ap.planId))
-            );
-            
-            const sponsorPlanConfig = sponsorMatchingActivePlan 
-                ? allPlans.find(p => p._id.toString() === String(sponsorMatchingActivePlan.planId))
-                : plan; 
-
-            referralCount = await Transaction.countDocuments({
-                userId: uplineUser._id,
-                type: 'Commission',
-                relatedPlanId: { $in: equivIds },
-                level: 1,
-                status: { $in: ['Approved', 'Pending'] }
-            });
-
-            const currentSlotNum = referralCount + 1;
-            const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            
-            // 1. EXECUTION ORDER: Check Hold Position First
-            isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && sponsorPlanConfig.holdPosition.slots.includes(currentSlotNum);
-
-            if (isHoldSlot) {
-                const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
-                const alreadyOwnsUpgrade = uplineUser.activePlans && uplineUser.activePlans.some(p => String(p.planId) === String(nextPlanId));
-                
-                if (alreadyOwnsUpgrade) {
-                    // Loophole check: Don't hold if goal is already met
-                    isHoldSlot = false; 
-                    eligibility.status = 'Approved';
-                    eligibility.message = `Direct Slot #${currentSlotNum} Commission from ${user.username} (${plan.name})`;
-                } else {
-                    const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
-                    const upName = nextPlan ? nextPlan.name : 'your next plan level';
-                    eligibility.status = 'Pending';
-                    eligibility.message = `Hold Commission for upgrade: Slot #${currentSlotNum} (${user.username}) reserved for auto-upgrade to ${upName}.`;
-                }
-            } 
-            // 2. EXECUTION ORDER: Check Overflow Only If NOT holding
-            else if (limit > 0 && referralCount >= limit) {
-                await Transaction.create({
-                    userId: uplineUser._id,
-                    userName: uplineUser.username,
-                    currency: uplineUser.currency,
-                    type: 'Commission',
-                    amount: 0,
-                    level: 1,
-                    sourceUserId: user._id,
-                    description: `Plan Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`,
-                    status: 'Rejected',
-                    relatedPlanId: plan._id
-                });
-                await Notification.create({
-                    userId: uplineUser._id,
-                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
-                });
-                currentUplineUsername = uplineUser.sponsor;
-                continue; 
-            }
-
-            if (plan.directCommissions?.length > 0) {
-                commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
-            } else {
-                commissionConfig = { type: 'percentage', value: 0 }; 
-            }
-        } else { 
-            commissionConfig = (plan.indirectCommissions || [])[level - 1];
-        }
-
-        if (!commissionConfig) {
-            currentUplineUsername = uplineUser.sponsor;
-            continue;
-        }
-        
-        if (settings.oneTimeCommissionPerGroup) {
-            const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => String(p.planId));
-            const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
-            const sponsorHasRecurringRights = sponsorActivePlanIds.some(id => exceptionPlanIds.includes(id));
-
-            if (!sponsorHasRecurringRights) {
-                const existingCommission = await Transaction.findOne({
-                    userId: uplineUser._id,
-                    sourceUserId: user._id,
-                    type: 'Commission',
-                    status: 'Approved',
-                    amount: { $gt: 0 }
-                });
-
-                if (existingCommission) {
-                    currentUplineUsername = uplineUser.sponsor;
-                    continue; 
-                }
-            }
-        }
-
-        const rawAmount = calculateAmount(commissionConfig, plan.price);
-        if (rawAmount <= 0) {
-            currentUplineUsername = uplineUser.sponsor;
-            continue;
-        }
-
-        const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
-
-        if (eligibility.status === 'Approved') {
-            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
-            await Notification.create({ userId: uplineUser._id, message: `You earned a Level ${level + 1} commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from ${user.username}.` });
-        } else if (eligibility.status === 'Pending') {
-            if (isHoldSlot) {
-                // Reserved for upgrade reservoir
-                uplineUser.heldBalance = Number((uplineUser.heldBalance + finalAmount).toFixed(2));
-                
-                // AUTOMATED UPGRADE CHECK
-                const equivIds = [plan._id.toString()];
-                if (settings.planEquivalencyGroups) {
-                    const group = settings.planEquivalencyGroups.find(g => 
-                        String(g.usdPlanId) === plan._id.toString() || 
-                        String(g.pkrPlanId) === plan._id.toString() || 
-                        String(g.eurPlanId) === plan._id.toString()
-                    );
-                    if (group) {
-                        if (group.usdPlanId) equivIds.push(String(group.usdPlanId));
-                        if (group.pkrPlanId) equivIds.push(String(group.pkrPlanId));
-                        if (group.eurPlanId) equivIds.push(String(group.eurPlanId));
-                    }
-                }
-                
-                const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
-                const sponsorPlanConfig = sponsorMatchingActivePlan ? allPlans.find(p => p._id.toString() === String(sponsorMatchingActivePlan.planId)) : null;
-
-                if (sponsorPlanConfig?.autoUpgrade?.enabled) {
-                    const toId = sponsorPlanConfig.autoUpgrade.toPlanId;
-                    const upgradePlan = allPlans.find(p => p._id.toString() === String(toId));
-                    
-                    if (upgradePlan && uplineUser.heldBalance >= upgradePlan.price) {
-                        uplineUser.heldBalance = Number((uplineUser.heldBalance - upgradePlan.price).toFixed(2));
-                        await executePlanPurchase(uplineUser, upgradePlan, 'auto', settings, exchangeRates, defaultRates, allPlans);
-                        await createLog('Auto-Upgrade', uplineUser.username, `Auto-upgraded to ${upgradePlan.name} using reserved funds.`, 'system');
-                    }
-                }
-            }
-            
-            await Notification.create({ 
-                userId: uplineUser._id, 
-                message: `${eligibility.message || 'Commission Held!'}. Amount reserved: ${uplineUser.currency}${finalAmount.toFixed(2)}` 
-            });
-        }
-
-        await Transaction.create({
-            userId: uplineUser._id,
-            userName: uplineUser.username,
-            currency: uplineUser.currency,
-            type: 'Commission',
-            amount: finalAmount,
-            level: level + 1,
-            sourceUserId: user._id,
-            description: eligibility.message || `Level ${level + 1} Commission from ${user.username} (${plan.name})`,
-            status: eligibility.status,
-            relatedPlanId: plan._id,
-            originalAmount: rawAmount,
-            originalCurrency: user.currency,
-            exchangeRate: exchangeRates[user.currency.toUpperCase()] || 1,
-            isHoldPosition: isHoldSlot 
-        });
-        
-        await uplineUser.save();
-        currentUplineUsername = uplineUser.sponsor;
-    }
-};
-
-/**
  * ADMIN MANUAL ACTIVATION
- * Bypasses payment but runs all purchase logic (commissions, unlocks)
  */
 export const adminActivatePlan = async (req, res) => {
     const { planId } = req.body;
@@ -821,7 +792,6 @@ export const adminActivatePlan = async (req, res) => {
         
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
-        // Ownership check
         const alreadyOwnsPlan = user.activePlans && user.activePlans.some(p => String(p.planId) === String(plan._id));
         if (alreadyOwnsPlan) {
             return res.status(400).json({ success: false, error: `User already owns the ${plan.name} plan.` });
@@ -831,7 +801,7 @@ export const adminActivatePlan = async (req, res) => {
         const settings = settingsDoc.toObject ? settingsDoc.toObject() : settingsDoc;
         const allPlans = await InvestmentPlan.find();
 
-        // EXECUTION: Use unified logic with 'admin' type to avoid balance deduction
+        // Use unified activation logic with 'admin' trigger (amount 0)
         const { user: updatedUser, transaction } = await executePlanPurchase(
             user, plan, 'admin', settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans
         );
@@ -855,28 +825,25 @@ export const purchasePlan = async (req, res) => {
         
         if (!user || !plan) return res.status(404).json({ success: false, error: 'User or Plan not found'});
         
-        // Currency Check
         if (user.currency !== plan.currency) {
             return res.status(400).json({ success: false, error: `This plan is in ${plan.currency}, but your account is in ${user.currency}.` });
         }
 
-        // Ownership Check
         const alreadyOwnsPlan = user.activePlans && user.activePlans.some(p => String(p.planId) === String(plan._id));
         if (alreadyOwnsPlan) {
             return res.status(400).json({ success: false, error: `You have already purchased the ${plan.name} plan.` });
         }
 
-        // Balance Check
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         
-        // Deduct Balance for 'user' type purchase
+        // Deduct Balance
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         
         const settingsDoc = await Setting.getSettings(); 
         const settings = settingsDoc.toObject ? settingsDoc.toObject() : settingsDoc; 
         const allPlans = await InvestmentPlan.find(); 
 
-        // EXECUTION
+        // Use unified activation logic with 'user' trigger (amount -price)
         const { user: updatedUser, transaction } = await executePlanPurchase(
             user, plan, 'user', settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans
         );
@@ -887,7 +854,6 @@ export const purchasePlan = async (req, res) => {
     }
 };
 
-// ... resetPasswordWithToken, verifyAndStartResetTimer, etc (unchanged) ...
 export const userRequestPasswordReset = async (req, res) => {
     const { email } = req.body;
     try {
