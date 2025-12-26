@@ -1,3 +1,4 @@
+
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Settings, Notification, Transfer, Log, Dispute, Status } from '../types';
 
 export const mockUsers: User[] = [
@@ -10,7 +11,6 @@ export const mockUsers: User[] = [
         country: 'Pakistan',
         currency: 'PKR',
         walletBalance: 100000,
-        heldBalance: 0,
         activePlan: 'None',
         activePlans: [],
         status: Status.Active,
@@ -26,7 +26,6 @@ export const mockUsers: User[] = [
         country: 'Pakistan',
         currency: 'PKR',
         walletBalance: 50000,
-        heldBalance: 0,
         activePlan: 'Pro PKR',
         activePlans: [
             { planId: 'p2', planName: 'Pro PKR', price: 15000, purchaseDate: new Date('2023-06-15').toISOString() }
@@ -37,7 +36,6 @@ export const mockUsers: User[] = [
     }
 ];
 
-// ... rest of mockData remains same ...
 export const mockInvestmentPlans: InvestmentPlan[] = [
     {
         _id: 'p2',

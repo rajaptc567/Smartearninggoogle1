@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -46,10 +47,6 @@ const UserSchema = new mongoose.Schema({
         required: true,
     },
     walletBalance: {
-        type: Number,
-        default: 0,
-    },
-    heldBalance: {
         type: Number,
         default: 0,
     },

@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -53,10 +54,6 @@ const TransactionSchema = new mongoose.Schema({
     },
     exchangeRate: {
         type: Number,
-    },
-    isHoldPosition: {
-        type: Boolean,
-        default: false
     }
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
