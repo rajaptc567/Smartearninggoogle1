@@ -89,7 +89,7 @@ const Referrals: React.FC = () => {
         return (t.status === 'Pending' || t.status === 'Approved') && (desc.includes('position') || desc.includes('reserved') || desc.includes('upgrade'));
     };
 
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean } => {
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isHoldPosition?: boolean, isOverflow?: boolean, isRejected?: boolean } => {
         if (!currentUser) return { earned: 0, held: 0 };
         
         const referralComms = transactions.filter(t => 
@@ -102,15 +102,16 @@ const Referrals: React.FC = () => {
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
         const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
-        const hasOverflowTx = referralComms.some(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
-        const isOverflow = hasOverflowTx && !isHoldPosition && earned === 0 && held === 0;
+        const hasRejectedTx = referralComms.some(t => t.status === 'Rejected');
+        const isOverflow = hasRejectedTx && referralComms.some(t => t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('overflow'));
+        const isRejected = hasRejectedTx && !isOverflow;
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
             const bestTx = referralComms.find(t => t.status === 'Approved' || t.status === 'Pending') || referralComms[0];
             earningSourcePlanId = bestTx.relatedPlanId?.toString();
         }
-        return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow };
+        return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isHoldPosition, isOverflow, isRejected };
     }, [currentUser, transactions]);
 
     const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
@@ -142,12 +143,16 @@ const Referrals: React.FC = () => {
 
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-            if (info.earned > 0 || info.held > 0 || info.isHoldPosition) {
+            const hasPlan = node.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(String(p.planId)));
+
+            if (hasPlan || info.earned > 0 || info.held > 0 || info.isHoldPosition || info.isOverflow || info.isRejected) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
+                if (info.isOverflow) overflowList.push(node);
             } 
-            else if (info.isOverflow && node.level === 1) overflowList.push(node);
-            else if (!node.user.activePlans || node.user.activePlans.length === 0) inactiveList.push(node);
+            else {
+                inactiveList.push(node);
+            }
         });
 
         const relevantCommissions = transactions.filter(t => 
@@ -155,10 +160,8 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false) 
         );
 
-        const treeToRender = fullGenealogyTree; // Show everything for now
-
         return {
-            genealogyTree: treeToRender,
+            genealogyTree: fullGenealogyTree,
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
@@ -208,15 +211,15 @@ const Referrals: React.FC = () => {
         let held = isHeldView ? (heldCommissionsData.stats.get(user._id)?.total || 0) : info.held;
         let isHoldPosition = isHeldView ? heldCommissionsData.stats.get(user._id)?.breakdown.some(b=>b.isHoldPosition) : info.isHoldPosition;
         let isOverflow = info.isOverflow;
+        let isRejected = info.isRejected;
 
         const isDirect = level === 1;
         const levelBadgeColor = isDirect ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
 
-        // NEW: Detect if user has ANY equivalent plan directly from their user object
         const activeEquivalentPlan = user.activePlans?.find(p => equivalentPlanIdsForSelected.has(String(p.planId)));
 
         return (
-            <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${level===1?'border-l-blue-500':'border-l-purple-500'} border-l-4 ${isHoldPosition ? 'border-l-amber-500' : isOverflow ? 'border-l-orange-500' : ''} transition-all duration-200 hover:shadow-md`}>
+            <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm border ${level===1?'border-l-blue-500':'border-l-purple-500'} border-l-4 ${isHoldPosition ? 'border-l-amber-500' : (isOverflow || isRejected) ? 'border-l-orange-500' : ''} transition-all duration-200 hover:shadow-md`}>
                 <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-start gap-3 w-full sm:w-auto">
                         {isTree && hasChildren && toggleNode ? (
@@ -232,16 +235,17 @@ const Referrals: React.FC = () => {
                                 {level && <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase ${levelBadgeColor}`}>{isDirect ? 'Direct' : `Level ${level}`}</span>}
                                 {isHoldPosition && <span className="text-[10px] bg-amber-500 text-white px-2 py-1 rounded-full font-bold uppercase tracking-wider">🔒 Held for upgrade</span>}
                                 {isOverflow && <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-orange-200">⚠️ Overflow</span>}
+                                {isRejected && !isOverflow && <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-red-200">Limit Reached</span>}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
                                 {activeEquivalentPlan ? (
                                     <p className="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path></svg>
                                         <span>Purchased: {activeEquivalentPlan.planName}</span>
-                                        {activeEquivalentPlan.planId !== selectedPlanId && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1 rounded">(Equivalent)</span>}
+                                        {activeEquivalentPlan.planId !== selectedPlanId && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1 rounded ml-1">(Equivalent)</span>}
                                     </p>
                                 ) : user.activePlans?.length > 0 ? (
-                                    <p className="text-gray-500">Purchased: {user.activePlans[0].planName} (Context Mismatch)</p>
+                                    <p className="text-gray-500">Purchased: {user.activePlans[0].planName}</p>
                                 ) : <p className="text-gray-400">No active plan</p>}
                                 {user.sponsor && <p className="flex items-center gap-1"><span>Via:</span><span className="text-blue-500 font-medium">@{user.sponsor}</span></p>}
                             </div>
@@ -264,7 +268,8 @@ const Referrals: React.FC = () => {
                                 </p>
                             </div>
                         )}
-                        {(earned === 0 && held === 0 && !isOverflow && !isHoldPosition) && <span className="text-xs text-gray-400 italic">No commission yet</span>}
+                        {(earned === 0 && held === 0 && !isOverflow && !isHoldPosition && !isRejected) && <span className="text-xs text-gray-400 italic">No commission yet</span>}
+                        {(isOverflow || isRejected) && <span className="text-xs text-orange-600 font-bold uppercase tracking-tight">Capped / Full</span>}
                     </div>
                 </div>
             </div>
@@ -292,9 +297,9 @@ const Referrals: React.FC = () => {
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Commission Network</h1>
                     <p className="text-sm text-gray-500">Track earnings and referral progress for each plan level.</p>
                 </div>
-                <div className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm border dark:border-gray-700 overflow-x-auto">
+                <div className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-lg shadow-sm border dark:border-gray-700 overflow-x-auto no-scrollbar">
                     {uniqueActivePlans.map(plan => (
-                        <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`flex-1 min-w-[120px] py-2 px-4 rounded-md text-xs font-bold transition-all whitespace-nowrap border ${selectedPlanId === plan.planId ? 'bg-blue-600 border-blue-600 text-white' : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50'}`}>{plan.planName}</button>
+                        <button key={plan.planId} onClick={() => setSelectedPlanId(plan.planId)} className={`flex-1 min-w-[120px] py-2 px-4 rounded-md text-xs font-bold transition-all whitespace-nowrap border ${selectedPlanId === plan.planId ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50'}`}>{plan.planName}</button>
                     ))}
                 </div>
             </div>
@@ -333,26 +338,26 @@ const Referrals: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap gap-2">
-                    <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Commission List ({directEarners.length + indirectEarners.length})</button>
-                    <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Tree View</button>
-                    <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Overflow ({overflowReferrals.length})</button>
-                    <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Held Commissions ({heldCommissionsData.count})</button>
-                    <button onClick={() => setViewMode('all')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'all' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>All Referrals ({allNodes.length})</button>
+                    <button onClick={() => setViewMode('commissions')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Commission List ({directEarners.length + indirectEarners.length})</button>
+                    <button onClick={() => setViewMode('tree')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'tree' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Tree View</button>
+                    <button onClick={() => setViewMode('overflow')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'overflow' ? 'bg-orange-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Overflow ({overflowReferrals.length})</button>
+                    <button onClick={() => setViewMode('held')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'held' ? 'bg-yellow-500 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>Held Commissions ({heldCommissionsData.count})</button>
+                    <button onClick={() => setViewMode('all')} className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-600 border dark:border-gray-700'}`}>All Referrals ({allNodes.length})</button>
                 </div>
                 <div className="p-4">
                     {viewMode === 'commissions' && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-blue-500 rounded-full mr-2"></span>Direct Referrals (Level 1)</h3><div className="space-y-3">{directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-400 text-sm italic">No direct earners yet.</p>}</div></div>
-                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center"><span className="w-2 h-8 bg-purple-500 rounded-full mr-2"></span>Indirect Team (Level 2+)</h3><div className="space-y-3">{indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-400 text-sm italic">No indirect team members yet.</p>}</div></div>
+                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center uppercase tracking-wider text-xs"><span className="w-1.5 h-4 bg-blue-500 rounded-full mr-2"></span>Direct Referrals (Level 1)</h3><div className="space-y-3">{directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-400 text-sm italic">No direct team members found for this context.</p>}</div></div>
+                            <div><h3 className="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center uppercase tracking-wider text-xs"><span className="w-1.5 h-4 bg-purple-500 rounded-full mr-2"></span>Indirect Team (Level 2+)</h3><div className="space-y-3">{indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-400 text-sm italic">No indirect team members found for this context.</p>}</div></div>
                         </div>
                     )}
-                    {viewMode === 'tree' && (genealogyTree.length > 0 ? <ul className="space-y-4">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <p className="text-center py-12 text-gray-400">No network found.</p>)}
-                    {viewMode === 'overflow' && <div className="space-y-3">{overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-12 text-gray-400">No overflow members.</p>}</div>}
-                    {viewMode === 'held' && <div className="space-y-3">{heldCommissionsData.referrals.length > 0 ? heldCommissionsData.referrals.map(u => <ReferralCardContent key={u._id} node={{user:u}} isHeldView={true} />) : <p className="text-center py-12 text-gray-400">No held commissions.</p>}</div>}
-                    {viewMode === 'all' && <div className="space-y-3">{allNodes.length > 0 ? allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} isAllView={true} />) : <p className="text-center py-12 text-gray-400">No referrals found.</p>}</div>}
-                    {viewMode === 'inactive' && <div className="space-y-3">{inactiveReferrals.length > 0 ? inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-12 text-gray-400">No inactive members.</p>}</div>}
+                    {viewMode === 'tree' && (genealogyTree.length > 0 ? <ul className="space-y-4">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <p className="text-center py-12 text-gray-400">No network hierarchy found.</p>)}
+                    {viewMode === 'overflow' && <div className="space-y-3">{overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-12 text-gray-400">No members have overflowed your current slot limits.</p>}</div>}
+                    {viewMode === 'held' && <div className="space-y-3">{heldCommissionsData.referrals.length > 0 ? heldCommissionsData.referrals.map(u => <ReferralCardContent key={u._id} node={{user:u}} isHeldView={true} />) : <p className="text-center py-12 text-gray-400">No commissions are currently being held.</p>}</div>}
+                    {viewMode === 'all' && <div className="space-y-3">{allNodes.length > 0 ? allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} isAllView={true} />) : <p className="text-center py-12 text-gray-400">No referrals found in your entire organization.</p>}</div>}
+                    {viewMode === 'inactive' && <div className="space-y-3">{inactiveReferrals.length > 0 ? inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-12 text-gray-400">No inactive members found.</p>}</div>}
                 </div>
             </div>
         </div>
