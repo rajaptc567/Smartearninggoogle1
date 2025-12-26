@@ -115,7 +115,7 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
 };
 
 /**
- * CORE COMMISSION PIPELINE (v1.10.14 - FIXED HOLD VS OVERFLOW)
+ * CORE COMMISSION PIPELINE (v1.10.15 - FIXED HOLD VS OVERFLOW ORDER)
  */
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
@@ -208,7 +208,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // 1. CALCULATE SLOT NUMBER FIRST (Include both Approved and Pending for occupancy)
+            // 1. CALCULATE SLOT NUMBER FIRST
+            // Mandatory: Include 'Pending' to count reserved hold positions as used slots
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -222,7 +223,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const sponsorOwnedEquivalent = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
             const activePlanDoc = sponsorOwnedEquivalent ? allPlans.find(p => p._id.toString() === String(sponsorOwnedEquivalent.planId)) : plan;
 
-            // 2. HOLD CHECK (MUST COME FIRST - Hold overrides Overflow)
+            // 2. HOLD CHECK (MUST COME FIRST - MANDATORY ORDER)
+            // If it's a hold slot, we bypass overflow check. HOLD overrides OVERFLOW.
             isHoldSlot = activePlanDoc?.holdPosition?.enabled && activePlanDoc.holdPosition.slots.includes(slotNum);
 
             // 3. OVERFLOW CHECK (ONLY IF NOT A HOLD SLOT)
@@ -250,6 +252,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 continue; 
             }
 
+            // Determine which commission percentage to use based on referral rank
             if (plan.directCommissions?.length > 0) {
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
             }
@@ -273,10 +276,9 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
 
         if (isHoldSlot) {
-            // Add to held balance for auto-upgrade
+            // HOLD Logic: Credit held balance (reason: HOLD_FOR_UPGRADE)
             uplineUser.heldBalance = Number((uplineUser.heldBalance + finalAmount).toFixed(2));
             
-            // Check Auto-Upgrade eligibility
             const upgradeToId = (level === 0 ? (sponsorOwnedEquivalent ? allPlans.find(p=>p._id.toString()===String(sponsorOwnedEquivalent.planId)) : plan) : plan).autoUpgrade?.toPlanId;
             const upgradePlan = allPlans.find(p => p._id.toString() === String(upgradeToId));
             if (upgradePlan && uplineUser.heldBalance >= upgradePlan.price) {
@@ -284,6 +286,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 await executePlanPurchase(uplineUser, upgradePlan, 'auto', settings, exchangeRates, defaultRates, allPlans);
             }
         } else if (eligibility.status === 'Approved') {
+            // NORMAL APPROVAL Logic: Credit wallet balance
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await Notification.create({ userId: uplineUser._id, message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from ${user.username}.` });
         }
@@ -298,7 +301,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             sourceUserId: user._id,
             description: isHoldSlot ? `Hold Commission for upgrade: Slot #${slotNum} (${user.username}) reserved.` : (eligibility.message || `Level ${level + 1} Commission from ${user.username}`),
             status: (isHoldSlot || eligibility.status === 'Pending') ? 'Pending' : 'Approved',
-            isHoldPosition: isHoldSlot, // Persist the hold state
+            isHoldPosition: isHoldSlot, 
             relatedPlanId: plan._id
         });
         
