@@ -84,6 +84,9 @@ const Referrals: React.FC = () => {
     }, [selectedPlanId, investmentPlans]);
 
     const isTransactionHoldPosition = (t: Transaction) => {
+        // Use explicit flag from backend if available
+        if (t.isHoldPosition !== undefined) return t.isHoldPosition === true;
+        // Fallback for legacy records
         const desc = t.description?.toLowerCase() || '';
         return (t.status === 'Pending' || t.status === 'Approved') && (desc.includes('hold commission for upgrade') || desc.includes('reserved for auto-upgrade'));
     };

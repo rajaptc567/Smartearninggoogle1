@@ -93,8 +93,7 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
         let totalReleased = 0;
         for (const comm of pendingCommissions) {
             // Only release standard pending commissions, NOT hold positions
-            const isHold = comm.description && comm.description.includes('Hold Commission for upgrade');
-            if (!isHold && canReleaseCommission(comm, user, settings, allPlans)) {
+            if (!comm.isHoldPosition && canReleaseCommission(comm, user, settings, allPlans)) {
                 comm.status = 'Approved';
                 await comm.save();
                 totalReleased += comm.amount;
@@ -116,7 +115,7 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
 };
 
 /**
- * CORE COMMISSION PIPELINE (v1.10.13 - FIXED EXECUTION ORDER)
+ * CORE COMMISSION PIPELINE (v1.10.14 - FIXED HOLD VS OVERFLOW)
  */
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
@@ -209,7 +208,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // 1. CALCULATE SLOT NUMBER FIRST (MANDATORY: Include Pending to count reserved spots)
+            // 1. CALCULATE SLOT NUMBER FIRST (Include both Approved and Pending for occupancy)
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -220,8 +219,8 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
             slotNum = referralCount + 1;
             
-            const sponsorPlanConfig = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
-            const activePlanDoc = sponsorPlanConfig ? allPlans.find(p => p._id.toString() === String(sponsorPlanConfig.planId)) : plan;
+            const sponsorOwnedEquivalent = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+            const activePlanDoc = sponsorOwnedEquivalent ? allPlans.find(p => p._id.toString() === String(sponsorOwnedEquivalent.planId)) : plan;
 
             // 2. HOLD CHECK (MUST COME FIRST - Hold overrides Overflow)
             isHoldSlot = activePlanDoc?.holdPosition?.enabled && activePlanDoc.holdPosition.slots.includes(slotNum);
@@ -258,7 +257,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             commissionConfig = (plan.indirectCommissions || [])[level - 1];
         }
 
-        // Apply One-Time Check (unless recurring rights)
+        // Apply One-Time Check
         if (settings.oneTimeCommissionPerGroup) {
             const hasRecurring = (uplineUser.activePlans || []).some(p => (settings.recurringCommissionPlanIds || []).includes(String(p.planId)));
             if (!hasRecurring) {
@@ -274,10 +273,11 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
 
         if (isHoldSlot) {
-            // HOLD logic: Add to held balance and check auto-upgrade
+            // Add to held balance for auto-upgrade
             uplineUser.heldBalance = Number((uplineUser.heldBalance + finalAmount).toFixed(2));
             
-            const upgradeToId = plan.autoUpgrade?.toPlanId;
+            // Check Auto-Upgrade eligibility
+            const upgradeToId = (level === 0 ? (sponsorOwnedEquivalent ? allPlans.find(p=>p._id.toString()===String(sponsorOwnedEquivalent.planId)) : plan) : plan).autoUpgrade?.toPlanId;
             const upgradePlan = allPlans.find(p => p._id.toString() === String(upgradeToId));
             if (upgradePlan && uplineUser.heldBalance >= upgradePlan.price) {
                 uplineUser.heldBalance = Number((uplineUser.heldBalance - upgradePlan.price).toFixed(2));
@@ -298,6 +298,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             sourceUserId: user._id,
             description: isHoldSlot ? `Hold Commission for upgrade: Slot #${slotNum} (${user.username}) reserved.` : (eligibility.message || `Level ${level + 1} Commission from ${user.username}`),
             status: (isHoldSlot || eligibility.status === 'Pending') ? 'Pending' : 'Approved',
+            isHoldPosition: isHoldSlot, // Persist the hold state
             relatedPlanId: plan._id
         });
         
@@ -361,8 +362,7 @@ export const updateUser = async (req, res) => {
             const pending = await Transaction.find({ userId: user._id, type: 'Commission', status: 'Pending' });
             let total = 0;
             for (const c of pending) { 
-                const isHold = c.description && c.description.includes('Hold Commission for upgrade');
-                if (!isHold && canReleaseCommission(c, user, settings, allPlans)) { 
+                if (!c.isHoldPosition && canReleaseCommission(c, user, settings, allPlans)) { 
                     c.status = 'Approved'; await c.save(); total += c.amount; 
                 } 
             }
