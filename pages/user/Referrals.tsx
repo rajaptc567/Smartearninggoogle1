@@ -35,10 +35,6 @@ const Referrals: React.FC = () => {
     
     const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'held' | 'all' | 'inactive'>('commissions');
 
-    const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
-    const [selectedSponsor, setSelectedSponsor] = useState<User | null>(null);
-    const [selectedReferralForSponsorModal, setSelectedReferralForSponsorModal] = useState<User | null>(null);
-
     const prevPlanId = useRef(selectedPlanId);
 
     useEffect(() => {
@@ -84,9 +80,7 @@ const Referrals: React.FC = () => {
     }, [selectedPlanId, investmentPlans]);
 
     const isTransactionHoldPosition = (t: Transaction) => {
-        // Use explicit flag from backend if available
         if (t.isHoldPosition !== undefined) return t.isHoldPosition === true;
-        // Fallback for legacy records
         const desc = t.description?.toLowerCase() || '';
         return (t.status === 'Pending' || t.status === 'Approved') && (desc.includes('hold commission for upgrade') || desc.includes('reserved for auto-upgrade'));
     };
@@ -101,8 +95,8 @@ const Referrals: React.FC = () => {
             (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : false) 
         );
 
-        const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
-        const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        const earned = referralComms.filter(t => t.status === 'Approved' && !t.isHoldPosition).reduce((sum, t) => sum + t.amount, 0);
+        const held = referralComms.filter(t => t.status === 'Pending' || t.isHoldPosition).reduce((sum, t) => sum + t.amount, 0);
         const isHoldPosition = referralComms.some(t => isTransactionHoldPosition(t));
         const isOverflow = referralComms.some(t => t.status === 'Rejected' && t.description.toLowerCase().includes('overflow'));
         
@@ -154,7 +148,7 @@ const Referrals: React.FC = () => {
         });
 
         const relevantCommissions = transactions.filter(t => 
-            t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Approved' && 
+            t.userId === currentUser._id && t.type === 'Commission' && t.status === 'Approved' && !t.isHoldPosition &&
             (t.relatedPlanId ? equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) : false) 
         );
 
@@ -205,7 +199,7 @@ const Referrals: React.FC = () => {
         const level = 'level' in node ? node.level : undefined;
         const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
         
-        let earned = isAllView ? transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved').reduce((s,t)=>s+t.amount,0) : info.earned;
+        let earned = isAllView ? transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved' && !t.isHoldPosition).reduce((s,t)=>s+t.amount,0) : info.earned;
         let held = isHeldView ? (heldCommissionsData.stats.get(user._id)?.total || 0) : info.held;
         let isHoldPosition = isHeldView ? heldCommissionsData.stats.get(user._id)?.breakdown.some(b=>b.isHoldPosition) : info.isHoldPosition;
         let isOverflow = info.isOverflow;

@@ -115,7 +115,7 @@ const executePlanPurchase = async (user, plan, triggerType, settings, exchangeRa
 };
 
 /**
- * CORE COMMISSION PIPELINE (v1.10.15 - FIXED HOLD VS OVERFLOW ORDER)
+ * CORE COMMISSION PIPELINE (v1.10.16 - PRIORITIZED HOLD OVER OVERFLOW)
  */
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
@@ -208,8 +208,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // 1. CALCULATE SLOT NUMBER FIRST
-            // Mandatory: Include 'Pending' to count reserved hold positions as used slots
+            // 1. CALCULATE SLOT NUMBER (Include Approved AND Pending to count held seats)
             const referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
@@ -223,11 +222,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const sponsorOwnedEquivalent = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
             const activePlanDoc = sponsorOwnedEquivalent ? allPlans.find(p => p._id.toString() === String(sponsorOwnedEquivalent.planId)) : plan;
 
-            // 2. HOLD CHECK (MUST COME FIRST - MANDATORY ORDER)
-            // If it's a hold slot, we bypass overflow check. HOLD overrides OVERFLOW.
-            isHoldSlot = activePlanDoc?.holdPosition?.enabled && activePlanDoc.holdPosition.slots.includes(slotNum);
+            // 2. HOLD CHECK (PRIORITY #1: HOLD OVERRIDES OVERFLOW)
+            isHoldSlot = activePlanDoc?.holdPosition?.enabled && 
+                         activePlanDoc.holdPosition.slots && 
+                         activePlanDoc.holdPosition.slots.some(s => Number(s) === Number(slotNum));
 
-            // 3. OVERFLOW CHECK (ONLY IF NOT A HOLD SLOT)
+            // 3. OVERFLOW CHECK (PRIORITY #2: ONLY IF NOT A HOLD SLOT)
             if (!isHoldSlot) {
                 const limit = activePlanDoc?.directReferralLimit || 0;
                 if (limit > 0 && slotNum > limit) {
@@ -244,7 +244,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `Overflow: Limit reached (Slot #${slotNum})`,
+                    description: `Overflow: Limit reached for ${activePlanDoc?.name || 'plan'} (Slot #${slotNum})`,
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });
@@ -252,7 +252,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 continue; 
             }
 
-            // Determine which commission percentage to use based on referral rank
             if (plan.directCommissions?.length > 0) {
                 commissionConfig = referralCount < plan.directCommissions.length ? plan.directCommissions[referralCount] : plan.directCommissions[plan.directCommissions.length - 1];
             }
@@ -276,7 +275,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
 
         if (isHoldSlot) {
-            // HOLD Logic: Credit held balance (reason: HOLD_FOR_UPGRADE)
+            // HOLD Logic: Reserve funds for upgrade
             uplineUser.heldBalance = Number((uplineUser.heldBalance + finalAmount).toFixed(2));
             
             const upgradeToId = (level === 0 ? (sponsorOwnedEquivalent ? allPlans.find(p=>p._id.toString()===String(sponsorOwnedEquivalent.planId)) : plan) : plan).autoUpgrade?.toPlanId;
@@ -286,7 +285,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 await executePlanPurchase(uplineUser, upgradePlan, 'auto', settings, exchangeRates, defaultRates, allPlans);
             }
         } else if (eligibility.status === 'Approved') {
-            // NORMAL APPROVAL Logic: Credit wallet balance
+            // Standard Approval Logic
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await Notification.create({ userId: uplineUser._id, message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from ${user.username}.` });
         }
