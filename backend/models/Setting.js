@@ -170,15 +170,6 @@ const SettingSchema = new mongoose.Schema({
             default: 'days'
         }
     },
-    planSortType: {
-        type: String,
-        enum: ['price-asc', 'price-desc', 'manual'],
-        default: 'price-asc',
-    },
-    manualPlanOrder: {
-        type: [String],
-        default: [],
-    },
     demoProfiles: [DemoProfileSchema],
     demoActivityTemplates: [DemoActivityTemplateSchema],
     notices: [NoticeSchema],

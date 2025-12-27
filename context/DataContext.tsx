@@ -73,9 +73,6 @@ const initialState: AppState = {
             value: 1,
             unit: 'days'
         },
-        // Initializing planSortType and manualPlanOrder in initialState
-        planSortType: 'price-asc',
-        manualPlanOrder: [],
         tickerSpeed: 6,
         tickerContentSource: 'hybrid',
         tickerRealActivities: { deposits: true, withdrawals: true, registrations: true, commissions: true, transfers: true, planPurchases: true },
