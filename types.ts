@@ -1,5 +1,4 @@
 
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -168,8 +167,6 @@ export interface Transaction {
     level?: number;
     sourceUserId?: string;
     relatedPlanId?: string;
-    // FIX: Added missing isHoldPosition property to Transaction interface to resolve type errors in referrals and other pages.
-    isHoldPosition?: boolean;
     originalAmount?: number;
     originalCurrency?: Currency;
     exchangeRate?: number;

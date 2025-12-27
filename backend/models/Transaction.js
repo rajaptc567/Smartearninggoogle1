@@ -1,3 +1,4 @@
+
 import mongoose from 'mongoose';
 
 const TransactionSchema = new mongoose.Schema({
@@ -38,10 +39,6 @@ const TransactionSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],
-    },
-    isHoldPosition: { // NEW: Explicit flag for automated upgrade holds
-        type: Boolean,
-        default: false
     },
     relatedPlanId: {
         type: mongoose.Schema.ObjectId,
