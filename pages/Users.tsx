@@ -1004,8 +1004,11 @@ const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDele
         csvRows.push(toCsvRow(['--- DISPUTE HISTORY ---']));
         const userDisps = disputes.filter(d => d.userId === user._id);
         if (userDisps.length > 0) {
-            csvRows.push(toCsvRow(['Date', 'Type', 'Status', 'Ref ID', 'Description']));
-            userDisps.forEach(d => csvRows.push(toCsvRow([new Date(d.date).toLocaleString(), d.type, d.status, d.referenceId, d.description])));
+            csvRows.push(toCsvRow(['Date', 'Type', 'Status', 'Ref ID', 'Description', 'Chat Log']));
+            userDisps.forEach(d => {
+                const chatLog = (d.messages || []).map(m => `[${new Date(m.date).toLocaleString()} - ${m.sender}]: ${m.message}`).join(' | ');
+                csvRows.push(toCsvRow([new Date(d.date).toLocaleString(), d.type, d.status, d.referenceId, d.description, chatLog]));
+            });
         } else {
             csvRows.push(toCsvRow(['No dispute records']));
         }
@@ -1149,14 +1152,17 @@ const BulkDeleteUserModal: React.FC<{ userIds: string[]; onClose: () => void; on
             csvRows.push(toCsvRow(['--- DISPUTE LOG ---']));
             const userDisps = disputes.filter(d => d.userId === user._id);
             if (userDisps.length > 0) {
-                csvRows.push(toCsvRow(['Date', 'Type', 'Status', 'Ref ID', 'Description']));
-                userDisps.forEach(d => csvRows.push(toCsvRow([new Date(d.date).toLocaleString(), d.type, d.status, d.referenceId, d.description])));
+                csvRows.push(toCsvRow(['Date', 'Type', 'Status', 'Ref ID', 'Description', 'Chat Log']));
+                userDisps.forEach(d => {
+                    const chatLog = (d.messages || []).map(m => `[${new Date(m.date).toLocaleString()} - ${m.sender}]: ${m.message}`).join(' | ');
+                    csvRows.push(toCsvRow([new Date(d.date).toLocaleString(), d.type, d.status, d.referenceId, d.description, chatLog]));
+                });
             } else {
                 csvRows.push(toCsvRow(['No dispute records']));
             }
             
             csvRows.push('');
-            csvRows.push(''); // 2 Empty lines between users
+            csvRows.push(''); // Spacing between users
         });
 
         const csvContent = csvRows.join('\n');
@@ -1184,8 +1190,8 @@ const BulkDeleteUserModal: React.FC<{ userIds: string[]; onClose: () => void; on
                     </ul>
                 </div>
 
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/50 p-3 rounded-md font-bold uppercase tracking-tight mb-6">
-                    MANDATORY STEP: You must download the detailed dossier (backup) of these users before the permanent deletion button is enabled. This backup includes full profile data, financial logs, network details, and transaction history.
+                <p className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md font-bold uppercase tracking-tight mb-6">
+                    RECOMMENDED: Download the detailed dossier (backup) of these users before permanent deletion. This includes full profile data, financial logs, network details, and transaction history.
                 </p>
 
                 <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 border-t pt-6">
@@ -1197,14 +1203,14 @@ const BulkDeleteUserModal: React.FC<{ userIds: string[]; onClose: () => void; on
                             disabled={isDownloading}
                             className={hasDownloaded ? 'bg-green-50 text-green-700 border-green-200' : ''}
                         >
-                            {isDownloading ? 'Generating...' : hasDownloaded ? '✓ Dossier Downloaded' : '1. Download Complete Dossiers'}
+                            {isDownloading ? 'Generating...' : hasDownloaded ? '✓ Dossier Downloaded' : 'Download Complete Dossiers'}
                         </Button>
                         <Button 
                             variant="danger" 
                             onClick={handleDelete} 
-                            disabled={isDeleting || !hasDownloaded}
+                            disabled={isDeleting}
                         >
-                            {isDeleting ? 'Deleting Batch...' : '2. Delete Permanently'}
+                            {isDeleting ? 'Deleting Batch...' : 'Delete Permanently'}
                         </Button>
                     </div>
                 </div>
