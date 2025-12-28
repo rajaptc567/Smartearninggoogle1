@@ -1132,8 +1132,6 @@ const BulkDeleteUserModal: React.FC<{ userIds: string[]; onClose: () => void; on
             } else {
                 csvRows.push(toCsvRow(['No withdrawal records']));
             }
-            csvRows.push('');
-
             // TRANSFERS
             csvRows.push(toCsvRow(['--- TRANSFER LOG ---']));
             const userTrans = transfers.filter(t => t.senderId === user._id || t.recipientId === user._id);

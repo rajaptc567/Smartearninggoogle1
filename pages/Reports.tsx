@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -21,7 +20,7 @@ const reportConfigs: { [key in ReportType]: { label: string; key: keyof any, isC
 
 const Reports: React.FC = () => {
     const { state } = useData();
-    const { users, transactions, deposits, withdrawals, transfers } = state;
+    const { users, transactions, deposits, withdrawals, transfers, disputes } = state;
     const UPLOADS_URL = getUploadsBaseUrl();
     
     const [activeTab, setActiveTab] = useState<'general' | 'dossier'>('general');
@@ -122,8 +121,6 @@ const Reports: React.FC = () => {
         document.body.removeChild(link);
     };
 
-    // ... (rest of the component unchanged)
-
     const handleUserSelect = (userId: string) => {
         setSelectedUserIds(prev => {
             if (prev.includes(userId)) {
@@ -147,8 +144,6 @@ const Reports: React.FC = () => {
         setShowDossierPreview(false);
     };
     
-    // ... (rest of the component is fine)
-
     // Helper to link a transaction to a deposit proof
     const getReceiptInfo = (tx: Transaction) => {
         if (tx.type !== 'Deposit') return 'N/A';
@@ -297,8 +292,6 @@ const Reports: React.FC = () => {
         document.body.removeChild(link);
     };
     
-    // ... (rest of the component, especially dossier preview, needs currency formatting)
-
     const filteredUsersForDossier = useMemo(() => {
         if (!userSearchTerm) return users;
         const term = userSearchTerm.toLowerCase();

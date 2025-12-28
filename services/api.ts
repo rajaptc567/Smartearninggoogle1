@@ -1,4 +1,3 @@
-// ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
 
 // The base URL of your backend API is determined at runtime.
@@ -85,7 +84,7 @@ export const deleteUser = async (id: string): Promise<{}> => {
     return result.data;
 };
 
-// NEW: Bulk Delete Function
+// Bulk Delete Function
 export const bulkDeleteUsers = async (ids: string[]): Promise<{ success: boolean }> => {
     // We execute individual deletions in parallel to ensure all cascade logic in the controller is triggered per user
     const deletePromises = ids.map(id => fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' }));
