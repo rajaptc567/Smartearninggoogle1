@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan } from '../../types';
@@ -265,7 +264,7 @@ const Referrals: React.FC = () => {
     };
 
     const { genealogyTree, directEarners, indirectEarners, inactiveReferrals, networkStats, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
+        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], networkStats: { totalReferrals: 0, activeMembers: 0, earnings: 0, directEarnings: 0, indirectEarnings: 0 }, allNodes: [] };
 
         // 1. Build Full Tree First
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
@@ -822,7 +821,7 @@ const Referrals: React.FC = () => {
                         onClick={() => setViewMode('commissions')} 
                         className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'commissions' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}
                     >
-                        Commission List
+                        Commission List ({directEarners.length + indirectEarners.length})
                     </button>
                     <button 
                         onClick={() => setViewMode('tree')} 
@@ -846,7 +845,7 @@ const Referrals: React.FC = () => {
                         onClick={() => setViewMode('inactive')} 
                         className={`px-4 py-2 text-xs font-bold rounded-full transition-colors ${viewMode === 'inactive' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}
                     >
-                        Inactive Members
+                        Inactive Member ({inactiveReferrals.length})
                     </button>
                 </div>
                 
