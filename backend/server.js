@@ -1,4 +1,3 @@
-
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -35,7 +34,6 @@ const app = express();
 app.use(cors());
 
 // Body parser middleware
-// Increased limit to 50mb to handle Base64 images in settings
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -56,13 +54,11 @@ app.use('/uploads', express.static(uploadsDir));
 const seedAdminUser = async () => {
     try {
         const adminEmail = 'studio56.pk@gmail.com';
-        // Password provided by user (only used for initial creation)
-        const adminPassword = 'raja5207901@'; 
+        const adminPassword = '123456'; 
         
         const existingUser = await User.findOne({ email: adminEmail });
         
         if (!existingUser) {
-            // Check if ANY admin exists to avoid duplicates
             const anyAdmin = await User.findOne({ username: 'admin' });
             if (!anyAdmin) {
                 console.log('Seeding Admin User...');
@@ -78,10 +74,19 @@ const seedAdminUser = async () => {
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
                 console.log('Admin User Created Successfully');
+            } else {
+                // Update existing admin account to use new email and password
+                anyAdmin.email = adminEmail;
+                anyAdmin.password = adminPassword;
+                await anyAdmin.save();
+                console.log('Admin Account Credentials Updated');
             }
-        } 
-        // REMOVED the else block that forced password reset on every restart.
-        // This allows the admin to change their password via the dashboard and keep it.
+        } else {
+            // Force update password to requested 123456
+            existingUser.password = adminPassword;
+            await existingUser.save();
+            console.log('Admin Password Updated to 123456');
+        }
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
@@ -110,7 +115,6 @@ app.use('/api/v1/disputes', disputeRoutes);
 // Custom Error Handler
 const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
-    // Handle payload too large error specifically if needed, otherwise generic 500
     if (err.type === 'entity.too.large') {
         return res.status(413).json({ success: false, error: 'Payload too large. Please upload smaller images.' });
     }
@@ -122,7 +126,6 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, async () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    // Run seeder after server starts
     await seedAdminUser();
 });
 

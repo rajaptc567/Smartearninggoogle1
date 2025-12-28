@@ -188,7 +188,7 @@ const Users: React.FC = () => {
                      <select
                         value={currencyFilter}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCurrencyFilter(e.target.value as Currency | '')}
-                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2"
                     >
                         <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
@@ -521,21 +521,33 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         const earned = relevantTx.filter(t => t.status === 'Approved').reduce((s, t) => s + t.amount, 0);
         const held = relevantTx.filter(t => t.status === 'Pending').reduce((s, t) => s + t.amount, 0);
         
-        const directs = users.filter(u => u.sponsor === member.username);
-        const countDownline = (username: string): number => {
-            const subs = users.filter(u => u.sponsor === username);
-            return subs.length + subs.reduce((acc, curr) => acc + countDownline(curr.username), 0);
+        const directs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === member.username.toLowerCase());
+        
+        const visited = new Set<string>();
+        const countDownline = (username: string, depth: number = 0): number => {
+            if (!username) return 0;
+            const normalized = username.toLowerCase();
+            if (visited.has(normalized) || depth > 20) return 0;
+            visited.add(normalized);
+            const subs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === normalized);
+            return subs.length + subs.reduce((acc, curr) => acc + countDownline(curr.username, depth + 1), 0);
         };
 
         const totalTeamSize = countDownline(member.username);
-        return { earned, held, directRefs: directs.length, totalTeam: totalTeamSize, indirectRefs: totalTeamSize - directs.length };
+        return { earned, held, directRefs: directs.length, totalTeam: totalTeamSize, indirectRefs: Math.max(0, totalTeamSize - directs.length) };
     }, [users, transactions]);
 
     const genealogyTree = useMemo(() => {
         if (!treeRoot) return [];
-        const buildGenealogy = (sponsorUsername: string, allUsers: User[], level: number): { user: User, children: any[], level: number }[] => {
-            const directReferrals = allUsers.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
-            return directReferrals.map(child => ({ user: child, children: buildGenealogy(child.username, allUsers, level + 1), level }));
+        const visited = new Set<string>();
+        const buildGenealogy = (sponsorUsername: string, allUsers: User[], level: number, depth: number = 0): { user: User, children: any[], level: number }[] => {
+            if (!sponsorUsername) return [];
+            const normalized = sponsorUsername.toLowerCase();
+            if (visited.has(normalized) || depth > 10) return [];
+            visited.add(normalized);
+            
+            const directReferrals = allUsers.filter(u => u.sponsor && u.sponsor.toLowerCase() === normalized);
+            return directReferrals.map(child => ({ user: child, children: buildGenealogy(child.username, allUsers, level + 1, depth + 1), level }));
         };
         return buildGenealogy(treeRoot.username, users, 1);
     }, [treeRoot, users]);
@@ -744,7 +756,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     {activeTab === 'network' && user && (
                          <div className="space-y-6 animate-fade-in pb-10 px-1">
                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                 <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold">Direct Referrals</p><p className="text-xl font-bold">{users.filter(u => u.sponsor === treeRoot?.username).length}</p></div>
+                                 <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold">Direct Referrals</p><p className="text-xl font-bold">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === treeRoot?.username?.toLowerCase()).length}</p></div>
                                  <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border dark:border-gray-600 text-center ring-2 ring-blue-500 ring-inset"><p className="text-[10px] text-blue-500 uppercase font-bold">Viewing Genealogy Of</p><p className="text-xl font-bold text-blue-600 truncate px-2">@{treeRoot?.username}</p></div>
                                  <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-amber-600">Held Amount</p><p className="text-xl font-bold text-amber-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Pending').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
                                  <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-green-600">Total Earnings</p><p className="text-xl font-bold text-green-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Approved' && t.type === 'Commission').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
@@ -939,7 +951,7 @@ const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDele
         const depTotal = deposits.filter(d => d.userId === user._id && d.status === 'Approved').reduce((s, d) => s + d.amount, 0);
         const withTotal = withdrawals.filter(w => w.userId === user._id && w.status === 'Paid').reduce((s, w) => s + w.finalAmount, 0);
         const commTotal = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved').reduce((s, t) => s + t.amount, 0);
-        const refCount = users.filter(u => u.sponsor === user.username).length;
+        const refCount = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === user.username.toLowerCase()).length;
 
         csvRows.push(toCsvRow(['--- FINANCIAL SUMMARY ---']));
         csvRows.push(toCsvRow(['Total Deposits Approved', formatCurrency(depTotal, user.currency)]));
@@ -1087,7 +1099,7 @@ const BulkDeleteUserModal: React.FC<{ userIds: string[]; onClose: () => void; on
             const depTotal = deposits.filter(d => d.userId === user._id && d.status === 'Approved').reduce((s, d) => s + d.amount, 0);
             const withTotal = withdrawals.filter(w => w.userId === user._id && w.status === 'Paid').reduce((s, w) => s + w.finalAmount, 0);
             const commTotal = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved').reduce((s, t) => s + t.amount, 0);
-            const refCount = users.filter(u => u.sponsor === user.username).length;
+            const refCount = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === user.username.toLowerCase()).length;
 
             csvRows.push(toCsvRow(['--- FINANCIAL SUMMARY ---']));
             csvRows.push(toCsvRow(['Total Deposits Approved', formatCurrency(depTotal, user.currency)]));
@@ -1293,7 +1305,6 @@ const MessageUserModal: React.FC<{ user: User | null; allUsers: User[]; investme
                     {!user && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label className="text-xs font-bold text-gray-500 uppercase">Target</label><select value={targetType} onChange={e => { setTargetType(e.target.value as any); setTargetIds([]); }} className="w-full rounded border dark:bg-gray-700 mt-1"><option value="all">All Users</option><option value="plan">By Plan</option><option value="inactive">Inactive</option><option value="manual">Manual</option></select></div>
-                            {/* FIX: Explicitly type the option element in Array.from callback to avoid 'unknown' type error */}
                             {targetType === 'plan' && <div><label className="text-xs font-bold text-gray-500 uppercase">Select Plans</label><select multiple value={targetIds} onChange={e => setTargetIds(Array.from(e.target.selectedOptions, (o: HTMLOptionElement) => o.value))} className="w-full rounded border dark:bg-gray-700 mt-1 h-20">{investmentPlans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</select></div>}
                             {targetType === 'manual' && <div className="md:col-span-2 space-y-2"><input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} placeholder="Filter..." className="w-full text-xs rounded border dark:bg-gray-700"/><div className="max-h-24 overflow-y-auto border rounded dark:border-gray-600">{filtered.map(u=><label key={u._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 dark:hover:bg-gray-700"><input type="checkbox" checked={targetIds.includes(u._id)} onChange={()=>setTargetIds(prev=>prev.includes(u._id)?prev.filter(i=>i!==u._id):[...prev, u._id])}/> <span className="text-xs">{u.username}</span></label>)}</div></div>}
                         </div>

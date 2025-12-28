@@ -144,36 +144,25 @@ const Reports: React.FC = () => {
         setShowDossierPreview(false);
     };
     
-    // Helper to link a transaction to a deposit proof
     const getReceiptInfo = (tx: Transaction) => {
         if (tx.type !== 'Deposit') return 'N/A';
-        
-        // Attempt to find matching deposit. 
-        // Transaction description usually contains "Deposit #<id>"
         const match = tx.description.match(/#(\w+)/);
         const depositId = match ? match[1] : null;
-        
         let deposit: Deposit | undefined;
         if (depositId) {
             deposit = deposits.find(d => d._id === depositId);
         } 
-        
-        // Fallback: Try strict matching on other fields if ID extraction fails (rare)
         if (!deposit) {
              deposit = deposits.find(d => d.transactionId === tx.description || (d.userId === tx.userId && d.amount === tx.amount && new Date(d.date).getTime() === new Date(tx.date).getTime()));
         }
-
         if (deposit && deposit.receiptUrl) {
             if (deposit.receiptUrl.startsWith('data:')) return '[Base64 Image Data - View in Admin Panel]';
             return `${UPLOADS_URL}${deposit.receiptUrl}`;
         }
-        
         return 'N/A';
     };
 
-    // Helper to calculate deep analytics
     const calculateUserAnalytics = (user: User) => {
-        // 1. Financials from Transactions/Records
         const approvedDeposits = deposits.filter(d => d.userId === user._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0);
         const paidWithdrawals = withdrawals.filter(w => w.userId === user._id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0);
         const sentTransfers = transfers.filter(t => t.senderId === user._id && t.status === Status.Approved).reduce((sum, t) => sum + t.amount, 0);
@@ -183,19 +172,23 @@ const Reports: React.FC = () => {
         const directCommission = commissions.filter(t => t.level === 1).reduce((sum, t) => sum + t.amount, 0);
         const indirectCommission = totalCommission - directCommission;
 
-        // 2. Network Stats
-        const directRefs = users.filter(u => u.sponsor === user.username);
+        const directRefs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === user.username.toLowerCase());
         const totalDirectRef = directRefs.length;
 
-        // Helper to count downline recursively
-        const countDownline = (username: string): number => {
-            const directs = users.filter(u => u.sponsor === username);
-            return directs.length + directs.reduce((acc, curr) => acc + countDownline(curr.username), 0);
+        // FIXED: Added cycle detection and depth limit
+        const visited = new Set<string>();
+        const countDownline = (username: string, depth: number = 0): number => {
+            if (!username) return 0;
+            const normalized = username.toLowerCase();
+            if (visited.has(normalized) || depth > 20) return 0;
+            visited.add(normalized);
+            
+            const subs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === normalized);
+            return subs.length + subs.reduce((acc, curr) => acc + countDownline(curr.username, depth + 1), 0);
         };
 
-        // Total network size including directs
         const totalNetwork = countDownline(user.username);
-        const totalIndirectRef = totalNetwork - totalDirectRef;
+        const totalIndirectRef = Math.max(0, totalNetwork - totalDirectRef);
 
         return {
             totalDeposit: approvedDeposits,
@@ -211,21 +204,14 @@ const Reports: React.FC = () => {
 
     const downloadBulkDossier = () => {
         if (selectedUserIds.length === 0) return alert('Please select at least one user.');
-
         const rows: string[][] = [];
-
         selectedUserIds.forEach((userId, index) => {
             const user = users.find(u => u._id === userId);
             if (!user) return;
-
             const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             const stats = calculateUserAnalytics(user);
-
-            // SEPARATOR
-            if (index > 0) rows.push([], [], []); // Spacers between users
+            if (index > 0) rows.push([], [], []);
             rows.push([`=== USER DOSSIER: ${user.username} (${user.email}) ===`]);
-            
-            // SECTION 1: ANALYTICS SUMMARY
             rows.push(['--- ANALYTICS SUMMARY ---']);
             rows.push(['Metric', 'Value']);
             rows.push(['Total Approved Deposits', formatCurrency(stats.totalDeposit, user.currency)]);
@@ -237,8 +223,6 @@ const Reports: React.FC = () => {
             rows.push(['Total Direct Referrals', `${stats.totalDirectRef}`]);
             rows.push(['Total Indirect Referrals', `${stats.totalIndirectRef}`]);
             rows.push([]);
-
-            // SECTION 2: PROFILE
             rows.push(['--- PROFILE ---']);
             rows.push(['User ID', user._id]);
             rows.push(['Full Name', user.fullName]);
@@ -248,8 +232,6 @@ const Reports: React.FC = () => {
             rows.push(['Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
             rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
             rows.push([]); 
-
-            // SECTION 3: PLANS
             rows.push(['--- ACTIVE PLANS ---']);
             if (user.activePlans && user.activePlans.length > 0) {
                 rows.push(['Plan Name', 'Price', 'Purchase Date']);
@@ -260,8 +242,6 @@ const Reports: React.FC = () => {
                 rows.push(['No active plans']);
             }
             rows.push([]); 
-
-            // SECTION 4: ACTIVITY LOG
             rows.push(['--- ACTIVITY LOG ---']);
             rows.push(['Date', 'Type', 'Amount', 'Status', 'Description/Details', 'Receipt / Proof']);
             userTx.forEach(tx => {
@@ -276,16 +256,13 @@ const Reports: React.FC = () => {
                 ]);
             });
         });
-
         const csvContent = rows.map(e => e.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-        
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         const filename = selectedUserIds.length === 1 
             ? `Dossier_${users.find(u => u._id === selectedUserIds[0])?.username}_${new Date().toISOString().split('T')[0]}.csv`
             : `Bulk_Dossiers_${selectedUserIds.length}_Users_${new Date().toISOString().split('T')[0]}.csv`;
-            
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -307,7 +284,6 @@ const Reports: React.FC = () => {
     const hasAmountField = ['deposits', 'withdrawals', 'transfers', 'users', 'commissions', 'all_transactions'].includes(reportType);
     const hasCurrencyField = ['deposits', 'withdrawals', 'users', 'transfers', 'commissions', 'all_transactions'].includes(reportType);
     
-    // Helper for Preview display of receipts
     const renderReceiptPreview = (tx: Transaction) => {
         const proof = getReceiptInfo(tx);
         if (proof === 'N/A') return <span className="text-gray-400">-</span>;
@@ -436,7 +412,6 @@ const Reports: React.FC = () => {
                     </p>
                     
                     <div className="space-y-4">
-                        {/* Selection Controls */}
                         <div className="flex flex-col sm:flex-row justify-between gap-4">
                             <input 
                                 type="text" 
@@ -451,7 +426,6 @@ const Reports: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* User List */}
                         <div className="border dark:border-gray-700 rounded-md max-h-64 overflow-y-auto">
                             {filteredUsersForDossier.length > 0 ? (
                                 <table className="w-full text-sm text-left">
@@ -481,7 +455,7 @@ const Reports: React.FC = () => {
                                                     <input 
                                                         type="checkbox" 
                                                         checked={selectedUserIds.includes(u._id)}
-                                                        onChange={() => {}} // Handled by row click
+                                                        onChange={() => {}} 
                                                         className="rounded dark:bg-gray-700 dark:border-gray-600 pointer-events-none"
                                                     />
                                                 </td>
@@ -514,7 +488,6 @@ const Reports: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Modal Preview Section */}
                         {showDossierPreview && selectedUserIds.length > 0 && (
                             <Modal isOpen={showDossierPreview} onClose={() => setShowDossierPreview(false)}>
                                 <div className="p-4 w-[95vw] max-w-7xl h-[85vh] overflow-y-auto">
@@ -525,22 +498,18 @@ const Reports: React.FC = () => {
                                             <Button variant="secondary" onClick={() => setShowDossierPreview(false)}>Close</Button>
                                         </div>
                                     </div>
-                                    
                                     <div className="space-y-8">
                                         {selectedUserIds.map(userId => {
                                             const user = users.find(u => u._id === userId);
                                             if (!user) return null;
                                             const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                                             const stats = calculateUserAnalytics(user);
-
                                             return (
                                                 <div key={user._id} className="border dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800 shadow-sm">
                                                     <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 mb-3 flex items-center">
                                                         {user.fullName} (@{user.username})
                                                         <span className="ml-2 text-xs text-gray-500 font-normal">{user._id}</span>
                                                     </h3>
-                                                    
-                                                    {/* ANALYTICS PREVIEW GRID */}
                                                     <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-white dark:bg-gray-900 p-4 rounded-md border border-gray-200 dark:border-gray-700">
                                                         <div className="text-center">
                                                             <p className="text-xs text-gray-500 uppercase">Total Commission</p>
@@ -561,7 +530,6 @@ const Reports: React.FC = () => {
                                                             <p className="text-[10px] text-gray-400">Dir: {stats.totalDirectRef} | Ind: {stats.totalIndirectRef}</p>
                                                         </div>
                                                     </div>
-
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
                                                         <div><strong>Email:</strong> {user.email}</div>
                                                         <div><strong>Phone:</strong> {user.phone}</div>
@@ -570,7 +538,6 @@ const Reports: React.FC = () => {
                                                         <div><strong>Status:</strong> <Badge status={user.status} /></div>
                                                         <div><strong>Registered:</strong> {new Date(user.registrationDate).toLocaleDateString()}</div>
                                                     </div>
-
                                                     <div className="mb-4">
                                                         <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-gray-600 pb-1 mb-2">Active Plans</h4>
                                                         {user.activePlans && user.activePlans.length > 0 ? (
@@ -583,7 +550,6 @@ const Reports: React.FC = () => {
                                                             </div>
                                                         ) : <p className="text-xs text-gray-500">No active plans</p>}
                                                     </div>
-
                                                     <div>
                                                         <h4 className="font-semibold text-gray-700 dark:text-gray-300 border-b dark:border-gray-600 pb-1 mb-2">Activity Log</h4>
                                                         <div className="overflow-x-auto max-h-60">
