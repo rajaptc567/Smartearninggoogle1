@@ -1,11 +1,16 @@
+
+// ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
 
 // The base URL of your backend API is determined at runtime.
+// This allows the same code to work for both local development and live deployment.
 function getApiBaseUrl() {
   const hostname = window.location.hostname;
+  // Check if running on localhost for development
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:5000/api/v1';
   }
+  // Otherwise, use the live production URL
   return 'https://smartearning-api.onrender.com/api/v1';
 }
 
@@ -19,6 +24,8 @@ export function getUploadsBaseUrl() {
 
 const API_BASE_URL = getApiBaseUrl();
 
+
+// A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -27,13 +34,14 @@ const handleResponse = async (response: Response) => {
             const error = (data && data.error) || response.statusText;
             throw new Error(error);
         }
-        return data;
+        return data; // Return the full response object { success, data, count }
     } else {
          const text = await response.text();
          throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
     }
 };
 
+// ... [User API Functions] ...
 export const getUsers = async (): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`);
     const result = await handleResponse(response);
@@ -82,24 +90,6 @@ export const deleteUser = async (id: string): Promise<{}> => {
     });
     const result = await handleResponse(response);
     return result.data;
-};
-
-// Bulk Delete Function
-export const bulkDeleteUsers = async (ids: string[]): Promise<{ success: boolean }> => {
-    // We execute individual deletions in parallel to ensure all cascade logic in the controller is triggered per user
-    const deletePromises = ids.map(id => fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' }));
-    const responses = await Promise.all(deletePromises);
-    
-    const errors = [];
-    for (const res of responses) {
-        if (!res.ok) errors.push(res.statusText);
-    }
-    
-    if (errors.length > 0 && errors.length === ids.length) {
-        throw new Error(`Failed to delete users: ${errors[0]}`);
-    }
-    
-    return { success: true };
 };
 
 export const login = async (email: string, password: string): Promise<User> => {
@@ -165,6 +155,7 @@ export const resetPasswordWithToken = async (token: string, password: string): P
     await handleResponse(response);
 };
 
+// --- Password Reset Request API Functions ---
 export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
     const response = await fetch(`${API_BASE_URL}/password-reset-requests`);
     const result = await handleResponse(response);
@@ -178,6 +169,9 @@ export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
     const result = await handleResponse(response);
     return result.data;
 };
+
+
+// --- Deposit API Functions ---
 
 export const getDeposits = async (): Promise<Deposit[]> => {
     const response = await fetch(`${API_BASE_URL}/deposits`);
@@ -203,6 +197,8 @@ export const updateDeposit = async (id: string, updateData: Partial<Deposit>): P
     const result = await handleResponse(response);
     return result.data;
 };
+
+// --- Withdrawal API Functions ---
 
 export const getWithdrawals = async (): Promise<Withdrawal[]> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals`);
@@ -230,11 +226,16 @@ export const updateWithdrawal = async (id: string, updateData: Partial<Withdrawa
     return result.data;
 };
 
+
+// --- Transaction API Functions ---
+
 export const getTransactions = async (): Promise<Transaction[]> => {
     const response = await fetch(`${API_BASE_URL}/transactions`);
     const result = await handleResponse(response);
     return result.data;
 };
+
+// --- Notification API Functions ---
 
 export const getNotifications = async (): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications`);
@@ -242,6 +243,7 @@ export const getNotifications = async (): Promise<Notification[]> => {
     return result.data;
 };
 
+// Updated for Bulk Messaging
 export const sendAdminNotification = async (data: { 
     userId?: string, 
     subject: string, 
@@ -293,12 +295,14 @@ export const markNotificationPopupAsShown = async (id: string): Promise<Notifica
     return result.data;
 };
 
+// --- Payment Method API Functions ---
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods`);
     const result = await handleResponse(response);
     return result.data;
 };
 
+// UPDATED: Now supports FormData for file uploads
 export const createPaymentMethod = async (methodData: Partial<PaymentMethod> | FormData): Promise<PaymentMethod> => {
     const headers: HeadersInit = {};
     let body: BodyInit;
@@ -319,6 +323,7 @@ export const createPaymentMethod = async (methodData: Partial<PaymentMethod> | F
     return result.data;
 };
 
+// UPDATED: Now supports FormData for file uploads
 export const updatePaymentMethod = async (id: string, methodData: Partial<PaymentMethod> | FormData): Promise<PaymentMethod> => {
     const headers: HeadersInit = {};
     let body: BodyInit;
@@ -347,6 +352,7 @@ export const deletePaymentMethod = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+// --- Investment Plan API Functions ---
 export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans`);
     const result = await handleResponse(response);
@@ -381,6 +387,7 @@ export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+// --- Rule API Functions ---
 export const getRules = async (): Promise<Rule[]> => {
     const response = await fetch(`${API_BASE_URL}/rules`);
     const result = await handleResponse(response);
@@ -415,6 +422,7 @@ export const deleteRule = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+// --- Settings API Functions ---
 export const getSettings = async (): Promise<Settings> => {
     const response = await fetch(`${API_BASE_URL}/settings`);
     const result = await handleResponse(response);
@@ -431,6 +439,7 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
     return result.data;
 };
 
+// --- Transfer API Functions ---
 export const getTransfers = async (): Promise<Transfer[]> => {
     const response = await fetch(`${API_BASE_URL}/transfers`);
     const result = await handleResponse(response);
@@ -457,6 +466,7 @@ export const updateTransfer = async (id: string, updateData: Partial<Transfer>):
     return result.data;
 };
 
+// --- Log API Functions ---
 export const getLogs = async (): Promise<Log[]> => {
     const response = await fetch(`${API_BASE_URL}/logs`);
     const result = await handleResponse(response);
@@ -471,6 +481,7 @@ export const clearLogs = async (): Promise<[]> => {
     return result.data;
 };
 
+// --- Dispute API Functions ---
 export const getDisputes = async (): Promise<Dispute[]> => {
     const response = await fetch(`${API_BASE_URL}/disputes`);
     const result = await handleResponse(response);
@@ -491,6 +502,8 @@ export const updateDispute = async (id: string, data: FormData | { status?: stri
     let body: BodyInit;
 
     if (data instanceof FormData) {
+        // When sending FormData, do not set the 'Content-Type' header.
+        // The browser will automatically set it to 'multipart/form-data' with the correct boundary.
         body = data;
     } else {
         headers['Content-Type'] = 'application/json';
