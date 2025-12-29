@@ -523,6 +523,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         
         const directs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === member.username.toLowerCase());
         
+        // FIXED: Added cycle detection and depth limit
         const visited = new Set<string>();
         const countDownline = (username: string, depth: number = 0): number => {
             if (!username) return 0;
@@ -539,13 +540,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
     const genealogyTree = useMemo(() => {
         if (!treeRoot) return [];
+        // FIXED: Added cycle detection and depth limit
         const visited = new Set<string>();
         const buildGenealogy = (sponsorUsername: string, allUsers: User[], level: number, depth: number = 0): { user: User, children: any[], level: number }[] => {
             if (!sponsorUsername) return [];
             const normalized = sponsorUsername.toLowerCase();
             if (visited.has(normalized) || depth > 10) return [];
             visited.add(normalized);
-            
             const directReferrals = allUsers.filter(u => u.sponsor && u.sponsor.toLowerCase() === normalized);
             return directReferrals.map(child => ({ user: child, children: buildGenealogy(child.username, allUsers, level + 1, depth + 1), level }));
         };
@@ -755,11 +756,46 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     
                     {activeTab === 'network' && user && (
                          <div className="space-y-6 animate-fade-in pb-10 px-1">
-                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                 <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold">Direct Referrals</p><p className="text-xl font-bold">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === treeRoot?.username?.toLowerCase()).length}</p></div>
-                                 <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border dark:border-gray-600 text-center ring-2 ring-blue-500 ring-inset"><p className="text-[10px] text-blue-500 uppercase font-bold">Viewing Genealogy Of</p><p className="text-xl font-bold text-blue-600 truncate px-2">@{treeRoot?.username}</p></div>
-                                 <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-amber-600">Held Amount</p><p className="text-xl font-bold text-amber-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Pending').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
-                                 <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-green-600">Total Earnings</p><p className="text-xl font-bold text-green-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Approved' && t.type === 'Commission').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 {/* Sponsor Management */}
+                                 <div className="bg-white dark:bg-gray-700 p-4 rounded-xl border dark:border-gray-600 shadow-sm">
+                                     <h3 className="font-bold mb-4 flex items-center gap-2">
+                                         <UsersIcon /> Sponsor Management
+                                     </h3>
+                                     <div className="space-y-4">
+                                         <div className="flex justify-between items-center text-sm p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
+                                             <span className="text-gray-500">Current Sponsor:</span>
+                                             <span className="font-bold text-blue-600">@{formData.sponsor || 'None'}</span>
+                                         </div>
+                                         
+                                         {!isChangingSponsor ? (
+                                             <Button variant="secondary" size="sm" onClick={() => setIsChangingSponsor(true)} className="w-full">Change Sponsor</Button>
+                                         ) : (
+                                             <div className="space-y-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 animate-fade-in">
+                                                 <label className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase">New Sponsor Username</label>
+                                                 <input 
+                                                     type="text" 
+                                                     value={newSponsorUsername} 
+                                                     onChange={e => setNewSponsorUsername(e.target.value)}
+                                                     placeholder="Enter username..."
+                                                     className="w-full text-sm rounded border-blue-200 dark:bg-gray-800"
+                                                 />
+                                                 <div className="flex gap-2 justify-end">
+                                                     <Button size="sm" variant="secondary" onClick={() => { setIsChangingSponsor(false); setNewSponsorUsername(''); }}>Cancel</Button>
+                                                     <Button size="sm" onClick={handleChangeSponsor} disabled={isSaving || !newSponsorUsername.trim()}>Update Sponsor</Button>
+                                                 </div>
+                                             </div>
+                                         )}
+                                     </div>
+                                 </div>
+
+                                 {/* Direct Stats Summary */}
+                                 <div className="grid grid-cols-2 gap-4">
+                                     <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold">Direct Referrals</p><p className="text-xl font-bold">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === treeRoot?.username?.toLowerCase()).length}</p></div>
+                                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border dark:border-gray-600 text-center ring-2 ring-blue-500 ring-inset"><p className="text-[10px] text-blue-500 uppercase font-bold">Viewing Genealogy Of</p><p className="text-xl font-bold text-blue-600 truncate px-2">@{treeRoot?.username}</p></div>
+                                     <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-amber-600">Held Amount</p><p className="text-xl font-bold text-amber-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Pending').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
+                                     <div className="bg-white dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600 text-center"><p className="text-[10px] text-gray-500 uppercase font-bold text-green-600">Total Earnings</p><p className="text-xl font-bold text-green-600">{formatCurrency(transactions.filter(t => t.userId === treeRoot?._id && t.status === 'Approved' && t.type === 'Commission').reduce((s,t)=>s+t.amount,0), treeRoot?.currency || 'USD')}</p></div>
+                                 </div>
                              </div>
 
                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -909,6 +945,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 };
 
 // --- Helper Components ---
+// FIX: Added missing UsersIcon component to fix ReferenceError.
+const UsersIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 1.803M15 21a9 9 0 00-9-8.627M15 21a9 9 0 003.75-1.465M12 12a4 4 0 100-8 4 4 0 000 8z"></path></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const FilterIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>;
 
@@ -951,7 +989,7 @@ const DeleteUserModal: React.FC<{ user: User; onClose: () => void; onConfirmDele
         const depTotal = deposits.filter(d => d.userId === user._id && d.status === 'Approved').reduce((s, d) => s + d.amount, 0);
         const withTotal = withdrawals.filter(w => w.userId === user._id && w.status === 'Paid').reduce((s, w) => s + w.finalAmount, 0);
         const commTotal = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved').reduce((s, t) => s + t.amount, 0);
-        const refCount = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === user.username.toLowerCase()).length;
+        const refCount = users.filter(u => u.sponsor === user.username).length;
 
         csvRows.push(toCsvRow(['--- FINANCIAL SUMMARY ---']));
         csvRows.push(toCsvRow(['Total Deposits Approved', formatCurrency(depTotal, user.currency)]));
