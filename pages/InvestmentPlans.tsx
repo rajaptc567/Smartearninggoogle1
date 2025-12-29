@@ -1,11 +1,11 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { InvestmentPlan, Status, CommissionType, Commission, Currency, formatCurrency, Rule, currencySymbols } from '../types';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { createInvestmentPlan, updateInvestmentPlan, deleteInvestmentPlan, createRule, updateRule, deleteRule } from '../services/api';
+import { createInvestmentPlan, updateInvestmentPlan, deleteInvestmentPlan, createRule, updateRule, deleteRule, updateSettings } from '../services/api';
 
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; size?: 'sm' | 'md' }> = ({ checked, onChange, disabled, size = 'md' }) => (
     <label className="inline-flex items-center cursor-pointer">
@@ -16,7 +16,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 
 const InvestmentPlans: React.FC = () => {
     const { state, dispatch } = useData();
-    const { investmentPlans, rules } = state;
+    const { investmentPlans, rules, settings } = state;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPlan, setEditingPlan] = useState<InvestmentPlan | null>(null);
@@ -31,6 +31,16 @@ const InvestmentPlans: React.FC = () => {
     // Rule Management State
     const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
     const [managingRulePlan, setManagingRulePlan] = useState<InvestmentPlan | null>(null);
+
+    // Sequence Management State
+    const [isSeqSaving, setIsSeqSaving] = useState(false);
+    const [localSortType, setLocalSortType] = useState<string>(settings.planSortType || 'price-asc');
+    const [localManualOrder, setLocalManualOrder] = useState<string[]>(settings.manualPlanOrder || []);
+
+    useEffect(() => {
+        setLocalSortType(settings.planSortType || 'price-asc');
+        setLocalManualOrder(settings.manualPlanOrder || []);
+    }, [settings]);
 
     const handleOpenModal = (plan: InvestmentPlan | null = null) => {
         setEditingPlan(plan);
@@ -84,6 +94,49 @@ const InvestmentPlans: React.FC = () => {
         }
     };
 
+    const handleSaveGlobalOrder = async () => {
+        setIsSeqSaving(true);
+        try {
+            const updated = await updateSettings({
+                planSortType: localSortType as any,
+                manualPlanOrder: localManualOrder
+            });
+            dispatch({ type: 'UPDATE_SETTINGS', payload: updated });
+            alert("Display sequence saved successfully.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to save sequence.");
+        } finally {
+            setIsSeqSaving(false);
+        }
+    };
+
+    const moveInManualOrder = (planId: string, direction: 'up' | 'down') => {
+        const activePlansInView = investmentPlans.filter(p => p.currency === currencyFilter && p.status === 'Active');
+        const planIdsInView = activePlansInView.map(p => p._id);
+        
+        // We only care about the order of plans currently in the active set for this currency
+        const currentCurrencyOrder = localManualOrder.filter(id => planIdsInView.includes(id));
+        
+        // Add any active plans not in the manual order yet
+        const missingIds = planIdsInView.filter(id => !currentCurrencyOrder.includes(id));
+        const fullCurrencyOrder = [...currentCurrencyOrder, ...missingIds];
+
+        const index = fullCurrencyOrder.indexOf(planId);
+        if (index === -1) return;
+
+        const newOrder = [...fullCurrencyOrder];
+        if (direction === 'up' && index > 0) {
+            [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+        } else if (direction === 'down' && index < newOrder.length - 1) {
+            [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+        }
+
+        // Merge back into global manual order: Remove these IDs from the old global list and prepend the new sorted list
+        const otherCurrencyIds = localManualOrder.filter(id => !planIdsInView.includes(id));
+        setLocalManualOrder([...newOrder, ...otherCurrencyIds]);
+    };
+
     // --- Rule Management Handlers ---
     
     const handleOpenRuleModal = (plan: InvestmentPlan) => {
@@ -98,8 +151,7 @@ const InvestmentPlans: React.FC = () => {
 
     const handleToggleRule = async (rule: Rule) => {
         try {
-            const updatedRule = await updateRule(rule._id, { isActive: !rule.isActive });
-            // Ideally dispatch specific update, here reloading for simplicity
+            await updateRule(rule._id, { isActive: !rule.isActive });
             window.location.reload(); 
         } catch (error) {
             console.error("Failed to toggle rule:", error);
@@ -111,50 +163,42 @@ const InvestmentPlans: React.FC = () => {
     const renderDirectCommissionSummary = (plan: InvestmentPlan) => {
         const comms = plan.directCommissions;
         if (!comms || comms.length === 0) return 'None';
-        
-        // Find highest commission
         let maxVal = 0;
         let maxType = 'percentage';
-
         comms.forEach(c => {
             if (c.value > maxVal) {
                 maxVal = c.value;
                 maxType = c.type;
             }
         });
-
         const formattedVal = maxType === 'percentage' ? `${maxVal}%` : formatCurrency(maxVal, plan.currency);
-        
-        if (comms.length > 1) {
-             return `Up to ${formattedVal}`;
-        }
-        
-        return formattedVal;
+        return comms.length > 1 ? `Up to ${formattedVal}` : formattedVal;
     };
 
-    // Helper to format price intelligently (hide .00)
     const formatPlanPrice = (amount: number, currency: string) => {
         const symbol = currencySymbols[currency] || currency;
-        // If whole number, format without decimals
         if (amount % 1 === 0) {
             return `${symbol} ${amount.toLocaleString()}`;
         }
-        // Otherwise use standard currency format
         return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
     const filteredPlans = useMemo(() => {
-        return investmentPlans
+        let list = [...investmentPlans]
             .filter(plan => {
                 const matchesCurrency = !currencyFilter || plan.currency?.toUpperCase() === currencyFilter;
                 const matchesStatus = !statusFilter || plan.status === statusFilter;
                 return matchesCurrency && matchesStatus;
-            })
-            .sort((a, b) => {
-                if (priceSort === 'low-high') return a.price - b.price;
-                if (priceSort === 'high-low') return b.price - a.price;
-                return 0; // Default order (creation time usually)
             });
+
+        // Apply visual sort for admin view
+        list.sort((a, b) => {
+            if (priceSort === 'low-high') return a.price - b.price;
+            if (priceSort === 'high-low') return b.price - a.price;
+            return 0; 
+        });
+
+        return list;
     }, [investmentPlans, currencyFilter, priceSort, statusFilter]);
 
 
@@ -184,26 +228,96 @@ const InvestmentPlans: React.FC = () => {
                         <option value="Disabled">Disabled</option>
                     </select>
 
-                    <select
-                        value={priceSort}
-                        onChange={(e) => setPriceSort(e.target.value as any)}
-                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    >
-                        <option value="">Default Order</option>
-                        <option value="low-high">Price: Low to High</option>
-                        <option value="high-low">Price: High to Low</option>
-                    </select>
-
                     <Button onClick={() => handleOpenModal()}>Create New Plan</Button>
                 </div>
             </div>
+
+            {/* NEW: Global Display Sequence Settings */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8 border border-blue-100 dark:border-blue-900">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="text-blue-500">⚙️</span> User-Side Plan Ordering
+                        </h3>
+                        <p className="text-sm text-gray-500">Control the sequence in which plans appear on the member dashboard.</p>
+                    </div>
+                    <Button onClick={handleSaveGlobalOrder} disabled={isSeqSaving} size="sm">
+                        {isSeqSaving ? 'Saving...' : 'Save Display Sequence'}
+                    </Button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-semibold mb-2">1. Sequence Method</label>
+                        <select 
+                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            value={localSortType}
+                            onChange={e => setLocalSortType(e.target.value)}
+                        >
+                            <option value="price-asc">Price: Low to High</option>
+                            <option value="price-desc">Price: High to Low</option>
+                            <option value="manual">Manual Custom Sequence</option>
+                        </select>
+                    </div>
+
+                    {localSortType === 'manual' && (
+                        <div className="animate-fade-in">
+                            <label className="block text-sm font-semibold mb-2">2. Manual Priority {currencyFilter ? `for ${currencyFilter}` : '(Select a currency filter above)'}</label>
+                            {currencyFilter ? (
+                                <div className="space-y-2 max-h-60 overflow-y-auto border dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-900">
+                                    {(() => {
+                                        const activeInCurrency = investmentPlans.filter(p => p.currency === currencyFilter && p.status === 'Active');
+                                        const orderedIds = localManualOrder.filter(id => activeInCurrency.some(p => p._id === id));
+                                        const missingIds = activeInCurrency.filter(p => !orderedIds.includes(p._id)).map(p => p._id);
+                                        const fullOrderIds = [...orderedIds, ...missingIds];
+
+                                        return fullOrderIds.map((id, idx) => {
+                                            const plan = investmentPlans.find(p => p._id === id);
+                                            if (!plan) return null;
+                                            return (
+                                                <div key={id} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded shadow-sm border dark:border-gray-700">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-bold text-gray-400">#{idx + 1}</span>
+                                                        <span className="text-sm font-medium">{plan.name}</span>
+                                                        <span className="text-xs text-blue-500 font-bold">{formatCurrency(plan.price, plan.currency)}</span>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => moveInManualOrder(id, 'up')}
+                                                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-30"
+                                                            disabled={idx === 0}
+                                                        >
+                                                            <ChevronUpIcon />
+                                                        </button>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => moveInManualOrder(id, 'down')}
+                                                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded disabled:opacity-30"
+                                                            disabled={idx === fullOrderIds.length - 1}
+                                                        >
+                                                            <ChevronDownIcon />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">Please select a specific currency filter above to manage its manual sequence.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredPlans.map((plan: InvestmentPlan) => {
                     const activeRule = rules.find(r => r.targetPlanId === plan._id);
                     
                     return (
                         <div key={plan._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex flex-col relative overflow-hidden">
-                            {/* Header */}
                             <div className="flex justify-between items-start mb-4">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">{plan.name}</h3>
                                 <div className="flex items-center gap-2">
@@ -234,7 +348,6 @@ const InvestmentPlans: React.FC = () => {
                             
                             <p className="text-xs text-gray-500 mt-4 mb-4 line-clamp-2">{plan.description}</p>
 
-                            {/* Joining & Upgrade Rules Section */}
                             <div className={`mt-auto mb-4 p-3 rounded-md border text-sm ${activeRule ? (activeRule.isActive !== false ? 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' : 'bg-gray-50 border-gray-200 dark:bg-gray-700/30 dark:border-gray-600') : 'border-dashed border-gray-300 dark:border-gray-600'}`}>
                                 <div className="flex justify-between items-center mb-1">
                                     <span className={`font-bold ${activeRule ? 'text-amber-800 dark:text-amber-200' : 'text-gray-500'}`}>
@@ -271,7 +384,6 @@ const InvestmentPlans: React.FC = () => {
                 })}
             </div>
 
-            {/* Plan Edit/Create Modal */}
             {isModalOpen && (
                 <PlanFormModal
                     plan={editingPlan}
@@ -280,7 +392,6 @@ const InvestmentPlans: React.FC = () => {
                 />
             )}
 
-            {/* Rule Management Modal */}
             {isRuleModalOpen && managingRulePlan && (
                 <PlanRuleModal
                     plan={managingRulePlan}
@@ -292,6 +403,10 @@ const InvestmentPlans: React.FC = () => {
         </div>
     );
 };
+
+// --- Icons ---
+const ChevronUpIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>;
+const ChevronDownIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
 
 // --- PlanRuleModal Component ---
 interface PlanRuleModalProps {
@@ -309,7 +424,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
     const [minReferrals, setMinReferrals] = useState(existingRule?.minDirectReferrals?.toString() || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Filter plans that are in the same currency and exclude the target plan itself
     const availableRequiredPlans = allPlans.filter(p => p.currency === plan.currency && p.status === 'Active' && p._id !== plan._id);
 
     const handleToggleRequiredPlan = (id: string) => {
@@ -337,16 +451,14 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
         try {
             let result;
             if (existingRule) {
-                // Update
                 result = await updateRule(existingRule._id, payload);
                 alert("Rule updated successfully!");
             } else {
-                // Create
                 result = await createRule(payload);
-                dispatch({ type: 'ADD_RULE', payload: result.data || result }); // Adjust based on API response structure
+                dispatch({ type: 'ADD_RULE', payload: result.data || result });
                 alert("Rule created successfully!");
             }
-            window.location.reload(); // Simple refresh to ensure state sync for now
+            window.location.reload(); 
         } catch (error) {
             console.error("Failed to save rule:", error);
             alert("Error saving rule.");
@@ -388,7 +500,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                 </p>
 
                 <form onSubmit={handleSave} className="space-y-6">
-                    {/* Required Plans Section */}
                     <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
                         <label className="block text-sm font-bold mb-2 text-gray-700 dark:text-gray-200">
                             1. Required Active Plans
@@ -412,7 +523,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                         )}
                     </div>
 
-                    {/* Earnings Section */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-bold mb-1 text-gray-700 dark:text-gray-200">2. Min Total Earnings</label>
@@ -436,7 +546,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                         </div>
                     </div>
 
-                    {/* Referrals Section */}
                     <div>
                         <label className="block text-sm font-bold mb-1 text-gray-700 dark:text-gray-200">4. Min Direct Referrals</label>
                         <input 
@@ -458,7 +567,6 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
     );
 };
 
-// Form Modal for Plans (Existing Code, extracted for clarity if needed, assuming it's in the same file as per original)
 interface PlanFormModalProps {
     plan: InvestmentPlan | null;
     onClose: () => void;
@@ -475,7 +583,7 @@ const defaultPlan: Partial<InvestmentPlan> = {
     status: Status.Active,
     description: '',
     directReferralLimit: 0,
-    directCommissions: [{ ...defaultCommission }], // Default one slot
+    directCommissions: [{ ...defaultCommission }], 
     indirectCommissions: [],
     commissionDeductions: {
         afterMaxPayout: { ...defaultCommission },
@@ -497,7 +605,6 @@ const defaultPlan: Partial<InvestmentPlan> = {
 const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) => {
     const { state } = useData();
     
-    // Ensure existing plans have directCommissions array if migration happened
     const initialPlan = plan ? {
         ...defaultPlan,
         ...plan,
@@ -519,7 +626,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const [newFeature, setNewFeature] = useState('');
 
      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value, type } = e.target;
+        const { name, value } = e.target;
         
         if(name.startsWith('displayConfig.')) {
             const field = name.split('.')[1];
@@ -541,25 +648,18 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
 
         if (name === 'directReferralLimit') {
              const limit = parseFloat(value) || 0;
-             
              setFormData(prev => {
                 const currentComms = prev!.directCommissions || [];
                 let newComms = [...currentComms];
-                
-                // If limit is 0 (unlimited), we treat it as a single "standard" commission
                 const targetLen = limit === 0 ? 1 : limit;
-
                 if (newComms.length < targetLen) {
-                    // Grow array
                     const fillCount = targetLen - newComms.length;
                     for(let i=0; i<fillCount; i++) {
                         newComms.push({ type: 'percentage', value: 0 });
                     }
                 } else if (newComms.length > targetLen) {
-                    // Shrink array
                     newComms = newComms.slice(0, targetLen);
                 }
-                
                 return { ...prev, directReferralLimit: limit, directCommissions: newComms };
              });
         } else {
@@ -573,13 +673,11 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         setFormData(prev => {
             const newFormData = { ...prev };
             const commissionObject = (newFormData as any)[main][sub];
-            
             if (field === 'value') {
                 commissionObject.value = parseFloat(value) || 0;
             } else {
                 commissionObject.type = value as CommissionType;
             }
-
             return newFormData;
         });
     };
@@ -587,16 +685,13 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const handleDirectCommissionChange = (index: number, field: 'type' | 'value', value: string) => {
         setFormData(prev => {
             const newComms = [...(prev!.directCommissions || [])];
-            // Ensure the index exists (sanity check)
             if (!newComms[index]) {
                 newComms[index] = { type: 'percentage', value: 0 };
             }
-            
             newComms[index] = {
                 ...newComms[index],
                 [field]: field === 'value' ? parseFloat(value) || 0 : value as CommissionType
             };
-            
             return { ...prev, directCommissions: newComms };
         });
     };
@@ -604,7 +699,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const handleIndirectCommissionChange = (index: number, field: 'type' | 'value', value: string) => {
         setFormData(prev => {
             if (!prev) return prev;
-
             const updatedIndirectCommissions = (prev.indirectCommissions || []).map((commission, i) => {
                 if (i === index) {
                     if (field === 'type') {
@@ -614,7 +708,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                 }
                 return commission;
             });
-
             return { ...prev, indirectCommissions: updatedIndirectCommissions };
         });
     };
@@ -851,7 +944,14 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                             {formData.autoUpgrade?.enabled && (
                                 <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
                                     <option value="">- Select Plan -</option>
-                                    {state.investmentPlans.filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    {state.investmentPlans
+                                        .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
+                                        .map(p => (
+                                            <option key={p._id} value={p._id}>
+                                                {p.name} ({formatCurrency(p.price, p.currency)})
+                                            </option>
+                                        ))
+                                    }
                                 </select>
                             )}
                         </div>
@@ -874,7 +974,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                         </div>
                     </div>
                 </fieldset>
-
 
                  <div className="mt-6 flex justify-end space-x-3">
                     <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
