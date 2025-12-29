@@ -1024,156 +1024,12 @@ interface DeleteUserModalProps {
 }
 
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
-    const { state } = useData();
     const [isDeleting, setIsDeleting] = useState(false);
     
     const handleConfirm = async () => {
         setIsDeleting(true);
         await onConfirmDelete(user._id);
         setIsDeleting(false);
-    };
-
-    const handleDownloadDossier = () => {
-        const userTx = state.transactions
-            .filter(t => t.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userDeposits = state.deposits
-            .filter(d => d.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userWithdrawals = state.withdrawals
-            .filter(w => w.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userTransfers = state.transfers
-            .filter(t => t.senderId === user._id || t.recipientId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const referrals = state.users.filter(u => u.sponsor === user.username);
-        
-        const approvedDeposits = userDeposits
-            .filter(d => d.status === Status.Approved)
-            .reduce((sum, d) => sum + d.amount, 0);
-        
-        const paidWithdrawals = userWithdrawals
-            .filter(w => w.status === Status.Paid)
-            .reduce((sum, w) => sum + w.finalAmount, 0);
-        
-        const commissions = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved');
-        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
-
-        const csvRows: string[][] = [];
-        csvRows.push([`=== COMPREHENSIVE USER DOSSIER: ${user.username} (${user.email}) ===`]);
-        csvRows.push([`Generated on: ${new Date().toLocaleString()}`]);
-        csvRows.push([]);
-        
-        // --- PROFILE SECTION ---
-        csvRows.push(['--- PROFILE INFORMATION ---']);
-        csvRows.push(['User ID', user._id]);
-        csvRows.push(['Username', user.username]);
-        csvRows.push(['Full Name', user.fullName]);
-        csvRows.push(['Email', user.email]);
-        csvRows.push(['Phone', user.phone]);
-        csvRows.push(['WhatsApp', user.whatsapp || 'N/A']);
-        csvRows.push(['Country', user.country]);
-        csvRows.push(['Currency', user.currency]);
-        csvRows.push(['Sponsor', user.sponsor || 'N/A']);
-        csvRows.push(['Status', user.status]);
-        csvRows.push(['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
-        csvRows.push(['Joined Date', new Date(user.registrationDate).toLocaleString()]);
-        csvRows.push([]);
-
-        // --- ANALYTICS SUMMARY ---
-        csvRows.push(['--- FINANCIAL SUMMARY ---']);
-        csvRows.push(['Metric', 'Total Value']);
-        csvRows.push(['Total Approved Deposits', formatCurrency(approvedDeposits, user.currency)]);
-        csvRows.push(['Total Paid Withdrawals', formatCurrency(paidWithdrawals, user.currency)]);
-        csvRows.push(['Total Commission Earned', formatCurrency(totalCommission, user.currency)]);
-        csvRows.push(['Total Direct Referrals', `${referrals.length}`]);
-        csvRows.push([]);
-
-        // --- ACTIVE PLANS ---
-        csvRows.push(['--- CURRENT ACTIVE PLANS ---']);
-        if (user.activePlans && user.activePlans.length > 0) {
-            csvRows.push(['Plan Name', 'Price', 'Purchase Date']);
-            user.activePlans.forEach(p => {
-                csvRows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['None']);
-        }
-        csvRows.push([]);
-
-        // --- REFERRALS ---
-        csvRows.push(['--- DIRECT REFERRALS (DOWNLINE) ---']);
-        if (referrals.length > 0) {
-            csvRows.push(['Username', 'Full Name', 'Email', 'Joined Date', 'Status']);
-            referrals.forEach(ref => {
-                csvRows.push([ref.username, ref.fullName, ref.email, new Date(ref.registrationDate).toLocaleDateString(), ref.status]);
-            });
-        } else {
-            csvRows.push(['No referrals found']);
-        }
-        csvRows.push([]);
-
-        // --- DEPOSITS ---
-        csvRows.push(['--- DEPOSIT HISTORY ---']);
-        if (userDeposits.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Transaction ID', 'Status', 'Date']);
-            userDeposits.forEach(d => {
-                csvRows.push([d._id, d.method, formatCurrency(d.amount, d.currency), d.transactionId, d.status, new Date(d.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No deposits found']);
-        }
-        csvRows.push([]);
-
-        // --- WITHDRAWALS ---
-        csvRows.push(['--- WITHDRAWAL HISTORY ---']);
-        if (userWithdrawals.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Fee', 'Final Amount', 'Status', 'Date']);
-            userWithdrawals.forEach(w => {
-                csvRows.push([w._id, w.method, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.status, new Date(w.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No withdrawals found']);
-        }
-        csvRows.push([]);
-
-        // --- TRANSFERS ---
-        csvRows.push(['--- TRANSFER HISTORY (SENT/RECEIVED) ---']);
-        if (userTransfers.length > 0) {
-            csvRows.push(['ID', 'Sender', 'Recipient', 'Amount', 'Fee', 'Total Deducted', 'Status', 'Date']);
-            userTransfers.forEach(t => {
-                csvRows.push([t._id, t.senderName, t.recipientName, formatCurrency(t.amount, t.currency), formatCurrency(t.fee || 0, t.currency), formatCurrency(t.totalDeducted || 0, t.currency), t.status, new Date(t.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No transfers found']);
-        }
-        csvRows.push([]);
-
-        // --- ACTIVITY LOG ---
-        csvRows.push(['--- TRANSACTION LOG (FULL ACTIVITY) ---']);
-        csvRows.push(['Date', 'Type', 'Amount', 'Status', 'Description']);
-        userTx.forEach(tx => {
-            csvRows.push([
-                new Date(tx.date).toLocaleString(),
-                tx.type,
-                formatCurrency(tx.amount, tx.currency),
-                tx.status || 'N/A',
-                tx.description
-            ]);
-        });
-
-        const csvContent = csvRows.map(e => e.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Full_User_Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
     return (
@@ -1188,15 +1044,6 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
                     <br/><br/>
                     All their deposits, withdrawals, transactions, and notification history will be wiped. <strong>This action is irreversible.</strong>
                 </p>
-                <div className="pt-2">
-                    <button 
-                        onClick={handleDownloadDossier}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-bold underline flex items-center justify-center gap-1 mx-auto"
-                    >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Full User Dossier (Referrals, Plans, History)
-                    </button>
-                </div>
                 <div className="flex gap-2 pt-4">
                     <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
                     <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>
