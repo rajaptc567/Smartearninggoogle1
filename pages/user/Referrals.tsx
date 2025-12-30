@@ -125,10 +125,9 @@ const Referrals: React.FC = () => {
         const hasGlobalEarning = globalComms.some(t => t.status === 'Approved' || t.status === 'Pending');
 
         // 2. Filter specifically for the context plan group
-        // STRICTOR MATCHING: If we have context plans, only look at transactions specifically tied to them.
         const referralComms = globalComms.filter(t => {
             if (contextPlanIds.size === 0) return true;
-            if (!t.relatedPlanId) return false; // Important: Unrelated legacy TXs don't consume slots for new views
+            if (!t.relatedPlanId) return false;
             return contextPlanIds.has(String(t.relatedPlanId));
         });
 
@@ -142,25 +141,22 @@ const Referrals: React.FC = () => {
         const overflowDescription = overflowTx?.description?.replace('[Overflow] ', '');
 
         // 3. One-Time Rule Enforcement Check
-        const hasEarnedFromOtherPlan = globalComms.some(t => t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId))));
-        const hasAnyCurrentActivity = referralComms.length > 0;
-        
-        const sponsorHasRecurringPlan = currentUser.activePlans?.some(ap => settings.recurringCommissionPlanIds?.includes(ap.planId));
-        
+        const hasEarnedFromOtherPlan = globalComms.some(t => 
+            t.status === 'Approved' && 
+            (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
+        );
+
         const isOneTimeBlocked = !!(
             settings.oneTimeCommissionPerGroup && 
             hasEarnedFromOtherPlan && 
-            !hasAnyCurrentActivity && 
-            !sponsorHasRecurringPlan
+            earned === 0 && held === 0
         );
 
         // --- THE "REMOVE COMPLETELY" LOGIC ---
-        // If we are looking at a specific plan group
-        // AND they provided a commission ELSEWHERE (hasGlobalEarning)
-        // BUT for THIS plan group they provided NO earnings/activity (earned + held == 0)
-        // THEN we hide them from this specific plan's view to keep the tier list focused.
-        // This effectively removes Ref 3 (Plan B) from the Plan A view.
-        const shouldRemoveCompletely = contextPlanIds.size > 0 && hasGlobalEarning && (earned + held === 0) && !overflowTx;
+        // If the one-time rule is enabled AND the user has already provided a commission in a different plan group,
+        // we completely hide them from the current plan group's context unless they have an active earning here.
+        // This removes Ref 1 (paid in Plan A) from the Plan B network view.
+        const shouldRemoveCompletely = settings.oneTimeCommissionPerGroup && hasEarnedFromOtherPlan && (earned + held === 0);
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
@@ -168,7 +164,7 @@ const Referrals: React.FC = () => {
             earningSourcePlanId = bestTx.relatedPlanId?.toString();
         }
         return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isOverflow, overflowDescription, hasGlobalEarning, isOneTimeBlocked, shouldRemoveCompletely };
-    }, [currentUser, transactions, settings, investmentPlans]);
+    }, [currentUser, transactions, settings]);
 
     const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, allNodes } = useMemo(() => {
         if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [] };
@@ -200,11 +196,8 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // Apply the "Remove Completely" filter
-            if (info.shouldRemoveCompletely) return;
-
-            // If they are one-time blocked for this plan context, we treat them as "consumed" and skip them from specific lists
-            if (info.isOneTimeBlocked && selectedPlanId) return;
+            // Apply the One-Time strict exclusion filter
+            if (info.shouldRemoveCompletely && selectedPlanId) return;
 
             if (info.earned > 0 || info.held > 0) {
                 if (node.level === 1) directEarnersList.push(node);
@@ -224,11 +217,8 @@ const Referrals: React.FC = () => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
                 
-                // If they are removed from this plan's context, hide them from tree too
-                if (info.shouldRemoveCompletely) return null;
-
-                // Skip if blocked by one-time rule for this specific view
-                if (info.isOneTimeBlocked && selectedPlanId) return null;
+                // Exclude based on one-time policy
+                if (info.shouldRemoveCompletely && selectedPlanId) return null;
 
                 const isRelevant = info.earned > 0 || info.held > 0;
                 const filteredChildren = filterRecursive(node.children);
@@ -242,8 +232,8 @@ const Referrals: React.FC = () => {
         const filteredAllNodes = nodesList.filter(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            if (info.shouldRemoveCompletely) return false;
-            if (selectedPlanId && info.isOneTimeBlocked) return false;
+            // Strict exclusion for All Referrals list too
+            if (info.shouldRemoveCompletely && selectedPlanId) return false;
             
             if (!selectedPlanId) return true;
             
