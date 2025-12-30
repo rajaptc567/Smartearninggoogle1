@@ -76,7 +76,11 @@ const Users: React.FC = () => {
 
     const handleBulkDelete = async () => {
         if (selectedUserIds.length === 0) return;
-        if (window.confirm(`Are you sure you want to permanently delete ${selectedUserIds.length} users and all their associated data? This action is irreversible and affects network structure.`)) {
+        
+        const count = selectedUserIds.length;
+        const confirmMessage = `Are you sure you want to permanently delete ${count} selected user(s) and all their associated data?\n\nThis action is IRREVERSIBLE and will wipe their balance, deposits, withdrawals, and referrals.`;
+        
+        if (window.confirm(confirmMessage)) {
             setIsProcessing(true);
             try {
                 await bulkDeleteUsers(selectedUserIds);
@@ -84,7 +88,7 @@ const Users: React.FC = () => {
                 const updatedUsers = await getUsers();
                 dispatch({ type: 'SET_USERS', payload: updatedUsers });
                 setSelectedUserIds([]);
-                alert('Selected users deleted successfully.');
+                alert(`Successfully deleted ${count} users.`);
             } catch (error) {
                 console.error("Failed to bulk delete users:", error);
                 alert(`Error: ${error instanceof Error ? error.message : 'Could not delete users.'}`);
@@ -143,16 +147,18 @@ const Users: React.FC = () => {
     };
 
     const handleSelectAll = () => {
-        const allFilteredIds = new Set(filteredUsers.map(u => u._id));
-        const currentSelectedIds = new Set(selectedUserIds);
         const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
 
         if (areAllFilteredSelected) {
-            allFilteredIds.forEach(id => currentSelectedIds.delete(id));
+            // Deselect only those that are currently visible
+            const filteredIds = new Set(filteredUsers.map(u => u._id));
+            setSelectedUserIds(prev => prev.filter(id => !filteredIds.has(id)));
         } else {
-            allFilteredIds.forEach(id => currentSelectedIds.add(id));
+            // Select all visible users
+            const currentSelectedSet = new Set(selectedUserIds);
+            filteredUsers.forEach(u => currentSelectedSet.add(u._id));
+            setSelectedUserIds(Array.from(currentSelectedSet));
         }
-        setSelectedUserIds(Array.from(currentSelectedIds));
     };
 
     const handleDownloadSelected = () => {
@@ -168,7 +174,7 @@ const Users: React.FC = () => {
             return `"${str}"`;
         };
 
-        const csvHeaders = ['Username', 'Full Name', 'Email', 'Phone', 'WhatsApp', 'Country'];
+        const csvHeaders = ['Username', 'Full Name', 'Email', 'Phone', 'WhatsApp', 'Country', 'Wallet Balance', 'Currency', 'Status'];
         const csvRows = [
             csvHeaders.join(','),
             ...usersToExport.map(user => [
@@ -177,7 +183,10 @@ const Users: React.FC = () => {
                 csvEscape(user.email),
                 csvEscape(user.phone),
                 csvEscape(user.whatsapp),
-                csvEscape(user.country)
+                csvEscape(user.country),
+                user.walletBalance,
+                csvEscape(user.currency),
+                csvEscape(user.status)
             ].join(','))
         ];
 
@@ -185,7 +194,7 @@ const Users: React.FC = () => {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `selected_users_${new Date().toISOString().split('T')[0]}.csv`;
+        link.download = `exported_users_${new Date().toISOString().split('T')[0]}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -198,8 +207,8 @@ const Users: React.FC = () => {
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Members ({filteredUsers.length})</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management ({filteredUsers.length})</h2>
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                      <select
                         value={statusFilter}
@@ -245,29 +254,46 @@ const Users: React.FC = () => {
                     />
                 </div>
             </div>
-             <div className="flex justify-end gap-2 mb-4">
-                 {selectedUserIds.length > 0 && (
-                    <>
-                        <Button variant="secondary" onClick={handleDownloadSelected}>Download Selected ({selectedUserIds.length})</Button>
-                        <Button variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>{isProcessing ? 'Processing...' : `Delete Selected (${selectedUserIds.length})`}</Button>
-                    </>
-                 )}
-                <Button variant="secondary" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
-                <Button variant="secondary" onClick={() => handleOpenMessage(null)}>Send Bulk Message</Button>
-                <Button onClick={() => handleOpenUserManagementModal(null)}>Add User</Button>
+
+            {/* Actions Bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-700 mb-6 gap-4">
+                <div className="flex items-center gap-4">
+                    {selectedUserIds.length > 0 ? (
+                        <div className="flex items-center gap-3 animate-fade-in">
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                {selectedUserIds.length} users selected
+                            </span>
+                            <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                            <Button size="sm" variant="secondary" onClick={handleDownloadSelected}>Download CSV</Button>
+                            <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
+                                {isProcessing ? 'Processing...' : 'Delete Selected'}
+                            </Button>
+                        </div>
+                    ) : (
+                        <span className="text-sm text-gray-500">Select users to perform bulk actions</span>
+                    )}
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
+                    <Button variant="secondary" size="sm" onClick={() => handleOpenMessage(null)}>Send Announcement</Button>
+                    <Button size="sm" onClick={() => handleOpenUserManagementModal(null)}>Add New User</Button>
+                </div>
             </div>
-             {isLoading ? <p>Loading users...</p> : (
-                 <div className="w-full overflow-hidden rounded-lg shadow-md">
+
+             {isLoading ? (
+                <div className="py-20 text-center text-gray-500 italic">Loading user directory...</div>
+             ) : (
+                 <div className="w-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <div className="w-full overflow-x-auto">
                         <table className="w-full whitespace-no-wrap">
                             <thead>
-                                <tr className="text-xs font-semibold tracking-wide text-left text-gray-500 uppercase border-b dark:border-gray-700 bg-gray-50 dark:text-gray-400 dark:bg-gray-800">
-                                    <th className="px-4 py-3">
+                                <tr className="text-xs font-bold tracking-wide text-left text-gray-500 uppercase border-b dark:border-gray-700 bg-gray-50 dark:text-gray-400 dark:bg-gray-900/50">
+                                    <th className="px-4 py-3 w-10">
                                         <input
                                             type="checkbox"
-                                            checked={areAllFilteredSelected}
+                                            checked={areAllFilteredSelected && filteredUsers.length > 0}
                                             onChange={handleSelectAll}
-                                            className="rounded"
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </th>
                                     {tableHeaders.map((header) => (
@@ -277,41 +303,69 @@ const Users: React.FC = () => {
                             </thead>
                             <tbody className="bg-white divide-y dark:divide-gray-700 dark:bg-gray-800">
                                 {filteredUsers.map((user: User) => (
-                                    <tr key={user._id} className="text-gray-700 dark:text-gray-400">
+                                    <tr key={user._id} className={`text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${selectedUserIds.includes(user._id) ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
                                         <td className="px-4 py-3">
                                              <input
                                                 type="checkbox"
                                                 checked={selectedUserIds.includes(user._id)}
                                                 onChange={() => handleSelectUser(user._id)}
-                                                className="rounded"
+                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                             />
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center text-sm">
                                                 <div>
-                                                    <p className="font-semibold">{user.fullName}</p>
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400">@{user.username} (ID: {user._id.substring(user._id.length - 6)})</p>
+                                                    <p className="font-bold text-gray-900 dark:text-white">{user.fullName}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">@{user.username}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             {user.email}<br/>
-                                            <span className="text-xs text-gray-600 dark:text-gray-400">{user.phone}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-500 font-mono">{user.phone}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-sm">{formatCurrency(user.walletBalance, user.currency)}</td>
-                                        <td className="px-4 py-3 text-sm">
-                                            {user.activePlans && user.activePlans.length > 0 
-                                                ? user.activePlans.map(p => p.planName).join(', ') 
-                                                : 'None'}
+                                        <td className="px-4 py-3 text-sm font-semibold">
+                                            <span className={user.walletBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                                {formatCurrency(user.walletBalance, user.currency)}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm max-w-[200px]">
+                                            <div className="flex flex-wrap gap-1">
+                                                {user.activePlans && user.activePlans.length > 0 
+                                                    ? user.activePlans.map((p, idx) => (
+                                                        <span key={idx} className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">
+                                                            {p.planName}
+                                                        </span>
+                                                      ))
+                                                    : <span className="text-gray-400 italic">No plans</span>}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-xs">
                                            <Badge status={user.status} />
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-                                                <Button size="sm" variant="secondary" onClick={() => handleOpenUserManagementModal(user)}>Manage</Button>
-                                                <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(user)}>Message</Button>
-                                                <Button size="sm" variant="danger" onClick={() => handleOpenDeleteModal(user)}>Delete</Button>
+                                            <div className="flex items-center space-x-2">
+                                                <button 
+                                                    onClick={() => handleOpenUserManagementModal(user)}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                                                    title="Manage User"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleOpenMessage(user)}
+                                                    className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                                    title="Message User"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleOpenDeleteModal(user)}
+                                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                                    title="Delete User"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -388,7 +442,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [activationPlanId, setActivationPlanId] = useState('');
     const [isActivatingPlan, setIsActivatingPlan] = useState(false);
 
-    // NEW: Tree Filter State
+    // Tree Filter State
     const [treePlanFilterId, setTreePlanFilterId] = useState('');
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -491,7 +545,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
 
-    /* FIX: useCallback was missing in the imports from react. Imported it to fix line 494. */
     const getEquivalentIds = useCallback((planId: string) => {
         const ids = new Set<string>();
         if (planId) {

@@ -232,7 +232,7 @@ const InvestmentPlans: React.FC = () => {
                 </div>
             </div>
 
-            {/* NEW: Global Display Sequence Settings */}
+            {/* Global Display Sequence Settings */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8 border border-blue-100 dark:border-blue-900">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
@@ -591,7 +591,6 @@ const defaultPlan: Partial<InvestmentPlan> = {
         afterMaxDirect: { ...defaultCommission },
     },
     autoUpgrade: { enabled: false, toPlanId: undefined },
-    holdPosition: { enabled: false, slots: [] },
     customFeatures: [],
     displayConfig: { 
         showDuration: true, 
@@ -638,11 +637,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         if(name === 'autoUpgrade.enabled') {
             const checked = (e.target as HTMLInputElement).checked;
             setFormData(prev => ({ ...prev, autoUpgrade: { ...prev!.autoUpgrade!, enabled: checked }}));
-            return;
-        }
-         if(name === 'holdPosition.enabled') {
-            const checked = (e.target as HTMLInputElement).checked;
-            setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, enabled: checked }}));
             return;
         }
 
@@ -743,16 +737,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
             ...prev,
             customFeatures: (prev.customFeatures || []).filter((_, i) => i !== index)
         }));
-    };
-
-    const handleHoldSlotChange = (slotNumber: number, checked: boolean) => {
-        let currentSlots = formData.holdPosition?.slots || [];
-        if (checked) {
-            currentSlots = [...currentSlots, slotNumber];
-        } else {
-            currentSlots = currentSlots.filter(s => s !== slotNumber);
-        }
-        setFormData(prev => ({ ...prev, holdPosition: { ...prev!.holdPosition!, slots: currentSlots } }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -954,23 +938,6 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                     }
                                 </select>
                             )}
-                        </div>
-                         <div>
-                            <label className="flex items-center space-x-2"><input type="checkbox" name="holdPosition.enabled" checked={formData.holdPosition?.enabled} onChange={handleChange} /> <span>Hold Position Commission</span></label>
-                            {formData.holdPosition?.enabled && formData.directReferralLimit! > 0 && (
-                                <div className="mt-2 p-2 border rounded-md dark:border-gray-700">
-                                    <p className="text-xs mb-2">Select referral slots whose commission will be held for upgrade:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {Array.from({ length: formData.directReferralLimit! }, (_, i) => i + 1).map(slot => (
-                                            <label key={slot} className="flex items-center space-x-1 text-sm p-1 bg-gray-100 dark:bg-gray-900 rounded">
-                                                <input type="checkbox" checked={formData.holdPosition?.slots?.includes(slot)} onChange={e => handleHoldSlotChange(slot, e.target.checked)} />
-                                                <span>{slot}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                             {formData.holdPosition?.enabled && formData.directReferralLimit === 0 && <p className="text-xs text-red-500 mt-1">Set a Direct Referral Limit to enable hold positions.</p>}
                         </div>
                     </div>
                 </fieldset>

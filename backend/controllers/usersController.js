@@ -596,38 +596,26 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 equivIds.includes(String(ap.planId))
             );
             
-            // Get the full config of that plan to respect the sponsor's own limit and hold settings
+            // Get the full config of that plan to respect the sponsor's own limit
             const sponsorPlanConfig = sponsorMatchingActivePlan 
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
                 : plan; // fallback to purchased plan if none found
 
-            // Count existing slot occupancy using Approved and Pending (Hold) transactions
+            // Count existing slot occupancy
             referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
                 level: 1,
-                status: { $in: ['Approved', 'Pending'] }
+                status: 'Approved'
             });
 
             const currentSlotNum = referralCount + 1;
-            
-            // Use the sponsor's specific limit and hold config
             const limit = sponsorPlanConfig?.directReferralLimit || 0;
-            const isHoldSlot = sponsorPlanConfig?.holdPosition?.enabled && sponsorPlanConfig.holdPosition.slots.includes(currentSlotNum);
 
-            // --- REFINED HOLD/OVERFLOW LOGIC ---
-            // 1. If it's a Hold slot, it occupies a slot but is status Pending
-            if (isHoldSlot) {
-                const nextPlanId = sponsorPlanConfig.autoUpgrade?.toPlanId;
-                const nextPlan = allPlans.find(p => p._id.toString() === String(nextPlanId));
-                const upName = nextPlan ? nextPlan.name : 'your next plan level';
+            if (limit > 0 && referralCount >= limit) {
+                const overflowDescription = `[Overflow] Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`;
                 
-                eligibility.status = 'Pending';
-                eligibility.message = `Hold Commission for upgrade: Slot #${currentSlotNum} (${user.username}) reserved for auto-upgrade to ${upName}.`;
-            } 
-            // 2. Only if NOT a Hold slot, check if it exceeds the hard referral limit.
-            else if (limit > 0 && referralCount >= limit) {
                 await Transaction.create({
                     userId: uplineUser._id,
                     userName: uplineUser.username,
@@ -636,14 +624,17 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     amount: 0,
                     level: 1,
                     sourceUserId: user._id,
-                    description: `Apna plan Overflow: Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`,
+                    description: overflowDescription,
                     status: 'Rejected',
                     relatedPlanId: plan._id
                 });
+                
                 await Notification.create({
                     userId: uplineUser._id,
+                    subject: 'Referral Limit Reached',
                     message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
                 });
+                
                 currentUplineUsername = uplineUser.sponsor;
                 continue; 
             }

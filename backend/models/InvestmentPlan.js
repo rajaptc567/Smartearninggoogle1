@@ -66,10 +66,6 @@ const InvestmentPlanSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: false },
         toPlanId: { type: String },
     },
-    holdPosition: {
-        enabled: { type: Boolean, default: false },
-        slots: [Number],
-    },
     customFeatures: {
         type: [String],
         default: []

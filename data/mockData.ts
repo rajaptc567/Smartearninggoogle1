@@ -50,8 +50,8 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         directCommissions: [{ type: 'percentage', value: 7 }],
         indirectCommissions: [{ type: 'percentage', value: 2 }, { type: 'percentage', value: 1 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
-        autoUpgrade: { enabled: false },
-        holdPosition: { enabled: false, slots: [] }
+        // FIX: Removed holdPosition as it doesn't exist in type InvestmentPlan
+        autoUpgrade: { enabled: false }
     },
     {
         _id: 'p3',
@@ -66,8 +66,8 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         directCommissions: [{ type: 'percentage', value: 10 }],
         indirectCommissions: [{ type: 'percentage', value: 3 }, { type: 'percentage', value: 2 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
-        autoUpgrade: { enabled: false },
-        holdPosition: { enabled: false, slots: [] }
+        // FIX: Removed holdPosition as it doesn't exist in type InvestmentPlan
+        autoUpgrade: { enabled: false }
     }
 ];
 

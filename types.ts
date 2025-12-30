@@ -140,10 +140,6 @@ export interface InvestmentPlan {
         enabled: boolean;
         toPlanId?: string;
     };
-    holdPosition?: {
-        enabled: boolean;
-        slots: number[];
-    };
     customFeatures?: string[];
     displayConfig?: {
         showDuration: boolean;
