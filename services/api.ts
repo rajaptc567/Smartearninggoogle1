@@ -1,22 +1,16 @@
 
 // ... existing imports ...
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
 // The base URL of your backend API is determined at runtime.
-// This allows the same code to work for both local development and live deployment.
 function getApiBaseUrl() {
   const hostname = window.location.hostname;
-  // Check if running on localhost for development
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:5000/api/v1';
   }
-  // Otherwise, use the live production URL
   return 'https://smartearning-api.onrender.com/api/v1';
 }
 
-/**
- * Returns the base URL for uploaded assets.
- */
 export function getUploadsBaseUrl() {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -28,7 +22,6 @@ export function getUploadsBaseUrl() {
 const API_BASE_URL = getApiBaseUrl();
 
 
-// A helper function to handle fetch responses.
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -37,7 +30,7 @@ const handleResponse = async (response: Response) => {
             const error = (data && data.error) || response.statusText;
             throw new Error(error);
         }
-        return data; // Return the full response object { success, data, count }
+        return data; 
     } else {
          const text = await response.text();
          throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
@@ -71,13 +64,7 @@ export const updateUser = async (id: string, userData: Partial<User>): Promise<U
     return result.data;
 };
 
-export const bulkUpdateUserRestrictions = async (payload: {
-    targetType: 'single' | 'plan' | 'all';
-    targetIds: string[];
-    restrictions: Partial<UserRestrictions>;
-    action: 'enable' | 'disable' | 'toggle';
-    sendNotification: boolean;
-}): Promise<{ message: string }> => {
+export const bulkUpdateUserRestrictions = async (payload: any): Promise<{ message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -87,14 +74,7 @@ export const bulkUpdateUserRestrictions = async (payload: {
     return result;
 };
 
-export const createBulkDummyUsers = async (payload: {
-    count: number;
-    sponsor: string;
-    balance: number;
-    country?: string;
-    currency?: string;
-    planId?: string;
-}): Promise<{ count: number; message: string }> => {
+export const createBulkDummyUsers = async (payload: any): Promise<{ count: number; message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-dummy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,7 +112,7 @@ export const login = async (email: string, password: string): Promise<User> => {
     return result.data;
 };
 
-export const adjustUserWallet = async (id: string, adjustmentData: { amount: number; description: string }): Promise<{ user: User; transaction: Transaction }> => {
+export const adjustUserWallet = async (id: string, adjustmentData: any): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +191,7 @@ export const createDeposit = async (formData: FormData): Promise<{ deposit: Depo
     return result.data;
 };
 
-export const updateDeposit = async (id: string, updateData: { status: string; adminNotes: string }): Promise<{ deposit: Deposit; user: User }> => {
+export const updateDeposit = async (id: string, updateData: any): Promise<{ deposit: Deposit; user: User }> => {
     const response = await fetch(`${API_BASE_URL}/deposits/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -500,7 +480,7 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const updateDispute = async (id: string, formDataOrData: FormData | any): Promise<Dispute> => {
+export const updateDispute = async (id: string, formDataOrData: any): Promise<Dispute> => {
     const isFormData = formDataOrData instanceof FormData;
     const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
@@ -516,6 +496,51 @@ export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Pro
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+// --- [Task API Functions] ---
+export const getTasks = async (): Promise<Task[]> => {
+    const response = await fetch(`${API_BASE_URL}/tasks`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createTask = async (taskData: Partial<Task>): Promise<Task> => {
+    const response = await fetch(`${API_BASE_URL}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateTask = async (id: string, taskData: Partial<Task>): Promise<Task> => {
+    const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteTask = async (id: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+        method: 'DELETE',
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const completeTask = async (taskId: string, userId: string): Promise<User> => {
+    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
     });
     const result = await handleResponse(response);
     return result.data;

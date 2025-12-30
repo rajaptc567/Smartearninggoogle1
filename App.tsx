@@ -20,7 +20,8 @@ import PasswordResets from './pages/PasswordResets';
 import AdminDisputes from './pages/AdminDisputes';
 import SentMessages from './pages/SentMessages';
 import TickerSettings from './pages/TickerSettings';
-import AdminProfile from './pages/AdminProfile'; // Import new page
+import AdminProfile from './pages/AdminProfile';
+import AdminTasks from './pages/AdminTasks';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -43,6 +44,7 @@ import TransferFunds from './pages/user/TransferFunds';
 import ActivePlans from './pages/user/ActivePlans';
 import UserDisputes from './pages/user/UserDisputes';
 import Messages from './pages/user/Messages';
+import UserTasks from './pages/user/UserTasks';
 
 
 const App: React.FC = () => {
@@ -68,6 +70,7 @@ const App: React.FC = () => {
           <Route path="payment-methods" element={<PaymentMethods />} />
           <Route path="investment-plans" element={<InvestmentPlans />} />
           <Route path="plan-equivalency" element={<PlanEquivalency />} />
+          <Route path="tasks" element={<AdminTasks />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
           <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />
@@ -88,6 +91,7 @@ const App: React.FC = () => {
           <Route path="transfer" element={<TransferFunds />} />
           <Route path="plans" element={<UserInvestmentPlans />} />
           <Route path="active-plans" element={<ActivePlans />} />
+          <Route path="tasks" element={<UserTasks />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="referrals" element={<Referrals />} />
           <Route path="disputes" element={<UserDisputes />} />

@@ -49,6 +49,19 @@ export interface User {
     registrationDate: string;
     restrictions?: UserRestrictions;
     sponsor?: string;
+    completedTasks?: string[]; // Array of Task IDs
+}
+
+export interface Task {
+    _id: string;
+    title: string;
+    description: string;
+    link: string;
+    type: 'Video' | 'Link' | 'Social' | 'Subscription';
+    isRequiredForWithdrawal: boolean;
+    status: 'Active' | 'Disabled';
+    rewardAmount?: number;
+    createdAt: string;
 }
 
 export interface Deposit {

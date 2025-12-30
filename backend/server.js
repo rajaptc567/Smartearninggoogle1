@@ -22,6 +22,7 @@ import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
+import taskRoutes from './routes/taskRoutes.js'; // Import new task routes
 
 // Load env vars
 dotenv.config();
@@ -35,7 +36,6 @@ const app = express();
 app.use(cors());
 
 // Body parser middleware
-// Increased limit to 50mb to handle Base64 images in settings
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -56,16 +56,13 @@ app.use('/uploads', express.static(uploadsDir));
 const seedAdminUser = async () => {
     try {
         const adminEmail = 'studio56.pk@gmail.com';
-        // Password provided by user (only used for initial creation)
         const adminPassword = 'raja5207901@'; 
         
         const existingUser = await User.findOne({ email: adminEmail });
         
         if (!existingUser) {
-            // Check if ANY admin exists to avoid duplicates
             const anyAdmin = await User.findOne({ username: 'admin' });
             if (!anyAdmin) {
-                console.log('Seeding Admin User...');
                 await User.create({
                     username: 'admin',
                     fullName: 'System Admin',
@@ -77,11 +74,8 @@ const seedAdminUser = async () => {
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
-                console.log('Admin User Created Successfully');
             }
         } 
-        // REMOVED the else block that forced password reset on every restart.
-        // This allows the admin to change their password via the dashboard and keep it.
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
@@ -106,27 +100,24 @@ app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
+app.use('/api/v1/tasks', taskRoutes); // Mount task routes
 
 // Custom Error Handler
 const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
-    // Handle payload too large error specifically if needed, otherwise generic 500
     if (err.type === 'entity.too.large') {
-        return res.status(413).json({ success: false, error: 'Payload too large. Please upload smaller images.' });
+        return res.status(413).json({ success: false, error: 'Payload too large.' });
     }
     res.status(500).json({ success: false, error: 'Internal Server Error' });
 };
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
 const server = app.listen(PORT, async () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    // Run seeder after server starts
     await seedAdminUser();
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
     console.log(`Error: ${err.message}`);
     server.close(() => process.exit(1));

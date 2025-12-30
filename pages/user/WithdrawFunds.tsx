@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentMethod, Status, Withdrawal, formatCurrency, currencySymbols } from '../../types';
+import { PaymentMethod, Status, Withdrawal, formatCurrency, currencySymbols, Task } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
 import { createWithdrawal } from '../../services/api';
@@ -17,6 +17,12 @@ const WithdrawalHeaderIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const LockIcon = () => (
+    <svg className="w-20 h-20 text-red-500 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
 );
 
@@ -44,7 +50,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { currentUser, paymentMethods, withdrawals, settings: { restrictWithdrawalAmount, withdrawalFrequency } } = state;
+    const { currentUser, paymentMethods, withdrawals, tasks, settings: { restrictWithdrawalAmount, withdrawalFrequency } } = state;
     const navigate = useNavigate();
 
     // Wizard State
@@ -63,6 +69,13 @@ const WithdrawFunds: React.FC = () => {
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
+
+    // --- ELIGIBILITY CHECK: UNCOMPLETED REQUIRED TASKS ---
+    const pendingRequiredTasks = useMemo(() => {
+        if (!currentUser) return [];
+        const completedIds = currentUser.completedTasks || [];
+        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !completedIds.includes(t._id));
+    }, [tasks, currentUser]);
 
     // Derived Data
     const withdrawalMethods = useMemo(() => {
@@ -139,7 +152,7 @@ const WithdrawFunds: React.FC = () => {
         }
     }, [currentUser, withdrawals, withdrawalFrequency]);
 
-    // Reset method if amount changes and method becomes invalid (though methods usually don't depend on amount for *availability* list, just validation)
+    // Reset method if amount changes and method becomes invalid
     useEffect(() => {
         if (selectedMethodId && !withdrawalMethods.find(m => m._id === selectedMethodId)) {
             setSelectedMethodId('');
@@ -207,6 +220,45 @@ const WithdrawFunds: React.FC = () => {
     };
 
     if (!currentUser) return null;
+
+    // --- RENDER LOCKED SCREEN IF TASKS PENDING ---
+    if (pendingRequiredTasks.length > 0) {
+        return (
+            <div className="max-w-2xl mx-auto mt-10 p-8 bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-fade-in">
+                <div className="flex flex-col items-center">
+                    <LockIcon />
+                    <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4">Security Verification Required</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
+                        To maintain a healthy platform and prove your eligibility, you are required to complete the following mandatory tasks before you can withdraw funds.
+                    </p>
+                    
+                    <div className="w-full space-y-3 mb-10 text-left">
+                        {pendingRequiredTasks.map(task => (
+                            <div key={task._id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border dark:border-gray-700 group hover:border-blue-500 transition-colors">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{task.title}</span>
+                                    <span className="text-[10px] text-red-500 font-black uppercase tracking-widest mt-0.5">Compulsory</span>
+                                </div>
+                                <button 
+                                    onClick={() => navigate('/member/tasks')}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+                                >
+                                    Complete &rarr;
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="p-5 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30 w-full flex items-start gap-4 text-left">
+                        <span className="text-xl">💡</span>
+                        <p className="text-xs text-blue-600 dark:text-blue-300 font-medium leading-relaxed">
+                            Once all mandatory tasks are completed in the <strong>"My Tasks"</strong> section, this form will automatically unlock for your requested currency.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     if (isSubmitted) {
         return (
@@ -394,7 +446,6 @@ const WithdrawFunds: React.FC = () => {
                             <p className="text-gray-500 dark:text-gray-400 text-sm">Provide your {selectedMethod.name} details.</p>
                         </div>
 
-                        {/* Breakdown */}
                         <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl border border-gray-200 dark:border-gray-600 mb-6">
                             <div className="flex justify-between text-sm mb-2">
                                 <span className="text-gray-500 dark:text-gray-400">Withdraw Amount</span>
