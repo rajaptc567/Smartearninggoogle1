@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useData } from '../../hooks/useData';
-import { User, Status, formatCurrency, InvestmentPlan, Transaction, currencySymbols } from '../../types';
+import { User, Status, formatCurrency, InvestmentPlan, Transaction, currencySymbols, Currency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
+import ShareButtons from '../../components/ui/ShareButtons';
 
 interface GenealogyNode {
     user: User;
@@ -14,7 +15,7 @@ interface GenealogyNode {
 }
 
 const Referrals: React.FC = () => {
-    const { state, dispatch } = useData();
+    const { state } = useData();
     const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
     
@@ -32,7 +33,7 @@ const Referrals: React.FC = () => {
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
     
-    const [viewMode, setViewMode] = useState<'commissions' | 'tree' | 'overflow' | 'held' | 'all' | 'inactive'>('commissions');
+    const [viewMode, setViewMode] = useState<'commissions' | 'all' | 'held' | 'tree' | 'overflow' | 'inactive'>('commissions');
 
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
     const [selectedSponsor, setSelectedSponsor] = useState<User | null>(null);
@@ -105,7 +106,7 @@ const Referrals: React.FC = () => {
                 t.type === 'Commission' &&
                 t.sourceUserId && String(t.sourceUserId) === String(referral._id)
             )
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
         const recurringPlanIds = settings.recurringCommissionPlanIds || [];
@@ -193,8 +194,8 @@ const Referrals: React.FC = () => {
         return { referrals, stats: pendingMap };
     }, [transactions, currentUser, settings, investmentPlans, users]);
 
-    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, allNodes } = useMemo(() => {
-        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [] };
+    const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, allNodes, scopeStats } = useMemo(() => {
+        if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [], scopeStats: { earned: 0, held: 0, directCount: 0, indirectCount: 0 } };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
             const directReferrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
@@ -219,10 +220,19 @@ const Referrals: React.FC = () => {
         const indirectEarnersList: any[] = [];
         const overflowList: any[] = [];
         const inactiveList: any[] = [];
+        let earnedSum = 0;
+        let heldSum = 0;
+        let directCount = 0;
+        let indirectCount = 0;
 
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             if (info.shouldRemoveCompletely) return;
+
+            earnedSum += info.earned;
+            heldSum += info.held;
+            if (info.level === 1) directCount++;
+            else indirectCount++;
 
             if (info.earned > 0 || info.held > 0) {
                 if (info.level === 1) directEarnersList.push({ ...node, info });
@@ -251,7 +261,15 @@ const Referrals: React.FC = () => {
             }).filter((n): n is GenealogyNode => n !== null);
         };
 
-        return { genealogyTree: filterRecursive(fullGenealogyTree), directEarners: directEarnersList, indirectEarners: indirectEarnersList, overflowReferrals: overflowList, inactiveReferrals: inactiveList, allNodes: filteredAllNodes };
+        return { 
+            genealogyTree: filterRecursive(fullGenealogyTree), 
+            directEarners: directEarnersList, 
+            indirectEarners: indirectEarnersList, 
+            overflowReferrals: overflowList, 
+            inactiveReferrals: inactiveList, 
+            allNodes: filteredAllNodes,
+            scopeStats: { earned: earnedSum, held: heldSum, directCount, indirectCount }
+        };
     }, [currentUser, users, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
     const ReferralCardContent: React.FC<{
@@ -337,7 +355,7 @@ const Referrals: React.FC = () => {
                                             <span className="text-[10px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
-                                        {isHeldView && item.planId && (
+                                        {(isHeldView || (showHeldAlert && hasHeld)) && item.planId && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }}
                                                 className="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-1 hover:underline flex items-center gap-1"
@@ -381,7 +399,7 @@ const Referrals: React.FC = () => {
 
                     <div className="mt-6 flex justify-between items-center text-[11px] font-black uppercase tracking-[0.2em] pt-5 border-t border-gray-800/50">
                         <span className="text-gray-500">{info.statusText}</span>
-                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username === user.sponsor) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400">Referrer: @{user.sponsor || 'Rajaptc56'}</button>
+                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username === user.sponsor) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400">Referrer: @{user.sponsor || 'Direct'}</button>
                     </div>
                 </div>
             </div>
@@ -404,6 +422,21 @@ const Referrals: React.FC = () => {
     if (!currentUser) return null;
 
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
+    
+    // Calculate current slot usage for the plan overview card
+    const currentSlotUsage = useMemo(() => {
+        if (!selectedPlanId) return { used: 0, limit: 0 };
+        const limit = selectedPlanDetails?.directReferralLimit || 0;
+        const usedCount = transactions.filter(t => 
+            String(t.userId) === String(currentUser._id) &&
+            t.type === 'Commission' &&
+            t.level === 1 &&
+            t.relatedPlanId &&
+            equivalentPlanIdsForSelected.has(String(t.relatedPlanId)) &&
+            (t.status === 'Approved' || t.status === 'Pending')
+        ).length;
+        return { used: usedCount, limit };
+    }, [selectedPlanId, selectedPlanDetails, transactions, currentUser._id, equivalentPlanIdsForSelected]);
 
     return (
         <div className="space-y-10 max-w-7xl mx-auto pb-20 px-4">
@@ -412,76 +445,214 @@ const Referrals: React.FC = () => {
                     <h1 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter">Network Insights</h1>
                     <p className="text-[11px] text-gray-500 font-black uppercase tracking-[0.3em] mt-2 ml-1">Deep analysis of your multi-level earnings</p>
                 </div>
-                <div className="bg-[#111827] p-3 rounded-[2rem] border border-gray-800 shadow-xl flex items-center gap-4 min-w-[280px]">
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-4">Network Scope:</span>
-                    <select 
-                        value={selectedPlanId} 
-                        onChange={(e) => setSelectedPlanId(e.target.value)}
-                        className="bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider rounded-full border-none focus:ring-4 focus:ring-blue-500/30 cursor-pointer pr-10 py-2.5 shadow-lg shadow-blue-600/20 grow"
-                    >
-                        {uniqueActivePlans.map(p => <option key={p.planId} value={p.planId}>{p.planName}</option>)}
-                    </select>
+                
+                {/* Attractive Smaller Tab-Style Plan Switcher with Intense Neon Outlines */}
+                <div className="bg-[#111827] p-1.5 rounded-[1.5rem] border-2 border-gray-800 shadow-2xl flex flex-wrap gap-2 items-center">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-3 hidden sm:inline">Active Scope:</span>
+                    {uniqueActivePlans.map(p => (
+                        <button
+                            key={p.planId}
+                            onClick={() => setSelectedPlanId(p.planId)}
+                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider transition-all duration-300 border-2 ${
+                                selectedPlanId === p.planId 
+                                ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white border-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)] scale-105 z-10' 
+                                : 'bg-gray-800/40 text-gray-500 border-gray-700 hover:text-gray-200 hover:border-gray-500 hover:bg-gray-800'
+                            }`}
+                        >
+                            {p.planName}
+                        </button>
+                    ))}
+                    {uniqueActivePlans.length === 0 && <span className="px-4 py-1.5 text-[9px] text-gray-500 italic">No active scope available</span>}
                 </div>
             </div>
 
-            {/* Main Stats Bar Section */}
+            {/* Selected Plan Technical Overview & Scoped Audit */}
+            {selectedPlanDetails && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+                    {/* Technical Card */}
+                    <div className="lg:col-span-2 bg-[#1e293b] rounded-[2.5rem] border border-gray-800 p-8 flex flex-col gap-8 overflow-hidden relative group">
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/5 blur-[60px] group-hover:bg-blue-500/10 transition-all duration-1000"></div>
+                        <div className="flex flex-col md:flex-row gap-8 items-center md:items-stretch">
+                            <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-6 bg-black/20 rounded-[2rem] border border-white/5 shadow-inner shrink-0">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Scope Target</h4>
+                                <span className="text-2xl font-black text-blue-400">{selectedPlanDetails.name}</span>
+                                <span className="text-3xl font-black text-white mt-3">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
+                                <div className="mt-4 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
+                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{selectedPlanDetails.durationDays === 0 ? 'Unlimited Access' : `${selectedPlanDetails.durationDays} Day Cycle`}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex-grow flex flex-col justify-between py-2 space-y-6">
+                                <div className="p-4 bg-black/10 rounded-2xl border border-white/5">
+                                    <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Strategic Overview</h5>
+                                    <p className="text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Min. Withdrawal</h5>
+                                        <p className="text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Direct Earning Rate</h5>
+                                        <p className="text-lg font-bold text-[#22c55e]">
+                                            {(() => {
+                                                const c = selectedPlanDetails.directCommissions?.[0];
+                                                if(!c) return 'None';
+                                                return c.type === 'percentage' ? `${c.value}%` : formatCurrency(c.value, selectedPlanDetails.currency);
+                                            })()}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Direct Referral Capacity</h5>
+                                        <span className="text-xs font-black text-white">{currentSlotUsage.used} / {currentSlotUsage.limit === 0 ? '∞' : currentSlotUsage.limit} used</span>
+                                    </div>
+                                    <div className="w-full bg-black/40 rounded-full h-3 overflow-hidden border border-white/5 shadow-inner">
+                                        <div 
+                                            className={`h-full transition-all duration-1000 ${currentSlotUsage.limit > 0 && currentSlotUsage.used >= currentSlotUsage.limit ? 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-blue-600 to-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]'}`}
+                                            style={{ width: `${currentSlotUsage.limit === 0 ? 100 : (currentSlotUsage.used / currentSlotUsage.limit) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Simplified Multi-Level Depth Info */}
+                        {selectedPlanDetails.indirectCommissions && selectedPlanDetails.indirectCommissions.length > 0 && (
+                            <div className="border-t border-gray-700/50 pt-6">
+                                <div className="flex items-center gap-4 bg-black/20 p-4 rounded-2xl border border-white/5">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center font-black text-blue-500">
+                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mb-0.5">Network Depth Architecture</h5>
+                                        <p className="text-lg font-black text-white">( {selectedPlanDetails.indirectCommissions.length} level deep )</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Scoped Financial Audit Card */}
+                    <div className="bg-[#111827] rounded-[2.5rem] border border-gray-800 p-8 flex flex-col justify-between shadow-2xl">
+                         <div>
+                            <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.4em] mb-6">Network Performance Audit</h4>
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400">Scoped Direct Reach</span>
+                                    <span className="text-xl font-black text-white">{scopeStats.directCount} Members</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400">Scoped Indirect Depth</span>
+                                    <span className="text-xl font-black text-white">{scopeStats.indirectCount} Members</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400">Commission Qualified</span>
+                                    <span className="text-xl font-black text-[#22c55e]">{formatCurrency(scopeStats.earned, currentUser.currency)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-400">Commission Held (Locked)</span>
+                                    <span className="text-xl font-black text-orange-500">{formatCurrency(scopeStats.held, currentUser.currency)}</span>
+                                </div>
+                            </div>
+                         </div>
+                         <button 
+                            onClick={() => setViewMode('held')}
+                            className="mt-8 w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] hover:bg-white/10 transition-colors"
+                         >
+                            Check Held Eligibility &rarr;
+                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Integrated Share Buttons Section */}
             <div className="bg-[#0b0f19] p-10 rounded-[3rem] border border-gray-800 shadow-2xl relative overflow-hidden group">
                 <div className="absolute -top-32 -right-32 w-80 h-80 bg-blue-600/10 blur-[120px] group-hover:bg-blue-600/15 transition-all duration-1000"></div>
                 
                 <div className="flex flex-col lg:flex-row justify-between items-stretch gap-10 relative z-10">
                     <div className="flex-grow w-full lg:w-3/5">
-                        <h3 className="text-[11px] font-black text-blue-400 uppercase tracking-[0.5em] mb-6 ml-1">Your Professional Invitation Link</h3>
-                        <div className="flex items-center bg-black/40 p-5 rounded-3xl border border-white/5 font-mono text-xs text-blue-100/70 break-all border-dashed select-all group-hover:border-blue-500/40 transition-all duration-500 min-h-[100px]">
-                            <span className="flex-grow px-2 leading-relaxed">{referralLink}</span>
-                            <button 
-                                onClick={() => {
-                                    navigator.clipboard.writeText(referralLink);
-                                    // Could trigger toast here
-                                }} 
-                                className="ml-5 p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 active:scale-90 transition-all shadow-xl shadow-blue-600/30 shrink-0"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                            </button>
-                        </div>
+                        <ShareButtons 
+                            url={referralLink} 
+                            title="Join my network on SmartEarning!" 
+                            className="bg-black/20 backdrop-blur-sm border-white/5 shadow-none" 
+                        />
                     </div>
                     
-                    <div className="flex gap-6 w-full lg:w-2/5">
+                    <div className="flex flex-col gap-6 w-full lg:w-2/5">
                         <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
-                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Team Size</p>
-                            <p className="text-4xl font-black text-white">{allNodes.length}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Total Direct Refs</p>
+                            <p className="text-4xl font-black text-white">{users.filter(u => u.sponsor === currentUser.username).length}</p>
                         </div>
                         <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
-                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Commissioners</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Global Commissioners</p>
                             <p className="text-4xl font-black text-[#22c55e]">{directEarners.length + indirectEarners.length}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Navigation Tabs - Exact style as screenshot */}
-            <div className="p-2 bg-[#111827] rounded-[2.5rem] border border-gray-800 shadow-inner">
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        { id: 'commissions', label: 'Earnings Detailed', count: directEarners.length + indirectEarners.length },
-                        { id: 'all', label: 'All Members + Held Info', count: allNodes.length },
-                        { id: 'held', label: 'Held Commissions Only', count: heldCommissionsData.referrals.length },
-                        { id: 'tree', label: 'Hierarchy Architecture', count: genealogyTree.length },
-                        { id: 'overflow', label: 'Overflow Logs', count: overflowReferrals.length },
-                        { id: 'inactive', label: 'Dormant Team', count: inactiveReferrals.length }
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setViewMode(tab.id as any)}
-                            className={`flex-1 min-w-[200px] px-8 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all ${
-                                viewMode === tab.id 
-                                ? 'bg-[#1f2937] text-blue-400 shadow-2xl border border-blue-500/20' 
-                                : 'text-gray-500 hover:text-gray-300 hover:bg-[#1f2937]/30'
-                            }`}
-                        >
-                            {tab.label} <span className="ml-2 text-xs opacity-50">({tab.count})</span>
-                        </button>
-                    ))}
-                </div>
+            {/* Navigation Tabs - Refined to match 'Plan Switcher' style: Still, Small, and Pill-shaped */}
+            <div className="p-3 bg-[#111827] rounded-[2.5rem] border border-gray-800 shadow-2xl flex flex-wrap gap-2 justify-center">
+                {[
+                    { 
+                        id: 'commissions', 
+                        label: 'Earnings Detailed', 
+                        count: directEarners.length + indirectEarners.length, 
+                        active: 'border-green-400 bg-gradient-to-r from-green-600 to-green-500 text-white shadow-[0_0_15px_rgba(74,222,128,0.4)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    },
+                    { 
+                        id: 'all', 
+                        label: 'All Members + Held Info', 
+                        count: allNodes.length, 
+                        active: 'border-blue-400 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_0_15px_rgba(96,165,250,0.4)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    },
+                    { 
+                        id: 'held', 
+                        label: 'Held Commissions Only', 
+                        count: heldCommissionsData.referrals.length, 
+                        active: 'border-orange-400 bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-[0_0_15px_rgba(251,146,60,0.4)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    },
+                    { 
+                        id: 'tree', 
+                        label: 'Hierarchy Architecture', 
+                        count: genealogyTree.length, 
+                        active: 'border-purple-400 bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-[0_0_15px_rgba(192,132,252,0.4)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    },
+                    { 
+                        id: 'overflow', 
+                        label: 'Overflow Logs', 
+                        count: overflowReferrals.length, 
+                        active: 'border-red-400 bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_15px_rgba(248,113,113,0.4)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    },
+                    { 
+                        id: 'inactive', 
+                        label: 'Dormant Team', 
+                        count: inactiveReferrals.length, 
+                        active: 'border-gray-400 bg-gradient-to-r from-gray-600 to-gray-500 text-white shadow-[0_0_15px_rgba(156,163,175,0.2)]', 
+                        inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
+                    }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setViewMode(tab.id as any)}
+                        className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 border-2 ${
+                            viewMode === tab.id 
+                            ? `${tab.active} scale-105 z-10` 
+                            : `${tab.inactive}`
+                        }`}
+                    >
+                        {tab.label} <span className="opacity-70 ml-1">({tab.count})</span>
+                    </button>
+                ))}
             </div>
 
             <div className="min-h-[600px] animate-fade-in">
@@ -600,6 +771,13 @@ const Referrals: React.FC = () => {
                 }
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
                     background: #6b7280;
+                }
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
                 }
             `}</style>
         </div>
