@@ -137,34 +137,62 @@ export const getUser = async (req, res) => {
     }
 };
 
-// Helper function for checking commission release eligibility
-const canReleaseCommission = (commission, user, settings, allPlans) => {
-    let canRelease = true;
-    
-    if (settings.requirePlanMatchForCommission && commission.relatedPlanId) {
-        const referralPlanId = commission.relatedPlanId.toString();
+// Helper function for checking commission release eligibility with slot limit enforcement
+const canReleaseCommission = async (commission, user, settings, allPlans) => {
+    if (commission.status !== 'Pending') return false;
 
+    let canRelease = true;
+    let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
+    
+    if (settings.requirePlanMatchForCommission && targetPlanId) {
         // Find the equivalency group this plan belongs to
         const group = (settings.planEquivalencyGroups || []).find(g => 
-            String(g.usdPlanId) === referralPlanId ||
-            String(g.pkrPlanId) === referralPlanId || 
-            String(g.eurPlanId) === referralPlanId
+            String(g.usdPlanId) === targetPlanId ||
+            String(g.pkrPlanId) === targetPlanId || 
+            String(g.eurPlanId) === targetPlanId
         );
 
         let hasEquivalentPlan = false;
+        let equivIds = [targetPlanId];
+
         if (group) {
-            const groupPlanIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+            equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
             const sponsorActivePlanIds = (user.activePlans || []).map(p => String(p.planId));
-            hasEquivalentPlan = sponsorActivePlanIds.some(id => groupPlanIds.includes(id));
+            hasEquivalentPlan = sponsorActivePlanIds.some(id => equivIds.includes(id));
         } else {
-            // Fallback for non-grouped plans
-            hasEquivalentPlan = (user.activePlans || []).some(p => String(p.planId) === referralPlanId);
+            hasEquivalentPlan = (user.activePlans || []).some(p => String(p.planId) === targetPlanId);
         }
-        if (!hasEquivalentPlan) canRelease = false;
+
+        if (!hasEquivalentPlan) return false;
+
+        // --- SLOT LIMIT CHECK DURING RELEASE ---
+        if (commission.level === 1) {
+             const activePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+             const planConfig = allPlans.find(p => p._id.toString() === String(activePlan.planId));
+             const limit = planConfig?.directReferralLimit || 0;
+
+             if (limit > 0) {
+                 const approvedCount = await Transaction.countDocuments({
+                     userId: user._id,
+                     type: 'Commission',
+                     relatedPlanId: { $in: equivIds },
+                     level: 1,
+                     status: 'Approved'
+                 });
+
+                 if (approvedCount >= limit) {
+                     // This commission is now an overflow because slots were filled while it was held
+                     commission.status = 'Rejected';
+                     commission.description = `[Overflow] Slot Limit (${limit}) reached before release.`;
+                     await commission.save();
+                     return false;
+                 }
+             }
+        }
 
     } else if (settings.requireActivePlanForCommission) {
         const hasAnyPlan = user.activePlans && user.activePlans.length > 0;
-        if (!hasAnyPlan) canRelease = false;
+        if (!hasAnyPlan) return false;
     }
 
     return canRelease;
@@ -270,7 +298,7 @@ export const updateUser = async (req, res) => {
 
             let releasedAmount = 0;
             for (const comm of pendingCommissions) {
-                if (canReleaseCommission(comm, updatedUser, settings, allPlans)) {
+                if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
                     comm.status = 'Approved';
                     await comm.save();
                     releasedAmount += comm.amount;
@@ -357,7 +385,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     let releasedAmount = 0;
 
                     for (const comm of pendingCommissions) {
-                       if (canReleaseCommission(comm, user, settings, allPlans)) {
+                       if (await canReleaseCommission(comm, user, settings, allPlans)) {
                             comm.status = 'Approved';
                             await comm.save();
                             releasedAmount += comm.amount;
@@ -591,52 +619,55 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
 
-            // REFINED: Get the sponsor's actual configuration for this slot limit
             const sponsorMatchingActivePlan = (uplineUser.activePlans || []).find(ap => 
                 equivIds.includes(String(ap.planId))
             );
             
-            // Get the full config of that plan to respect the sponsor's own limit
+            // LOGIC FIX: If sponsor doesn't own a plan yet, we DON'T enforce the limit here.
+            // This allows all potential referrals to show up as "Held".
+            // The limit will be enforced at the time they buy the plan (during release).
             const sponsorPlanConfig = sponsorMatchingActivePlan 
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
-                : plan; // fallback to purchased plan if none found
+                : null;
 
-            // Count existing slot occupancy including held ones
-            referralCount = await Transaction.countDocuments({
-                userId: uplineUser._id,
-                type: 'Commission',
-                relatedPlanId: { $in: equivIds },
-                level: 1,
-                status: { $in: ['Approved', 'Pending'] }
-            });
-
-            const currentSlotNum = referralCount + 1;
-            const limit = sponsorPlanConfig?.directReferralLimit || 0;
-
-            if (limit > 0 && referralCount >= limit) {
-                const overflowDescription = `[Overflow] Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`;
+            if (sponsorPlanConfig) {
+                const limit = sponsorPlanConfig.directReferralLimit || 0;
                 
-                await Transaction.create({
+                // Count existing approved and pending slots
+                referralCount = await Transaction.countDocuments({
                     userId: uplineUser._id,
-                    userName: uplineUser.username,
-                    currency: uplineUser.currency,
                     type: 'Commission',
-                    amount: 0,
+                    relatedPlanId: { $in: equivIds },
                     level: 1,
-                    sourceUserId: user._id,
-                    description: overflowDescription,
-                    status: 'Rejected',
-                    relatedPlanId: plan._id
+                    status: { $in: ['Approved', 'Pending'] }
                 });
-                
-                await Notification.create({
-                    userId: uplineUser._id,
-                    subject: 'Referral Limit Reached',
-                    message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
-                });
-                
-                currentUplineUsername = uplineUser.sponsor;
-                continue; 
+
+                if (limit > 0 && referralCount >= limit) {
+                    const currentSlotNum = referralCount + 1;
+                    const overflowDescription = `[Overflow] Slot #${currentSlotNum} from ${user.username} - Limit (${limit}) Reached`;
+                    
+                    await Transaction.create({
+                        userId: uplineUser._id,
+                        userName: uplineUser.username,
+                        currency: uplineUser.currency,
+                        type: 'Commission',
+                        amount: 0,
+                        level: 1,
+                        sourceUserId: user._id,
+                        description: overflowDescription,
+                        status: 'Rejected',
+                        relatedPlanId: plan._id
+                    });
+                    
+                    await Notification.create({
+                        userId: uplineUser._id,
+                        subject: 'Referral Limit Reached',
+                        message: `⚠️ Slot Limit Reached! Your referral ${user.username} activated '${plan.name}', but your ${limit} direct slots for this level are full.`
+                    });
+                    
+                    currentUplineUsername = uplineUser.sponsor;
+                    continue; 
+                }
             }
 
             // Calculate commission value
@@ -771,7 +802,7 @@ export const adminActivatePlan = async (req, res) => {
         if (heldCommissions.length > 0) {
             let totalReleased = 0;
             for (const comm of heldCommissions) {
-                if (canReleaseCommission(comm, user, settings, allPlans)) {
+                if (await canReleaseCommission(comm, user, settings, allPlans)) {
                     comm.status = 'Approved';
                     await comm.save();
                     totalReleased += comm.amount;
@@ -864,7 +895,7 @@ export const purchasePlan = async (req, res) => {
         if (heldCommissions.length > 0) {
             let totalReleased = 0;
             for (const comm of heldCommissions) {
-                if (canReleaseCommission(comm, user, settings, allPlans)) {
+                if (await canReleaseCommission(comm, user, settings, allPlans)) {
                     comm.status = 'Approved';
                     await comm.save();
                     totalReleased += comm.amount;
@@ -884,6 +915,79 @@ export const purchasePlan = async (req, res) => {
         await distributeCommissions(user, plan, settings, exchangeRates, defaultRates, allPlans);
         
         res.status(200).json({ success: true, data: { user, transaction } });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Bulk Create Dummy Users
+// @route   POST /api/v1/users/bulk-dummy
+export const createBulkDummyUsers = async (req, res) => {
+    try {
+        const { count, sponsor, balance, country, currency, planId } = req.body;
+        
+        if (!count || isNaN(count) || count <= 0) {
+            return res.status(400).json({ success: false, error: 'Please provide a valid count.' });
+        }
+
+        const numCount = parseInt(count);
+        const numBalance = parseFloat(balance) || 0;
+        
+        // Find sponsor
+        const sponsorUser = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
+        if (!sponsorUser) {
+            return res.status(404).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
+        }
+
+        const settings = await Setting.getSettings();
+        const allPlans = await InvestmentPlan.find();
+        const plan = planId ? await InvestmentPlan.findById(planId) : null;
+
+        const usersCreated = [];
+        
+        for (let i = 0; i < numCount; i++) {
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            const username = `dummy_${randomSuffix}_${i}`;
+            const email = `dummy_${randomSuffix}_${i}@smartearning.com`;
+            
+            const userData = {
+                fullName: `Dummy Member ${randomSuffix}`,
+                username,
+                email,
+                password: 'password123',
+                phone: `0000${randomSuffix}${i}`,
+                whatsapp: `0000${randomSuffix}${i}`,
+                country: country || sponsorUser.country,
+                currency: currency || sponsorUser.currency,
+                walletBalance: numBalance,
+                sponsor: sponsorUser.username,
+                status: 'Active',
+                restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false }
+            };
+
+            const user = await User.create(userData);
+
+            // If a plan is selected, activate it and trigger commissions
+            if (plan) {
+                user.activePlan = plan.name;
+                user.activePlans.push({
+                    planId: plan._id,
+                    planName: plan.name,
+                    price: plan.price,
+                    purchaseDate: new Date()
+                });
+                await user.save();
+                
+                await distributeCommissions(user, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
+            }
+
+            usersCreated.push(user);
+        }
+
+        await createLog('Bulk Dummy Users Created', sponsorUser.username, `Created ${numCount} dummy users under sponsor ${sponsorUser.username}. Balance: ${numBalance}. Plan: ${plan?.name || 'None'}`, 'admin');
+
+        res.status(201).json({ success: true, count: usersCreated.length, message: `Successfully created ${usersCreated.length} dummy users.` });
+
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

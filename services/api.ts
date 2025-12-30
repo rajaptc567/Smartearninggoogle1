@@ -1,3 +1,4 @@
+
 // ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency } from '../types';
 
@@ -79,6 +80,23 @@ export const bulkUpdateUserRestrictions = async (payload: {
 }): Promise<{ message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const result = await handleResponse(response);
+    return result;
+};
+
+export const createBulkDummyUsers = async (payload: {
+    count: number;
+    sponsor: string;
+    balance: number;
+    country?: string;
+    currency?: string;
+    planId?: string;
+}): Promise<{ count: number; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/bulk-dummy`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
     });

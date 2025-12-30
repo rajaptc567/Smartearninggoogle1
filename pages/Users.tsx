@@ -6,7 +6,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, createBulkDummyUsers } from '../services/api';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -22,6 +22,7 @@ const Users: React.FC = () => {
     
     const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
     const [isBulkRestrictionsModalOpen, setIsBulkRestrictionsModalOpen] = useState(false);
+    const [isBulkDummyModalOpen, setIsBulkDummyModalOpen] = useState(false);
     const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     
@@ -58,6 +59,7 @@ const Users: React.FC = () => {
         setUserToDelete(null);
         setIsUserManagementModalOpen(false);
         setIsBulkRestrictionsModalOpen(false);
+        setIsBulkDummyModalOpen(false);
         setIsMessageModalOpen(false);
         setIsDeleteModalOpen(false);
     };
@@ -275,6 +277,7 @@ const Users: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
+                    <Button variant="secondary" size="sm" onClick={() => setIsBulkDummyModalOpen(true)}>Bulk Dummy Add</Button>
                     <Button variant="secondary" size="sm" onClick={() => handleOpenMessage(null)}>Send Announcement</Button>
                     <Button size="sm" onClick={() => handleOpenUserManagementModal(null)}>Add New User</Button>
                 </div>
@@ -388,6 +391,13 @@ const Users: React.FC = () => {
                     onClose={handleCloseAllModals}
                 />
             )}
+            {isBulkDummyModalOpen && (
+                <BulkDummyUserModal
+                    users={users}
+                    investmentPlans={investmentPlans}
+                    onClose={handleCloseAllModals}
+                />
+            )}
             {isMessageModalOpen && (
                 <MessageUserModal
                     user={managingUser}
@@ -404,6 +414,99 @@ const Users: React.FC = () => {
                 />
             )}
         </div>
+    );
+};
+
+// --- BulkDummyUserModal ---
+
+interface BulkDummyUserModalProps {
+    users: User[];
+    investmentPlans: InvestmentPlan[];
+    onClose: () => void;
+}
+
+const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
+    const [count, setCount] = useState('1');
+    const [sponsor, setSponsor] = useState('');
+    const [balance, setBalance] = useState('0');
+    const [planId, setPlanId] = useState('');
+    const [country, setCountry] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Auto-fill sponsor if there's only one admin or from dropdown
+    const handleSponsorSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSponsor(e.target.value);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!sponsor) return alert("Sponsor username is required.");
+        
+        setIsSubmitting(true);
+        try {
+            const result = await createBulkDummyUsers({
+                count: parseInt(count),
+                sponsor,
+                balance: parseFloat(balance),
+                planId: planId || undefined,
+                country: country || undefined
+            });
+            
+            alert(result.message);
+            
+            // Refresh users list
+            const updatedUsers = await getUsers();
+            dispatch({ type: 'SET_USERS', payload: updatedUsers });
+            onClose();
+        } catch (error) {
+            console.error(error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Could not create dummy users.'}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-96 max-w-full">
+                <h3 className="text-xl font-bold mb-4">Bulk Create Dummy Users</h3>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Number of Users</label>
+                        <input type="number" min="1" max="50" value={count} onChange={e => setCount(e.target.value)} className="w-full rounded-md dark:bg-gray-700" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Sponsor Username</label>
+                        <input type="text" value={sponsor} onChange={handleSponsorSearch} placeholder="e.g. admin" className="w-full rounded-md dark:bg-gray-700" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Starting Balance</label>
+                        <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)} className="w-full rounded-md dark:bg-gray-700" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Activate Plan (Optional)</label>
+                        <select value={planId} onChange={e => setPlanId(e.target.value)} className="w-full rounded-md dark:bg-gray-700">
+                            <option value="">-- No Plan --</option>
+                            {investmentPlans.filter(p => p.status === 'Active').map(p => (
+                                <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Country (Optional)</label>
+                        <select value={country} onChange={e => setCountry(e.target.value)} className="w-full rounded-md dark:bg-gray-700">
+                            <option value="">Inherit from Sponsor</option>
+                            {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-2">
+                        <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Generate Users'}</Button>
+                    </div>
+                </form>
+            </div>
+        </Modal>
     );
 };
 

@@ -15,7 +15,8 @@ import {
     resetPasswordWithToken,
     userRequestPasswordReset,
     verifyAndStartResetTimer,
-    bulkUpdateRestrictions
+    bulkUpdateRestrictions,
+    createBulkDummyUsers
 } from '../controllers/usersController.js';
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
 router.put('/bulk-restrictions', bulkUpdateRestrictions);
+router.post('/bulk-dummy', createBulkDummyUsers);
 router.delete('/bulk', bulkDeleteUsers);
 
 router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
