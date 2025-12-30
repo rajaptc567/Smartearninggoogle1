@@ -100,29 +100,63 @@ const Referrals: React.FC = () => {
         return t.status === 'Rejected' && desc.includes('overflow');
     };
 
-    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { earned: number; held: number; status?: string; earningSourcePlanId?: string, isOverflow?: boolean, overflowDescription?: string } => {
-        if (!currentUser) return { earned: 0, held: 0 };
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>): { 
+        earned: number; 
+        held: number; 
+        status?: string; 
+        earningSourcePlanId?: string; 
+        isOverflow?: boolean; 
+        overflowDescription?: string;
+        hasGlobalEarning: boolean;
+        isOneTimeBlocked: boolean; 
+    } => {
+        if (!currentUser) return { earned: 0, held: 0, hasGlobalEarning: false, isOneTimeBlocked: false };
         
-        const referralComms = transactions.filter(t => 
+        // 1. Get ALL direct commissions from this referral
+        const globalComms = transactions.filter(t => 
             t.userId === currentUser._id &&
             t.type === 'Commission' &&
             t.sourceUserId === referral._id &&
+            t.level === 1
+        );
+
+        // Check if this referral has EVER paid a successful commission (Approved/Pending) to the sponsor
+        const hasGlobalEarning = globalComms.some(t => t.status === 'Approved' || t.status === 'Pending');
+
+        // 2. Filter specifically for the context plan group (if any)
+        const referralComms = globalComms.filter(t => 
             (contextPlanIds.size > 0 && t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : true) 
         );
 
         const earned = referralComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = referralComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        
         const overflowTx = referralComms.find(t => isTransactionOverflow(t));
-        const isOverflow = !!overflowTx;
+        
+        // Overflow flag is only relevant if they haven't paid a commission elsewhere yet.
+        const isOverflow = !!overflowTx && !hasGlobalEarning;
         const overflowDescription = overflowTx?.description?.replace('[Overflow] ', '');
+
+        // 3. One-Time Rule Enforcement Check
+        const hasEarnedFromOtherPlan = globalComms.some(t => t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId))));
+        const hasAnyCurrentActivity = referralComms.length > 0;
+        
+        const sponsorHasRecurringPlan = currentUser.activePlans?.some(ap => settings.recurringCommissionPlanIds?.includes(ap.planId));
+        
+        const isOneTimeBlocked = !!(
+            settings.oneTimeCommissionPerGroup && 
+            hasEarnedFromOtherPlan && 
+            !hasAnyCurrentActivity && 
+            !sponsorHasRecurringPlan
+        );
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
             const bestTx = referralComms.find(t => t.status === 'Approved' || t.status === 'Pending') || referralComms[0];
             earningSourcePlanId = bestTx.relatedPlanId?.toString();
         }
-        return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isOverflow, overflowDescription };
-    }, [currentUser, transactions]);
+        return { earned, held, status: referralComms[0]?.status, earningSourcePlanId, isOverflow, overflowDescription, hasGlobalEarning, isOneTimeBlocked };
+    }, [currentUser, transactions, settings]);
 
     const { genealogyTree, directEarners, indirectEarners, overflowReferrals, inactiveReferrals, allNodes } = useMemo(() => {
         if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [] };
@@ -153,6 +187,14 @@ const Referrals: React.FC = () => {
 
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            
+            // LOGIC REFINEMENT: If a plan is selected, hide the user if they've provided commissions elsewhere
+            // but nothing for THIS specific plan (meaning they were only an overflow here).
+            if (selectedPlanId && info.hasGlobalEarning && info.earned === 0 && info.held === 0) return;
+
+            // If they are one-time blocked for this plan context, we treat them as "consumed" and skip them from specific lists
+            if (info.isOneTimeBlocked && selectedPlanId) return;
+
             if (info.earned > 0 || info.held > 0) {
                 if (node.level === 1) directEarnersList.push(node);
                 else indirectEarnersList.push(node);
@@ -170,6 +212,13 @@ const Referrals: React.FC = () => {
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+                
+                // Skip if blocked by one-time rule for this specific view
+                if (info.isOneTimeBlocked && selectedPlanId) return null;
+
+                // Skip if upgraded elsewhere and didn't pay for this plan
+                if (selectedPlanId && info.hasGlobalEarning && info.earned === 0 && info.held === 0) return null;
+
                 const isRelevant = info.earned > 0 || info.held > 0;
                 const filteredChildren = filterRecursive(node.children);
                 if (isRelevant) return { ...node, children: filteredChildren };
@@ -179,10 +228,17 @@ const Referrals: React.FC = () => {
         };
         const treeToRender = filterRecursive(fullGenealogyTree);
 
-        // Filter all nodes based on selected plan if one is active
         const filteredAllNodes = nodesList.filter(node => {
-            if (!selectedPlanId) return true;
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            
+            if (selectedPlanId) {
+                if (info.isOneTimeBlocked) return false;
+                // NEW: If they gave commission elsewhere, but nothing for this plan, hide them.
+                if (info.hasGlobalEarning && info.earned === 0 && info.held === 0) return false;
+            }
+            
+            if (!selectedPlanId) return true;
+            
             const hasMatchingPlan = node.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId));
             return hasMatchingPlan || info.earned > 0 || info.held > 0 || info.isOverflow;
         });
@@ -200,7 +256,6 @@ const Referrals: React.FC = () => {
     const heldCommissionsData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
         
-        // Held commissions are ALWAYS global so users see everything they are missing.
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, date: string, txId: string }[] }>();
         
         transactions
@@ -217,7 +272,6 @@ const Referrals: React.FC = () => {
                 let missingPlanId = undefined;
                 let missingPlanName = undefined;
 
-                // Identify what plan is needed based on relatedPlanId
                 if (t.relatedPlanId) {
                     let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
                     if (settings.planEquivalencyGroups) {
@@ -296,11 +350,12 @@ const Referrals: React.FC = () => {
                 (selectedPlanId ? (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : true) : true)
             );
             earned = filteredComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+            held = filteredComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
             
-            const overflowTx = filteredComms.find(t => isTransactionOverflow(t));
-            if (overflowTx && earned === 0) {
+            const info = getCommissionInfoForReferral(user, contextPlanIds);
+            if (info.isOverflow) {
                 isOverflow = true;
-                overflowDescription = overflowTx.description.replace('[Overflow] ', '');
+                overflowDescription = info.overflowDescription || '';
             }
         } else {
             const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
