@@ -4,8 +4,7 @@ import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
-import { useNavigate, useLocation } from 'react-router-dom';
-import ShareButtons from '../../components/ui/ShareButtons';
+import { useNavigate } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
 
 interface GenealogyNode {
@@ -18,8 +17,8 @@ const Referrals: React.FC = () => {
     const { state } = useData();
     const { currentUser, users, transactions, settings, investmentPlans } = state;
     const navigate = useNavigate();
-    const location = useLocation();
     
+    // Filter unique active plans for the plan switcher
     const uniqueActivePlans = useMemo(() => {
         if (!currentUser || !currentUser.activePlans) return [];
         const seen = new Set();
@@ -38,10 +37,10 @@ const Referrals: React.FC = () => {
 
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
     const [selectedSponsor, setSelectedSponsor] = useState<User | null>(null);
-    const [selectedReferralForSponsorModal, setSelectedReferralForSponsorModal] = useState<User | null>(null);
 
     const prevPlanId = useRef(selectedPlanId);
 
+    // Auto-select first plan if none selected
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
@@ -51,11 +50,12 @@ const Referrals: React.FC = () => {
     
     useEffect(() => {
         if (selectedPlanId && selectedPlanId !== prevPlanId.current) {
-            setViewMode('commissions');
-            setHighlightedUserId(null);
+            if (['commissions', 'tree', 'all', 'overflow'].includes(viewMode)) {
+                setHighlightedUserId(null);
+            }
             prevPlanId.current = selectedPlanId;
         }
-    }, [selectedPlanId]);
+    }, [selectedPlanId, viewMode]);
 
     useEffect(() => {
         if (highlightedUserId && viewMode === 'tree') {
@@ -181,28 +181,36 @@ const Referrals: React.FC = () => {
         };
         const treeToRender = filterRecursive(fullGenealogyTree);
 
+        // Filter all nodes based on selected plan if one is active
+        const filteredAllNodes = nodesList.filter(node => {
+            if (!selectedPlanId) return true;
+            const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
+            const hasMatchingPlan = node.user.activePlans?.some(p => equivalentPlanIdsForSelected.has(p.planId));
+            return hasMatchingPlan || info.earned > 0 || info.held > 0 || info.isHoldPosition;
+        });
+
         return {
             genealogyTree: treeToRender,
             directEarners: directEarnersList,
             indirectEarners: indirectEarnersList,
             overflowReferrals: overflowList,
             inactiveReferrals: inactiveList,
-            allNodes: nodesList
+            allNodes: filteredAllNodes
         };
-    }, [currentUser, users, transactions, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
+    }, [currentUser, users, selectedPlanId, equivalentPlanIdsForSelected, getCommissionInfoForReferral]);
 
     const heldCommissionsData = useMemo(() => {
         if (!currentUser) return { referrals: [], count: 0, stats: new Map() };
         
-        const filterIds = selectedPlanId ? getEquivalentIds(selectedPlanId) : null;
+        // Held commissions are ALWAYS global (across all levels) so users see everything they are missing,
+        // even if they don't have ANY plan active yet.
         const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, isHoldPosition?: boolean, date: string, txId: string }[] }>();
         
         transactions
             .filter(t => 
                 t.userId === currentUser._id && 
                 t.type === 'Commission' && 
-                t.status === 'Pending' &&
-                (filterIds ? (t.relatedPlanId ? filterIds.has(String(t.relatedPlanId)) : true) : true) 
+                t.status === 'Pending'
             )
             .forEach(t => {
                 if (!t.sourceUserId) return;
@@ -213,7 +221,6 @@ const Referrals: React.FC = () => {
                 let missingPlanName = undefined;
                 let isHoldPosition = false;
 
-                // Step 1: Resolve the specific plan name that would trigger this commission
                 if (t.relatedPlanId) {
                     let targetPlan = investmentPlans.find(p => p._id === String(t.relatedPlanId));
                     if (settings.planEquivalencyGroups) {
@@ -232,7 +239,6 @@ const Referrals: React.FC = () => {
                     missingPlanId = targetPlan?._id;
                 }
 
-                // Step 2: Assign reason
                 if (isTransactionHoldPosition(t)) {
                     reason = "Hold for Auto-Upgrade";
                     isHoldPosition = true;
@@ -259,7 +265,7 @@ const Referrals: React.FC = () => {
         const heldIds = Array.from(pendingMap.keys());
         const referrals = users.filter(u => heldIds.includes(u._id));
         return { referrals, count: referrals.length, stats: pendingMap };
-    }, [transactions, currentUser, settings, investmentPlans, getEquivalentIds, users, selectedPlanId]);
+    }, [transactions, currentUser, settings, investmentPlans, users]);
 
     const handleSponsorClick = (sponsorUsername: string) => {
         const sponsor = users.find(u => u.username.toLowerCase() === sponsorUsername.toLowerCase());
@@ -290,12 +296,18 @@ const Referrals: React.FC = () => {
             breakdown = stats?.breakdown || [];
             if (breakdown.some(b => b.isHoldPosition)) isHoldPosition = true;
         } else if (isAllView) {
-            const allApproved = transactions.filter(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && t.status === 'Approved');
-            earned = allApproved.reduce((sum, t) => sum + t.amount, 0);
-            const pendingHold = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Pending' && isTransactionHoldPosition(t));
+            const contextPlanIds = selectedPlanId ? getEquivalentIds(selectedPlanId) : new Set<string>();
+            const filteredComms = transactions.filter(t => 
+                t.userId === currentUser?._id && 
+                t.type === 'Commission' && 
+                t.sourceUserId === user._id &&
+                (selectedPlanId ? (t.relatedPlanId ? contextPlanIds.has(String(t.relatedPlanId)) : true) : true)
+            );
+            earned = filteredComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+            const pendingHold = filteredComms.find(t => t.status === 'Pending' && isTransactionHoldPosition(t));
             if (pendingHold) isHoldPosition = true;
-            const overflowTx = transactions.find(t => t.userId === currentUser?._id && t.sourceUserId === user._id && t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
-            const anySuccess = transactions.find(t => t.userId === currentUser?._id && t.type === 'Commission' && t.sourceUserId === user._id && (t.status === 'Approved' || t.status === 'Pending'));
+            const overflowTx = filteredComms.find(t => t.status === 'Rejected' && t.amount === 0 && (t.description.toLowerCase().includes('limit') || t.description.toLowerCase().includes('full') || t.description.toLowerCase().includes('overflow')));
+            const anySuccess = filteredComms.find(t => (t.status === 'Approved' || t.status === 'Pending'));
             if (overflowTx && !anySuccess && !isHoldPosition) isOverflow = true;
         } else {
             const info = getCommissionInfoForReferral(user, equivalentPlanIdsForSelected);
@@ -418,7 +430,7 @@ const Referrals: React.FC = () => {
                 <p className="text-sm text-gray-500">View earnings generated from your team.</p>
             </div>
 
-            {uniqueActivePlans.length === 0 && (
+            {uniqueActivePlans.length === 0 ? (
                 <div className="bg-[#1e293b] border border-orange-500/50 p-4 rounded-xl flex items-center justify-between shadow-lg">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-500">
@@ -430,6 +442,27 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
                     <Button onClick={() => navigate('/member/plans')} className="bg-blue-600 hover:bg-blue-700">Buy Plan</Button>
+                </div>
+            ) : (
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Switch Network Level</h3>
+                    <div className="flex flex-wrap gap-3">
+                        {uniqueActivePlans.map(plan => (
+                            <button
+                                key={plan.planId}
+                                onClick={() => setSelectedPlanId(plan.planId)}
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all border flex items-center gap-2 ${
+                                    selectedPlanId === plan.planId
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                                }`}
+                            >
+                                <span className="text-lg">💎</span>
+                                {plan.planName}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-4 uppercase font-semibold">Viewing network for: <span className="text-blue-500 font-bold">{currentPlanName}</span></p>
                 </div>
             )}
 
@@ -474,9 +507,9 @@ const Referrals: React.FC = () => {
                     <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl mb-6 flex gap-4 animate-fade-in">
                         <div className="text-orange-500 text-2xl pt-1">💡</div>
                         <div>
-                            <h4 className="font-bold text-orange-500 text-sm">Every Held Commission for {currentPlanName}</h4>
+                            <h4 className="font-bold text-orange-500 text-sm">Global Held Commissions Across All Levels</h4>
                             <p className="text-orange-500/80 text-xs mt-1 leading-relaxed">
-                                Below is a complete list of commissions currently being held. Each card displays the referral user and a breakdown of <strong>every individual transaction</strong> with its specific purpose and amount. To release these funds, ensure you own the qualifying plan level.
+                                Below is a complete list of commissions currently being held. Each card displays the referral user and a breakdown of <strong>every individual transaction</strong> with its specific purpose and amount. To release these funds, ensure you own the qualifying plan level shown in each card.
                             </p>
                         </div>
                     </div>
@@ -485,12 +518,12 @@ const Referrals: React.FC = () => {
                 {viewMode === 'commissions' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest pl-2">Direct Referrals</h3>
-                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-600 text-sm italic pl-2">No direct earnings.</p>}
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest pl-2">Direct Referrals for {currentPlanName}</h3>
+                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-600 text-sm italic pl-2">No direct earnings for this level.</p>}
                         </div>
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest pl-2">Indirect Team</h3>
-                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-600 text-sm italic pl-2">No indirect earnings.</p>}
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest pl-2">Indirect Team for {currentPlanName}</h3>
+                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-gray-600 text-sm italic pl-2">No indirect earnings for this level.</p>}
                         </div>
                     </div>
                 )}
@@ -513,18 +546,21 @@ const Referrals: React.FC = () => {
                 {viewMode === 'all' && (
                     <div className="space-y-4">
                         {allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} isAllView={true} />)}
+                        {allNodes.length === 0 && (
+                            <div className="text-center py-20 text-gray-500 italic">No network members found for {currentPlanName}.</div>
+                        )}
                     </div>
                 )}
 
                 {viewMode === 'tree' && (
                     genealogyTree.length > 0 ? (
                         <ul className="space-y-4">{genealogyTree.map(node => renderTreeNode(node))}</ul>
-                    ) : <div className="text-center py-20 text-gray-500 italic">No network tree data.</div>
+                    ) : <div className="text-center py-20 text-gray-500 italic">No network tree data for {currentPlanName}.</div>
                 )}
 
                 {viewMode === 'overflow' && (
                     <div className="space-y-4">
-                        {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-20 text-gray-500 italic">No overflow members.</p>}
+                        {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <p className="text-center py-20 text-gray-500 italic">No overflow members for this level.</p>}
                     </div>
                 )}
 
