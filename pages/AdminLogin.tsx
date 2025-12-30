@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -41,23 +40,23 @@ const AdminLogin: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
+        <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
+            <div className="w-full max-w-md p-8 space-y-6 bg-[#111827] rounded-xl shadow-2xl border border-gray-800/50">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
-                    <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Admin Panel Login</h2>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Restricted Access: Authorized Personnel Only</p>
+                    <h1 className="text-4xl font-black text-blue-500 tracking-tight">SmartEarning</h1>
+                    <h2 className="mt-4 text-2xl font-bold text-white">Admin Panel Login</h2>
+                    <p className="mt-2 text-sm text-gray-400">Restricted Access: Authorized Personnel Only</p>
                 </div>
 
                 {error && (
-                    <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-300" role="alert">
-                        <span className="font-medium">Error:</span> {error}
+                    <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-900/50 rounded-lg animate-shake" role="alert">
+                        <span className="font-bold">Error:</span> {error}
                     </div>
                 )}
 
-                <form className="space-y-6" onSubmit={handleLogin}>
+                <form className="space-y-5" onSubmit={handleLogin}>
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Admin Email</label>
+                        <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5 ml-1">Admin Email</label>
                         <input
                             id="email"
                             name="email"
@@ -65,12 +64,12 @@ const AdminLogin: React.FC = () => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            // Removed placeholder to ensure box is not prefilled visually
+                            placeholder="admin@example.com"
+                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                         />
                     </div>
                     <div>
-                        <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                        <label htmlFor="password"  className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5 ml-1">Password</label>
                         <input
                             id="password"
                             name="password"
@@ -78,17 +77,23 @@ const AdminLogin: React.FC = () => {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            placeholder="••••••"
+                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                         />
                     </div>
-                    <div>
-                        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-                            {isLoading ? 'Verifying...' : 'Secure Sign In'}
+                    <div className="pt-2">
+                        <Button type="submit" size="lg" className="w-full py-4 text-lg font-black bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 border-0" disabled={isLoading}>
+                            {isLoading ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Verifying...
+                                </span>
+                            ) : 'Secure Sign In'}
                         </Button>
                     </div>
                 </form>
-                 <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-                    <Link to="/login" className="font-medium text-gray-500 hover:text-gray-400">
+                 <p className="text-sm text-center">
+                    <Link to="/login" className="text-gray-500 hover:text-gray-300 font-medium transition-colors">
                         Return to member login
                     </Link>
                 </p>
