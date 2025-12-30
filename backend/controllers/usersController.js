@@ -638,7 +638,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 
                 // --- ROBUST SLOT COUNTING ---
                 // Query only Level 1 direct commissions (Approved or Pending) for THIS plan group.
-                // We strictly use the equivIds set.
                 referralCount = await Transaction.countDocuments({
                     userId: uplineUser._id,
                     type: 'Commission',
@@ -690,24 +689,42 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             continue;
         }
         
-        // One-time check
+        // --- ONE-TIME RULE BYPASS FOR RECURRING SOURCES ---
         if (settings.oneTimeCommissionPerGroup) {
-            const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
-            const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
-            const sponsorHasRecurringRights = sponsorActivePlanIds.some(id => exceptionPlanIds.includes(id));
+            // Find the VERY FIRST commission transaction ever paid by this referral to this sponsor
+            const firstEverCommission = await Transaction.findOne({
+                userId: uplineUser._id,
+                sourceUserId: user._id,
+                type: 'Commission',
+                level: 1, // Only check for direct referrals level
+                status: { $in: ['Approved', 'Pending'] }
+            }).sort({ date: 1 }); // Oldest first
 
-            if (!sponsorHasRecurringRights) {
-                const existingCommission = await Transaction.findOne({
-                    userId: uplineUser._id,
-                    sourceUserId: user._id,
-                    type: 'Commission',
-                    status: 'Approved',
-                    amount: { $gt: 0 }
-                });
+            let isRecurringSource = false;
+            
+            if (firstEverCommission) {
+                const activationPlanId = firstEverCommission.relatedPlanId?.toString();
+                const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+                
+                // If the referral's activation plan is in the recurring list, bypass the one-time check
+                if (activationPlanId && recurringPlanIds.includes(activationPlanId)) {
+                    isRecurringSource = true;
+                }
 
-                if (existingCommission) {
-                    currentUplineUsername = uplineUser.sponsor;
-                    continue; 
+                if (!isRecurringSource) {
+                    // Enforce one-time restriction: Check if any commission was ALREADY paid for the TARGET level/group
+                    const existingCommission = await Transaction.findOne({
+                        userId: uplineUser._id,
+                        sourceUserId: user._id,
+                        type: 'Commission',
+                        status: { $in: ['Approved', 'Pending'] },
+                        amount: { $gt: 0 }
+                    });
+
+                    if (existingCommission) {
+                        currentUplineUsername = uplineUser.sponsor;
+                        continue; 
+                    }
                 }
             }
         }
