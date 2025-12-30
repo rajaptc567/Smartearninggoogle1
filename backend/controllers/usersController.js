@@ -601,13 +601,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
                 : plan; // fallback to purchased plan if none found
 
-            // Count existing slot occupancy
+            // Count existing slot occupancy including held ones
             referralCount = await Transaction.countDocuments({
                 userId: uplineUser._id,
                 type: 'Commission',
                 relatedPlanId: { $in: equivIds },
                 level: 1,
-                status: 'Approved'
+                status: { $in: ['Approved', 'Pending'] }
             });
 
             const currentSlotNum = referralCount + 1;
