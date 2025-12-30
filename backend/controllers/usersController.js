@@ -168,11 +168,16 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
         // --- SLOT LIMIT CHECK DURING RELEASE ---
         if (commission.level === 1) {
              const activePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+             if (!activePlan) return false;
+
              const planConfig = allPlans.find(p => p._id.toString() === String(activePlan.planId));
              const limit = planConfig?.directReferralLimit || 0;
 
              if (limit > 0) {
+                 // Important: Exclude the current commission transaction itself from the count 
+                 // to see if there is ROOM for it.
                  const approvedCount = await Transaction.countDocuments({
+                     _id: { $ne: commission._id },
                      userId: user._id,
                      type: 'Commission',
                      relatedPlanId: { $in: equivIds },
@@ -623,9 +628,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 equivIds.includes(String(ap.planId))
             );
             
-            // LOGIC FIX: If sponsor doesn't own a plan yet, we DON'T enforce the limit here.
-            // This allows all potential referrals to show up as "Held".
-            // The limit will be enforced at the time they buy the plan (during release).
+            // Limit is enforced ONLY if the sponsor has a plan in the matching group.
             const sponsorPlanConfig = sponsorMatchingActivePlan 
                 ? allPlans.find(p => p._id.toString() === sponsorMatchingActivePlan.planId.toString())
                 : null;
@@ -633,7 +636,9 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             if (sponsorPlanConfig) {
                 const limit = sponsorPlanConfig.directReferralLimit || 0;
                 
-                // Count existing approved and pending slots
+                // --- ROBUST SLOT COUNTING ---
+                // Query only Level 1 direct commissions (Approved or Pending) for THIS plan group.
+                // We strictly use the equivIds set.
                 referralCount = await Transaction.countDocuments({
                     userId: uplineUser._id,
                     type: 'Commission',
