@@ -27,18 +27,18 @@ const ActivePlans: React.FC = () => {
         const equivIds = new Set<string>();
         equivIds.add(planId);
         const group = settings.planEquivalencyGroups?.find(g =>
-            g.usdPlanId === planId || g.pkrPlanId === planId || g.eurPlanId === planId
+            String(g.usdPlanId) === planId || String(g.pkrPlanId) === planId || String(g.eurPlanId) === planId
         );
         if (group) {
-            if (group.usdPlanId) equivIds.add(group.usdPlanId);
-            if (group.pkrPlanId) equivIds.add(group.pkrPlanId);
-            if (group.eurPlanId) equivIds.add(group.eurPlanId);
+            if (group.usdPlanId) equivIds.add(String(group.usdPlanId));
+            if (group.pkrPlanId) equivIds.add(String(group.pkrPlanId));
+            if (group.eurPlanId) equivIds.add(String(group.eurPlanId));
         }
 
         // 2. Count direct referrals who occupy a slot in this plan group.
         // We look at commissions (Approved or Pending) on Level 1 for this plan group.
         const slotHoldersCount = transactions.filter(t => 
-            t.userId === currentUser._id &&
+            String(t.userId) === String(currentUser._id) &&
             t.type === 'Commission' &&
             t.level === 1 &&
             t.relatedPlanId &&

@@ -125,6 +125,7 @@ const Referrals: React.FC = () => {
         const hasGlobalEarning = globalComms.some(t => t.status === 'Approved' || t.status === 'Pending');
 
         // 2. Filter specifically for the context plan group
+        // STRICTOR MATCHING: Only look at transactions strictly tied to this group.
         const referralComms = globalComms.filter(t => {
             if (contextPlanIds.size === 0) return true;
             if (!t.relatedPlanId) return false;
@@ -142,21 +143,27 @@ const Referrals: React.FC = () => {
 
         // 3. One-Time Rule Enforcement Check
         const hasEarnedFromOtherPlan = globalComms.some(t => 
-            t.status === 'Approved' && 
-            (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
+            t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
         );
+        
+        // Determine if sponsor has recurring rights
+        const sponsorHasRecurringRights = currentUser.activePlans?.some(ap => settings.recurringCommissionPlanIds?.includes(ap.planId));
+        
+        // Determine if current view's plan is designated as a recurring plan
+        const currentViewIsRecurring = Array.from(contextPlanIds).some(id => settings.recurringCommissionPlanIds?.includes(id));
 
         const isOneTimeBlocked = !!(
             settings.oneTimeCommissionPerGroup && 
             hasEarnedFromOtherPlan && 
-            earned === 0 && held === 0
+            !sponsorHasRecurringRights
         );
 
         // --- THE "REMOVE COMPLETELY" LOGIC ---
-        // If the one-time rule is enabled AND the user has already provided a commission in a different plan group,
-        // we completely hide them from the current plan group's context unless they have an active earning here.
-        // This removes Ref 1 (paid in Plan A) from the Plan B network view.
-        const shouldRemoveCompletely = settings.oneTimeCommissionPerGroup && hasEarnedFromOtherPlan && (earned + held === 0);
+        // If one-time rule is enabled, we hide members who paid elsewhere UNLESS:
+        // 1. Sponsor has recurring rights via an active plan.
+        // 2. The referral has an active earning in the current plan context.
+        // If a plan is recurring, it should show all members who generated commissions for it, even if they paid for other plans.
+        const shouldRemoveCompletely = settings.oneTimeCommissionPerGroup && hasEarnedFromOtherPlan && !sponsorHasRecurringRights && (earned + held === 0);
         
         let earningSourcePlanId: string | undefined;
         if (referralComms.length > 0) {
@@ -196,8 +203,8 @@ const Referrals: React.FC = () => {
         nodesList.forEach(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             
-            // Apply the One-Time strict exclusion filter
-            if (info.shouldRemoveCompletely && selectedPlanId) return;
+            // Filter by one-time logic (respecting recurring plans)
+            if (info.shouldRemoveCompletely) return;
 
             if (info.earned > 0 || info.held > 0) {
                 if (node.level === 1) directEarnersList.push(node);
@@ -217,8 +224,7 @@ const Referrals: React.FC = () => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
                 
-                // Exclude based on one-time policy
-                if (info.shouldRemoveCompletely && selectedPlanId) return null;
+                if (info.shouldRemoveCompletely) return null;
 
                 const isRelevant = info.earned > 0 || info.held > 0;
                 const filteredChildren = filterRecursive(node.children);
@@ -231,9 +237,7 @@ const Referrals: React.FC = () => {
 
         const filteredAllNodes = nodesList.filter(node => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-            
-            // Strict exclusion for All Referrals list too
-            if (info.shouldRemoveCompletely && selectedPlanId) return false;
+            if (info.shouldRemoveCompletely) return false;
             
             if (!selectedPlanId) return true;
             

@@ -638,7 +638,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 
                 // --- ROBUST SLOT COUNTING ---
                 // Query only Level 1 direct commissions (Approved or Pending) for THIS plan group.
-                // We strictly use the equivIds set.
                 referralCount = await Transaction.countDocuments({
                     userId: uplineUser._id,
                     type: 'Commission',
@@ -690,18 +689,21 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             continue;
         }
         
-        // One-time check
+        // --- ONE-TIME RULE BYPASS FOR RECURRING PLANS ---
         if (settings.oneTimeCommissionPerGroup) {
             const sponsorActivePlanIds = (uplineUser.activePlans || []).map(p => p.planId.toString());
-            const exceptionPlanIds = settings.recurringCommissionPlanIds || [];
-            const sponsorHasRecurringRights = sponsorActivePlanIds.some(id => exceptionPlanIds.includes(id));
+            const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+            
+            // Check if sponsor owns any plan listed as a Recurring Commission Plan
+            const sponsorHasRecurringRights = sponsorActivePlanIds.some(id => recurringPlanIds.includes(id));
 
             if (!sponsorHasRecurringRights) {
+                // If NO recurring rights, enforce one-time restriction
                 const existingCommission = await Transaction.findOne({
                     userId: uplineUser._id,
                     sourceUserId: user._id,
                     type: 'Commission',
-                    status: 'Approved',
+                    status: { $in: ['Approved', 'Pending'] },
                     amount: { $gt: 0 }
                 });
 
