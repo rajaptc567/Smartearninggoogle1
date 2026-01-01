@@ -60,7 +60,7 @@ const EditBar: React.FC<EditBarProps> = ({ onSave, onExit, isSaving, isDirty }) 
 // --- SVG Icon Components for this page ---
 const CheckIcon = () => <svg className="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>;
 const SecureIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 20.944a11.955 11.955 0 019-2.606a11.955 11.955 0 019 2.606c-.311-5.863-3.69-10.964-8.618-13.04z" /></svg>;
-const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
+const NetworkIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
 const GrowthIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
 const UsdIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /><path d="M12 12a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" /></svg>;
 const EurIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M14.121 15.536A9.004 9.004 0 0112 16.5c-2.43 0-4.63-.92-6.287-2.464m12.574-3.072a9.004 9.004 0 00-12.574 0M14.121 8.464A9.004 9.004 0 0112 7.5c-2.43 0-4.63.92-6.287 2.464" /></svg>;
@@ -69,19 +69,24 @@ const PlusIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" 
 const TrashIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const GenericPaymentIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
 
-// Reusable Payment Method Card Component
+// Reusable Payment Method Card Component - MAXIMIZED VISIBILITY & FIXED SPACING
 const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center justify-center w-40 h-32 md:w-48 md:h-36 transition-all duration-300 transform hover:scale-105 hover:shadow-md group">
-        {pm.logoUrl ? (
-            <div className={`w-full h-16 flex items-center justify-center mb-3 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300`}>
-                <img src={pm.logoUrl} alt={pm.name} className="max-w-full max-h-full object-contain" title={pm.name} />
-            </div>
-        ) : (
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-3 text-gray-400">
+    <div className="bg-white dark:bg-gray-800 p-0 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col items-center w-36 h-40 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl group overflow-hidden">
+        {/* Logo container - Takes remaining space */}
+        <div className={`w-full flex-grow flex items-center justify-center p-2 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
+            {pm.logoUrl ? (
+                <img src={pm.logoUrl} alt={pm.name} className="max-w-[90%] max-h-[90%] object-contain drop-shadow-md" title={pm.name} />
+            ) : (
                 <GenericPaymentIcon />
-            </div>
-        )}
-        <span className="text-xs md:text-sm font-semibold text-gray-700 dark:text-gray-300 text-center">{pm.name}</span>
+            )}
+        </div>
+        
+        {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
+        <div className="w-full h-10 md:h-12 bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-1 border-t border-blue-500/50">
+            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-white text-center leading-tight line-clamp-2 break-words w-full">
+                {pm.name}
+            </span>
+        </div>
     </div>
 );
 
@@ -571,7 +576,7 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
-                {/* NEW: Payment Methods Section (Dynamic & Admin Controlled) */}
+                {/* REDESIGNED: Payment Methods Section (Optimized for space & fixed clipping) */}
                 {(showPaymentMethods || editMode) && (
                     <section className={`py-20 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden ${!showPaymentMethods && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showPaymentMethods && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
@@ -614,16 +619,13 @@ const HomePage: React.FC = () => {
 
                             <div className={`relative ${pmDisplayType === 'sliding' ? 'w-full' : ''}`}>
                                 {pmDisplayType === 'sliding' ? (
-                                    // Sliding Animation Wrapper
                                     <div className="flex animate-slide gap-8 items-center">
-                                        {/* Duplicated list for seamless loop */}
                                         {slidingMethods.map((pm, idx) => (
                                             <PaymentMethodCard key={`${pm.name}-${idx}`} pm={pm} colorStyle={pmColorStyle} />
                                         ))}
                                     </div>
                                 ) : (
-                                    // Static or Pulsing Grid
-                                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10 opacity-90 hover:opacity-100 transition-opacity">
+                                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
                                         {activePaymentMethods.map((pm, idx) => (
                                             <div key={idx} className={pmDisplayType === 'pulsing' ? 'animate-pulse' : ''}>
                                                 <PaymentMethodCard pm={pm} colorStyle={pmColorStyle} />
