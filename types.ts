@@ -33,6 +33,12 @@ export interface ActivePlan {
     purchaseDate: string;
 }
 
+export interface CompletedTask {
+    taskId: string;
+    proofUrl?: string;
+    completedAt: string;
+}
+
 export interface User {
     _id: string;
     username: string;
@@ -49,7 +55,7 @@ export interface User {
     registrationDate: string;
     restrictions?: UserRestrictions;
     sponsor?: string;
-    completedTasks?: string[]; // Array of Task IDs
+    completedTasks?: CompletedTask[]; 
 }
 
 export interface Task {
@@ -58,6 +64,10 @@ export interface Task {
     description: string;
     link: string;
     type: 'Video' | 'Link' | 'Social' | 'Subscription';
+    videoDurationType?: 'Full' | 'Specific';
+    videoDurationValue?: number; // Seconds
+    requireProof: boolean;
+    proofInstructions?: string;
     isRequiredForWithdrawal: boolean;
     status: 'Active' | 'Disabled';
     rewardAmount?: number;
@@ -285,6 +295,7 @@ export interface HomepageContent {
 
 export interface Settings {
     isUserTransferEnabled: boolean;
+    isTasksEnabled: boolean; // New Flag
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];

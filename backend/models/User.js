@@ -73,6 +73,11 @@ const UserSchema = new mongoose.Schema({
         dispute: { type: Boolean, default: false },
         excludeFromTicker: { type: Boolean, default: false },
     },
+    completedTasks: [{
+        taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
+        proofUrl: String,
+        completedAt: { type: Date, default: Date.now }
+    }],
     sponsor: {
         type: String,
     },

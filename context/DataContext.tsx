@@ -55,6 +55,7 @@ const initialState: AppState = {
     tasks: [],
     settings: {
         isUserTransferEnabled: true,
+        isTasksEnabled: true, // Default enabled
         transferConfig: {
             enabled: true,
             tiers: [],
@@ -155,6 +156,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         }
         if (newSettings.exchangeRates && !newSettings.exchangeRates.EUR) newSettings.exchangeRates.EUR = 0.92;
         if (newSettings.exchangeRates && !newSettings.exchangeRates.USD) newSettings.exchangeRates.USD = 1;
+        if (newSettings.isTasksEnabled === undefined) newSettings.isTasksEnabled = true;
         return newSettings;
     };
 

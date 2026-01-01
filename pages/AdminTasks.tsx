@@ -16,7 +16,19 @@ const AdminTasks: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
 
     const handleOpenModal = (task: Task | null = null) => {
-        setEditingTask(task || { title: '', description: '', link: '', type: 'Link', isRequiredForWithdrawal: false, status: 'Active', rewardAmount: 0 });
+        setEditingTask(task || { 
+            title: '', 
+            description: '', 
+            link: '', 
+            type: 'Link', 
+            videoDurationType: 'Specific',
+            videoDurationValue: 60,
+            requireProof: false,
+            proofInstructions: 'Please upload a screenshot as proof of completion.',
+            isRequiredForWithdrawal: false, 
+            status: 'Active', 
+            rewardAmount: 0 
+        });
         setIsModalOpen(true);
     };
 
@@ -60,7 +72,7 @@ const AdminTasks: React.FC = () => {
                 <Button onClick={() => handleOpenModal()}>Add New Task</Button>
             </div>
 
-            <Table headers={['Title', 'Type', 'Target Link', 'Withdraw Req?', 'Reward', 'Status', 'Actions']}>
+            <Table headers={['Title', 'Type', 'Target Link', 'Withdraw Req?', 'Verification', 'Reward', 'Status', 'Actions']}>
                 {tasks.map((task) => (
                     <tr key={task._id} className="text-gray-700 dark:text-gray-400">
                         <td className="px-4 py-3 font-medium">{task.title}</td>
@@ -71,6 +83,13 @@ const AdminTasks: React.FC = () => {
                                 <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold uppercase tracking-tight">Compulsory</span> : 
                                 <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">Optional</span>
                             }
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                            <div className="space-y-1">
+                                {task.type === 'Video' && <div className="font-bold">{task.videoDurationType} ({task.videoDurationValue}s)</div>}
+                                {task.requireProof && <div className="text-blue-600 font-bold uppercase tracking-tighter">Requires Proof</div>}
+                                {!task.requireProof && task.type !== 'Video' && <div className="text-gray-400 italic">Auto-Verify</div>}
+                            </div>
                         </td>
                         <td className="px-4 py-3 text-sm font-mono">{task.rewardAmount || 0}</td>
                         <td className="px-4 py-3">
@@ -103,7 +122,7 @@ const AdminTasks: React.FC = () => {
                         </div>
                         
                         <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Action Link (URL)</label>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Target Link (URL)</label>
                             <input className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="https://..." value={editingTask.link} onChange={e => setEditingTask({...editingTask, link: e.target.value})} />
                         </div>
 
@@ -112,7 +131,7 @@ const AdminTasks: React.FC = () => {
                                 <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Task Category</label>
                                 <select className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" value={editingTask.type} onChange={e => setEditingTask({...editingTask, type: e.target.value as any})}>
                                     <option value="Link">Website Visit</option>
-                                    <option value="Video">Video Watch</option>
+                                    <option value="Video">Video Watch (Timed)</option>
                                     <option value="Social">Join Community</option>
                                     <option value="Subscription">Channel Follow</option>
                                 </select>
@@ -121,6 +140,40 @@ const AdminTasks: React.FC = () => {
                                 <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Bonus Reward</label>
                                 <input type="number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="0.00" value={editingTask.rewardAmount} onChange={e => setEditingTask({...editingTask, rewardAmount: parseFloat(e.target.value) || 0})} />
                             </div>
+                        </div>
+
+                        {editingTask.type === 'Video' && (
+                            <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30 space-y-3">
+                                <label className="block text-xs font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">Video Verification</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Duration Type</label>
+                                        <select className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" value={editingTask.videoDurationType} onChange={e => setEditingTask({...editingTask, videoDurationType: e.target.value as any})}>
+                                            <option value="Specific">Timer (Seconds)</option>
+                                            <option value="Full">Entire Video</option>
+                                        </select>
+                                    </div>
+                                    {editingTask.videoDurationType === 'Specific' && (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Timer (Sec)</label>
+                                            <input type="number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" value={editingTask.videoDurationValue} onChange={e => setEditingTask({...editingTask, videoDurationValue: parseInt(e.target.value) || 0})} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="p-3 bg-indigo-50 dark:bg-indigo-900/10 rounded-lg border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" className="w-5 h-5 rounded text-indigo-600" checked={editingTask.requireProof} onChange={e => setEditingTask({...editingTask, requireProof: e.target.checked})} />
+                                <span className="text-sm font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-tighter">Require Screenshot Proof</span>
+                            </label>
+                            {editingTask.requireProof && (
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Proof Instructions</label>
+                                    <textarea className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-xs" rows={2} placeholder="Instructions for the user screenshot..." value={editingTask.proofInstructions} onChange={e => setEditingTask({...editingTask, proofInstructions: e.target.value})} />
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">

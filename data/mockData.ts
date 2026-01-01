@@ -102,6 +102,8 @@ export const mockPaymentMethods: PaymentMethod[] = [
 
 export const mockSettings: Settings = {
     isUserTransferEnabled: true,
+    // FIX: Added required property isTasksEnabled
+    isTasksEnabled: true,
     transferConfig: {
         enabled: true,
         tiers: [

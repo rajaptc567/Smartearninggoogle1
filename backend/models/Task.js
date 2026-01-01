@@ -20,6 +20,23 @@ const TaskSchema = new mongoose.Schema({
         enum: ['Video', 'Link', 'Social', 'Subscription'],
         default: 'Link'
     },
+    videoDurationType: {
+        type: String,
+        enum: ['Full', 'Specific'],
+        default: 'Specific'
+    },
+    videoDurationValue: {
+        type: Number,
+        default: 60 // Default 60 seconds
+    },
+    requireProof: {
+        type: Boolean,
+        default: false
+    },
+    proofInstructions: {
+        type: String,
+        default: 'Please upload a screenshot as proof of completion.'
+    },
     isRequiredForWithdrawal: {
         type: Boolean,
         default: false

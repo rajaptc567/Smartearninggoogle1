@@ -205,18 +205,22 @@ const Settings: React.FC = () => {
     };
 
     // --- FAQ Handlers ---
+    // Fix: Refactored handleFaqChange to use localSettings.faqs instead of non-existent localFaqs
     const handleFaqChange = (index: number, field: keyof FaqItem, value: string) => {
-        const newFaqs = [...(localSettings.faqs || [])];
-        newFaqs[index] = { ...newFaqs[index], [field]: value };
+        const updatedFaqs = [...(localSettings.faqs || [])];
+        updatedFaqs[index] = { ...updatedFaqs[index], [field]: value };
+        setLocalSettings(prev => ({ ...prev, faqs: updatedFaqs }));
+        setIsDirty(true);
+    };
+
+    // Fix: Refactored handleAddFaq to use localSettings.faqs instead of non-existent localFaqs
+    const handleAddFaq = () => {
+        const newFaqs = [...(localSettings.faqs || []), { question: 'New Question', answer: 'Answer here...' }];
         setLocalSettings(prev => ({ ...prev, faqs: newFaqs }));
         setIsDirty(true);
     };
 
-    const handleAddFaq = () => {
-        setLocalSettings(prev => ({ ...prev, faqs: [...(prev.faqs || []), { question: 'New Question', answer: 'Answer here...' }] }));
-        setIsDirty(true);
-    };
-
+    // Fix: Refactored handleRemoveFaq to use localSettings.faqs instead of non-existent localFaqs
     const handleRemoveFaq = (index: number) => {
         const newFaqs = (localSettings.faqs || []).filter((_, i) => i !== index);
         setLocalSettings(prev => ({ ...prev, faqs: newFaqs }));
@@ -373,26 +377,47 @@ const Settings: React.FC = () => {
         {/* GENERAL TAB */}
         {activeTab === 'general' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... General Content ... */}
                 <div>
                     <h4 className="text-md font-bold text-gray-800 dark:text-white mb-4">Feature Toggles</h4>
-                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
-                        <div>
-                            <label htmlFor="transferConfig.enabled" className="block text-sm font-medium text-gray-900 dark:text-gray-200">User-to-User Transfers</label>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Allow members to transfer wallet funds to other members.</p>
+                    
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="transferConfig.enabled" className="block text-sm font-medium text-gray-900 dark:text-gray-200">User-to-User Transfers</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Allow members to transfer wallet funds to other members.</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                <input 
+                                    id="transferConfig.enabled"
+                                    name="transferConfig.enabled"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.transferConfig?.enabled ?? true}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="transferConfig.enabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.enabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
                         </div>
-                        <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
-                            <input 
-                                id="transferConfig.enabled"
-                                name="transferConfig.enabled"
-                                type="checkbox" 
-                                className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
-                                checked={localSettings.transferConfig?.enabled ?? true}
-                                onChange={handleCheckboxChange}
-                            />
-                            <label htmlFor="transferConfig.enabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.enabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="isTasksEnabled" className="block text-sm font-medium text-gray-900 dark:text-gray-200">Enable Tasks Feature</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Control visibility of "My Tasks" menu for all members.</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                <input 
+                                    id="isTasksEnabled"
+                                    name="isTasksEnabled"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.isTasksEnabled ?? true}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="isTasksEnabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.isTasksEnabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
                         </div>
                     </div>
+
                      {localSettings.transferConfig?.enabled && (
                         <div className="pl-8 mt-2 animate-fade-in">
                             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
@@ -423,7 +448,7 @@ const Settings: React.FC = () => {
                 </div>
             </div>
         )}
-
+        
         {/* HOMEPAGE TAB */}
         {activeTab === 'homepage' && (
             <div className="space-y-6 animate-fade-in">
@@ -567,7 +592,6 @@ const Settings: React.FC = () => {
                     <div className="mt-4 pt-4 border-t dark:border-gray-600">
                         <h5 className="font-semibold text-gray-700 dark:text-gray-300 text-sm mb-3">Display Logos Management</h5>
                         
-                        {/* List of Existing Logos */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                             {(localSettings.homepagePaymentLogos || []).map((logo, index) => (
                                 <div key={index} className="relative p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-800 flex flex-col items-center group">
@@ -585,7 +609,6 @@ const Settings: React.FC = () => {
                             ))}
                         </div>
 
-                        {/* Add New Logo Form */}
                         <div className="flex flex-col sm:flex-row gap-2 items-end bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
                             <div className="flex-grow">
                                 <label className="text-xs font-bold text-gray-500">Method Name</label>
@@ -620,7 +643,6 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Features Section */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Features</h4>
                     {[1, 2, 3].map(num => (
@@ -637,7 +659,6 @@ const Settings: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Info Sections (Multi-Currency, MLM, CTA) */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
                     <h4 className="font-semibold text-gray-800 dark:text-white">Content Sections</h4>
                     
@@ -686,6 +707,7 @@ const Settings: React.FC = () => {
                 </div>
                 
                 <div className="space-y-4">
+                    {/* Fix: Replaced localFaqs with localSettings.faqs */}
                     {(localSettings.faqs || []).map((faq, index) => (
                         <div key={index} className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600 flex gap-4 items-start">
                             <div className="flex-grow space-y-2">
@@ -713,6 +735,7 @@ const Settings: React.FC = () => {
                             </button>
                         </div>
                     ))}
+                    {/* Fix: Replaced localFaqs with localSettings.faqs */}
                     {(localSettings.faqs || []).length === 0 && (
                         <div className="text-center p-8 text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed dark:border-gray-700">
                             No FAQs added yet.
@@ -725,7 +748,6 @@ const Settings: React.FC = () => {
         {/* EXCHANGE RATES TAB */}
         {activeTab === 'exchange_rates' && (
             <div className="space-y-8 animate-fade-in">
-                {/* ... (Existing Exchange Rates code) ... */}
                 <div className="flex flex-col sm:flex-row justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                      <div className="mb-3 sm:mb-0">
                         <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Currency Rates</h4>
@@ -738,7 +760,6 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* LEFT COLUMN: RATE INPUTS */}
                     <div className="lg:col-span-2 space-y-6">
                          <div className="flex justify-between items-end">
                             <h4 className="font-semibold text-gray-800 dark:text-white text-lg">Active Rates</h4>
@@ -753,7 +774,6 @@ const Settings: React.FC = () => {
                             </Button>
                         </div>
                         
-                        {/* Currency Cards Loop */}
                         {(['USD', 'EUR', 'PKR'] as const).map(currency => (
                             <div key={currency} className="bg-white dark:bg-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600 overflow-hidden">
                                 <div className="p-4 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center">
@@ -801,10 +821,7 @@ const Settings: React.FC = () => {
                         ))}
                     </div>
                     
-                    {/* RIGHT COLUMN: SIMULATOR & REFERENCE */}
                     <div className="space-y-6">
-                        
-                         {/* Calculator */}
                         <div className="bg-gray-900 text-white p-6 rounded-xl shadow-lg border border-gray-700 relative overflow-hidden">
                             <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-green-500 rounded-full opacity-20 blur-xl"></div>
                             <h4 className="font-bold text-lg mb-4 flex items-center relative z-10">
@@ -840,7 +857,6 @@ const Settings: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Reference Table */}
                         <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                             <h4 className="font-bold text-gray-800 dark:text-white mb-3 text-sm uppercase tracking-wide">Cross-Rate Reference</h4>
                             <div className="space-y-3 text-sm">
@@ -875,7 +891,6 @@ const Settings: React.FC = () => {
         {/* TRANSFERS TAB */}
         {activeTab === 'transfers' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... (Existing Transfers Tab Code) ... */}
                  <div>
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white">Transfer Fee Structure</h3>
@@ -977,7 +992,6 @@ const Settings: React.FC = () => {
         {/* WITHDRAWALS TAB */}
         {activeTab === 'withdrawals' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... (Existing Withdrawals Tab Code) ... */}
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Withdrawal Restrictions</h3>
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -1053,7 +1067,6 @@ const Settings: React.FC = () => {
         {/* COMMISSIONS TAB */}
         {activeTab === 'commissions' && (
             <div className="space-y-6 animate-fade-in">
-                {/* ... (Existing Commissions Tab Code) ... */}
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Referral Commission Rules</h3>
                 <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-800 dark:text-yellow-200">
                     <p className="font-bold mb-1">Important:</p>

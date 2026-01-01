@@ -36,7 +36,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isCompleted ? 'bg-green-50 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
                         <span className={`text-xs mt-2 font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
@@ -73,8 +73,8 @@ const WithdrawFunds: React.FC = () => {
     // --- ELIGIBILITY CHECK: UNCOMPLETED REQUIRED TASKS ---
     const pendingRequiredTasks = useMemo(() => {
         if (!currentUser) return [];
-        const completedIds = currentUser.completedTasks || [];
-        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !completedIds.includes(t._id));
+        const completedTaskIds = (currentUser.completedTasks || []).map(ct => ct.taskId);
+        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !completedTaskIds.includes(t._id));
     }, [tasks, currentUser]);
 
     // Derived Data

@@ -61,11 +61,28 @@ export const completeTask = async (req, res) => {
         if (!task || !user) return res.status(404).json({ success: false, error: 'User or Task not found' });
 
         if (!user.completedTasks) user.completedTasks = [];
-        if (user.completedTasks.includes(task._id.toString())) {
+        
+        const alreadyCompleted = user.completedTasks.find(ct => ct.taskId.toString() === task._id.toString());
+        if (alreadyCompleted) {
             return res.status(400).json({ success: false, error: 'Task already completed' });
         }
 
-        user.completedTasks.push(task._id.toString());
+        const completionData = {
+            taskId: task._id,
+            completedAt: new Date()
+        };
+
+        // Handle screenshot proof
+        if (task.requireProof) {
+            if (!req.file) {
+                return res.status(400).json({ success: false, error: 'Proof screenshot is required for this task.' });
+            }
+            const b64 = Buffer.from(req.file.buffer).toString('base64');
+            const mimeType = req.file.mimetype;
+            completionData.proofUrl = `data:${mimeType};base64,${b64}`;
+        }
+
+        user.completedTasks.push(completionData);
         
         // Handle reward if any
         if (task.rewardAmount > 0) {
@@ -77,7 +94,8 @@ export const completeTask = async (req, res) => {
                 type: 'Manual Credit',
                 amount: task.rewardAmount,
                 description: `Reward for completing task: ${task.title}`,
-                status: 'Approved'
+                status: 'Approved',
+                date: new Date()
             });
         }
 

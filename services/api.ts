@@ -143,7 +143,7 @@ export const adminActivatePlan = async (userId: string, planId: string): Promise
 };
 
 export const userRequestPasswordReset = async (email: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/request-password-reset`, {
+    const response = await fetch(`${API_BASE_URL}/request-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -160,14 +160,14 @@ export const adminInitiatePasswordReset = async (userId: string): Promise<{ rese
 };
 
 export const verifyResetToken = async (token: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/verify-reset-token/${token}`, {
+    const response = await fetch(`${API_BASE_URL}/verify-reset-token/${token}`, {
         method: 'POST',
     });
     await handleResponse(response);
 };
 
 export const resetPasswordWithToken = async (token: string, password: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/reset-password/${token}`, {
+    const response = await fetch(`${API_BASE_URL}/reset-password/${token}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -536,11 +536,16 @@ export const deleteTask = async (id: string): Promise<{}> => {
     return result.data;
 };
 
-export const completeTask = async (taskId: string, userId: string): Promise<User> => {
+export const completeTask = async (taskId: string, userId: string, proof?: File): Promise<User> => {
+    const formData = new FormData();
+    formData.append('userId', userId);
+    if (proof) {
+        formData.append('proof', proof);
+    }
+    
     const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/complete`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: formData,
     });
     const result = await handleResponse(response);
     return result.data;
