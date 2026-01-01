@@ -134,7 +134,7 @@ export const createWithdrawal = async (req, res) => {
 // @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
-        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pCustomFields } = req.body;
+        const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pLogoUrl, p2pCustomFields } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
         if (!withdrawal) {
@@ -165,6 +165,7 @@ export const updateWithdrawal = async (req, res) => {
                 feePercent: 0,
                 status: 'Enabled',
                 instructions: p2pInstructions || '', 
+                logoUrl: p2pLogoUrl || '', // Store the selected branding logo
                 p2pWithdrawalId: withdrawal._id,
                 customFields: p2pCustomFields || []
             };
@@ -199,7 +200,6 @@ export const updateWithdrawal = async (req, res) => {
         // --- Handle Transaction Logic ---
         
         // Find the original transaction to update its status and description
-        // Use Regex to match "Pending Withdrawal #ID" or similar even if text slightly varied
         const originalTransaction = await Transaction.findOne({
             userId: user._id,
             type: 'Withdrawal Request',
@@ -208,7 +208,7 @@ export const updateWithdrawal = async (req, res) => {
 
         // If request was pending/matching and is now being rejected, refund the user
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            user.walletBalance += withdrawal.amount;
+            user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
             
             // Create a refund transaction
             await Transaction.create({

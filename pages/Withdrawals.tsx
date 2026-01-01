@@ -3,14 +3,14 @@ import React, { useState, useEffect } from 'react';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { Status, Withdrawal, formatCurrency, Currency, Deposit } from '../types';
+import { Status, Withdrawal, formatCurrency, Currency, Deposit, HomepagePaymentLogo } from '../types';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
 import { updateWithdrawal, updateDeposit, getUploadsBaseUrl } from '../services/api';
 
 const Withdrawals: React.FC = () => {
   const { state, dispatch } = useData();
-  const { withdrawals, paymentMethods } = state;
+  const { withdrawals, paymentMethods, settings } = state;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
@@ -22,6 +22,7 @@ const Withdrawals: React.FC = () => {
   const [p2pAccountTitle, setP2pAccountTitle] = useState('');
   const [p2pAccountNumber, setP2pAccountNumber] = useState('');
   const [p2pInstructions, setP2pInstructions] = useState('');
+  const [p2pLogoUrl, setP2pLogoUrl] = useState('');
   const [p2pCustomFields, setP2pCustomFields] = useState<{ title: string; value: string }[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -48,12 +49,14 @@ const Withdrawals: React.FC = () => {
           setP2pAccountTitle(existingMethod.accountTitle);
           setP2pAccountNumber(existingMethod.accountNumber);
           setP2pInstructions(existingMethod.instructions || '');
+          setP2pLogoUrl(existingMethod.logoUrl || '');
           setP2pCustomFields(existingMethod.customFields || []);
       } else {
           setP2pName(`P2P - ${selectedWithdrawal.method}`);
           setP2pAccountTitle(selectedWithdrawal.accountTitle);
           setP2pAccountNumber(selectedWithdrawal.accountNumber);
           setP2pInstructions('');
+          setP2pLogoUrl('');
           setP2pCustomFields([]);
       }
 
@@ -102,6 +105,11 @@ const Withdrawals: React.FC = () => {
       setP2pCustomFields(p2pCustomFields.filter((_, i) => i !== index));
   };
 
+  const handleSelectSavedLogo = (logo: HomepagePaymentLogo) => {
+      setP2pName(logo.name);
+      setP2pLogoUrl(logo.logoUrl);
+  };
+
   const handleSaveChanges = async () => {
     if (selectedWithdrawal) {
         setIsSaving(true);
@@ -112,6 +120,7 @@ const Withdrawals: React.FC = () => {
                 payload.p2pAccountTitle = p2pAccountTitle;
                 payload.p2pAccountNumber = p2pAccountNumber;
                 payload.p2pInstructions = p2pInstructions;
+                payload.p2pLogoUrl = p2pLogoUrl;
                 payload.p2pCustomFields = p2pCustomFields.filter(f => f.title.trim() !== ''); // Clean empty fields
             }
             const result = await updateWithdrawal(selectedWithdrawal._id, payload);
@@ -200,6 +209,8 @@ const Withdrawals: React.FC = () => {
 
   const tableHeaders = ['ID', 'User', 'Amount', 'Final Amount', 'Method', 'Status', 'Match Rem.', 'Date'];
 
+  const savedLogos = settings.homepagePaymentLogos || [];
+
   return (
     <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
@@ -213,8 +224,8 @@ const Withdrawals: React.FC = () => {
                   <option value="">All Status</option>
                   <option value={Status.Pending}>Pending</option>
                   <option value={Status.Matching}>Matching (P2P)</option>
-                  <option value={Status.Approved}>Approved</option>
-                  <option value={Status.Paid}>Paid</option>
+                  <option value={Status.Approved}>Approved (Processing)</option>
+                  <option value={Status.Paid}>Paid (Complete)</option>
                   <option value={Status.Rejected}>Rejected</option>
               </select>
                <select
@@ -263,83 +274,82 @@ const Withdrawals: React.FC = () => {
 
       {selectedWithdrawal && (
            <Modal isOpen={true} onClose={handleCloseModal}>
-              <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200">
+              <div className="p-2 sm:p-4 text-gray-800 dark:text-gray-200 w-[90vw] max-w-4xl max-h-[85vh] overflow-y-auto custom-scrollbar">
                   <h3 className="text-xl font-bold mb-4">Withdrawal Details - <span className="text-blue-600 dark:text-blue-400">{selectedWithdrawal._id}</span></h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                      <div><span className="font-semibold">User:</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
-                      <div><span className="font-semibold">Amount Requested:</span> {formatCurrency(selectedWithdrawal.amount, selectedWithdrawal.currency)}</div>
-                      <div><span className="font-semibold">Fee:</span> {formatCurrency(selectedWithdrawal.fee, selectedWithdrawal.currency)}</div>
-                      <div><span className="font-semibold">Final Amount:</span> {formatCurrency(selectedWithdrawal.finalAmount, selectedWithdrawal.currency)}</div>
-                      <div><span className="font-semibold">Method:</span> {selectedWithdrawal.method}</div>
-                      <div><span className="font-semibold">Date:</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
-                      <div className="md:col-span-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border dark:border-gray-600">
-                          <div className="font-semibold mb-1">Account Details:</div>
-                          <div>Title: {selectedWithdrawal.accountTitle}</div>
-                          <div>Number: {selectedWithdrawal.accountNumber}</div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">User</span> {selectedWithdrawal.userName} (ID: {selectedWithdrawal.userId})</div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">Amount Requested</span> {formatCurrency(selectedWithdrawal.amount, selectedWithdrawal.currency)}</div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">Processing Fee</span> {formatCurrency(selectedWithdrawal.fee, selectedWithdrawal.currency)}</div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">Net Amount to Pay</span> <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(selectedWithdrawal.finalAmount, selectedWithdrawal.currency)}</span></div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">Original Method</span> {selectedWithdrawal.method}</div>
+                      <div><span className="font-semibold text-gray-500 uppercase text-xs block">Requested Date</span> {new Date(selectedWithdrawal.date).toLocaleString()}</div>
+                      <div className="md:col-span-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-[1.5rem] border dark:border-gray-700">
+                          <div className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-2">Member Account Destination:</div>
+                          <div className="font-bold text-gray-900 dark:text-white">Title: {selectedWithdrawal.accountTitle}</div>
+                          <div className="font-mono text-gray-600 dark:text-gray-300">Number/IBAN: {selectedWithdrawal.accountNumber}</div>
                       </div>
                   </div>
 
                    {selectedWithdrawal.userNotes && (
                        <div className="mt-4">
-                          <h4 className="font-semibold mb-2">User Notes:</h4>
-                          <p className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md border dark:border-gray-600">{selectedWithdrawal.userNotes}</p>
+                          <h4 className="font-semibold text-gray-500 uppercase text-xs mb-2">User Remarks:</h4>
+                          <p className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border dark:border-gray-600 italic">"{selectedWithdrawal.userNotes}"</p>
                       </div>
                    )}
 
                    {/* P2P MATCHING SECTION */}
                    {selectedWithdrawal.status === Status.Matching && (
-                       <div className="mt-6 p-4 border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 rounded-lg">
-                           <h4 className="font-bold text-blue-800 dark:text-blue-200 mb-2">P2P Matching Status</h4>
-                           <div className="flex justify-between items-center mb-4">
-                               <span className="text-sm">Remaining to Match:</span>
-                               <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
+                       <div className="mt-6 p-5 border border-orange-200 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-900/50 rounded-[2.5rem] shadow-sm">
+                           <h4 className="font-black text-orange-700 dark:text-orange-300 mb-3 uppercase tracking-tighter flex items-center gap-2">
+                               <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs">P2P</div>
+                               Active Matching Status
+                            </h4>
+                           <div className="flex justify-between items-center mb-6 bg-white/50 dark:bg-black/20 p-4 rounded-2xl border dark:border-orange-900/30">
+                               <span className="text-xs font-bold text-orange-600">Balance Pending Match:</span>
+                               <span className="font-black text-2xl text-orange-600 dark:text-orange-400">
                                    {formatCurrency(selectedWithdrawal.matchRemainingAmount !== undefined ? selectedWithdrawal.matchRemainingAmount : selectedWithdrawal.finalAmount, selectedWithdrawal.currency)}
                                </span>
                            </div>
                            
                            {selectedWithdrawal.matchedDepositIds && selectedWithdrawal.matchedDepositIds.length > 0 && (
-                               <div className="space-y-2">
-                                   <h5 className="font-semibold text-sm">Matched Deposits:</h5>
-                                   <div className="max-h-60 overflow-y-auto border dark:border-gray-600 rounded bg-white dark:bg-gray-800">
+                               <div className="space-y-3">
+                                   <h5 className="font-black text-[10px] text-orange-400 uppercase tracking-widest">Matched Payment Streams</h5>
+                                   <div className="max-h-60 overflow-y-auto border dark:border-orange-900/30 rounded-[1.5rem] bg-white dark:bg-gray-900 shadow-inner">
                                        <table className="w-full text-xs text-left">
-                                           <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0">
+                                           <thead className="bg-gray-100 dark:bg-gray-800 text-gray-500 sticky top-0 uppercase text-[9px] font-black">
                                                <tr>
-                                                   <th className="p-2">Depositor</th>
-                                                   <th className="p-2">Amount</th>
-                                                   <th className="p-2">Tx ID</th>
-                                                   <th className="p-2">Status</th>
-                                                   <th className="p-2">Proof</th>
-                                                   <th className="p-2">Action</th>
+                                                   <th className="p-3">Depositor</th>
+                                                   <th className="p-3">Amount</th>
+                                                   <th className="p-3">Status</th>
+                                                   <th className="p-3">Proof</th>
+                                                   <th className="p-3 text-right">Action</th>
                                                </tr>
                                            </thead>
-                                           <tbody className="divide-y dark:divide-gray-700">
+                                           <tbody className="divide-y dark:divide-gray-800">
                                                {selectedWithdrawal.matchedDepositIds.map((deposit: Deposit) => (
-                                                   <tr key={deposit._id}>
-                                                       <td className="p-2">{deposit.userName}</td>
-                                                       <td className="p-2 font-mono">{formatCurrency(deposit.amount, deposit.currency)}</td>
-                                                       <td className="p-2 font-mono">{deposit.transactionId}</td>
-                                                       <td className="p-2"><Badge status={matchedDepositStatus[deposit._id] || deposit.status} /></td>
-                                                       <td className="p-2">
-                                                           {deposit.receiptUrl ? <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">View</a> : 'N/A'}
+                                                   <tr key={deposit._id} className="hover:bg-gray-50 dark:hover:bg-black/20">
+                                                       <td className="p-3 font-bold">{deposit.userName}</td>
+                                                       <td className="p-3 font-mono font-black">{formatCurrency(deposit.amount, deposit.currency)}</td>
+                                                       <td className="p-3"><Badge status={matchedDepositStatus[deposit._id] || deposit.status} /></td>
+                                                       <td className="p-3">
+                                                           {deposit.receiptUrl ? <a href={getReceiptSrc(deposit.receiptUrl)} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline font-bold">View Screenshot</a> : <span className="text-gray-400">No Proof</span>}
                                                        </td>
-                                                       <td className="p-2">
-                                                           <div className="flex gap-1">
+                                                       <td className="p-3 text-right">
+                                                           <div className="flex gap-2 justify-end">
                                                                <button 
                                                                    onClick={() => handleUpdateMatchedDeposit(deposit._id, Status.Approved)} 
-                                                                   className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                                                   className="px-2 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-30 transition-all font-bold"
                                                                    disabled={savingDepositId === deposit._id || (matchedDepositStatus[deposit._id] || deposit.status) === Status.Approved}
-                                                                   title="Approve Payment"
                                                                >
-                                                                   ✓
+                                                                   Verify
                                                                </button>
                                                                <button 
                                                                    onClick={() => handleUpdateMatchedDeposit(deposit._id, Status.Rejected)} 
-                                                                   className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                                                                   className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-30 transition-all font-bold"
                                                                    disabled={savingDepositId === deposit._id || (matchedDepositStatus[deposit._id] || deposit.status) === Status.Rejected}
-                                                                   title="Reject Payment"
                                                                >
-                                                                   ✗
+                                                                   Reject
                                                                </button>
                                                            </div>
                                                        </td>
@@ -353,83 +363,127 @@ const Withdrawals: React.FC = () => {
                        </div>
                    )}
 
-                   <div className="mt-6 border-t dark:border-gray-700 pt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div className="mt-8 border-t dark:border-gray-700 pt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
-                              <label htmlFor="status" className="block text-sm font-semibold mb-2">Request Status</label>
+                              <label htmlFor="status" className="block text-[10px] font-black text-gray-400 uppercase mb-1.5 tracking-widest">Update Request Status</label>
                               <select 
                                   id="status" 
                                   value={currentStatus} 
                                   onChange={(e) => setCurrentStatus(e.target.value as Withdrawal['status'])}
-                                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  className="w-full rounded-xl border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-bold"
                               >
-                                  <option value={Status.Pending}>Pending</option>
-                                  <option value={Status.Matching}>Matching (P2P)</option>
-                                  <option value={Status.Approved}>Approved (Processing)</option>
-                                  <option value={Status.Paid}>Paid (Complete)</option>
-                                  <option value={Status.Rejected}>Rejected</option>
+                                  <option value={Status.Pending}>Pending Admin Review</option>
+                                  <option value={Status.Matching}>Assign to P2P Matching</option>
+                                  <option value={Status.Approved}>Approved for Gateway</option>
+                                  <option value={Status.Paid}>Mark as Paid / Complete</option>
+                                  <option value={Status.Rejected}>Reject Request</option>
                               </select>
                           </div>
                           <div>
-                              <label htmlFor="adminNotes" className="block text-sm font-semibold mb-2">Admin Notes</label>
+                              <label htmlFor="adminNotes" className="block text-[10px] font-black text-gray-400 uppercase mb-1.5 tracking-widest">Internal Admin Notes</label>
                               <textarea
                                   id="adminNotes"
                                   rows={1}
-                                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                  className="w-full rounded-xl border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                                   value={adminNotes}
                                   onChange={(e) => setAdminNotes(e.target.value)}
-                                  placeholder="Internal remarks..."
+                                  placeholder="Type notes for other admins..."
                               />
                           </div>
                       </div>
 
                       {currentStatus === Status.Matching && (
-                          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border dark:border-gray-600">
-                              <h5 className="font-semibold text-sm mb-2">P2P Payment Method Settings</h5>
-                              <div className="grid grid-cols-1 gap-3">
-                                  <input type="text" placeholder="Method Name (e.g. P2P - Easypaisa)" value={p2pName} onChange={e => setP2pName(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
-                                  <div className="grid grid-cols-2 gap-3">
-                                      <input type="text" placeholder="Account Title" value={p2pAccountTitle} onChange={e => setP2pAccountTitle(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
-                                      <input type="text" placeholder="Account Number" value={p2pAccountNumber} onChange={e => setP2pAccountNumber(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" />
-                                  </div>
-                                  <textarea placeholder="Instructions for depositors..." value={p2pInstructions} onChange={e => setP2pInstructions(e.target.value)} className="text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 w-full" rows={2} />
-                                  
-                                  {/* Custom Fields Section for P2P */}
-                                  <div className="mt-2 border-t dark:border-gray-600 pt-2">
-                                      <div className="flex justify-between items-center mb-2">
-                                          <h6 className="text-xs font-semibold text-gray-500 uppercase">Custom Fields (e.g. Bank Code)</h6>
-                                          <Button type="button" size="sm" variant="secondary" onClick={handleAddCustomField} className="py-0.5 px-2 text-xs">+ Add Field</Button>
+                          <div className="mt-6 space-y-6 animate-fade-in">
+                              
+                              {/* BRANDING LIBRARY INTEGRATION */}
+                              <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/50 shadow-inner">
+                                <label className="block text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-[0.2em] mb-4">P2P Gateway Brand Identity</label>
+                                <div className="flex overflow-x-auto pb-4 gap-4 no-scrollbar">
+                                    {savedLogos.map((logo, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => handleSelectSavedLogo(logo)}
+                                            className={`shrink-0 p-4 rounded-3xl border bg-white dark:bg-gray-800 transition-all hover:scale-105 flex flex-col items-center gap-2 w-28 ${p2pName === logo.name ? 'border-blue-500 ring-4 ring-blue-500/20 shadow-xl' : 'border-gray-200 dark:border-gray-700'}`}
+                                        >
+                                            <img src={logo.logoUrl} alt={logo.name} className="h-12 w-12 object-contain" />
+                                            <span className="text-[10px] font-black uppercase truncate w-full text-center tracking-tighter">{logo.name}</span>
+                                        </button>
+                                    ))}
+                                    {savedLogos.length === 0 && (
+                                        <div className="w-full text-center py-4 text-xs text-gray-400 italic">Configure branding in Settings -> Homepage Logos first.</div>
+                                    )}
+                                </div>
+                              </div>
+
+                              <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border dark:border-gray-700">
+                                  <h5 className="font-black text-xs text-gray-500 uppercase mb-4 tracking-widest">Active P2P Gateway Overrides</h5>
+                                  <div className="grid grid-cols-1 gap-4">
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div>
+                                              <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Display Title</label>
+                                              <input type="text" placeholder="e.g. P2P - Easypaisa" value={p2pName} onChange={e => setP2pName(e.target.value)} className="font-bold rounded-xl dark:bg-gray-800 dark:border-gray-600 w-full" />
+                                          </div>
+                                          <div>
+                                              <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Branded Logo URL (or selected above)</label>
+                                              <input type="text" readOnly placeholder="Select from library above" value={p2pLogoUrl} className="text-xs font-mono rounded-xl bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 w-full" />
+                                          </div>
                                       </div>
                                       
-                                      {p2pCustomFields.map((field, index) => (
-                                          <div key={index} className="flex gap-2 items-center mb-2">
-                                              <input 
-                                                  placeholder="Title (e.g. Branch Code)" 
-                                                  value={field.title} 
-                                                  onChange={(e) => handleCustomFieldChange(index, 'title', e.target.value)}
-                                                  className="w-1/3 text-xs rounded-md dark:bg-gray-800 dark:border-gray-500"
-                                              />
-                                              <input 
-                                                  placeholder="Value (e.g. 0911)" 
-                                                  value={field.value} 
-                                                  onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
-                                                  className="w-full text-xs rounded-md dark:bg-gray-800 dark:border-gray-500"
-                                              />
-                                              <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700">
-                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                              </button>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div>
+                                              <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Recipient Account Title</label>
+                                              <input type="text" placeholder="Account Title" value={p2pAccountTitle} onChange={e => setP2pAccountTitle(e.target.value)} className="font-bold rounded-xl dark:bg-gray-800 dark:border-gray-600 w-full" />
                                           </div>
-                                      ))}
+                                          <div>
+                                              <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Recipient Account Number</label>
+                                              <input type="text" placeholder="Account Number" value={p2pAccountNumber} onChange={e => setP2pAccountNumber(e.target.value)} className="font-mono font-bold rounded-xl dark:bg-gray-800 dark:border-gray-600 w-full" />
+                                          </div>
+                                      </div>
+
+                                      <div>
+                                          <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Payment Instructions for Depositors</label>
+                                          <textarea placeholder="e.g. Please transfer funds and upload the proof. This is a direct member payment." value={p2pInstructions} onChange={e => setP2pInstructions(e.target.value)} className="rounded-2xl dark:bg-gray-800 dark:border-gray-600 w-full text-xs" rows={2} />
+                                      </div>
+                                      
+                                      {/* Custom Fields Section for P2P */}
+                                      <div className="mt-2 border-t dark:border-gray-600 pt-4">
+                                          <div className="flex justify-between items-center mb-3">
+                                              <h6 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Extended Gateway Fields</h6>
+                                              <button type="button" onClick={handleAddCustomField} className="text-blue-500 text-[10px] font-black hover:underline uppercase">+ New Metadata Field</button>
+                                          </div>
+                                          
+                                          <div className="space-y-3">
+                                            {p2pCustomFields.map((field, index) => (
+                                                <div key={index} className="flex gap-3 items-center p-3 bg-white dark:bg-black/20 rounded-2xl border dark:border-gray-700">
+                                                    <input 
+                                                        placeholder="Label (e.g. Bank Code)" 
+                                                        value={field.title} 
+                                                        onChange={(e) => handleCustomFieldChange(index, 'title', e.target.value)}
+                                                        className="w-1/3 text-xs font-bold rounded-xl dark:bg-gray-800 dark:border-gray-500"
+                                                    />
+                                                    <input 
+                                                        placeholder="Value (e.g. 0911)" 
+                                                        value={field.value} 
+                                                        onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
+                                                        className="w-full text-xs rounded-xl dark:bg-gray-800 dark:border-gray-500"
+                                                    />
+                                                    <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700 p-2 font-black text-lg">×</button>
+                                                </div>
+                                            ))}
+                                          </div>
+                                      </div>
                                   </div>
                               </div>
                           </div>
                       )}
                   </div>
 
-                  <div className="mt-8 flex justify-end space-x-3">
-                      <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                      <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
-                          {isSaving ? 'Saving...' : 'Save Changes'}
+                  <div className="mt-10 flex justify-end space-x-3 pt-6 border-t dark:border-gray-700">
+                      <Button variant="secondary" onClick={handleCloseModal}>Cancel / Discard</Button>
+                      <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving} className="px-10 py-3 shadow-xl shadow-blue-500/30 uppercase tracking-[0.2em] font-black">
+                          {isSaving ? 'Processing...' : 'Commit Status Update'}
                       </Button>
                   </div>
               </div>

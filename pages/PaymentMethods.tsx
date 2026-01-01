@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { PaymentMethod, Currency, formatCurrency } from '../types';
+import { PaymentMethod, Currency, formatCurrency, HomepagePaymentLogo } from '../types';
 import Modal from '../components/ui/Modal';
-import { createPaymentMethod, updatePaymentMethod, deletePaymentMethod } from '../services/api';
+import { createPaymentMethod, updatePaymentMethod, deletePaymentMethod, updateSettings } from '../services/api';
 
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
     <label className="inline-flex items-center cursor-pointer">
@@ -17,7 +17,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 
 const PaymentMethods: React.FC = () => {
     const { state, dispatch } = useData();
-    const { paymentMethods } = state;
+    const { paymentMethods, settings } = state;
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
@@ -174,6 +174,8 @@ const PaymentMethods: React.FC = () => {
                     method={editingMethod}
                     onClose={handleCloseModal}
                     onSave={handleSave}
+                    savedLogos={settings.homepagePaymentLogos || []}
+                    currentSettings={settings}
                 />
             )}
         </div>
@@ -185,6 +187,8 @@ interface PaymentMethodFormModalProps {
     method: PaymentMethod | null;
     onClose: () => void;
     onSave: (formData: FormData, id?: string) => void;
+    savedLogos: HomepagePaymentLogo[];
+    currentSettings: any;
 }
 
 interface CustomField {
@@ -199,12 +203,15 @@ interface Step {
     imageFile?: File; // Temporary file object for upload
 }
 
-const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave }) => {
+const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave, savedLogos, currentSettings }) => {
+    const { dispatch } = useData();
     const [formData, setFormData] = useState<Partial<PaymentMethod>>(
         method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
+    const [saveToLibrary, setSaveToLibrary] = useState(false);
     
     // How To Deposit State
     const [howToEnabled, setHowToEnabled] = useState(false);
@@ -235,7 +242,14 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setLogoFile(e.target.files[0]);
+            setLogoUrlOverride(null); // Clear selected library logo if user uploads new one
         }
+    };
+
+    const handleSelectSavedLogo = (logo: HomepagePaymentLogo) => {
+        setFormData(prev => ({ ...prev, name: logo.name }));
+        setLogoUrlOverride(logo.logoUrl);
+        setLogoFile(null); // Clear manual upload
     };
 
     const handleAddCustomField = () => {
@@ -287,6 +301,33 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         e.preventDefault();
         setIsSaving(true);
         
+        let finalLogoUrl = logoUrlOverride || method?.logoUrl || '';
+
+        // If a new file is uploaded, we might want to store it in the library too
+        if (logoFile) {
+            finalLogoUrl = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target?.result as string);
+                reader.readAsDataURL(logoFile);
+            });
+        }
+
+        // --- Handle Saving to Branding Library ---
+        if (saveToLibrary && formData.name && finalLogoUrl) {
+            const existingLogos = currentSettings.homepagePaymentLogos || [];
+            const exists = existingLogos.some((l: any) => l.name.toLowerCase() === formData.name?.toLowerCase());
+            
+            if (!exists) {
+                try {
+                    const newLogos = [...existingLogos, { name: formData.name, logoUrl: finalLogoUrl }];
+                    const updated = await updateSettings({ homepagePaymentLogos: newLogos });
+                    dispatch({ type: 'UPDATE_SETTINGS', payload: updated });
+                } catch (error) {
+                    console.error("Failed to update branding library:", error);
+                }
+            }
+        }
+
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
             if (value !== undefined && value !== null && key !== 'logoUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit') {
@@ -296,19 +337,17 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         
         if (logoFile) {
             data.append('logo', logoFile);
+        } else if (logoUrlOverride) {
+            data.append('logoUrl', logoUrlOverride);
+        } else if (method?.logoUrl) {
+            data.append('logoUrl', method.logoUrl);
         }
 
         // Clean empty custom fields
         const cleanedCustomFields = customFields.filter(f => f.title.trim() !== '');
         data.append('customFields', JSON.stringify(cleanedCustomFields));
 
-        // Prepare How-To Data
-        // IMPORTANT: We need to process image files into Base64 strings BEFORE sending if we want to stick to JSON payload within FormData for complex structures.
-        // OR we just rely on the imageFile property being processed locally to imageUrl (dataURI) which is what `handleStepImageChange` does.
-        // Since the backend expects `imageUrl` in the steps array, and we set that to base64 on client, we can just send the array.
-        
         const processedSteps = await Promise.all(howToSteps.map(async (step) => {
-            // If there is a new file, ensure imageUrl is the base64 string
             if (step.imageFile && !step.imageUrl?.startsWith('data:')) {
                  const base64 = await new Promise<string>((resolve) => {
                     const reader = new FileReader();
@@ -333,45 +372,112 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <form onSubmit={handleSubmit} className="p-4 space-y-4 max-h-[85vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-4 space-y-4 max-h-[85vh] overflow-y-auto w-[90vw] max-w-2xl">
                  <h2 className="text-xl font-bold">{method ? 'Edit Payment Method' : 'Add New Method'}</h2>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Method Name (e.g. Easypaisa)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <select
-                        name="currency"
-                        value={formData.currency || 'PKR'}
-                        onChange={handleChange}
-                        className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
-                        required
-                    >
-                        <option value="PKR">PKR (Rs)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="USD">USD ($)</option>
-                    </select>
-                    <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
-                        <option value="Deposit">Deposit</option>
-                        <option value="Withdrawal">Withdrawal</option>
-                    </select>
-                    <div className="md:col-span-1">
-                        <label className="block text-xs text-gray-500 mb-1">Logo (Optional)</label>
-                        <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                 
+                 {/* QUICK SELECT LOGO SECTION */}
+                 {savedLogos.length > 0 && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/50">
+                        <label className="block text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 mb-3 tracking-widest">Select From Branding Library</label>
+                        <div className="flex overflow-x-auto pb-2 gap-3 no-scrollbar">
+                            {savedLogos.map((logo, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => handleSelectSavedLogo(logo)}
+                                    className={`shrink-0 p-3 rounded-xl border bg-white dark:bg-gray-800 transition-all hover:scale-105 flex flex-col items-center gap-2 w-24 ${formData.name === logo.name ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md' : 'border-gray-200 dark:border-gray-700'}`}
+                                >
+                                    <img src={logo.logoUrl} alt={logo.name} className="h-10 w-10 object-contain" />
+                                    <span className="text-[10px] font-bold truncate w-full text-center">{logo.name}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="Account Title" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="Account Number" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="Min Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="Max Amount" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                     <input type="number" step="0.01" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="Fee % (Optional)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                     <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
-                        <option value="Enabled">Enabled</option>
-                        <option value="Disabled">Disabled</option>
-                    </select>
-                    <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions (Optional)" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                 )}
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Method Name</label>
+                        <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Easypaisa" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Currency</label>
+                        <select
+                            name="currency"
+                            value={formData.currency || 'PKR'}
+                            onChange={handleChange}
+                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            required
+                        >
+                            <option value="PKR">PKR (Rs)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction Category</label>
+                        <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                            <option value="Deposit">Deposit</option>
+                            <option value="Withdrawal">Withdrawal</option>
+                        </select>
+                    </div>
+                    <div className="md:col-span-1">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Visual Branding (Logo)</label>
+                        <div className="flex items-center gap-3">
+                            {(logoUrlOverride || method?.logoUrl) && !logoFile && (
+                                <img src={logoUrlOverride || method?.logoUrl} className="h-10 w-10 object-contain rounded bg-gray-100 p-1" alt="current" />
+                            )}
+                            <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                        </div>
+                    </div>
+                    
+                    <div className="md:col-span-2 py-2 px-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 flex items-center justify-between">
+                         <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" className="w-5 h-5 rounded text-blue-600" checked={saveToLibrary} onChange={e => setSaveToLibrary(e.target.checked)} />
+                            <div>
+                                <span className="text-xs font-black uppercase text-gray-700 dark:text-gray-300">Save this brand to Library</span>
+                                <p className="text-[10px] text-gray-500">Makes this logo and name available for quick-select next time.</p>
+                            </div>
+                         </label>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Title</label>
+                        <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="e.g. Smart Support" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account / Wallet Number</label>
+                        <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="e.g. 03001234567" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Minimum Limit</label>
+                        <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="0" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Maximum Limit</label>
+                        <input type="number" name="maxAmount" value={formData.maxAmount || ''} onChange={handleChange} placeholder="1000" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Gateway Fee (%)</label>
+                        <input type="number" step="0.01" name="feePercent" value={formData.feePercent || ''} onChange={handleChange} placeholder="0.00" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                    </div>
+                     <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Visibility Status</label>
+                        <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                            <option value="Enabled">Enabled & Public</option>
+                            <option value="Disabled">Hidden / Maintenance</option>
+                        </select>
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Special Instructions for Users</label>
+                        <textarea name="instructions" value={formData.instructions || ''} onChange={handleChange} placeholder="Instructions (Optional)" rows={2} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                    </div>
                  </div>
 
                  {/* CUSTOM FIELDS SECTION */}
                  <div className="border-t dark:border-gray-700 pt-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Custom Fields</h3>
+                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tighter">Extra Input Fields</h3>
                         <Button type="button" size="sm" variant="secondary" onClick={handleAddCustomField}>+ Add Field</Button>
                     </div>
                     
@@ -391,7 +497,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                         onChange={(e) => handleCustomFieldChange(index, 'value', e.target.value)}
                                         className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500"
                                     />
-                                    <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700">×</button>
+                                    <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700 p-2 font-bold text-xl">×</button>
                                 </div>
                             ))}
                         </div>
@@ -401,51 +507,51 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                  {/* HOW TO DEPOSIT SECTION */}
                  <div className="border-t dark:border-gray-700 pt-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">How-To Guide</h3>
+                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tighter">Visual How-To Guide</h3>
                         <ToggleSwitch checked={howToEnabled} onChange={() => setHowToEnabled(!howToEnabled)} />
                     </div>
-                    <p className="text-xs text-gray-500 mb-3">Provide step-by-step instructions with optional images for the user.</p>
+                    <p className="text-[10px] text-gray-500 mb-3">Create a step-by-step visual workflow for your users.</p>
 
                     {howToEnabled && (
                         <div className="space-y-4 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border dark:border-gray-600">
                             {howToSteps.map((step, index) => (
-                                <div key={index} className="border dark:border-gray-600 p-3 rounded-md bg-white dark:bg-gray-800">
+                                <div key={index} className="border dark:border-gray-600 p-3 rounded-md bg-white dark:bg-gray-800 shadow-sm relative">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-gray-500 uppercase">Step {index + 1}</span>
-                                        <button type="button" onClick={() => handleRemoveStep(index)} className="text-red-500 text-xs hover:underline">Remove</button>
+                                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Step {index + 1}</span>
+                                        <button type="button" onClick={() => handleRemoveStep(index)} className="text-red-500 text-[10px] font-black uppercase hover:underline">Remove</button>
                                     </div>
                                     <input 
-                                        placeholder="Step Title (e.g. Open App)" 
+                                        placeholder="Action (e.g. Open App)" 
                                         value={step.title} 
                                         onChange={(e) => handleStepChange(index, 'title', e.target.value)}
-                                        className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
+                                        className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2 font-bold"
                                     />
                                     <textarea 
-                                        placeholder="Description of this step..." 
+                                        placeholder="Explain exactly what the user needs to do..." 
                                         value={step.description} 
                                         onChange={(e) => handleStepChange(index, 'description', e.target.value)}
-                                        className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
+                                        className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
                                         rows={2}
                                     />
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
                                         <input 
                                             type="file" 
                                             accept="image/*" 
                                             onChange={(e) => e.target.files && handleStepImageChange(index, e.target.files[0])}
-                                            className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                            className="text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-black file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                         />
-                                        {step.imageUrl && <img src={step.imageUrl} alt="Preview" className="h-8 w-8 object-cover rounded" />}
+                                        {step.imageUrl && <img src={step.imageUrl} alt="Preview" className="h-10 w-10 object-cover rounded shadow-sm border border-white" />}
                                     </div>
                                 </div>
                             ))}
-                            <Button type="button" size="sm" variant="secondary" onClick={handleAddStep} className="w-full">+ Add Step</Button>
+                            <Button type="button" size="sm" variant="secondary" onClick={handleAddStep} className="w-full">+ Add Sequence Step</Button>
                         </div>
                     )}
                  </div>
 
-                 <div className="mt-6 flex justify-end space-x-3 pt-2 border-t dark:border-gray-700">
+                 <div className="mt-6 flex justify-end space-x-3 pt-4 border-t dark:border-gray-700">
                     <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
-                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Method'}</Button>
+                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Processing...' : 'Finalize Method'}</Button>
                 </div>
             </form>
         </Modal>
