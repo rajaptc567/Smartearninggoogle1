@@ -73,17 +73,17 @@ const GenericPaymentIcon = () => <svg xmlns="http://www.w3.org/2000/svg" classNa
 const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
     <div className="bg-white dark:bg-gray-800 p-0 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col items-center w-36 h-40 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl group overflow-hidden">
         {/* Logo container - Takes remaining space */}
-        <div className={`w-full flex-grow flex items-center justify-center p-2 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
+        <div className={`w-full flex-grow flex items-center justify-center p-3 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
             {pm.logoUrl ? (
-                <img src={pm.logoUrl} alt={pm.name} className="max-w-[90%] max-h-[90%] object-contain drop-shadow-md" title={pm.name} />
+                <img src={pm.logoUrl} alt={pm.name} className="max-w-[85%] max-h-[85%] object-contain drop-shadow-md" title={pm.name} />
             ) : (
                 <GenericPaymentIcon />
             )}
         </div>
         
         {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
-        <div className="w-full h-10 md:h-12 bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-1 border-t border-blue-500/50">
-            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-white text-center leading-tight line-clamp-2 break-words w-full">
+        <div className="w-full min-h-[44px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-2 border-t border-blue-500/50">
+            <span className="text-[11px] md:text-xs font-black uppercase tracking-widest text-white text-center leading-tight break-words w-full flex items-center justify-center">
                 {pm.name}
             </span>
         </div>

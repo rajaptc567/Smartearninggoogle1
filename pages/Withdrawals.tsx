@@ -412,7 +412,7 @@ const Withdrawals: React.FC = () => {
                                         </button>
                                     ))}
                                     {savedLogos.length === 0 && (
-                                        <div className="w-full text-center py-4 text-xs text-gray-400 italic">Configure branding in Settings -> Homepage Logos first.</div>
+                                        <div className="w-full text-center py-4 text-xs text-gray-400 italic">Configure branding in Settings &rarr; Homepage Logos first.</div>
                                     )}
                                 </div>
                               </div>
