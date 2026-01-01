@@ -548,7 +548,7 @@ const WithdrawFunds: React.FC = () => {
                             <Button type="button" variant="secondary" onClick={() => setStep(3)}>
                                 &larr; Back
                             </Button>
-                            <Button type="submit" onClick={handleSubmit} className="flex-grow py-3 text-lg shadow-lg shadow-green-500/30 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                            <Button type="submit" onClick={handleSubmit} className="flex-grow py-3 text-lg shadow-lg shadow-blue-500/30 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
                                 {isSubmitting ? 'Processing...' : `Submit Request`}
                             </Button>
                         </div>
@@ -600,7 +600,10 @@ const WithdrawFunds: React.FC = () => {
                                 <td className="px-4 py-3 font-semibold">{formatCurrency(withdrawal.amount, withdrawal.currency)}</td>
                                 <td className="px-4 py-3 text-sm text-red-500">-{formatCurrency(withdrawal.fee, withdrawal.currency)}</td>
                                 <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</td>
-                                <td className="px-4 py-3"><Badge status={withdrawal.status} /></td>
+                                <td className="px-4 py-3">
+                                    {/* MASKING: Show 'Matching' as 'Pending' to user */}
+                                    <Badge status={withdrawal.status === Status.Matching ? Status.Pending : withdrawal.status} />
+                                </td>
                             </tr>
                         ))}
                     </Table>

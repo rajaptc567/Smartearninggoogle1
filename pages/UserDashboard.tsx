@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
@@ -146,9 +144,7 @@ const UserDashboard: React.FC = () => {
     );
     
      const NetworkSummaryCard = () => {
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
-        // FIX: Explicitly typed the accumulator and current value to 'number' in the reduce function.
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
         return (
@@ -248,7 +244,10 @@ const UserDashboard: React.FC = () => {
                             <td className="px-4 py-3 text-sm">{tx._id.substring(0, 8)}...</td>
                             <td className="px-4 py-3 text-sm">{tx.type}</td>
                             <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
-                            <td className="px-4 py-3 text-xs"><Badge status={tx.status as Status || Status.Approved} /></td>
+                            <td className="px-4 py-3 text-xs">
+                                {/* MASKING: Show 'Matching' as 'Pending' to user */}
+                                <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
+                            </td>
                             <td className="px-4 py-3 text-sm">{tx.date}</td>
                             <td className="px-4 py-3 text-sm">{tx.description}</td>
                         </tr>

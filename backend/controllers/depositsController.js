@@ -1,5 +1,4 @@
 
-
 import Deposit from '../models/Deposit.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -66,8 +65,6 @@ export const createDeposit = async (req, res) => {
                     error: `Deposit amount ${user.currency}${depositAmount} exceeds the remaining needed amount of ${user.currency}${remaining}.`
                 });
             }
-
-            // Logic proceeds...
         }
 
         if (req.file) {
@@ -80,7 +77,7 @@ export const createDeposit = async (req, res) => {
 
         const deposit = await Deposit.create(depositData);
         
-        // NEW: Create a Transaction record immediately (Pending)
+        // Create a Transaction record immediately (Pending)
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
@@ -91,13 +88,13 @@ export const createDeposit = async (req, res) => {
             description: `Pending Deposit #${deposit._id}`
         });
         
-        // Create a notification for the user
+        // Create a notification for the depositor
         await Notification.create({
             userId: deposit.userId,
             message: `Your deposit request #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} is pending review.`
         });
 
-        // --- HANDLE P2P UPDATE ---
+        // --- HANDLE P2P UPDATE (Silent to withdrawal user) ---
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             const depositAmount = deposit.amount;
@@ -118,24 +115,13 @@ export const createDeposit = async (req, res) => {
                     { p2pWithdrawalId: withdrawal._id },
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
-                
-                // Notify Withdrawal User about Partial Payment Pending Verification
-                await Notification.create({
-                    userId: withdrawal.userId,
-                    message: `A payment of ${user.currency}${depositAmount.toFixed(2)} for your withdrawal request has been received and is pending verification. Remaining amount: ${user.currency}${withdrawal.matchRemainingAmount.toFixed(2)}.`
-                });
+                // NOTE: Notification to withdrawal user removed to keep P2P invisible
             } else {
                 // 4. FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
-                
-                // Notify Withdrawal User about Completion Pending Verification
-                await Notification.create({
-                    userId: withdrawal.userId,
-                    message: `Your withdrawal request of ${user.currency}${withdrawal.finalAmount.toFixed(2)} is now being processed for payment.`
-                });
+                // NOTE: Notification to withdrawal user removed to keep P2P invisible
             }
         }
-        // --- END P2P HANDLE ---
         
         res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) {
@@ -157,7 +143,6 @@ export const updateDeposit = async (req, res) => {
 
         const originalStatus = deposit.status;
         if (originalStatus === status) {
-            // Only notes are updated, no financial logic needed
             deposit.adminNotes = adminNotes;
             await deposit.save();
             return res.status(200).json({ success: true, data: { deposit } });
@@ -171,14 +156,10 @@ export const updateDeposit = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Associated user not found' });
         }
 
-        // --- Find existing transaction to update status ---
         const transaction = await Transaction.findOne({ 
             description: { $regex: `Deposit #${deposit._id}` } 
         });
 
-        // --- Main Approval/Rejection Logic ---
-        
-        // 1. BECOMING APPROVED (From Pending or Rejected)
         if (originalStatus !== 'Approved' && status === 'Approved') {
             user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
@@ -193,20 +174,8 @@ export const updateDeposit = async (req, res) => {
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been approved.`
             });
-
-            // Notify Withdrawal User that payment is confirmed
-            if (deposit.matchedWithdrawalId) {
-                const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
-                if(withdrawal) {
-                    await Notification.create({
-                        userId: withdrawal.userId,
-                        message: `Payment Confirmation: ${user.currency}${deposit.amount.toFixed(2)} has been confirmed for your pending withdrawal.`
-                    });
-                }
-            }
-            
+            // NOTE: P2P payment confirmation notification to withdrawal user removed
         } 
-        // 2. REVOKING APPROVAL (Going from Approved TO Rejected or Pending)
         else if (originalStatus === 'Approved' && status !== 'Approved') {
             user.walletBalance = Number((user.walletBalance - deposit.amount).toFixed(2));
             await user.save();
@@ -217,7 +186,6 @@ export const updateDeposit = async (req, res) => {
                 await transaction.save();
             }
         } 
-        // 3. SIMPLE REJECTION (Pending -> Rejected) or PENDING (Rejected -> Pending)
         else {
              if (transaction) {
                 transaction.status = status;
@@ -228,7 +196,6 @@ export const updateDeposit = async (req, res) => {
         
         if (status === 'Rejected') {
             let rejectionReason = adminNotes || 'Contact support';
-            // If this is a P2P deposit, override the reason for the user's notification to be generic.
             if (deposit.matchedWithdrawalId) {
                 rejectionReason = 'Payment could not be verified. Please contact support if this is an error.';
             }
@@ -238,7 +205,6 @@ export const updateDeposit = async (req, res) => {
                 message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been rejected. Reason: ${rejectionReason}`
             });
             
-            // Reverse P2P Matching Logic if Rejected
             if (deposit.matchedWithdrawalId) {
                 const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
                 if (withdrawal) {
@@ -246,11 +212,7 @@ export const updateDeposit = async (req, res) => {
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
                     await withdrawal.save();
                     
-                    // Notify Withdrawal User about Rejection/Restoration
-                    await Notification.create({
-                        userId: withdrawal.userId,
-                        message: `An issue occurred with a payment for your withdrawal. The amount of ${user.currency}${deposit.amount.toFixed(2)} has been returned to your pending balance to be matched again.`
-                    });
+                    // NOTE: Restoration notification to withdrawal user removed
 
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
                     

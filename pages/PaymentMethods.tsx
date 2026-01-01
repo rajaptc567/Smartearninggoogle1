@@ -126,48 +126,64 @@ const PaymentMethods: React.FC = () => {
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredMethods.map(method => (
-                    <div key={method._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 relative">
-                        <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                                {method.logoUrl && (
-                                    <img src={method.logoUrl} alt={method.name} className="w-10 h-10 object-contain rounded-md bg-gray-50" />
-                                )}
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name}</h3>
-                                    <p className="text-xs text-gray-400">{method.currency}</p>
+                {filteredMethods.map(method => {
+                    const isP2P = !!method.p2pWithdrawalId;
+                    return (
+                        <div key={method._id} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 relative border-t-4 ${isP2P ? 'border-orange-500' : 'border-transparent'}`}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                    {method.logoUrl && (
+                                        <img src={method.logoUrl} alt={method.name} className="w-10 h-10 object-contain rounded-md bg-gray-50" />
+                                    )}
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{method.name}</h3>
+                                        <p className="text-xs text-gray-400">{method.currency}</p>
+                                    </div>
                                 </div>
+                                <ToggleSwitch 
+                                    checked={method.status === 'Enabled'}
+                                    onChange={() => handleToggleStatus(method)}
+                                    disabled={togglingId === method._id}
+                                />
                             </div>
-                             <ToggleSwitch 
-                                checked={method.status === 'Enabled'}
-                                onChange={() => handleToggleStatus(method)}
-                                disabled={togglingId === method._id}
-                            />
+                            
+                            <div className="absolute top-6 right-16 flex flex-col items-end gap-1">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-tighter shadow-sm ${method.type === 'Deposit' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                    {method.type}
+                                </span>
+                                {isP2P && (
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-widest bg-orange-600 text-white shadow-lg shadow-orange-500/20 animate-pulse">
+                                        P2P Gateway
+                                    </span>
+                                )}
+                            </div>
+                            
+                            <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                                <p><span className="font-semibold">Account:</span> {method.accountTitle} ({method.accountNumber})</p>
+                                <p><span className="font-semibold">Limits:</span> {formatCurrency(method.minAmount, method.currency)} - {formatCurrency(method.maxAmount, method.currency)}</p>
+                                <p><span className="font-semibold">Fee:</span> {method.feePercent}%</p>
+                                {method.customFields && method.customFields.length > 0 && (
+                                    <p className="text-xs text-blue-500 italic">+{method.customFields.length} custom fields</p>
+                                )}
+                                {isP2P && (
+                                    <div className="mt-2 p-2 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded text-[10px] text-orange-700 dark:text-orange-300 font-bold uppercase italic">
+                                        Linked to Matching Withdrawal: #{method.p2pWithdrawalId?.toString().substring(0, 8)}...
+                                    </div>
+                                )}
+                                {method.howToDeposit?.enabled && (
+                                    <p className="text-xs text-green-600 italic flex items-center">
+                                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        Guide Active
+                                    </p>
+                                )}
+                            </div>
+                            <div className="mt-6 flex justify-end space-x-2">
+                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(method)}>Edit</Button>
+                            <Button size="sm" variant="danger" onClick={() => handleDelete(method._id)}>Delete</Button>
+                            </div>
                         </div>
-                        <span className={`absolute top-6 right-16 text-xs font-bold px-2 py-0.5 rounded ${method.type === 'Deposit' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {method.type}
-                        </span>
-                        
-                        <div className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                            <p><span className="font-semibold">Account:</span> {method.accountTitle} ({method.accountNumber})</p>
-                            <p><span className="font-semibold">Limits:</span> {formatCurrency(method.minAmount, method.currency)} - {formatCurrency(method.maxAmount, method.currency)}</p>
-                            <p><span className="font-semibold">Fee:</span> {method.feePercent}%</p>
-                            {method.customFields && method.customFields.length > 0 && (
-                                <p className="text-xs text-blue-500 italic">+{method.customFields.length} custom fields</p>
-                            )}
-                            {method.howToDeposit?.enabled && (
-                                <p className="text-xs text-green-600 italic flex items-center">
-                                    <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    Guide Active
-                                </p>
-                            )}
-                        </div>
-                        <div className="mt-6 flex justify-end space-x-2">
-                           <Button size="sm" variant="secondary" onClick={() => handleOpenModal(method)}>Edit</Button>
-                           <Button size="sm" variant="danger" onClick={() => handleDelete(method._id)}>Delete</Button>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             {isModalOpen && (
                 <PaymentMethodFormModal

@@ -29,7 +29,11 @@ const Transactions: React.FC = () => {
             .filter(t => t.userId === currentUser._id)
             .filter(t => {
                 if (typeFilter && t.type !== typeFilter) return false;
-                if (statusFilter && (t.status || 'Approved') !== statusFilter) return false;
+                
+                // MASKING: Logic for filtering by status needs to handle 'Matching' being hidden
+                let actualStatus = t.status || 'Approved';
+                if (statusFilter === 'Pending' && actualStatus === 'Matching') return true;
+                if (statusFilter && actualStatus !== statusFilter) return false;
                 
                 const from = dateFrom ? new Date(dateFrom) : null;
                 const to = dateTo ? new Date(dateTo) : null;
@@ -85,7 +89,8 @@ const Transactions: React.FC = () => {
                                 {formatCurrency(tx.amount, tx.currency)}
                             </td>
                              <td className="px-4 py-3 text-xs">
-                                <Badge status={tx.status as Status || Status.Approved} />
+                                {/* MASKING: Show 'Matching' as 'Pending' to user */}
+                                <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
                             </td>
                             <td className="px-4 py-3 text-sm">{new Date(tx.date).toLocaleString()}</td>
                             <td className="px-4 py-3 text-sm">
@@ -97,7 +102,7 @@ const Transactions: React.FC = () => {
                                     </span>
                                 )}
                             </td>
-                        </tr>
+                         </tr>
                     ))}
                 </Table>
             ) : (
