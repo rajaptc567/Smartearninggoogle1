@@ -24,6 +24,8 @@ export interface UserRestrictions {
     earning: boolean;
     dispute: boolean;
     excludeFromTicker: boolean;
+    login: boolean; // New: Block account access
+    purchase: boolean; // New: Block plan purchases
 }
 
 export interface ActivePlan {
@@ -55,7 +57,8 @@ export interface User {
     registrationDate: string;
     restrictions?: UserRestrictions;
     sponsor?: string;
-    completedTasks?: CompletedTask[]; 
+    completedTasks?: CompletedTask[];
+    isVerified?: boolean; // Added for admin management
 }
 
 export interface Task {

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -86,7 +86,6 @@ const Users: React.FC = () => {
             setIsProcessing(true);
             try {
                 await bulkDeleteUsers(selectedUserIds);
-                // Refresh local data to reflect deletions
                 const updatedUsers = await getUsers();
                 dispatch({ type: 'SET_USERS', payload: updatedUsers });
                 setSelectedUserIds([]);
@@ -150,13 +149,10 @@ const Users: React.FC = () => {
 
     const handleSelectAll = () => {
         const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
-
         if (areAllFilteredSelected) {
-            // Deselect only those that are currently visible
             const filteredIds = new Set(filteredUsers.map(u => u._id));
             setSelectedUserIds(prev => prev.filter(id => !filteredIds.has(id)));
         } else {
-            // Select all visible users
             const currentSelectedSet = new Set(selectedUserIds);
             filteredUsers.forEach(u => currentSelectedSet.add(u._id));
             setSelectedUserIds(Array.from(currentSelectedSet));
@@ -166,7 +162,6 @@ const Users: React.FC = () => {
     const handleDownloadSelected = () => {
         if (selectedUserIds.length === 0) return;
         const usersToExport = users.filter(u => selectedUserIds.includes(u._id));
-        
         const csvEscape = (field: any): string => {
             if (field === null || field === undefined) return '""';
             const str = String(field);
@@ -175,7 +170,6 @@ const Users: React.FC = () => {
             }
             return `"${str}"`;
         };
-
         const csvHeaders = ['Username', 'Full Name', 'Email', 'Phone', 'WhatsApp', 'Country', 'Wallet Balance', 'Currency', 'Status'];
         const csvRows = [
             csvHeaders.join(','),
@@ -191,7 +185,6 @@ const Users: React.FC = () => {
                 csvEscape(user.status)
             ].join(','))
         ];
-
         const csvContent = csvRows.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
@@ -202,9 +195,7 @@ const Users: React.FC = () => {
         document.body.removeChild(link);
     };
 
-
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
-
     const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
 
     return (
@@ -214,7 +205,7 @@ const Users: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                      <select
                         value={statusFilter}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
+                        onChange={(e) => setStatusFilter(e.target.value)}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Statuses</option>
@@ -223,10 +214,9 @@ const Users: React.FC = () => {
                         <option value={Status.Paused}>Paused</option>
                         <option value={Status.Pending}>Pending</option>
                     </select>
-
                      <select
                         value={planFilter}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPlanFilter(e.target.value)}
+                        onChange={(e) => setPlanFilter(e.target.value)}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Plans</option>
@@ -235,10 +225,9 @@ const Users: React.FC = () => {
                             <option key={plan._id} value={plan._id}>{plan.name}</option>
                         ))}
                     </select>
-                    
                      <select
                         value={currencyFilter}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCurrencyFilter(e.target.value as Currency | '')}
+                        onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Currencies</option>
@@ -246,18 +235,16 @@ const Users: React.FC = () => {
                         <option value="EUR">EUR</option>
                         <option value="USD">USD</option>
                     </select>
-
                     <input 
                         type="text" 
                         placeholder="Search name, email, ID..."
                         value={searchTerm}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                         className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                 </div>
             </div>
 
-            {/* Actions Bar */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-700 mb-6 gap-4">
                 <div className="flex items-center gap-4">
                     {selectedUserIds.length > 0 ? (
@@ -348,25 +335,13 @@ const Users: React.FC = () => {
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <div className="flex items-center space-x-2">
-                                                <button 
-                                                    onClick={() => handleOpenUserManagementModal(user)}
-                                                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                                                    title="Manage User"
-                                                >
+                                                <button onClick={() => handleOpenUserManagementModal(user)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors" title="Manage User">
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                                 </button>
-                                                <button 
-                                                    onClick={() => handleOpenMessage(user)}
-                                                    className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-                                                    title="Message User"
-                                                >
+                                                <button onClick={() => handleOpenMessage(user)} className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors" title="Message User">
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                                                 </button>
-                                                <button 
-                                                    onClick={() => handleOpenDeleteModal(user)}
-                                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                                    title="Delete User"
-                                                >
+                                                <button onClick={() => handleOpenDeleteModal(user)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Delete User">
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                 </button>
                                             </div>
@@ -382,131 +357,22 @@ const Users: React.FC = () => {
                 <UserManagementModal 
                     user={managingUser}
                     onClose={handleCloseAllModals}
+                    onDeleteRequest={handleOpenDeleteModal}
                 />
             )}
             {isBulkRestrictionsModalOpen && (
-                <BulkRestrictionsModal
-                    allUsers={users}
-                    investmentPlans={investmentPlans}
-                    onClose={handleCloseAllModals}
-                />
+                <BulkRestrictionsModal allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isBulkDummyModalOpen && (
-                <BulkDummyUserModal
-                    users={users}
-                    investmentPlans={investmentPlans}
-                    onClose={handleCloseAllModals}
-                />
+                <BulkDummyUserModal users={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isMessageModalOpen && (
-                <MessageUserModal
-                    user={managingUser}
-                    allUsers={users}
-                    investmentPlans={investmentPlans}
-                    onClose={handleCloseAllModals}
-                />
+                <MessageUserModal user={managingUser} allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isDeleteModalOpen && userToDelete && (
-                <DeleteUserModal
-                    user={userToDelete}
-                    onClose={handleCloseAllModals}
-                    onConfirmDelete={handleConfirmDelete}
-                />
+                <DeleteUserModal user={userToDelete} onClose={handleCloseAllModals} onConfirmDelete={handleConfirmDelete}/>
             )}
         </div>
-    );
-};
-
-// --- BulkDummyUserModal ---
-
-interface BulkDummyUserModalProps {
-    users: User[];
-    investmentPlans: InvestmentPlan[];
-    onClose: () => void;
-}
-
-const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investmentPlans, onClose }) => {
-    const { dispatch } = useData();
-    const [count, setCount] = useState('1');
-    const [sponsor, setSponsor] = useState('');
-    const [balance, setBalance] = useState('0');
-    const [planId, setPlanId] = useState('');
-    const [country, setCountry] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Auto-fill sponsor if there's only one admin or from dropdown
-    const handleSponsorSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setSponsor(e.target.value);
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!sponsor) return alert("Sponsor username is required.");
-        
-        setIsSubmitting(true);
-        try {
-            const result = await createBulkDummyUsers({
-                count: parseInt(count),
-                sponsor,
-                balance: parseFloat(balance),
-                planId: planId || undefined,
-                country: country || undefined
-            });
-            
-            alert(result.message);
-            
-            // Refresh users list
-            const updatedUsers = await getUsers();
-            dispatch({ type: 'SET_USERS', payload: updatedUsers });
-            onClose();
-        } catch (error) {
-            console.error(error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Could not create dummy users.'}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-96 max-w-full">
-                <h3 className="text-xl font-bold mb-4">Bulk Create Dummy Users</h3>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Number of Users</label>
-                        <input type="number" min="1" max="50" value={count} onChange={e => setCount(e.target.value)} className="w-full rounded-md dark:bg-gray-700" required />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Sponsor Username</label>
-                        <input type="text" value={sponsor} onChange={handleSponsorSearch} placeholder="e.g. admin" className="w-full rounded-md dark:bg-gray-700" required />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Starting Balance</label>
-                        <input type="number" step="0.01" value={balance} onChange={e => setBalance(e.target.value)} className="w-full rounded-md dark:bg-gray-700" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Activate Plan (Optional)</label>
-                        <select value={planId} onChange={e => setPlanId(e.target.value)} className="w-full rounded-md dark:bg-gray-700">
-                            <option value="">-- No Plan --</option>
-                            {investmentPlans.filter(p => p.status === 'Active').map(p => (
-                                <option key={p._id} value={p._id}>{p.name} ({p.currency})</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Country (Optional)</label>
-                        <select value={country} onChange={e => setCountry(e.target.value)} className="w-full rounded-md dark:bg-gray-700">
-                            <option value="">Inherit from Sponsor</option>
-                            {countries.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div className="pt-4 flex justify-end gap-2">
-                        <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating...' : 'Generate Users'}</Button>
-                    </div>
-                </form>
-            </div>
-        </Modal>
     );
 };
 
@@ -515,15 +381,16 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
 interface UserManagementModalProps {
     user: User | null;
     onClose: () => void;
+    onDeleteRequest?: (user: User) => void;
 }
 
-const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose }) => {
+const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onDeleteRequest }) => {
     const { state, dispatch } = useData();
-    const { users, transactions, investmentPlans, settings } = state;
+    const { users, transactions, investmentPlans, settings, logs } = state;
 
-    const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'network' | 'history'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'permissions' | 'network' | 'transactions' | 'commissions' | 'activity'>('profile');
     const [formData, setFormData] = useState<Partial<User>>(
-        user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false } }
+        user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false } }
     );
     const [isSaving, setIsSaving] = useState(false);
 
@@ -535,18 +402,15 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [resetLink, setResetLink] = useState('');
     const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
-    // Financial History Filter State
+    // History Filter State
     const [historyTypeFilter, setHistoryTypeFilter] = useState('');
     const [historyStatusFilter, setHistoryStatusFilter] = useState('');
-    const [historyDateFrom, setHistoryDateFrom] = useState('');
-    const [historyDateTo, setHistoryDateTo] = useState('');
 
-    // Manual Plan Activation State
+    // Manual Management State
     const [activationPlanId, setActivationPlanId] = useState('');
     const [isActivatingPlan, setIsActivatingPlan] = useState(false);
-
-    // Tree Filter State
     const [treePlanFilterId, setTreePlanFilterId] = useState('');
+    const [newSponsorUsername, setNewSponsorUsername] = useState(user?.sponsor || '');
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -585,15 +449,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             alert("Please enter a valid positive amount for adjustment.");
             return;
         }
-
         const adjustmentAmount = action === 'credit' ? numericAmount : -numericAmount;
-        
         setIsSaving(true);
         try {
             const result = await adjustUserWallet(user._id, { amount: adjustmentAmount, description: walletAdjReason });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
-            setFormData(prev => ({ ...prev, walletBalance: result.user.walletBalance })); // Update local form state
+            setFormData(prev => ({ ...prev, walletBalance: result.user.walletBalance }));
             alert("Wallet adjusted successfully.");
             setWalletAdjAmount('');
         } catch (error) {
@@ -609,7 +471,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         try {
             const { _id, ...updateData } = formData;
             if (user) {
-                const updatedUser = await apiUpdateUser(user._id, updateData);
+                const updatedUser = await apiUpdateUser(user._id, { ...updateData, sponsor: newSponsorUsername });
                 dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             } else {
                 const newUser = await apiCreateUser({ ...updateData, password: 'password123' } as any);
@@ -627,7 +489,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
     const handleManualActivatePlan = async () => {
         if (!user || !activationPlanId) return;
-        
         setIsActivatingPlan(true);
         try {
             const result = await adminActivatePlan(user._id, activationPlanId);
@@ -635,115 +496,73 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
             setFormData(prev => ({ ...prev, activePlans: result.user.activePlans, walletBalance: result.user.walletBalance }));
             setActivationPlanId('');
-            alert(`Plan activated successfully for ${user.username}!`);
+            alert(`Plan activated successfully!`);
         } catch (error) {
             console.error(error);
-            alert(`Failed to activate plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            alert(`Failed to activate plan.`);
         } finally {
             setIsActivatingPlan(false);
         }
     };
+
+    const handleRemovePlan = async (planId: string) => {
+        if (!user || !window.confirm("Are you sure you want to strip this plan from the user?")) return;
+        setIsSaving(true);
+        try {
+            const updatedPlans = (user.activePlans || []).filter(p => p.planId !== planId);
+            const updatedUser = await apiUpdateUser(user._id, { activePlans: updatedPlans as any });
+            dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            setFormData(prev => ({ ...prev, activePlans: updatedUser.activePlans }));
+            alert("Plan removed successfully.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to remove plan.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
     
     const TabButton: React.FC<{ tabId: typeof activeTab, children: React.ReactNode }> = ({ tabId, children }) => (
-        <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
+        <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
-
-    const getEquivalentIds = useCallback((planId: string) => {
-        const ids = new Set<string>();
-        if (planId) {
-            ids.add(planId);
-            const group = settings.planEquivalencyGroups?.find(g =>
-                String(g.usdPlanId) === planId ||
-                String(g.pkrPlanId) === planId ||
-                String(g.eurPlanId) === planId
-            );
-            if (group) {
-                if (group.usdPlanId) ids.add(String(group.usdPlanId));
-                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
-                if (group.eurPlanId) ids.add(String(group.eurPlanId));
-            }
-        }
-        return ids;
-    }, [settings.planEquivalencyGroups]);
 
     const genealogyTree = useMemo(() => {
         if (!user) return [];
-        
-        const filterIds = treePlanFilterId ? getEquivalentIds(treePlanFilterId) : null;
-
         const buildGenealogy = (sponsorUsername: string, allUsers: User[]): { user: User, children: any[] }[] => {
             const directReferrals = allUsers.filter(u => u.sponsor === sponsorUsername);
-            if (!directReferrals.length) return [];
-            
-            return directReferrals
-                .map(child => {
-                    const children = buildGenealogy(child.username, allUsers);
-                    // If filtering, only show node if child has the plan OR has descendants with the plan
-                    if (filterIds) {
-                        const hasPlan = child.activePlans?.some(p => filterIds.has(String(p.planId)));
-                        const hasEarningFromChild = transactions.some(t => t.userId === user._id && t.sourceUserId === child._id && t.relatedPlanId && filterIds.has(String(t.relatedPlanId)));
-                        
-                        if (hasPlan || hasEarningFromChild || children.length > 0) {
-                            return { user: child, children };
-                        }
-                        return null;
-                    }
-                    return { user: child, children };
-                })
-                .filter((n): n is { user: User, children: any[] } => n !== null);
+            return directReferrals.map(child => ({
+                user: child,
+                children: buildGenealogy(child.username, allUsers)
+            }));
         };
         return buildGenealogy(user.username, users);
-    }, [user, users, treePlanFilterId, getEquivalentIds, transactions]);
+    }, [user, users]);
 
-    const allUserTransactions = useMemo(() => {
+    const filteredUserTransactions = useMemo(() => {
         if (!user) return [];
         return transactions
             .filter(t => t.userId === user._id)
+            .filter(t => !historyTypeFilter || t.type === historyTypeFilter)
+            .filter(t => !historyStatusFilter || (t.status || 'Approved') === historyStatusFilter)
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [user, transactions]);
+    }, [user, transactions, historyTypeFilter, historyStatusFilter]);
 
-    const filteredUserTransactions = useMemo(() => {
-        return allUserTransactions.filter(t => {
-            if (historyTypeFilter && t.type !== historyTypeFilter) return false;
-            if (historyStatusFilter && (t.status || 'Approved') !== historyStatusFilter) return false;
-            
-            const from = historyDateFrom ? new Date(historyDateFrom) : null;
-            const to = historyDateTo ? new Date(historyDateTo) : null;
-            if (from) from.setHours(0, 0, 0, 0);
-            if (to) to.setHours(23, 59, 59, 999);
-            const itemDate = new Date(t.date);
-            if (from && itemDate < from) return false;
-            if (to && itemDate > to) return false;
-
-            return true;
-        });
-    }, [allUserTransactions, historyTypeFilter, historyStatusFilter, historyDateFrom, historyDateTo]);
-
-    const currencyPlans = useMemo(() => {
+    const userActivityLogs = useMemo(() => {
         if (!user) return [];
-        return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency);
-    }, [user, investmentPlans]);
+        return logs.filter(l => l.affectedUser === user.username || l.performedBy === user.username).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }, [user, logs]);
 
     const activatablePlans = useMemo(() => {
         if (!user) return [];
         const currentOwnedPlanIds = (user.activePlans || []).map(p => p.planId.toString());
-        return currencyPlans.filter(p => !currentOwnedPlanIds.includes(p._id.toString()));
-    }, [user, currencyPlans]);
+        return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency && !currentOwnedPlanIds.includes(p._id.toString()));
+    }, [user, investmentPlans]);
 
     const renderTree = (nodes: { user: User, children: any[] }[]) => (
         <ul className="pl-4 border-l border-gray-200 dark:border-gray-700 space-y-3">
             {nodes.map(node => (
                 <li key={node.user._id} className="text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md">
-                    <div className="flex justify-between items-center">
-                        <p className="font-bold">{node.user.username}</p>
-                        <Badge status={node.user.status as any} />
-                    </div>
-                    <p className="text-xs text-gray-500">Joined: {new Date(node.user.registrationDate).toLocaleDateString()}</p>
-                    <div className="mt-1 text-xs">
-                        <strong>Plans:</strong> {node.user.activePlans && node.user.activePlans.length > 0 
-                            ? node.user.activePlans.map(p => `${p.planName} (${formatCurrency(p.price, node.user.currency)})`).join(', ') 
-                            : 'None'}
-                    </div>
+                    <div className="flex justify-between items-center"><p className="font-bold">{node.user.username}</p><Badge status={node.user.status as any}/></div>
                     {node.children.length > 0 && <div className="mt-2">{renderTree(node.children)}</div>}
                 </li>
             ))}
@@ -752,210 +571,246 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
     return (
          <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-[95vw] max-w-4xl h-[90vh] flex flex-col">
-                <h2 className="text-xl font-bold mb-4">{user ? `Manage User: ${user.username}` : 'Add New User'}</h2>
-                <div className="border-b border-gray-200 dark:border-gray-700">
-                    <nav className="-mb-px flex space-x-4">
-                        <TabButton tabId="profile">Profile & Wallet</TabButton>
-                        {user && <TabButton tabId="security">Security & Restrictions</TabButton>}
-                        {user && <TabButton tabId="network">Network & Plans</TabButton>}
-                        {user && <TabButton tabId="history">Financial History</TabButton>}
+            <div className="p-4 w-[95vw] max-w-5xl h-[90vh] flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">{user ? `Manage Member: @${user.username}` : 'Create Member'}</h2>
+                    {user && (
+                        <div className="flex gap-4">
+                            <div className="text-right">
+                                <p className="text-[10px] font-black uppercase text-gray-400">Scoped Balance</p>
+                                <p className="text-xl font-black text-green-600">{formatCurrency(user.walletBalance, user.currency)}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="border-b border-gray-200 dark:border-gray-700 overflow-x-auto no-scrollbar">
+                    <nav className="-mb-px flex space-x-2">
+                        <TabButton tabId="profile">Basic Profile</TabButton>
+                        {user && <TabButton tabId="permissions">Security & Controls</TabButton>}
+                        {user && <TabButton tabId="network">Team & Hierarchy</TabButton>}
+                        {user && <TabButton tabId="transactions">Financials</TabButton>}
+                        {user && <TabButton tabId="commissions">Commissions</TabButton>}
+                        {user && <TabButton tabId="activity">Action Logs</TabButton>}
                     </nav>
                 </div>
 
-                <div className="flex-grow overflow-y-auto pt-6 space-y-6">
+                <div className="flex-grow overflow-y-auto pt-6 space-y-6 px-1">
                     {activeTab === 'profile' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-4">
-                               <h3 className="font-semibold">Profile Information</h3>
-                               <input name="fullName" value={formData.fullName || ''} onChange={handleFormChange} placeholder="Full Name" className="w-full rounded-md dark:bg-gray-700" />
-                               <input name="username" value={formData.username || ''} onChange={handleFormChange} placeholder="Username" className="w-full rounded-md dark:bg-gray-700" disabled={!!user} />
-                               <input name="email" value={formData.email || ''} onChange={handleFormChange} placeholder="Email" className="w-full rounded-md dark:bg-gray-700" />
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs text-gray-500">Phone</label>
-                                        <input name="phone" value={formData.phone || ''} onChange={handleFormChange} placeholder="Phone" className="w-full rounded-md dark:bg-gray-700" />
+                               <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest">Public Information</h3>
+                               <div className="space-y-3">
+                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase">Legal Name</label><input name="fullName" value={formData.fullName || ''} onChange={handleFormChange} placeholder="Full Name" className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase">System ID (Username)</label><input name="username" value={formData.username || ''} onChange={handleFormChange} disabled={!!user} className="w-full rounded-md dark:bg-gray-700 mt-1 bg-gray-100 dark:bg-gray-800/50 cursor-not-allowed" /></div>
+                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase">Primary Email</label><input name="email" value={formData.email || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-[10px] font-bold text-gray-400 uppercase">Phone</label><input name="phone" value={formData.phone || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                                        <div><label className="text-[10px] font-bold text-gray-400 uppercase">WhatsApp</label><input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
                                     </div>
-                                    <div>
-                                        <label className="text-xs text-gray-500">WhatsApp</label>
-                                        <input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} placeholder="WhatsApp Number" className="w-full rounded-md dark:bg-gray-700" />
-                                    </div>
-                                </div>
-                                <select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    <option value="">-- Select country --</option>
-                                    {countries.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <select name="status" value={formData.status} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700">
-                                    {Object.values(Status).filter(s => ['Active', 'Blocked', 'Pending', 'Paused'].includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                    <div><label className="text-[10px] font-bold text-gray-400 uppercase">Country</label><select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                               </div>
                             </div>
                             {user && (
-                            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border dark:border-gray-600">
-                                <h3 className="font-semibold">Wallet Management</h3>
-                                <p className="text-2xl font-bold">{formatCurrency(formData.walletBalance || 0, formData.currency || 'PKR')}</p>
-                                <div>
-                                    <label className="text-xs">Adjustment Amount</label>
-                                    <input type="number" value={walletAdjAmount} onChange={(e) => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
+                                <div className="space-y-6">
+                                    <div className="bg-gray-50 dark:bg-gray-700/30 p-5 rounded-2xl border dark:border-gray-600">
+                                        <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Direct Wallet Adjustment</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Amount</label><input type="number" value={walletAdjAmount} onChange={(e) => setWalletAdjAmount(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1 font-mono font-bold" placeholder="0.00" /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Admin Ref</label><input type="text" value={walletAdjReason} onChange={(e) => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                            <Button variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit (+)</Button>
+                                            <Button variant="danger" onClick={() => handleWalletAdjustment('debit')} disabled={isSaving}>Debit (-)</Button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-indigo-50 dark:bg-indigo-900/10 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-900/30">
+                                        <h3 className="font-black text-xs uppercase text-indigo-500 tracking-widest mb-4">Global Status Override</h3>
+                                        <select name="status" value={formData.status} onChange={handleFormChange} className="w-full rounded-xl dark:bg-gray-800 dark:border-gray-700 font-bold">
+                                            {Object.values(Status).filter(s => ['Active', 'Blocked', 'Pending', 'Paused'].includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
-                                 <div>
-                                    <label className="text-xs">Reason / Description</label>
-                                    <input type="text" value={walletAdjReason} onChange={(e) => setWalletAdjReason(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="success" onClick={() => handleWalletAdjustment('credit')} disabled={isSaving}>Credit (+)</Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleWalletAdjustment('debit')} disabled={isSaving}>Debit (-)</Button>
-                                </div>
-                            </div>
                             )}
                         </div>
                     )}
-                    {activeTab === 'security' && user && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                                <h3 className="font-semibold">Password Reset</h3>
-                                <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink}>{isGeneratingLink ? 'Generating...' : 'Generate Password Reset Link'}</Button>
-                                {resetLink && <div className="text-xs p-2 bg-blue-50 dark:bg-blue-900/50 rounded break-words mt-2">{resetLink}</div>}
+
+                    {activeTab === 'permissions' && user && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+                            <div className="space-y-6">
+                                <section>
+                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Action Restrictions</h4>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {Object.keys(formData.restrictions || {}).map(key => (
+                                            <label key={key} className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${(formData.restrictions as any)[key] ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'}`}>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold capitalize">Block {key}</span>
+                                                    <span className="text-[10px] text-gray-400">Prohibits this action for user</span>
+                                                </div>
+                                                <input type="checkbox" className="w-5 h-5 rounded text-red-600" checked={(formData.restrictions as any)[key]} onChange={() => handleRestrictionsChange(key as keyof UserRestrictions)} />
+                                            </label>
+                                        ))}
+                                    </div>
+                                </section>
                             </div>
-                            <div className="space-y-2">
-                                <h3 className="font-semibold">Activity Restrictions</h3>
-                                {Object.keys(formData.restrictions || {}).map(key => (
-                                    <label key={key} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                                        <span>Block {key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                                        <input type="checkbox" checked={(formData.restrictions as any)[key]} onChange={() => handleRestrictionsChange(key as keyof UserRestrictions)} />
-                                    </label>
-                                ))}
+                            
+                            <div className="space-y-6">
+                                <section className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
+                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Authentication Reset</h4>
+                                    <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink} className="w-full">Generate Password Reset Link</Button>
+                                    {resetLink && (
+                                        <div className="mt-4 p-3 bg-white dark:bg-gray-900 rounded-xl border shadow-inner flex gap-2">
+                                            <input readOnly value={resetLink} className="w-full text-[10px] font-mono bg-transparent border-none p-0 outline-none"/>
+                                            <button onClick={() => {navigator.clipboard.writeText(resetLink); alert('Link Copied');}} className="text-blue-500 font-bold text-xs uppercase shrink-0">Copy</button>
+                                        </div>
+                                    )}
+                                </section>
+
+                                <section className="p-5 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+                                    <h4 className="font-black text-[10px] text-blue-500 uppercase tracking-widest mb-4">Identity Verification</h4>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Verified Badge Status:</span>
+                                        <button onClick={() => setFormData({...formData, isVerified: !formData.isVerified})} className={`px-4 py-1.5 rounded-full text-xs font-black uppercase transition-all ${formData.isVerified ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-200 text-gray-500'}`}>
+                                            {formData.isVerified ? 'Verified' : 'Unverified'}
+                                        </button>
+                                    </div>
+                                </section>
                             </div>
                         </div>
                     )}
+
                     {activeTab === 'network' && user && (
-                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                             <div className="space-y-4">
-                                <h3 className="font-semibold mb-2">Network & Downline</h3>
-                                <p className="text-sm"><strong>Sponsor:</strong> {user.sponsor || 'N/A'}</p>
-                                
-                                <div className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded border dark:border-gray-600">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Filter Tree by Plan</label>
-                                    <select 
-                                        value={treePlanFilterId} 
-                                        onChange={e => setTreePlanFilterId(e.target.value)}
-                                        className="w-full text-xs rounded border-gray-300 dark:bg-gray-800 dark:border-gray-700"
-                                    >
-                                        <option value="">Show All Network</option>
-                                        {currencyPlans.map(p => <option key={p._id} value={p._id}>{p.name} Tree</option>)}
-                                    </select>
+                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
+                             <div className="space-y-6">
+                                <div className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
+                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Upline / Referral Sponsor</h4>
+                                    <div className="flex gap-4 items-end">
+                                        <div className="flex-grow">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Current Sponsor Username</label>
+                                            <input value={newSponsorUsername} onChange={e => setNewSponsorUsername(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
+                                        </div>
+                                        <Button variant="secondary" onClick={() => setNewSponsorUsername('')} size="sm" className="mb-1">Clear</Button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-3 italic">* Changing sponsor will shift commissions for all future purchases to the new upline.</p>
                                 </div>
 
-                                <div className="mt-4">
-                                    <h4 className="font-semibold mb-2 text-sm uppercase tracking-wide text-gray-500">Downline Tree:</h4>
-                                    {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-xs italic text-gray-400">No members found matching filter.</p>}
+                                <div className="mt-4 bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 h-[300px] overflow-y-auto custom-scrollbar">
+                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Downline Visualization</h4>
+                                    {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-sm italic text-gray-500 text-center py-20">No direct or indirect referrals found.</p>}
                                 </div>
                              </div>
                              
                              <div className="space-y-6">
-                                 <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600">
-                                    <h4 className="font-semibold mb-3">Active Plans</h4>
-                                    {user.activePlans && user.activePlans.length > 0 ? (
-                                        <ul className="space-y-2">
-                                            {user.activePlans.map((p, i) => (
-                                                <li key={p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-md text-sm flex justify-between items-center shadow-sm">
-                                                    <span>
-                                                        <span className="font-bold">{p.planName}</span>
-                                                        <span className="text-[10px] text-gray-500 block uppercase tracking-wider">Purchased: {new Date(p.purchaseDate).toLocaleDateString()}</span>
-                                                    </span>
-                                                    <span className="font-bold text-blue-600">{formatCurrency(p.price, user.currency)}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-sm text-gray-500 italic">No plans active.</p>
-                                    )}
-                                 </div>
-
-                                 <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
-                                    <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-1 flex items-center gap-2">
-                                        <span className="text-lg">🛡️</span> Manual Plan Activation
-                                    </h4>
-                                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-4">Assign a plan manually. Commissions will trigger correctly.</p>
+                                 <div className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
+                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Manage Active Plans</h4>
+                                    <div className="space-y-2 mb-6">
+                                        {user.activePlans && user.activePlans.length > 0 ? user.activePlans.map((p, i) => (
+                                            <div key={p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 flex justify-between items-center shadow-sm">
+                                                <div>
+                                                    <p className="font-black text-blue-600 uppercase text-xs">{p.planName}</p>
+                                                    <p className="text-[9px] text-gray-400 uppercase font-bold">{new Date(p.purchaseDate).toLocaleDateString()}</p>
+                                                </div>
+                                                <button onClick={() => handleRemovePlan(p.planId)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Remove Plan">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            </div>
+                                        )) : <p className="text-xs text-gray-400 italic text-center py-4">No plans active.</p>}
+                                    </div>
                                     
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Select {user.currency} Plan</label>
-                                            <select 
-                                                value={activationPlanId} 
-                                                onChange={e => setActivationPlanId(e.target.value)}
-                                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
-                                            >
-                                                <option value="">-- Choose Plan --</option>
-                                                {activatablePlans.map(p => (
-                                                    <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>
-                                                ))}
-                                                {activatablePlans.length === 0 && <option disabled>No other {user.currency} plans available.</option>}
+                                    <div className="pt-4 border-t dark:border-gray-600">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1.5">Grant New Plan</label>
+                                        <div className="flex gap-2">
+                                            <select value={activationPlanId} onChange={e => setActivationPlanId(e.target.value)} className="flex-grow rounded-xl dark:bg-gray-800 text-xs font-bold">
+                                                <option value="">-- Select Plan --</option>
+                                                {activatablePlans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                                             </select>
+                                            <Button onClick={handleManualActivatePlan} disabled={isActivatingPlan || !activationPlanId} size="sm">Grant</Button>
                                         </div>
-                                        <Button 
-                                            onClick={handleManualActivatePlan} 
-                                            disabled={isActivatingPlan || !activationPlanId}
-                                            className="w-full bg-blue-700 hover:bg-blue-800"
-                                            size="sm"
-                                        >
-                                            {isActivatingPlan ? 'Activating...' : 'Activate Plan Now'}
-                                        </Button>
                                     </div>
                                  </div>
                              </div>
                          </div>
                     )}
-                    {activeTab === 'history' && user && (
-                        <div className="space-y-4">
-                            <h3 className="font-semibold">Financial History</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                                <div><select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                <div><select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700"><option value="">All Statuses</option>{Object.values(Status).filter(s => ['Approved', 'Pending', 'Rejected'].includes(s)).map(s=><option key={s} value={s}>{s}</option>)}</select></div>
-                                <div><input type="date" value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
-                                <div><input type="date" value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} className="w-full text-xs rounded-md dark:bg-gray-700" /></div>
+
+                    {activeTab === 'transactions' && user && (
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="flex gap-2">
+                                 <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                 <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Status</option><option value="Approved">Approved</option><option value="Pending">Pending</option><option value="Rejected">Rejected</option></select>
                             </div>
-                            <div className="max-h-[50vh] overflow-y-auto border dark:border-gray-700 rounded-lg">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
-                                        <tr>
-                                            <th className="p-2">Date</th>
-                                            <th className="p-2">Type</th>
-                                            <th className="p-2">Amount</th>
-                                            <th className="p-2">Status</th>
-                                            <th className="p-2">Description</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y dark:divide-gray-700">
-                                        {filteredUserTransactions.length > 0 ? filteredUserTransactions.map(tx => (
-                                            <tr key={tx._id}>
-                                                <td className="p-2 whitespace-nowrap">{new Date(tx.date).toLocaleString()}</td>
-                                                <td className="p-2">{tx.type}</td>
-                                                <td className={`p-2 font-mono ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {formatCurrency(tx.amount, tx.currency)}
-                                                </td>
-                                                <td className="p-2"><Badge status={tx.status as Status || Status.Approved} /></td>
-                                                <td className="p-2 max-w-xs truncate" title={tx.description}>{tx.description}</td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={5} className="p-4 text-center text-gray-500">No transactions found.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                            <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
+                                <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase font-black sticky top-0">
+                                            <tr><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y dark:divide-gray-800">
+                                            {filteredUserTransactions.map(tx => (
+                                                <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                    <td className="p-4 font-bold">{tx.type}</td>
+                                                    <td className={`p-4 text-right font-black ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
+                                                    <td className="p-4 text-center"><Badge status={tx.status as Status || Status.Approved} /></td>
+                                                    <td className="p-4 opacity-80 italic">{tx.description}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'commissions' && user && (
+                        <div className="space-y-4 animate-fade-in text-center py-20">
+                            <p className="text-gray-400 italic">Referral commission analysis panel loading...</p>
+                        </div>
+                    )}
+
+                    {activeTab === 'activity' && user && (
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
+                                <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0">
+                                            <tr><th className="p-4">Timestamp</th><th className="p-4">Action</th><th className="p-4">Performed By</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y dark:divide-gray-800">
+                                            {userActivityLogs.map(log => (
+                                                <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                    <td className="p-4 font-mono text-gray-400">{new Date(log.timestamp).toLocaleString()}</td>
+                                                    <td className="p-4 font-black uppercase tracking-tight">{log.action}</td>
+                                                    <td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${log.performedBy === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>{log.performedBy}</span></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <div className="mt-6 flex justify-end space-x-3 border-t dark:border-gray-700 pt-4">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
-                    <Button type="button" onClick={handleSaveChanges} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Profile Details'}</Button>
+                <div className="mt-6 flex justify-between items-center border-t dark:border-gray-700 pt-6">
+                    <div className="flex gap-2">
+                        {user && onDeleteRequest && <Button size="sm" variant="danger" onClick={() => onDeleteRequest(user)}>Force Delete User</Button>}
+                    </div>
+                    <div className="flex gap-3">
+                        <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Discard & Close</Button>
+                        <Button type="button" onClick={handleSaveChanges} disabled={isSaving} className="px-10 shadow-xl shadow-blue-500/20">
+                            {isSaving ? 'Processing...' : 'Commit All Updates'}
+                        </Button>
+                    </div>
                 </div>
             </div>
+            <style>{`
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+            `}</style>
         </Modal>
     );
 };
-
-// ... (Sub-components remain functional)
 
 interface BulkRestrictionsModalProps {
     allUsers: User[];
@@ -976,21 +831,11 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
 
     const handleApply = async () => {
         if (targetType === 'plan' && targetIds.length === 0) return alert('Select at least one plan');
-        
         setIsProcessing(true);
         try {
-            await bulkUpdateUserRestrictions({
-                targetType,
-                targetIds,
-                restrictions,
-                action,
-                sendNotification
-            });
-            
-            // Refresh data
+            await bulkUpdateUserRestrictions({ targetType, targetIds, restrictions, action, sendNotification });
             const updatedUsers = await getUsers();
             dispatch({ type: 'SET_USERS', payload: updatedUsers });
-            
             alert('Bulk update completed successfully');
             onClose();
         } catch (err: any) {
@@ -1012,7 +857,6 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
         <Modal isOpen={true} onClose={onClose}>
             <div className="p-4 w-[500px] max-w-full space-y-6">
                 <h3 className="text-xl font-bold">Bulk Restrictions Manager</h3>
-                
                 <section>
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-2">1. Select Target Users</label>
                     <div className="flex gap-2 mb-3">
@@ -1030,7 +874,6 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                         </div>
                     )}
                 </section>
-
                 <section>
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-2">2. Select Restrictions to Affect</label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1042,7 +885,6 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                         ))}
                     </div>
                 </section>
-
                 <section>
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-2">3. Action</label>
                     <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full border rounded p-2 text-sm">
@@ -1051,7 +893,6 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                         <option value="toggle">Invert Current Status</option>
                     </select>
                 </section>
-
                 <div className="pt-4 border-t flex items-center justify-between">
                     <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                         <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded" />
@@ -1061,6 +902,61 @@ const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers,
                         <Button variant="secondary" onClick={onClose}>Cancel</Button>
                         <Button onClick={handleApply} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Apply Bulk Update'}</Button>
                     </div>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+interface BulkDummyUserModalProps {
+    users: User[];
+    investmentPlans: InvestmentPlan[];
+    onClose: () => void;
+}
+
+const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
+    const [count, setCount] = useState('10');
+    const [sponsor, setSponsor] = useState('');
+    const [balance, setBalance] = useState('0');
+    const [country, setCountry] = useState(countries[0]);
+    const [currency, setCurrency] = useState<Currency>('PKR');
+    const [planId, setPlanId] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleCreate = async () => {
+        if (!sponsor) return alert('Sponsor username is required');
+        setIsProcessing(true);
+        try {
+            await createBulkDummyUsers({ count: parseInt(count), sponsor, balance: parseFloat(balance), country, currency, planId: planId || undefined });
+            const updatedUsers = await getUsers();
+            dispatch({ type: 'SET_USERS', payload: updatedUsers });
+            alert('Bulk dummy users created successfully');
+            onClose();
+        } catch (err: any) {
+            alert(err.message || 'Operation failed');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose}>
+            <div className="p-4 w-[500px] max-w-full space-y-4">
+                <h3 className="text-xl font-bold">Bulk Dummy User Generator</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Number of Users</label><input type="number" value={count} onChange={e => setCount(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Initial Balance</label><input type="number" value={balance} onChange={e => setBalance(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                </div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Sponsor Username</label><input type="text" value={sponsor} onChange={e => setSponsor(e.target.value)} placeholder="Username of the sponsor" className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Country</label><select value={country} onChange={e => setCountry(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Currency</label><select value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="PKR">PKR</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
+                </div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Auto-Activate Plan (Optional)</label><select value={planId} onChange={e => setPlanId(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="">-- No Plan --</option>{investmentPlans.filter(p => p.currency === currency).map(p => <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>)}</select></div>
+                <div className="pt-4 border-t flex justify-end gap-2">
+                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleCreate} disabled={isProcessing}>{isProcessing ? 'Generating...' : 'Generate Dummy Users'}</Button>
                 </div>
             </div>
         </Modal>
@@ -1087,23 +983,11 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!message) return alert('Message is required');
-        
         setIsSending(true);
         try {
-            const result = await sendAdminNotification({
-                userId: targetType === 'single' ? targetIds[0] : undefined,
-                targetType: targetType !== 'single' ? targetType : undefined,
-                targetIds: targetType === 'plan' ? targetIds : undefined,
-                subject,
-                message,
-                isPopup,
-                randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined
-            });
-            
-            // Add new notifications to local state
+            const result = await sendAdminNotification({ userId: targetType === 'single' ? targetIds[0] : undefined, targetType: targetType !== 'single' ? targetType : undefined, targetIds: targetType === 'plan' ? targetIds : undefined, subject, message, isPopup, randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined });
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
-            
-            alert(`Message sent to ${result.count} users successfully.`);
+            alert(`Message sent successfully.`);
             onClose();
         } catch (err: any) {
             alert(err.message || 'Failed to send message');
@@ -1120,12 +1004,9 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
         <Modal isOpen={true} onClose={onClose}>
             <form onSubmit={handleSend} className="p-4 w-[500px] max-w-full space-y-4">
                 <h3 className="text-xl font-bold">Send Announcement</h3>
-                
                 <div>
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients</label>
-                    {user ? (
-                        <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div>
-                    ) : (
+                    {user ? <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div> : (
                         <div className="space-y-3">
                             <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full border rounded p-2 text-sm">
                                 <option value="all">All Members</option>
@@ -1142,32 +1023,13 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
                                     ))}
                                 </div>
                             )}
-                            {targetType === 'inactive' && (
-                                <input type="number" placeholder="Send to X random inactive users (leave empty for ALL)" value={randomCount} onChange={e => setRandomCount(e.target.value)} className="w-full border rounded p-2 text-sm" />
-                            )}
                         </div>
                     )}
                 </div>
-
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label>
-                    <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" />
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label>
-                    <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required />
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <input type="checkbox" id="popup-chk" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded" />
-                    <label htmlFor="popup-chk" className="text-sm font-medium cursor-pointer">Display as urgent POPUP for user</label>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                    <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>
-                    <Button type="submit" disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button>
-                </div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" /></div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required /></div>
+                <div className="flex items-center gap-2"><input type="checkbox" id="popup-chk" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded" /><label htmlFor="popup-chk" className="text-sm font-medium cursor-pointer">Display as urgent POPUP for user</label></div>
+                <div className="flex justify-end gap-2 pt-4 border-t"><Button variant="secondary" onClick={onClose} type="button">Cancel</Button><Button type="submit" disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button></div>
             </form>
         </Modal>
     );
@@ -1182,154 +1044,10 @@ interface DeleteUserModalProps {
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
     const { state } = useData();
     const [isDeleting, setIsDeleting] = useState(false);
-    
     const handleConfirm = async () => {
         setIsDeleting(true);
         await onConfirmDelete(user._id);
         setIsDeleting(false);
-    };
-
-    const handleDownloadDossier = () => {
-        const userTx = state.transactions
-            .filter(t => t.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userDeposits = state.deposits
-            .filter(d => d.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userWithdrawals = state.withdrawals
-            .filter(w => w.userId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const userTransfers = state.transfers
-            .filter(t => t.senderId === user._id || t.recipientId === user._id)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        const referrals = state.users.filter(u => u.sponsor === user.username);
-        
-        const approvedDeposits = userDeposits
-            .filter(d => d.status === Status.Approved)
-            .reduce((sum, d) => sum + d.amount, 0);
-        
-        const paidWithdrawals = userWithdrawals
-            .filter(w => w.status === Status.Paid)
-            .reduce((sum, w) => sum + w.finalAmount, 0);
-        
-        const commissions = userTx.filter(t => t.type === 'Commission' && t.status === 'Approved');
-        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
-
-        const csvRows: string[][] = [];
-        csvRows.push([`=== COMPREHENSIVE USER DOSSIER: ${user.username} (${user.email}) ===`]);
-        csvRows.push([`Generated on: ${new Date().toLocaleString()}`]);
-        csvRows.push([]);
-        
-        // --- PROFILE SECTION ---
-        csvRows.push(['--- PROFILE INFORMATION ---']);
-        csvRows.push(['User ID', user._id]);
-        csvRows.push(['Username', user.username]);
-        csvRows.push(['Full Name', user.fullName]);
-        csvRows.push(['Email', user.email]);
-        csvRows.push(['Phone', user.phone]);
-        csvRows.push(['WhatsApp', user.whatsapp || 'N/A']);
-        csvRows.push(['Country', user.country]);
-        csvRows.push(['Currency', user.currency]);
-        csvRows.push(['Sponsor', user.sponsor || 'N/A']);
-        csvRows.push(['Status', user.status]);
-        csvRows.push(['Current Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
-        csvRows.push(['Joined Date', new Date(user.registrationDate).toLocaleString()]);
-        csvRows.push([]);
-
-        // --- ANALYTICS SUMMARY ---
-        csvRows.push(['--- FINANCIAL SUMMARY ---']);
-        csvRows.push(['Metric', 'Total Value']);
-        csvRows.push(['Total Approved Deposits', formatCurrency(approvedDeposits, user.currency)]);
-        csvRows.push(['Total Paid Withdrawals', formatCurrency(paidWithdrawals, user.currency)]);
-        csvRows.push(['Total Commission Earned', formatCurrency(totalCommission, user.currency)]);
-        csvRows.push(['Total Direct Referrals', `${referrals.length}`]);
-        csvRows.push([]);
-
-        // --- ACTIVE PLANS ---
-        csvRows.push(['--- CURRENT ACTIVE PLANS ---']);
-        if (user.activePlans && user.activePlans.length > 0) {
-            csvRows.push(['Plan Name', 'Price', 'Purchase Date']);
-            user.activePlans.forEach(p => {
-                csvRows.push([p.planName, formatCurrency(p.price, user.currency), new Date(p.purchaseDate).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['None']);
-        }
-        csvRows.push([]);
-
-        // --- REFERRALS ---
-        csvRows.push(['--- DIRECT REFERRALS (DOWNLINE) ---']);
-        if (referrals.length > 0) {
-            csvRows.push(['Username', 'Full Name', 'Email', 'Joined Date', 'Status']);
-            referrals.forEach(ref => {
-                csvRows.push([ref.username, ref.fullName, ref.email, new Date(ref.registrationDate).toLocaleDateString(), ref.status]);
-            });
-        } else {
-            csvRows.push(['No referrals found']);
-        }
-        csvRows.push([]);
-
-        // --- DEPOSITS ---
-        csvRows.push(['--- DEPOSIT HISTORY ---']);
-        if (userDeposits.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Transaction ID', 'Status', 'Date']);
-            userDeposits.forEach(d => {
-                csvRows.push([d._id, d.method, formatCurrency(d.amount, d.currency), d.transactionId, d.status, new Date(d.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No deposits found']);
-        }
-        csvRows.push([]);
-
-        // --- WITHDRAWALS ---
-        csvRows.push(['--- WITHDRAWAL HISTORY ---']);
-        if (userWithdrawals.length > 0) {
-            csvRows.push(['ID', 'Method', 'Amount', 'Fee', 'Final Amount', 'Status', 'Date']);
-            userWithdrawals.forEach(w => {
-                csvRows.push([w._id, w.method, formatCurrency(w.amount, w.currency), formatCurrency(w.fee, w.currency), formatCurrency(w.finalAmount, w.currency), w.status, new Date(w.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No withdrawals found']);
-        }
-        csvRows.push([]);
-
-        // --- TRANSFERS ---
-        csvRows.push(['--- TRANSFER HISTORY (SENT/RECEIVED) ---']);
-        if (userTransfers.length > 0) {
-            csvRows.push(['ID', 'Sender', 'Recipient', 'Amount', 'Fee', 'Total Deducted', 'Status', 'Date']);
-            userTransfers.forEach(t => {
-                csvRows.push([t._id, t.senderName, t.recipientName, formatCurrency(t.amount, t.currency), formatCurrency(t.fee || 0, t.currency), formatCurrency(t.totalDeducted || 0, t.currency), t.status, new Date(t.date).toLocaleString()]);
-            });
-        } else {
-            csvRows.push(['No transfers found']);
-        }
-        csvRows.push([]);
-
-        // --- ACTIVITY LOG ---
-        csvRows.push(['--- TRANSACTION LOG (FULL ACTIVITY) ---']);
-        csvRows.push(['Date', 'Type', 'Amount', 'Status', 'Description']);
-        userTx.forEach(tx => {
-            csvRows.push([
-                new Date(tx.date).toLocaleString(),
-                tx.type,
-                formatCurrency(tx.amount, tx.currency),
-                tx.status || 'N/A',
-                tx.description
-            ]);
-        });
-
-        const csvContent = csvRows.map(e => e.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Full_User_Dossier_${user.username}_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
     return (
@@ -1339,25 +1057,10 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>
                 <h3 className="text-xl font-bold">Confirm Deletion</h3>
-                <p className="text-sm text-gray-500">
-                    Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>?
-                    <br/><br/>
-                    All their deposits, withdrawals, transactions, and notification history will be wiped. <strong>This action is irreversible.</strong>
-                </p>
-                <div className="pt-2">
-                    <button 
-                        onClick={handleDownloadDossier}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-bold underline flex items-center justify-center gap-1 mx-auto"
-                    >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Full User Dossier (Referrals, Plans, History)
-                    </button>
-                </div>
+                <p className="text-sm text-gray-500">Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>? This action is irreversible.</p>
                 <div className="flex gap-2 pt-4">
                     <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
-                    <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>
-                        {isDeleting ? 'Deleting...' : 'Yes, Delete All'}
-                    </Button>
+                    <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete All'}</Button>
                 </div>
             </div>
         </Modal>

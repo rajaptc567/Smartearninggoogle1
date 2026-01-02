@@ -15,7 +15,8 @@ export const mockUsers: User[] = [
         activePlans: [],
         status: Status.Active,
         registrationDate: new Date('2023-01-01').toISOString(),
-        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
+        // Added missing login and purchase properties to match UserRestrictions type
+        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false }
     },
     {
         _id: 'u2',
