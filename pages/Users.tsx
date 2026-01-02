@@ -200,7 +200,7 @@ const Users: React.FC = () => {
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management ({filteredUsers.length})</h2>
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                      <select
@@ -358,6 +358,7 @@ const Users: React.FC = () => {
                     user={managingUser}
                     onClose={handleCloseAllModals}
                     onDeleteRequest={handleOpenDeleteModal}
+                    onNavigateToUser={(u) => handleOpenUserManagementModal(u)}
                 />
             )}
             {isBulkRestrictionsModalOpen && (
@@ -382,9 +383,10 @@ interface UserManagementModalProps {
     user: User | null;
     onClose: () => void;
     onDeleteRequest?: (user: User) => void;
+    onNavigateToUser?: (user: User) => void;
 }
 
-const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onDeleteRequest }) => {
+const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose, onDeleteRequest, onNavigateToUser }) => {
     const { state, dispatch } = useData();
     const { users, transactions, investmentPlans, settings, logs } = state;
 
@@ -402,6 +404,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [resetLink, setResetLink] = useState('');
     const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
+    // Network Tab Advanced State
+    const [networkSearch, setNetworkSearch] = useState('');
+    const [isTreeView, setIsTreeView] = useState(true);
+    const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
+
     // History Filter State
     const [historyTypeFilter, setHistoryTypeFilter] = useState('');
     const [historyStatusFilter, setHistoryStatusFilter] = useState('');
@@ -409,7 +416,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     // Manual Management State
     const [activationPlanId, setActivationPlanId] = useState('');
     const [isActivatingPlan, setIsActivatingPlan] = useState(false);
-    const [treePlanFilterId, setTreePlanFilterId] = useState('');
     const [newSponsorUsername, setNewSponsorUsername] = useState(user?.sponsor || '');
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -509,7 +515,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         if (!user || !window.confirm("Are you sure you want to strip this plan from the user?")) return;
         setIsSaving(true);
         try {
-            const updatedPlans = (user.activePlans || []).filter(p => p.planId !== planId);
+            const updatedPlans = (formData.activePlans || []).filter(p => p.planId !== planId);
             const updatedUser = await apiUpdateUser(user._id, { activePlans: updatedPlans as any });
             dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             setFormData(prev => ({ ...prev, activePlans: updatedUser.activePlans }));
@@ -526,17 +532,120 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
 
-    const genealogyTree = useMemo(() => {
-        if (!user) return [];
-        const buildGenealogy = (sponsorUsername: string, allUsers: User[]): { user: User, children: any[] }[] => {
-            const directReferrals = allUsers.filter(u => u.sponsor === sponsorUsername);
-            return directReferrals.map(child => ({
-                user: child,
-                children: buildGenealogy(child.username, allUsers)
-            }));
+    // --- Advanced Network Logic ---
+    const networkData = useMemo(() => {
+        if (!user) return { tree: [], flat: [], stats: { total: 0, revenue: 0, active: 0 } };
+        
+        const myCommissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission');
+        
+        const buildFlatDownline = (sponsorUsername: string, level: number): any[] => {
+            const children = users.filter(u => u.sponsor === sponsorUsername);
+            let results: any[] = [];
+            
+            children.forEach(child => {
+                const childComms = myCommissions.filter(t => t.sourceUserId === child._id);
+                const revenueGenerated = childComms.reduce((sum, t) => sum + t.amount, 0);
+                const isActive = (child.activePlans || []).length > 0;
+
+                results.push({
+                    user: child,
+                    level,
+                    revenueGenerated,
+                    isActive,
+                    commissions: childComms
+                });
+                
+                results = results.concat(buildFlatDownline(child.username, level + 1));
+            });
+            
+            return results;
         };
-        return buildGenealogy(user.username, users);
-    }, [user, users]);
+
+        const flatDownline = buildFlatDownline(user.username, 1);
+        
+        const totalRevenue = flatDownline.reduce((sum, item) => sum + item.revenueGenerated, 0);
+        const activeCount = flatDownline.filter(item => item.isActive).length;
+
+        // Recursive tree builder using the flat data
+        const buildTree = (sponsorUsername: string): any[] => {
+            return flatDownline
+                .filter(item => item.user.sponsor === sponsorUsername)
+                .map(item => ({
+                    ...item,
+                    children: buildTree(item.user.username)
+                }));
+        };
+
+        return {
+            tree: buildTree(user.username),
+            flat: flatDownline,
+            stats: {
+                total: flatDownline.length,
+                revenue: totalRevenue,
+                active: activeCount
+            }
+        };
+    }, [user, users, transactions]);
+
+    const filteredFlatDownline = useMemo(() => {
+        return networkData.flat.filter(item => 
+            item.user.username.toLowerCase().includes(networkSearch.toLowerCase()) ||
+            item.user.fullName.toLowerCase().includes(networkSearch.toLowerCase())
+        );
+    }, [networkData.flat, networkSearch]);
+
+    const drilldownTransactions = useMemo(() => {
+        if (!drilldownMemberId || !user) return [];
+        return transactions.filter(t => 
+            t.userId === user._id && 
+            t.sourceUserId === drilldownMemberId && 
+            t.type === 'Commission'
+        ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [drilldownMemberId, transactions, user]);
+
+    const userCommissions = useMemo(() => {
+        if (!user) return [];
+        return transactions
+            .filter(t => t.userId === user._id && t.type === 'Commission')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [user, transactions]);
+
+    const renderTreeNode = (node: any) => (
+        <li key={node.user._id} className="relative pl-6 pt-4">
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
+            <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
+            
+            <div className={`p-4 rounded-xl border dark:border-gray-700 shadow-sm transition-all hover:border-blue-400 ${node.isActive ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50 opacity-80'}`}>
+                <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${node.level === 1 ? 'bg-blue-500' : 'bg-purple-500'}`}>
+                            {node.user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <p className="font-bold flex items-center gap-2">
+                                {node.user.username}
+                                <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded uppercase tracking-wider text-gray-500">Lvl {node.level}</span>
+                            </p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-tighter">Impact: {formatCurrency(node.revenueGenerated, user?.currency)} Revenue Generated</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setDrilldownMemberId(node.user._id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="View Commissions From Member"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/></svg></button>
+                        <button onClick={() => onNavigateToUser?.(node.user)} className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Manage Member"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                    </div>
+                </div>
+                
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    <div className="p-1.5 bg-gray-50 dark:bg-gray-900 rounded">Balance: <span className="text-gray-900 dark:text-white">{formatCurrency(node.user.walletBalance, node.user.currency)}</span></div>
+                    <div className="p-1.5 bg-gray-50 dark:bg-gray-900 rounded">Active: <span className="text-gray-900 dark:text-white">{node.user.activePlans?.length || 0} Plans</span></div>
+                </div>
+            </div>
+
+            {node.children.length > 0 && (
+                <ul className="ml-4">{node.children.map(child => renderTreeNode(child))}</ul>
+            )}
+        </li>
+    );
 
     const filteredUserTransactions = useMemo(() => {
         if (!user) return [];
@@ -554,20 +663,9 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
     const activatablePlans = useMemo(() => {
         if (!user) return [];
-        const currentOwnedPlanIds = (user.activePlans || []).map(p => p.planId.toString());
+        const currentOwnedPlanIds = (formData.activePlans || []).map(p => p.planId.toString());
         return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency && !currentOwnedPlanIds.includes(p._id.toString()));
-    }, [user, investmentPlans]);
-
-    const renderTree = (nodes: { user: User, children: any[] }[]) => (
-        <ul className="pl-4 border-l border-gray-200 dark:border-gray-700 space-y-3">
-            {nodes.map(node => (
-                <li key={node.user._id} className="text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md">
-                    <div className="flex justify-between items-center"><p className="font-bold">{node.user.username}</p><Badge status={node.user.status as any}/></div>
-                    {node.children.length > 0 && <div className="mt-2">{renderTree(node.children)}</div>}
-                </li>
-            ))}
-        </ul>
-    );
+    }, [user, investmentPlans, formData.activePlans]);
 
     return (
          <Modal isOpen={true} onClose={onClose}>
@@ -681,79 +779,219 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     )}
 
                     {activeTab === 'network' && user && (
-                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in">
-                             <div className="space-y-6">
-                                <div className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
-                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Upline / Referral Sponsor</h4>
-                                    <div className="flex gap-4 items-end">
-                                        <div className="flex-grow">
-                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Current Sponsor Username</label>
-                                            <input value={newSponsorUsername} onChange={e => setNewSponsorUsername(e.target.value)} className="w-full rounded-md dark:bg-gray-700 mt-1" />
-                                        </div>
-                                        <Button variant="secondary" onClick={() => setNewSponsorUsername('')} size="sm" className="mb-1">Clear</Button>
-                                    </div>
-                                    <p className="text-[10px] text-gray-500 mt-3 italic">* Changing sponsor will shift commissions for all future purchases to the new upline.</p>
+                         <div className="flex flex-col gap-6 animate-fade-in">
+                             {/* Network Analytics Header */}
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border dark:border-blue-800 text-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Team Size</p>
+                                    <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{networkData.stats.total}</p>
                                 </div>
-
-                                <div className="mt-4 bg-white dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 h-[300px] overflow-y-auto custom-scrollbar">
-                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Downline Visualization</h4>
-                                    {genealogyTree.length > 0 ? renderTree(genealogyTree) : <p className="text-sm italic text-gray-500 text-center py-20">No direct or indirect referrals found.</p>}
+                                <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-2xl border dark:border-green-800 text-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Network Revenue</p>
+                                    <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(networkData.stats.revenue, user.currency)}</p>
+                                </div>
+                                <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border dark:border-purple-800 text-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Active Earners</p>
+                                    <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{networkData.stats.active}</p>
+                                </div>
+                                <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border dark:border-indigo-800 text-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Team Sponsor</p>
+                                    <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 truncate">@{user.sponsor || 'None'}</p>
                                 </div>
                              </div>
-                             
-                             <div className="space-y-6">
-                                 <div className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
-                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Manage Active Plans</h4>
-                                    <div className="space-y-2 mb-6">
-                                        {user.activePlans && user.activePlans.length > 0 ? user.activePlans.map((p, i) => (
-                                            <div key={p.planId + i} className="p-3 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 flex justify-between items-center shadow-sm">
-                                                <div>
-                                                    <p className="font-black text-blue-600 uppercase text-xs">{p.planName}</p>
-                                                    <p className="text-[9px] text-gray-400 uppercase font-bold">{new Date(p.purchaseDate).toLocaleDateString()}</p>
-                                                </div>
-                                                <button onClick={() => handleRemovePlan(p.planId)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors" title="Remove Plan">
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            </div>
-                                        )) : <p className="text-xs text-gray-400 italic text-center py-4">No plans active.</p>}
-                                    </div>
-                                    
-                                    <div className="pt-4 border-t dark:border-gray-600">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1.5">Grant New Plan</label>
-                                        <div className="flex gap-2">
-                                            <select value={activationPlanId} onChange={e => setActivationPlanId(e.target.value)} className="flex-grow rounded-xl dark:bg-gray-800 text-xs font-bold">
-                                                <option value="">-- Select Plan --</option>
-                                                {activatablePlans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                                            </select>
-                                            <Button onClick={handleManualActivatePlan} disabled={isActivatingPlan || !activationPlanId} size="sm">Grant</Button>
+
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-2 space-y-4">
+                                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-2xl border dark:border-gray-600">
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setIsTreeView(true)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${isTreeView ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500'}`}>Hierarchy Tree</button>
+                                            <button onClick={() => setIsTreeView(false)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${!isTreeView ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500'}`}>Flat Audit List</button>
+                                        </div>
+                                        <div className="flex-grow max-w-md w-full relative">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search members..." 
+                                                className="w-full text-xs font-bold rounded-xl dark:bg-gray-800 dark:border-gray-700 pl-8" 
+                                                value={networkSearch}
+                                                onChange={e => setNetworkSearch(e.target.value)}
+                                            />
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                         </div>
                                     </div>
-                                 </div>
+
+                                    {drilldownMemberId ? (
+                                        <div className="bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-[2.5rem] p-6 animate-slide-up">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div>
+                                                    <h4 className="text-xl font-black text-gray-900 dark:text-white">Earnings from @{users.find(u => u._id === drilldownMemberId)?.username}</h4>
+                                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Transaction audit trail for Managed User</p>
+                                                </div>
+                                                <button onClick={() => setDrilldownMemberId(null)} className="px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-xs font-black uppercase tracking-widest text-gray-500 hover:text-red-500 transition-colors">Close Drilldown</button>
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                <table className="w-full text-left text-xs">
+                                                    <thead className="sticky top-0 bg-white dark:bg-gray-900 text-gray-400 uppercase font-black tracking-widest border-b dark:border-gray-700">
+                                                        <tr>
+                                                            <th className="py-3 px-4">Date</th>
+                                                            <th className="py-3 px-4">Level</th>
+                                                            <th className="py-3 px-4">Description</th>
+                                                            <th className="py-3 px-4 text-right">Earning</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y dark:divide-gray-800">
+                                                        {drilldownTransactions.length > 0 ? drilldownTransactions.map(tx => (
+                                                            <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                                <td className="py-3 px-4 font-mono text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
+                                                                <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded-full font-black ${tx.level === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>L{tx.level}</span></td>
+                                                                <td className="py-3 px-4 italic opacity-80">{tx.description}</td>
+                                                                <td className="py-3 px-4 text-right font-black text-green-600">+{formatCurrency(tx.amount, user.currency)}</td>
+                                                            </tr>
+                                                        )) : (
+                                                            <tr><td colSpan={4} className="py-12 text-center text-gray-500 italic">No commission earnings recorded from this member for the Managed User.</td></tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border dark:border-gray-700 h-[450px] overflow-y-auto custom-scrollbar">
+                                            {isTreeView ? (
+                                                <ul className="space-y-4">
+                                                    {networkData.tree.length > 0 ? networkData.tree.map(node => renderTreeNode(node)) : <p className="text-center py-20 text-gray-500 italic">No network downline detected.</p>}
+                                                </ul>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {filteredFlatDownline.length > 0 ? filteredFlatDownline.map((item, idx) => (
+                                                        <div key={idx} className="flex flex-col sm:flex-row justify-between items-center p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700 hover:border-blue-400 transition-all">
+                                                            <div className="flex items-center gap-4">
+                                                                <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${item.level === 1 ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'}`}>L{item.level}</span>
+                                                                <div>
+                                                                    <p className="font-bold text-gray-900 dark:text-white">@{item.user.username} <span className="text-[10px] text-gray-400 ml-1">({item.user.fullName})</span></p>
+                                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Impact: <span className="text-green-600">+{formatCurrency(item.revenueGenerated, user.currency)}</span></p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-2 mt-3 sm:mt-0">
+                                                                <button onClick={() => setDrilldownMemberId(item.user._id)} className="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-blue-700">Audit Earnings</button>
+                                                                <button onClick={() => onNavigateToUser?.(item.user)} className="px-3 py-1.5 bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[10px] font-black uppercase tracking-widest rounded-lg">Profile</button>
+                                                            </div>
+                                                        </div>
+                                                    )) : <p className="text-center py-20 text-gray-500 italic">No matching members found.</p>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="lg:col-span-1 space-y-6">
+                                     {/* Activated Plans Portfolio Section */}
+                                     <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[2.5rem] border border-indigo-100 dark:border-indigo-900/50 h-fit shadow-lg">
+                                        <h4 className="font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
+                                            <span className="text-xl">💼</span> Live Plan Portfolio
+                                        </h4>
+                                        <p className="text-[10px] text-indigo-600/70 dark:text-indigo-400/70 mb-4 font-black uppercase tracking-widest">Active Member Assets</p>
+                                        
+                                        <div className="space-y-3">
+                                            {formData.activePlans && formData.activePlans.length > 0 ? formData.activePlans.map((p, idx) => (
+                                                <div key={p.planId + idx} className="p-4 bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 flex justify-between items-center shadow-sm group hover:border-red-400 transition-all">
+                                                    <div>
+                                                        <p className="font-black text-indigo-700 dark:text-indigo-400 uppercase text-[11px] tracking-tight">{p.planName}</p>
+                                                        <p className="text-lg font-black text-gray-900 dark:text-white mt-0.5">{formatCurrency(p.price, user?.currency)}</p>
+                                                        <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">Acquired: {new Date(p.purchaseDate).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleRemovePlan(p.planId)} 
+                                                        className="text-gray-300 hover:text-red-600 p-2.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-2xl transition-all"
+                                                        title="Strip Plan Access"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                </div>
+                                            )) : (
+                                                <div className="text-center py-10 border-2 border-dashed border-indigo-200 dark:border-indigo-900/50 rounded-3xl text-xs text-indigo-400 italic font-bold">
+                                                    No plans active in member portfolio.
+                                                </div>
+                                            )}
+                                        </div>
+                                     </div>
+
+                                     <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/50 h-fit">
+                                        <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+                                            <span className="text-xl">🛡️</span> Grant Plan Access
+                                        </h4>
+                                        <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-4 font-black uppercase tracking-widest">Manual Administrative Activation</p>
+                                        
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-[9px] font-black text-gray-400 uppercase block mb-1.5 tracking-tighter ml-1">Available {user?.currency} Plans</label>
+                                                <select 
+                                                    value={activationPlanId} 
+                                                    onChange={e => setActivationPlanId(e.target.value)}
+                                                    className="w-full rounded-2xl dark:bg-gray-800 dark:border-gray-700 text-sm font-bold p-3"
+                                                >
+                                                    <option value="">-- Choose Target Plan --</option>
+                                                    {activatablePlans.map(p => (
+                                                        <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>
+                                                    ))}
+                                                    {activatablePlans.length === 0 && <option disabled>All {user?.currency} plans are already active.</option>}
+                                                </select>
+                                            </div>
+                                            <Button 
+                                                onClick={handleManualActivatePlan} 
+                                                disabled={isActivatingPlan || !activationPlanId}
+                                                className="w-full bg-blue-700 hover:bg-blue-800 shadow-xl shadow-blue-500/20 py-4 rounded-2xl font-black uppercase text-xs tracking-widest"
+                                            >
+                                                {isActivatingPlan ? 'Activating...' : 'Activate Selected Plan'}
+                                            </Button>
+                                            <p className="text-[9px] text-gray-400 italic text-center px-4 leading-relaxed">
+                                                * This will instantly assign the plan without deducting balance. Upline commissions will be distributed normally.
+                                            </p>
+                                        </div>
+                                     </div>
+
+                                     <div className="p-6 bg-gray-50 dark:bg-gray-700/30 rounded-[2.5rem] border dark:border-gray-600">
+                                        <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Upline / Referral Sponsor</h4>
+                                        <div className="flex gap-4 items-end">
+                                            <div className="flex-grow">
+                                                <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Current Sponsor Username</label>
+                                                <input value={newSponsorUsername} onChange={e => setNewSponsorUsername(e.target.value)} className="w-full rounded-xl dark:bg-gray-800 dark:border-gray-700 mt-1 font-bold text-sm" />
+                                            </div>
+                                            <Button variant="secondary" onClick={() => setNewSponsorUsername('')} size="sm" className="mb-0.5 rounded-xl">Clear</Button>
+                                        </div>
+                                        <p className="text-[9px] text-gray-500 mt-3 italic leading-relaxed">* Changing sponsor will shift commissions for all future purchases to the new upline. Use with caution.</p>
+                                    </div>
+                                </div>
                              </div>
                          </div>
                     )}
 
                     {activeTab === 'transactions' && user && (
                         <div className="space-y-4 animate-fade-in">
-                            <div className="flex gap-2">
-                                 <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                                 <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Status</option><option value="Approved">Approved</option><option value="Pending">Pending</option><option value="Rejected">Rejected</option></select>
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold">Transaction History Ledger</h3>
+                                <div className="flex gap-2">
+                                     <select value={historyTypeFilter} onChange={(e) => setHistoryTypeFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Types</option>{transactionTypes.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                     <select value={historyStatusFilter} onChange={(e) => setHistoryStatusFilter(e.target.value)} className="text-xs rounded-lg dark:bg-gray-700 border-gray-300 py-1"><option value="">All Status</option><option value="Approved">Approved</option><option value="Pending">Pending</option><option value="Rejected">Rejected</option></select>
+                                </div>
                             </div>
+                            
                             <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
                                 <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase font-black sticky top-0">
-                                            <tr><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase font-black sticky top-0 z-10 border-b dark:border-gray-700">
+                                            <tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {filteredUserTransactions.map(tx => (
+                                            {filteredUserTransactions.length > 0 ? filteredUserTransactions.map(tx => (
                                                 <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                    <td className="p-4 font-mono text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
                                                     <td className="p-4 font-bold">{tx.type}</td>
                                                     <td className={`p-4 text-right font-black ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
                                                     <td className="p-4 text-center"><Badge status={tx.status as Status || Status.Approved} /></td>
                                                     <td className="p-4 opacity-80 italic">{tx.description}</td>
                                                 </tr>
-                                            ))}
+                                            )) : (
+                                                <tr><td colSpan={5} className="p-12 text-center text-gray-500 italic">No transactions found matching filters.</td></tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -762,27 +1000,76 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     )}
 
                     {activeTab === 'commissions' && user && (
-                        <div className="space-y-4 animate-fade-in text-center py-20">
-                            <p className="text-gray-400 italic">Referral commission analysis panel loading...</p>
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="flex justify-between items-center mb-2">
+                                <div>
+                                    <h3 className="text-xl font-bold">Referral Commission Ledger</h3>
+                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Detailed history of all earnings generated by team activity</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Commission Earnings</p>
+                                    <p className="text-2xl font-black text-green-600">{formatCurrency(userCommissions.reduce((sum, t) => sum + t.amount, 0), user.currency)}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
+                                <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0 border-b dark:border-gray-700 z-10">
+                                            <tr>
+                                                <th className="p-4">Date</th>
+                                                <th className="p-4">Level</th>
+                                                <th className="p-4">Source Referral</th>
+                                                <th className="p-4 text-right">Earning</th>
+                                                <th className="p-4 text-center">Status</th>
+                                                <th className="p-4">Plan Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y dark:divide-gray-800">
+                                            {userCommissions.length > 0 ? userCommissions.map(comm => {
+                                                const sourceUser = users.find(u => u._id === comm.sourceUserId);
+                                                return (
+                                                    <tr key={comm._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                        <td className="p-4 font-mono text-gray-400">{new Date(comm.date).toLocaleDateString()}</td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-0.5 rounded-full font-black text-[10px] ${comm.level === 1 ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>L{comm.level}</span>
+                                                        </td>
+                                                        <td className="p-4 font-bold text-gray-800 dark:text-white">@{sourceUser?.username || 'Unknown'}</td>
+                                                        <td className="p-4 text-right font-black text-green-600 text-sm">{formatCurrency(comm.amount, user.currency)}</td>
+                                                        <td className="p-4 text-center"><Badge status={comm.status as Status || Status.Approved} /></td>
+                                                        <td className="p-4 opacity-70 italic">{comm.description.split('from')[0].trim()}</td>
+                                                    </tr>
+                                                );
+                                            }) : (
+                                                <tr><td colSpan={6} className="p-12 text-center text-gray-500 italic text-sm">No commissions have been earned by this member yet.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {activeTab === 'activity' && user && (
                         <div className="space-y-4 animate-fade-in">
+                            <h3 className="text-lg font-bold">System Log Audit Trail</h3>
                             <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
                                 <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0">
-                                            <tr><th className="p-4">Timestamp</th><th className="p-4">Action</th><th className="p-4">Performed By</th></tr>
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0 z-10 border-b dark:border-gray-700">
+                                            <tr><th className="p-4">Timestamp</th><th className="p-4">Action</th><th className="p-4">Performed By</th><th className="p-4">Technical Details</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {userActivityLogs.map(log => (
+                                            {userActivityLogs.length > 0 ? userActivityLogs.map(log => (
                                                 <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                                     <td className="p-4 font-mono text-gray-400">{new Date(log.timestamp).toLocaleString()}</td>
                                                     <td className="p-4 font-black uppercase tracking-tight">{log.action}</td>
                                                     <td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${log.performedBy === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>{log.performedBy}</span></td>
+                                                    <td className="p-4 opacity-80 italic">{log.details}</td>
                                                 </tr>
-                                            ))}
+                                            )) : (
+                                                <tr><td colSpan={4} className="p-12 text-center text-gray-500 italic">No action logs found for this member.</td></tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -807,6 +1094,13 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                 .no-scrollbar::-webkit-scrollbar { display: none; }
                 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+                @keyframes slide-up {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-slide-up {
+                    animation: slide-up 0.3s ease-out forwards;
+                }
             `}</style>
         </Modal>
     );
@@ -1044,6 +1338,7 @@ interface DeleteUserModalProps {
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
     const { state } = useData();
     const [isDeleting, setIsDeleting] = useState(false);
+    
     const handleConfirm = async () => {
         setIsDeleting(true);
         await onConfirmDelete(user._id);
