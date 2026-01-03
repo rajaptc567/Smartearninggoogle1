@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction, currencySymbols, Currency } from '../../types';
 import Badge from '../../components/ui/Badge';
@@ -600,42 +600,42 @@ const Referrals: React.FC = () => {
                 {[
                     { 
                         id: 'commissions', 
-                        label: 'Earnings Detailed', 
+                        label: 'earning', 
                         count: directEarners.length + indirectEarners.length, 
                         active: 'border-green-400 bg-gradient-to-r from-green-600 to-green-500 text-white shadow-[0_0_15px_rgba(74,222,128,0.4)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
                     },
                     { 
                         id: 'all', 
-                        label: 'All Members + Held Info', 
+                        label: 'all refferal', 
                         count: allNodes.length, 
                         active: 'border-blue-400 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_0_15px_rgba(96,165,250,0.4)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
                     },
                     { 
                         id: 'held', 
-                        label: 'Held Commissions Only', 
+                        label: 'held commission', 
                         count: heldCommissionsData.referrals.length, 
                         active: 'border-orange-400 bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-[0_0_15px_rgba(251,146,60,0.4)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
                     },
                     { 
                         id: 'tree', 
-                        label: 'Hierarchy Architecture', 
+                        label: 'ref tree', 
                         count: genealogyTree.length, 
                         active: 'border-purple-400 bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-[0_0_15px_rgba(192,132,252,0.4)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
                     },
                     { 
                         id: 'overflow', 
-                        label: 'Overflow Logs', 
+                        label: 'overflow', 
                         count: overflowReferrals.length, 
                         active: 'border-red-400 bg-gradient-to-r from-red-600 to-red-500 text-white shadow-[0_0_15px_rgba(248,113,113,0.4)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
                     },
                     { 
                         id: 'inactive', 
-                        label: 'Dormant Team', 
+                        label: 'inactive ref', 
                         count: inactiveReferrals.length, 
                         active: 'border-gray-400 bg-gradient-to-r from-gray-600 to-gray-500 text-white shadow-[0_0_15px_rgba(156,163,175,0.2)]', 
                         inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' 
