@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, Link } from 'react-router-dom';
 import UserSidebar from './UserSidebar';
 import UserHeader from './UserHeader';
 import { useData } from '../hooks/useData';
@@ -48,7 +48,6 @@ const UserLayout: React.FC = () => {
     if (!users.length) return [];
   
     const activities: Activity[] = [];
-    // Combine exclusions: Users blocked via restrictions + specific events hidden by admin
     const excludedUserIds = new Set(users.filter(u => u.restrictions?.excludeFromTicker).map(u => u._id));
     const hiddenEventIds = new Set(settings.tickerHiddenEventIds || []);
 
@@ -82,14 +81,12 @@ const UserLayout: React.FC = () => {
         return res;
     };
 
-    // Helper to get random template
     const getRandomTemplate = (type: keyof typeof realTemplates) => {
         const list = realTemplates[type];
         if (!list || !Array.isArray(list) || list.length === 0) return '';
         return list[Math.floor(Math.random() * list.length)];
     }
 
-    // Helper to mask names
     const processName = (name: string) => {
         if (!realActivityConfig.privacyMode) return name;
         const parts = name.split(' ');
@@ -99,20 +96,17 @@ const UserLayout: React.FC = () => {
         return name.substring(0, Math.min(3, name.length)) + '...';
     };
 
-    // Helper to check min amount and currency
     const isValidAmount = (amount: number, currency: string) => {
         if (amount < realActivityConfig.minAmount) return false;
         if (realActivityConfig.excludedCurrencies.includes(currency as any)) return false;
         return true;
     }
 
-    // Helper to get user country
     const getUserCountry = (userId: string) => {
         const u = users.find(user => user._id === userId);
         return u ? u.country : '';
     };
 
-    // 1. Process Real Activities
     if (contentSource === 'hybrid' || contentSource === 'real_only') {
         const realSources = [];
         
@@ -127,8 +121,6 @@ const UserLayout: React.FC = () => {
                 .slice(0, 3).map(w => ({ type: 'withdrawal', data: w, date: new Date(w.date) })));
         }
         if (realActivitySettings.registrations) {
-            // Registrations usually don't have an amount to filter, unless we check subscription plan price? 
-            // For now, allow all registrations unless excluded by user logic
             realSources.push(...users.filter(u => !excludedUserIds.has(u._id) && !hiddenEventIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
         }
         if (realActivitySettings.commissions) {
@@ -189,7 +181,6 @@ const UserLayout: React.FC = () => {
         });
     }
     
-    // 2. Add Demo Activities from Settings
     if (contentSource === 'hybrid' || contentSource === 'demo_only') {
         const demoProfiles = settings.demoProfiles || [];
         const demoTemplates = (settings.demoActivityTemplates || []).filter(t => t.enabled);
@@ -204,31 +195,22 @@ const UserLayout: React.FC = () => {
                 text = text.replace('{country}', `<strong>${profile.country}</strong>`);
                 text = text.replace('{currency}', `<strong>${profile.currency}</strong>`);
 
-                // --- SMART PRICING LOGIC ---
-                
-                // Get valid plans for this fake user's currency
                 const plansForCurrency = investmentPlans.filter(p => p.status === 'Active' && p.currency === profile.currency);
                 const randomPlan = plansForCurrency.length > 0 ? plansForCurrency[Math.floor(Math.random() * plansForCurrency.length)] : null;
 
-                // Case A: Deposit, Withdrawal, Plan Purchase -> MUST match a real plan price
                 if (['deposit', 'withdrawal', 'plan'].includes(template.type)) {
                     if (randomPlan) {
-                        // Use exact plan price
                         text = text.replace('{amount}', `<strong>${formatCurrency(randomPlan.price, profile.currency)}</strong>`);
                         text = text.replace('{plan}', `<strong>${randomPlan.name}</strong>`);
                     } else {
-                        // Fallback if no plan exists for this currency (prevent broken text)
                         text = text.replace('{amount}', `<strong>${formatCurrency(100, profile.currency)}</strong>`);
                         text = text.replace('{plan}', `<strong>Basic</strong>`);
                     }
                 }
 
-                // Case B: Commission -> MUST match a real plan's commission calculation
                 else if (template.type === 'commission') {
                     if (randomPlan) {
-                        // Randomly simulate Direct (Level 1) or Indirect (Level 2)
-                        const isDirect = Math.random() > 0.4; // 60% chance direct
-                        
+                        const isDirect = Math.random() > 0.4;
                         let commVal = 0;
                         if (isDirect && randomPlan.directCommissions?.length > 0) {
                             const config = randomPlan.directCommissions[0];
@@ -237,37 +219,27 @@ const UserLayout: React.FC = () => {
                             const config = randomPlan.indirectCommissions[0];
                             commVal = config.type === 'percentage' ? (randomPlan.price * config.value) / 100 : config.value;
                         } else {
-                            // Fallback logic if plan doesn't have configs
                             commVal = randomPlan.price * 0.05; 
                         }
-                        
                         text = text.replace('{amount}', `<strong>${formatCurrency(commVal, profile.currency)}</strong>`);
                     } else {
                         text = text.replace('{amount}', `<strong>${formatCurrency(5, profile.currency)}</strong>`);
                     }
                 }
 
-                // Case C: Transfers -> Random value within range settings
                 else if (template.type === 'transfer') {
                     const ranges = settings.tickerDemoAmountRanges || { USD: {min: 50, max: 500}, EUR: {min: 50, max: 500}, PKR: {min: 5000, max: 50000} };
                     const currencyRange = ranges[profile.currency] || { min: 10, max: 100 };
-                    
-                    // Round to nearest 10 for cleaner transfer amounts
                     let randomAmount = Math.floor(Math.random() * (currencyRange.max - currencyRange.min + 1)) + currencyRange.min;
                     randomAmount = Math.round(randomAmount / 10) * 10; 
-
                     text = text.replace('{amount}', `<strong>${formatCurrency(randomAmount, profile.currency)}</strong>`);
                 }
                 
-                // Cleanup: If any {amount} or {plan} tags remain (e.g. template type mismatch), clean them up generic
                 if (text.includes('{amount}')) text = text.replace('{amount}', `<strong>${formatCurrency(50, profile.currency)}</strong>`);
                 if (text.includes('{plan}')) text = text.replace('{plan}', `<strong>Standard</strong>`);
 
-                // ---------------------------
-
                 if (text) {
                     const hoursAgo = Math.floor(Math.random() * 10) + 1;
-                    // Make ID unique to prevent key warnings
                     activities.push({ id: `demo-${template._id}-${profile._id}-${Date.now()}-${Math.random()}`, type: template.type, text, time: `${hoursAgo}h ago` });
                 }
             });
@@ -282,57 +254,36 @@ const UserLayout: React.FC = () => {
   const handleClosePopup = async () => {
       if (popupNotification) {
           try {
-              // Mark as shown in backend
               const updatedNotifications = await markNotificationPopupAsShown(popupNotification._id);
               dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifications });
               setPopupNotification(null);
           } catch (error) {
               console.error("Failed to mark popup as shown", error);
-              setPopupNotification(null); // Close locally anyway to not block user
+              setPopupNotification(null);
           }
       }
   };
   
-  // Filter Notices for the current user
   const visibleNotices = useMemo(() => {
       if (!settings.notices || !currentUser) return [];
-      
       const now = new Date().getTime();
 
       return settings.notices.filter(notice => {
           if (!notice.enabled) return false;
-          
-          // Time Limitation Check
-          if (notice.startTime) {
-              if (now < new Date(notice.startTime).getTime()) return false;
-          }
-          if (notice.endTime) {
-              if (now > new Date(notice.endTime).getTime()) return false;
-          }
-
-          // Targeting Logic
+          if (notice.startTime && now < new Date(notice.startTime).getTime()) return false;
+          if (notice.endTime && now > new Date(notice.endTime).getTime()) return false;
           if (notice.targetType === 'all') return true;
-          
-          if (notice.targetType === 'inactive') {
-              return (!currentUser.activePlans || currentUser.activePlans.length === 0);
-          }
-          
-          if (notice.targetType === 'plan') {
-              if (!notice.targetIds || notice.targetIds.length === 0) return false;
-              // Check if user has ANY of the targeted plans active
-              return currentUser.activePlans?.some(p => notice.targetIds?.includes(p.planId));
-          }
-          
-          if (notice.targetType === 'manual') {
-              if (!notice.targetIds || notice.targetIds.length === 0) return false;
-              return notice.targetIds.includes(currentUser._id);
-          }
-          
+          if (notice.targetType === 'inactive') return (!currentUser.activePlans || currentUser.activePlans.length === 0);
+          if (notice.targetType === 'plan') return currentUser.activePlans?.some(p => notice.targetIds?.includes(p.planId));
+          if (notice.targetType === 'manual') return notice.targetIds?.includes(currentUser._id);
           return false;
       });
   }, [settings.notices, currentUser]);
 
-  
+  const hasNoPlan = useMemo(() => {
+    return !currentUser?.activePlans || currentUser.activePlans.length === 0;
+  }, [currentUser]);
+
   if (!state.currentUser) {
     return null; 
   }
@@ -343,6 +294,22 @@ const UserLayout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <UserHeader setSidebarOpen={setSidebarOpen} />
         
+        {/* PERSISTENT NO-PLAN WARNING BANNER */}
+        {hasNoPlan && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 px-4 shadow-lg flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in relative z-40">
+            <span className="flex items-center gap-2 font-bold text-sm">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              Account Not Activated: Buy a plan to start earning commissions.
+            </span>
+            <button 
+              onClick={() => navigate('/member/plans')}
+              className="bg-white text-orange-600 px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-50 transition-colors shadow-sm"
+            >
+              Browse Plans &rarr;
+            </button>
+          </div>
+        )}
+
         {/* System Notices Bar */}
         {visibleNotices.length > 0 && (
             <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -389,7 +356,6 @@ const UserLayout: React.FC = () => {
   );
 };
 
-// Sub-component for individual notices to handle animations cleanly
 const NoticeItem: React.FC<{ notice: Notice }> = ({ notice }) => {
     const colorClasses = {
         info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
@@ -403,9 +369,7 @@ const NoticeItem: React.FC<{ notice: Notice }> = ({ notice }) => {
     if (notice.style === 'sliding') {
         return (
             <div className={containerClass}>
-                <div className="animate-marquee whitespace-nowrap w-full">
-                    <span className="inline-block px-4">{notice.message}</span>
-                    <span className="inline-block px-4">{notice.message}</span>
+                <div className="animate-marquee whitespace-nowrap w-full text-center">
                     <span className="inline-block px-4">{notice.message}</span>
                 </div>
             </div>
@@ -420,7 +384,6 @@ const NoticeItem: React.FC<{ notice: Notice }> = ({ notice }) => {
         );
     }
 
-    // Static
     return (
         <div className={containerClass}>
             {notice.message}

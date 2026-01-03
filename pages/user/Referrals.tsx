@@ -40,6 +40,10 @@ const Referrals: React.FC = () => {
 
     const prevPlanId = useRef(selectedPlanId);
 
+    const isUserInactive = useMemo(() => {
+      return !currentUser?.activePlans || currentUser.activePlans.length === 0;
+    }, [currentUser]);
+
     useEffect(() => {
         if (uniqueActivePlans.length > 0 && !selectedPlanId) {
             setSelectedPlanId(uniqueActivePlans[0].planId);
@@ -104,7 +108,7 @@ const Referrals: React.FC = () => {
 
     const isTransactionOverflow = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        return t.status === 'Rejected' && (desc.includes('overflow') || desc.includes('limit'));
+        return t.status === 'Pending' && desc.includes('overflow');
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
@@ -159,10 +163,7 @@ const Referrals: React.FC = () => {
         let statusText = 'Eligible Team Member';
         if (referral.activePlans && referral.activePlans.length > 0) statusText = 'Active Earner';
         if (isOneTimeBlocked) statusText = 'One-Time Payout Consumed';
-        if (isOverflow) {
-            const desc = overflowTx?.description?.toLowerCase() || '';
-            statusText = desc.includes('limit') ? 'One-Time Limit Reached' : 'Plan Slot Limit Reached';
-        }
+        if (isOverflow) statusText = 'Plan Slot Capacity Reached';
 
         return { earned, held, overflow, history: contextComms, isOverflow, isRecurringReferral, shouldRemoveCompletely, statusText, level, relatedPlanId };
     }, [currentUser, transactions, settings, users]);
@@ -170,7 +171,7 @@ const Referrals: React.FC = () => {
     const heldCommissionsData = useMemo(() => {
         if (!currentUser) return { referrals: [], stats: new Map() };
         
-        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, planId?: string, planName?: string, amount: number, date: string, txId: string }[] }>();
+        const pendingMap = new Map<string, { total: number, breakdown: { reason: string, isOverflow: boolean, planId?: string, planName?: string, amount: number, date: string, txId: string }[] }>();
         
         transactions
             .filter(t => 
@@ -185,6 +186,7 @@ const Referrals: React.FC = () => {
                 current.total += t.amount;
                 
                 let reason = "Pending Verification";
+                let isOverflow = t.description.toLowerCase().includes('overflow');
                 let missingPlanId = undefined;
                 let missingPlanName = undefined;
 
@@ -194,7 +196,9 @@ const Referrals: React.FC = () => {
                     missingPlanId = targetPlan?._id;
                 }
 
-                if (currentUser.restrictions?.earning) {
+                if (isOverflow) {
+                    reason = `Slot Limit reached for ${missingPlanName}`;
+                } else if (currentUser.restrictions?.earning) {
                     reason = "Account Earning Restricted";
                 } else if (settings.requireActivePlanForCommission && (!currentUser.activePlans || currentUser.activePlans.length === 0)) {
                     reason = "Purchase Required to Release";
@@ -202,7 +206,7 @@ const Referrals: React.FC = () => {
                      reason = `Upgrade to ${missingPlanName} needed`;
                 }
                 
-                current.breakdown.push({ reason, planId: missingPlanId, planName: missingPlanName, amount: t.amount, date: t.date, txId: t._id });
+                current.breakdown.push({ reason, isOverflow, planId: missingPlanId, planName: missingPlanName, amount: t.amount, date: t.date, txId: t._id });
                 pendingMap.set(srcId, current);
             });
             
@@ -265,7 +269,10 @@ const Referrals: React.FC = () => {
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
-        })).filter(n => !n.info.shouldRemoveCompletely);
+        })).filter(n => 
+            !n.info.shouldRemoveCompletely && 
+            n.info.history.length > 0 
+        );
 
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
@@ -303,15 +310,11 @@ const Referrals: React.FC = () => {
         const globalHistory = heldStats?.breakdown || [];
         
         const historyToShow = isHeldView ? globalHistory : info.history;
-        const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow && info.earned === 0 ? info.overflow : info.earned);
+        const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow && info.earned === 0 ? info.held : info.earned);
         const hasHeld = totalHeldGlobal > 0;
         const isOverflow = info.isOverflow;
         
-        const isOneTimeLimit = isOverflow && info.history.some((t: any) => t.description?.toLowerCase().includes('limit'));
-
-        // Find the specific requirement for this user's locked funds
         const requiredPlan = getRequiredPlanForCommission(info.relatedPlanId);
-
         const symbol = currencySymbols[currentUser?.currency || 'USD'];
 
         return (
@@ -330,7 +333,6 @@ const Referrals: React.FC = () => {
                                 <h4 className="font-bold text-white flex items-center gap-2 text-xl">
                                     {user.username}
                                     {info.isRecurringReferral && !isHeldView && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
-                                    {isOverflow && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">{isOneTimeLimit ? '⚠️ Limit Reached' : '⚠️ Slot Overflow'}</span>}
                                     {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-3 w-3"><span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
                                 </h4>
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -343,7 +345,7 @@ const Referrals: React.FC = () => {
                         </div>
                         <div className="text-right">
                             <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
-                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : isOverflow ? 'OVERFLOW LOST' : 'TOTAL EARNED'}
+                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : 'TOTAL EARNED'}
                             </p>
                             <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500 opacity-50' : 'text-[#22c55e]'}`}>
                                 <span className="text-lg mr-1">{symbol}</span>
@@ -355,7 +357,7 @@ const Referrals: React.FC = () => {
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
-                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : isOverflow ? 'ISSUE INCIDENTS' : 'EARNING TIMELINE BREAKDOWN'}
+                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : 'EARNING TIMELINE BREAKDOWN'}
                             </p>
                             {info.held > 0 && !isHeldView && (
                                 <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded-lg border border-orange-500/20">
@@ -367,10 +369,10 @@ const Referrals: React.FC = () => {
                         
                         <div className="space-y-2.5">
                             {historyToShow && historyToShow.length > 0 ? historyToShow.map((item: any) => (
-                                <div key={item._id || item.txId} className={`flex justify-between items-center p-4 bg-[#1f2937] dark:bg-gray-900 rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : item.status === 'Rejected' ? 'border-red-500/30' : 'border-gray-800'} text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
+                                <div key={item._id || item.txId} className={`flex justify-between items-center p-4 bg-[#1f2937] dark:bg-gray-900 rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : 'border-gray-800'} text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
                                     <div className="flex flex-col">
                                         <div className="flex items-center gap-2.5">
-                                            <span className={`w-2 h-2 rounded-full ${item.status === 'Approved' ? 'bg-green-500' : item.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
+                                            <span className={`w-2 h-2 rounded-full ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
                                             <span className="font-bold text-gray-200">
                                                 {isHeldView ? item.reason : item.description.split('from')[0].trim()}
                                             </span>
@@ -380,7 +382,7 @@ const Referrals: React.FC = () => {
                                         </span>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
-                                        <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : item.status === 'Rejected' ? 'text-red-500' : 'text-orange-500'}`}>
+                                        <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : 'text-orange-500'}`}>
                                             <span className="text-[10px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
@@ -402,13 +404,13 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* ACTION CENTER FOR HELD COMMISSION */}
                     {(isHeldView || hasHeld) && (
                         <div className="mt-6 p-5 bg-orange-500/10 border border-orange-500/30 rounded-[1.5rem] shadow-lg">
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">UNLOCK REQUIREMENT FOUND</p>
-                                    <p className="text-sm font-bold text-white">Buy equivalent plan = <span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
+                                    <p className="text-sm font-bold text-white">Requirement: <span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
+                                    {isOverflow && <p className="text-[10px] text-orange-200/60 mt-1 italic font-medium">* When you purchase a plan with an available slot (under the limit), these funds will be automatically released to your wallet.</p>}
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-gray-500 uppercase">VALUE AT STAKE</p>
@@ -421,27 +423,6 @@ const Referrals: React.FC = () => {
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                 Buy to Unlock Commission &rarr;
-                            </button>
-                        </div>
-                    )}
-                    
-                    {/* INFO BOX FOR OVERFLOW/LIMIT */}
-                    {isOverflow && !isHeldView && (
-                         <div className="mt-6 p-4 bg-red-600/10 border border-red-500/30 rounded-[1.5rem]">
-                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">
-                                {isOneTimeLimit ? 'ONE-TIME POLICY ACTIVE' : 'CAPACITY REACHED'}
-                            </p>
-                            <p className="text-xs text-gray-300 leading-relaxed font-medium">
-                                {isOneTimeLimit ? 
-                                    'This sponsor is configured for one-time commissions. To earn repeatedly from the same referral, you must upgrade to a Recurring-eligible plan.' : 
-                                    "Your current plan's direct referral limit was reached. To avoid missing future commissions, upgrade to a plan with more slots."
-                                }
-                            </p>
-                            <button 
-                                onClick={() => navigate('/member/plans')}
-                                className="mt-3 text-xs font-black text-blue-500 uppercase hover:underline"
-                            >
-                                View Eligible Plans &rarr;
                             </button>
                         </div>
                     )}
@@ -474,6 +455,32 @@ const Referrals: React.FC = () => {
     
     return (
         <div className="space-y-10 max-w-7xl mx-auto pb-20 px-4">
+            {/* ELIGIBILITY WARNING FOR INACTIVE USERS */}
+            {isUserInactive && (
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[3rem] text-white shadow-2xl border border-white/10 flex flex-col md:flex-row items-center gap-8 animate-fade-in relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                    
+                    <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-[2rem] flex items-center justify-center text-4xl shrink-0 shadow-inner">
+                        🛡️
+                    </div>
+                    
+                    <div className="flex-grow text-center md:text-left relative z-10">
+                        <h4 className="text-2xl font-black uppercase tracking-tighter">Earnings Eligibility Warning</h4>
+                        <p className="text-blue-100/80 mt-2 font-medium leading-relaxed">
+                            You currently have <strong className="text-white">no active plans</strong>. You can build your network and invite friends, but all referral commissions will be <strong className="underline decoration-wavy decoration-white/40 underline-offset-4">Locked (Held)</strong> until you purchase a plan. Unlock your earning potential today!
+                        </p>
+                    </div>
+                    
+                    <button 
+                        onClick={() => navigate('/member/plans')}
+                        className="bg-white text-blue-600 px-8 py-4 rounded-[1.5rem] font-black uppercase text-sm tracking-widest hover:bg-blue-50 transition-all shadow-xl hover:scale-105 active:scale-95 shrink-0"
+                    >
+                        Buy Plan Now &rarr;
+                    </button>
+                </div>
+            )}
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
                 <div>
                     <h1 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter">Network Intelligence</h1>
@@ -636,7 +643,7 @@ const Referrals: React.FC = () => {
                 {viewMode === 'all' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                         {allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />)}
-                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">Your team network is currently empty. Start sharing!</div>}
+                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No team members found for the selected plan scope.</div>}
                     </div>
                 )}
 
