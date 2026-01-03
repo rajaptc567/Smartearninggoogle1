@@ -108,7 +108,7 @@ const Referrals: React.FC = () => {
 
     const isTransactionOverflow = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        return t.status === 'Pending' && desc.includes('overflow');
+        return desc.includes('overflow');
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
@@ -133,6 +133,10 @@ const Referrals: React.FC = () => {
             )
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+        // A referral is tagged as overflow if ANY commission from them was rejected due to slot limits
+        const globalOverflowTx = referralComms.find(t => isTransactionOverflow(t));
+        const isOverflow = !!globalOverflowTx;
+
         const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
         const recurringPlanIds = settings.recurringCommissionPlanIds || [];
         const isRecurringReferral = !!(oldestComm?.relatedPlanId && recurringPlanIds.includes(String(oldestComm.relatedPlanId)));
@@ -149,9 +153,6 @@ const Referrals: React.FC = () => {
         
         const pendingComm = contextComms.find(t => t.status === 'Pending');
         const relatedPlanId = pendingComm ? String(pendingComm.relatedPlanId) : null;
-
-        const overflowTx = contextComms.find(t => isTransactionOverflow(t));
-        const isOverflow = !!overflowTx;
 
         const hasPaidElseWhere = referralComms.some(t => 
             t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
@@ -249,43 +250,59 @@ const Referrals: React.FC = () => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             if (info.shouldRemoveCompletely) return;
 
-            // Stats include everything active in this scope
-            earnedSum += info.earned;
-            heldSum += info.held;
-            if (info.level === 1) directCount++;
-            else indirectCount++;
-
-            // Distribution to tabs
+            // Distribution to specific tabs
             if (info.isOverflow) {
+                // Requirement: Add overflow user under overflow tab
                 overflowList.push({ ...node, info });
-            } else if (info.earned > 0 || info.held > 0) {
-                if (info.level === 1) directEarnersList.push({ ...node, info });
-                else indirectEarnersList.push({ ...node, info });
             } else {
-                if (!node.user.activePlans || node.user.activePlans.length === 0) {
+                // Requirement: remove inactive user from all referral tab
+                const isActive = node.user.activePlans && node.user.activePlans.length > 0;
+                
+                // Member counts for stats (only if not overflow)
+                earnedSum += info.earned;
+                heldSum += info.held;
+                if (info.level === 1) directCount++;
+                else indirectCount++;
+
+                // Commission check for Earning tab logic
+                if (info.earned > 0 || info.held > 0) {
+                    if (info.level === 1) directEarnersList.push({ ...node, info });
+                    else indirectEarnersList.push({ ...node, info });
+                } else if (!isActive) {
                     inactiveList.push({ ...node, info });
                 }
             }
         });
 
-        // "All Referral" tab: Hide overflow members
+        // "All Referral" tab logic: Exclude overflow AND inactive users as requested
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
         })).filter(n => 
             !n.info.shouldRemoveCompletely && 
-            n.info.history.length > 0 &&
-            !n.info.isOverflow // Don't show overflow refs in "All Referral"
+            !n.info.isOverflow &&
+            n.user.activePlans && n.user.activePlans.length > 0
         );
 
+        // "Ref Tree" logic: synchronized with Earning tab logic
+        // Shows hierarchy including any direct referral OR any indirect who has paid commission.
+        // Paths to indirect earners are preserved.
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                // Hide if overflow or if user told to remove
+                // Requirement: don't show overflow user under ref tree
                 if (info.shouldRemoveCompletely || info.isOverflow) return null;
                 
                 const filteredChildren = filterRecursive(node.children);
-                if (info.earned > 0 || info.held > 0 || filteredChildren.length > 0) return { ...node, children: filteredChildren };
+                const hasPaidChild = filteredChildren.length > 0;
+                
+                // Requirement: include indirect referral that generate Commission to login user to ref tree tab
+                const hasPaidSelf = info.earned > 0 || info.held > 0;
+                
+                // Keep if direct OR if they/their descendants paid commission
+                if (info.level === 1 || hasPaidSelf || hasPaidChild) {
+                    return { ...node, children: filteredChildren };
+                }
                 return null;
             }).filter((n): n is GenealogyNode => n !== null);
         };
@@ -319,7 +336,7 @@ const Referrals: React.FC = () => {
         const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow && info.earned === 0 ? info.held : info.earned);
         const hasHeld = totalHeldGlobal > 0;
         const isOverflow = info.isOverflow;
-        
+
         const requiredPlan = getRequiredPlanForCommission(info.relatedPlanId);
         const symbol = currencySymbols[currentUser?.currency || 'USD'];
 
@@ -329,6 +346,12 @@ const Referrals: React.FC = () => {
                 ${highlightedUserId === user._id ? 'border-blue-400 ring-2 ring-blue-400' : ''} 
                 border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
                 
+                {isOverflow && (
+                    <div className="bg-red-600 text-white py-1.5 px-4 text-center">
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Direct Referral Limit Reached</span>
+                    </div>
+                )}
+
                 <div className="p-8">
                     <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-4">
@@ -351,7 +374,7 @@ const Referrals: React.FC = () => {
                         </div>
                         <div className="text-right">
                             <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
-                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : 'TOTAL EARNED'}
+                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : isOverflow ? 'OVERFLOW LOST' : 'TOTAL EARNED'}
                             </p>
                             <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
                                 <span className="text-lg mr-1">{symbol}</span>
@@ -392,7 +415,7 @@ const Referrals: React.FC = () => {
                                             <span className="text-[10px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
-                                        {item.status === 'Pending' && item.planId && (
+                                        {item.status === 'Pending' && item.planId && !isOverflow && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }}
                                                 className="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-1 hover:underline flex items-center gap-1"
@@ -410,13 +433,12 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
 
-                    {(isHeldView || hasHeld) && (
+                    {(isHeldView || hasHeld) && !isOverflow && (
                         <div className="mt-6 p-5 bg-orange-500/10 border border-orange-500/30 rounded-[1.5rem] shadow-lg">
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">UNLOCK REQUIREMENT FOUND</p>
                                     <p className="text-sm font-bold text-white">Requirement: <span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
-                                    {isOverflow && <p className="text-[10px] text-orange-200/60 mt-1 italic font-medium">* When you purchase a plan with an available slot (under the limit), these funds will be automatically released to your wallet.</p>}
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-gray-500 uppercase">VALUE AT STAKE</p>
@@ -648,7 +670,7 @@ const Referrals: React.FC = () => {
                 {viewMode === 'all' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                         {allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />)}
-                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No team members found for the selected plan scope.</div>}
+                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No active team members found for the selected plan scope.</div>}
                     </div>
                 )}
 
