@@ -144,7 +144,7 @@ const Referrals: React.FC = () => {
         });
 
         const earned = contextComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
-        const held = contextComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        const held = contextComms.filter(t => t.status === 'Pending' && !isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         const overflow = contextComms.filter(t => isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         
         const pendingComm = contextComms.find(t => t.status === 'Pending');
@@ -249,16 +249,18 @@ const Referrals: React.FC = () => {
             const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
             if (info.shouldRemoveCompletely) return;
 
+            // Stats include everything active in this scope
             earnedSum += info.earned;
             heldSum += info.held;
             if (info.level === 1) directCount++;
             else indirectCount++;
 
-            if (info.earned > 0 || info.held > 0) {
+            // Distribution to tabs
+            if (info.isOverflow) {
+                overflowList.push({ ...node, info });
+            } else if (info.earned > 0 || info.held > 0) {
                 if (info.level === 1) directEarnersList.push({ ...node, info });
                 else indirectEarnersList.push({ ...node, info });
-            } else if (info.isOverflow) {
-                overflowList.push({ ...node, info });
             } else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
                     inactiveList.push({ ...node, info });
@@ -266,18 +268,22 @@ const Referrals: React.FC = () => {
             }
         });
 
+        // "All Referral" tab: Hide overflow members
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
         })).filter(n => 
             !n.info.shouldRemoveCompletely && 
-            n.info.history.length > 0 
+            n.info.history.length > 0 &&
+            !n.info.isOverflow // Don't show overflow refs in "All Referral"
         );
 
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                if (info.shouldRemoveCompletely) return null;
+                // Hide if overflow or if user told to remove
+                if (info.shouldRemoveCompletely || info.isOverflow) return null;
+                
                 const filteredChildren = filterRecursive(node.children);
                 if (info.earned > 0 || info.held > 0 || filteredChildren.length > 0) return { ...node, children: filteredChildren };
                 return null;
@@ -319,7 +325,7 @@ const Referrals: React.FC = () => {
 
         return (
             <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-[2.5rem] shadow-sm border transition-all duration-200 overflow-hidden group 
-                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10 grayscale' : 'border-gray-800 dark:border-gray-700'} 
+                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-800 dark:border-gray-700'} 
                 ${highlightedUserId === user._id ? 'border-blue-400 ring-2 ring-blue-400' : ''} 
                 border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
                 
@@ -347,7 +353,7 @@ const Referrals: React.FC = () => {
                             <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
                                 {isHeldView || hasHeld ? 'LOCKED FUNDS' : 'TOTAL EARNED'}
                             </p>
-                            <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500 opacity-50' : 'text-[#22c55e]'}`}>
+                            <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
                                 <span className="text-lg mr-1">{symbol}</span>
                                 {amountToShow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
@@ -455,7 +461,6 @@ const Referrals: React.FC = () => {
     
     return (
         <div className="space-y-10 max-w-7xl mx-auto pb-20 px-4">
-            {/* ELIGIBILITY WARNING FOR INACTIVE USERS */}
             {isUserInactive && (
                 <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[3rem] text-white shadow-2xl border border-white/10 flex flex-col md:flex-row items-center gap-8 animate-fade-in relative overflow-hidden group">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
