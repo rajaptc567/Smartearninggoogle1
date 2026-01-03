@@ -33,7 +33,6 @@ const Referrals: React.FC = () => {
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [highlightedUserId, setHighlightedUserId] = useState<string | null>(null);
     
-    // View Modes renamed per request
     const [viewMode, setViewMode] = useState<'earning' | 'all' | 'held' | 'tree' | 'overflow' | 'inactive'>('earning');
 
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
@@ -82,7 +81,6 @@ const Referrals: React.FC = () => {
         return investmentPlans.find(p => p._id === selectedPlanId);
     }, [selectedPlanId, investmentPlans]);
 
-    // Helper to find the required local plan for a specific commission
     const getRequiredPlanForCommission = useCallback((relatedPlanId?: string) => {
         if (!relatedPlanId || !currentUser) return null;
         let targetPlan = investmentPlans.find(p => p._id === String(relatedPlanId));
@@ -110,7 +108,7 @@ const Referrals: React.FC = () => {
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
-        if (!currentUser) return { earned: 0, held: 0, history: [], isRecurringReferral: false, shouldRemoveCompletely: false, statusText: '', level: 0, relatedPlanId: null };
+        if (!currentUser) return { earned: 0, held: 0, overflow: 0, history: [], isRecurringReferral: false, shouldRemoveCompletely: false, statusText: '', level: 0, relatedPlanId: null, isOverflow: false };
         
         const findLevel = (sponsor: string, targetId: string, currentLvl: number): number => {
             const directs = users.filter(u => u.sponsor === sponsor);
@@ -143,12 +141,13 @@ const Referrals: React.FC = () => {
 
         const earned = contextComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
         const held = contextComms.filter(t => t.status === 'Pending').reduce((sum, t) => sum + t.amount, 0);
+        const overflow = contextComms.filter(t => isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         
         const pendingComm = contextComms.find(t => t.status === 'Pending');
         const relatedPlanId = pendingComm ? String(pendingComm.relatedPlanId) : null;
 
         const overflowTx = contextComms.find(t => isTransactionOverflow(t));
-        const isOverflow = !!overflowTx && earned === 0 && held === 0;
+        const isOverflow = !!overflowTx;
 
         const hasPaidElseWhere = referralComms.some(t => 
             t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
@@ -160,9 +159,9 @@ const Referrals: React.FC = () => {
         let statusText = 'Eligible Team Member';
         if (referral.activePlans && referral.activePlans.length > 0) statusText = 'Active Earner';
         if (isOneTimeBlocked) statusText = 'One-Time Payout Consumed';
-        if (isOverflow) statusText = 'Referral Slot Limit Reached';
+        if (isOverflow) statusText = 'Plan Slot Limit Reached';
 
-        return { earned, held, history: contextComms, isOverflow, isRecurringReferral, shouldRemoveCompletely, statusText, level, relatedPlanId };
+        return { earned, held, overflow, history: contextComms, isOverflow, isRecurringReferral, shouldRemoveCompletely, statusText, level, relatedPlanId };
     }, [currentUser, transactions, settings, users]);
 
     const heldCommissionsData = useMemo(() => {
@@ -301,8 +300,9 @@ const Referrals: React.FC = () => {
         const globalHistory = heldStats?.breakdown || [];
         
         const historyToShow = isHeldView ? globalHistory : info.history;
-        const amountToShow = isHeldView ? totalHeldGlobal : info.earned;
+        const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow && info.earned === 0 ? info.overflow : info.earned);
         const hasHeld = totalHeldGlobal > 0;
+        const isOverflow = info.isOverflow;
         
         // Find the specific requirement for this user's locked funds
         const requiredPlan = getRequiredPlanForCommission(info.relatedPlanId);
@@ -311,24 +311,25 @@ const Referrals: React.FC = () => {
 
         return (
             <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-[2.5rem] shadow-sm border transition-all duration-200 overflow-hidden group 
-                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-gray-800 dark:border-gray-700'} 
+                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10 grayscale' : 'border-gray-800 dark:border-gray-700'} 
                 ${highlightedUserId === user._id ? 'border-blue-400 ring-2 ring-blue-400' : ''} 
-                border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
+                border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
                 
                 <div className="p-8">
                     <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-4">
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isOverflow ? 'bg-red-100 text-red-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                 {user.username.charAt(0).toUpperCase()}
                             </div>
                             <div>
                                 <h4 className="font-bold text-white flex items-center gap-2 text-xl">
                                     {user.username}
                                     {info.isRecurringReferral && !isHeldView && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
+                                    {isOverflow && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">⚠️ Slot Overflow</span>}
                                     {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-3 w-3"><span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
                                 </h4>
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
-                                    <span className={`px-4 py-1 rounded-full font-black uppercase text-[11px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                    <span className={`px-4 py-1 rounded-full font-black uppercase text-[11px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isOverflow ? 'bg-red-600 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
                                         {isDirect ? 'DIRECT TEAM' : `NETWORK LEVEL ${level}`}
                                     </span>
                                     <span className="text-sm text-gray-400 font-medium">@{user.username} • {user.fullName}</span>
@@ -336,10 +337,10 @@ const Referrals: React.FC = () => {
                             </div>
                         </div>
                         <div className="text-right">
-                            <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : 'text-gray-500'}`}>
-                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : 'TOTAL EARNED'}
+                            <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
+                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : isOverflow ? 'OVERFLOW LOST' : 'TOTAL EARNED'}
                             </p>
-                            <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : 'text-[#22c55e]'}`}>
+                            <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500 opacity-50' : 'text-[#22c55e]'}`}>
                                 <span className="text-lg mr-1">{symbol}</span>
                                 {amountToShow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
@@ -349,7 +350,7 @@ const Referrals: React.FC = () => {
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
-                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : 'EARNING TIMELINE BREAKDOWN'}
+                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : isOverflow ? 'OVERFLOW INCIDENTS' : 'EARNING TIMELINE BREAKDOWN'}
                             </p>
                             {info.held > 0 && !isHeldView && (
                                 <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded-lg border border-orange-500/20">
@@ -361,10 +362,10 @@ const Referrals: React.FC = () => {
                         
                         <div className="space-y-2.5">
                             {historyToShow && historyToShow.length > 0 ? historyToShow.map((item: any) => (
-                                <div key={item._id || item.txId} className={`flex justify-between items-center p-4 bg-[#1f2937] dark:bg-gray-900 rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : 'border-gray-800'} text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
+                                <div key={item._id || item.txId} className={`flex justify-between items-center p-4 bg-[#1f2937] dark:bg-gray-900 rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : item.status === 'Rejected' ? 'border-red-500/30' : 'border-gray-800'} text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
                                     <div className="flex flex-col">
                                         <div className="flex items-center gap-2.5">
-                                            <span className={`w-2 h-2 rounded-full ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                                            <span className={`w-2 h-2 rounded-full ${item.status === 'Approved' ? 'bg-green-500' : item.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
                                             <span className="font-bold text-gray-200">
                                                 {isHeldView ? item.reason : item.description.split('from')[0].trim()}
                                             </span>
@@ -374,7 +375,7 @@ const Referrals: React.FC = () => {
                                         </span>
                                     </div>
                                     <div className="text-right flex flex-col items-end">
-                                        <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : 'text-orange-500'}`}>
+                                        <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : item.status === 'Rejected' ? 'text-red-500' : 'text-orange-500'}`}>
                                             <span className="text-[10px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
@@ -415,6 +416,23 @@ const Referrals: React.FC = () => {
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                 Buy to Unlock Commission &rarr;
+                            </button>
+                        </div>
+                    )}
+                    
+                    {/* INFO BOX FOR OVERFLOW */}
+                    {isOverflow && !isHeldView && (
+                         <div className="mt-6 p-4 bg-red-600/10 border border-red-500/30 rounded-[1.5rem]">
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">CAPACITY REACHED</p>
+                            <p className="text-xs text-gray-300 leading-relaxed font-medium">
+                                Your current plan's direct referral limit was reached during this transaction. 
+                                <strong className="text-white"> To avoid missing future commissions, upgrade to a plan with more slots.</strong>
+                            </p>
+                            <button 
+                                onClick={() => navigate('/member/plans')}
+                                className="mt-3 text-xs font-black text-blue-500 uppercase hover:underline"
+                            >
+                                View Higher Plans &rarr;
                             </button>
                         </div>
                     )}
@@ -564,7 +582,6 @@ const Referrals: React.FC = () => {
                 </div>
             </div>
 
-            {/* Renamed navigation pills as per request */}
             <div className="p-3 bg-[#111827] rounded-[2.5rem] border border-gray-800 shadow-2xl flex flex-wrap gap-2 justify-center">
                 {[
                     { id: 'earning', label: 'earning', count: directEarners.length + indirectEarners.length, active: 'border-green-400 bg-gradient-to-r from-green-600 to-green-500 text-white shadow-[0_0_15px_rgba(74,222,128,0.4)]', inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' },
