@@ -15,13 +15,37 @@ const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus
 
 /**
  * Helper: Checks if a held commission can be released.
- * Also enforces the direct referral limit during the release process.
+ * Enforces: Missed Plan Ownership, Direct Referral Limits, and One-Time Rules.
  */
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
 
     let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
     if (!targetPlanId) return false;
+
+    // --- ONE-TIME COMMISSION CHECK ---
+    if (settings.oneTimeCommissionPerGroup) {
+        const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+        const hasRecurringPlan = (user.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
+
+        if (!hasRecurringPlan) {
+            // Check if this user has ALREADY received an approved commission from this source
+            const alreadyReceived = await Transaction.findOne({
+                userId: user._id,
+                sourceUserId: commission.sourceUserId,
+                type: 'Commission',
+                status: 'Approved',
+                _id: { $ne: commission._id } // Don't count itself
+            });
+
+            if (alreadyReceived) {
+                commission.status = 'Rejected';
+                commission.description = `[Limit] One-time commission already received from @${commission.userName || 'referral'}.`;
+                await commission.save();
+                return false;
+            }
+        }
+    }
 
     // Determine equivalency group IDs
     let equivIds = [targetPlanId];
@@ -61,7 +85,6 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
             });
 
             if (approvedCount >= limit) {
-                // If limit is reached, this held commission is now officially Overflowed/Rejected
                 commission.status = 'Rejected';
                 commission.description = `[Overflow] Slot Limit (${limit}) reached for ${planConfig.name}.`;
                 await commission.save();
@@ -82,7 +105,6 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
 
 /**
  * Distributes commissions up the sponsor chain.
- * Enforces referral limits and held status.
  */
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
@@ -103,8 +125,30 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
     };
 
-    const checkInitialEligibility = async (uplineUser, purchasePlanId, level, referralUsername) => {
+    const checkInitialEligibility = async (uplineUser, purchasePlanId, level, referralId) => {
         if (uplineUser.restrictions?.earning) return { status: 'Pending', message: `Commission Held! Earnings paused.` };
+
+        // --- 1. ONE-TIME COMMISSION CHECK (ALL LEVELS) ---
+        if (settings.oneTimeCommissionPerGroup) {
+            const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+            const hasRecurringPlan = (uplineUser.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
+
+            if (!hasRecurringPlan) {
+                const alreadyReceived = await Transaction.findOne({
+                    userId: uplineUser._id,
+                    sourceUserId: referralId,
+                    type: 'Commission',
+                    status: 'Approved'
+                });
+
+                if (alreadyReceived) {
+                    return { 
+                        status: 'Rejected', 
+                        message: `[Limit] One-time commission already received from this user. Upgrade to a recurring-eligible plan to earn again.` 
+                    };
+                }
+            }
+        }
 
         const equivIds = [purchasePlanId.toString()];
         if (settings.planEquivalencyGroups) {
@@ -120,14 +164,14 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
         const qualifyingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
 
-        // 1. Ownership Check
+        // 2. Ownership Check
         if (settings.requirePlanMatchForCommission) {
             if (!qualifyingActivePlan) return { status: 'Pending', message: `Commission Held! Equivalent plan required.` };
         } else if (settings.requireActivePlanForCommission) {
             if ((uplineUser.activePlans || []).length === 0) return { status: 'Pending', message: `Commission Held! Active plan required.` };
         }
 
-        // 2. Direct Referral Limit Check (L1)
+        // 3. Direct Referral Limit Check (L1)
         if (level === 1 && qualifyingActivePlan) {
             const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan.planId));
             const limit = planConfig?.directReferralLimit || 0;
@@ -144,7 +188,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 if (approvedCount >= limit) {
                     return { 
                         status: 'Rejected', 
-                        message: `[Overflow] Slot Limit (${limit}) reached. Sponsor notified.` 
+                        message: `[Overflow] Slot Limit (${limit}) reached for ${planConfig.name}.` 
                     };
                 }
             }
@@ -164,7 +208,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
         if (settings.requireUplineEligibility && level > 0 && !isPreviousUplineEligible) break;
 
-        let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user.username);
+        let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user._id);
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
         let commissionConfig = level === 0 ? (plan.directCommissions?.[0] || {type: 'percentage', value: 0}) : (plan.indirectCommissions || [])[level - 1];
@@ -179,11 +223,11 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
         } else if (eligibility.status === 'Rejected') {
-            // Send specific Overflow Notification
+            // Send Overflow/Limit Notification
             await Notification.create({
                 userId: uplineUser._id,
-                subject: 'Referral Slot Full',
-                message: `Your direct referral slots for ${plan.name} are full (Limit reached). Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} has overflowed. If this referral buys a different plan where you have slots available, you will receive commission normally.`,
+                subject: 'Commission Missed',
+                message: `${eligibility.message.replace('[Limit] ', '').replace('[Overflow] ', '')} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`,
                 isPopup: true
             });
         }
@@ -199,24 +243,19 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
     }
 };
 
-// @desc    Register a new user
 export const createUser = async (req, res, next) => {
     try {
         const { fullName, username, email, password, phone, sponsor, country } = req.body;
-
         if (!country) return res.status(400).json({ success: false, error: 'Country is a required field.' });
-
         if (sponsor) {
             const sponsorExists = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
             if (!sponsorExists) return res.status(400).json({ success: false, error: `Sponsor with username '${sponsor}' not found.` });
             req.body.sponsor = sponsorExists.username;
         }
-
         let currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
         req.body.currency = currency;
         req.body.activePlans = [];
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
-
         const user = await User.create(req.body);
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.fullName}! Account created.` });
         const userResponse = user.toObject(); delete userResponse.password;
@@ -224,7 +263,6 @@ export const createUser = async (req, res, next) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// @desc    Auth user
 export const loginUser = async (req, res, next) => {
     const { email, password } = req.body;
     try {
@@ -251,34 +289,26 @@ export const getUser = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// @desc    Update user & Trigger Held Release
 export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
-
         Object.assign(userToUpdate, req.body);
         let updatedUser = await userToUpdate.save();
-
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
-        
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
             if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
-                comm.status = 'Approved';
-                await comm.save();
-                releasedAmount += comm.amount;
+                comm.status = 'Approved'; await comm.save(); releasedAmount += comm.amount;
             }
         }
-
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
             await Notification.create({ userId: updatedUser._id, message: `Profile update released ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions.` });
         }
-
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -289,15 +319,11 @@ export const adminActivatePlan = async (req, res) => {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
-        
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         let updatedUser = await user.save();
-        
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         await distributeCommissions(updatedUser, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
-        
-        // RELEASE SCAN
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
@@ -321,18 +347,13 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
-        
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         let updatedUser = await user.save();
-        
         await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: 'Plan Purchase', amount: -plan.price, description: `Purchased ${plan.name} plan`, status: 'Approved' });
-        
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         await distributeCommissions(updatedUser, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
-        
-        // RELEASE SCAN
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
@@ -349,7 +370,6 @@ export const purchasePlan = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// ... (Rest of existing controller functions: delete, bulk, password reset)
 export const bulkUpdateRestrictions = async (req, res) => {
     try {
         const { targetType, targetIds, restrictions, action } = req.body;
@@ -357,11 +377,9 @@ export const bulkUpdateRestrictions = async (req, res) => {
         if (targetType === 'all') query = {};
         else if (targetType === 'plan') query = { 'activePlans.planId': { $in: targetIds } };
         else if (targetType === 'single') query = { _id: { $in: targetIds } };
-        
         const usersToUpdate = await User.find(query);
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
-        
         for (const user of usersToUpdate) {
             let currentRestrictions = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
             let hasChange = false;

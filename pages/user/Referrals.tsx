@@ -104,7 +104,7 @@ const Referrals: React.FC = () => {
 
     const isTransactionOverflow = (t: Transaction) => {
         const desc = t.description?.toLowerCase() || '';
-        return t.status === 'Rejected' && desc.includes('overflow');
+        return t.status === 'Rejected' && (desc.includes('overflow') || desc.includes('limit'));
     };
 
     const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
@@ -153,13 +153,16 @@ const Referrals: React.FC = () => {
             t.status === 'Approved' && (!t.relatedPlanId || !contextPlanIds.has(String(t.relatedPlanId)))
         );
 
-        const isOneTimeBlocked = settings.oneTimeCommissionPerGroup && hasPaidElseWhere && !isRecurringReferral && level === 1;
+        const isOneTimeBlocked = settings.oneTimeCommissionPerGroup && hasPaidElseWhere && !isRecurringReferral;
         const shouldRemoveCompletely = isOneTimeBlocked && (earned + held === 0);
         
         let statusText = 'Eligible Team Member';
         if (referral.activePlans && referral.activePlans.length > 0) statusText = 'Active Earner';
         if (isOneTimeBlocked) statusText = 'One-Time Payout Consumed';
-        if (isOverflow) statusText = 'Plan Slot Limit Reached';
+        if (isOverflow) {
+            const desc = overflowTx?.description?.toLowerCase() || '';
+            statusText = desc.includes('limit') ? 'One-Time Limit Reached' : 'Plan Slot Limit Reached';
+        }
 
         return { earned, held, overflow, history: contextComms, isOverflow, isRecurringReferral, shouldRemoveCompletely, statusText, level, relatedPlanId };
     }, [currentUser, transactions, settings, users]);
@@ -250,7 +253,7 @@ const Referrals: React.FC = () => {
             if (info.earned > 0 || info.held > 0) {
                 if (info.level === 1) directEarnersList.push({ ...node, info });
                 else indirectEarnersList.push({ ...node, info });
-            } else if (info.isOverflow && info.level === 1) {
+            } else if (info.isOverflow) {
                 overflowList.push({ ...node, info });
             } else {
                 if (!node.user.activePlans || node.user.activePlans.length === 0) {
@@ -304,6 +307,8 @@ const Referrals: React.FC = () => {
         const hasHeld = totalHeldGlobal > 0;
         const isOverflow = info.isOverflow;
         
+        const isOneTimeLimit = isOverflow && info.history.some((t: any) => t.description?.toLowerCase().includes('limit'));
+
         // Find the specific requirement for this user's locked funds
         const requiredPlan = getRequiredPlanForCommission(info.relatedPlanId);
 
@@ -325,7 +330,7 @@ const Referrals: React.FC = () => {
                                 <h4 className="font-bold text-white flex items-center gap-2 text-xl">
                                     {user.username}
                                     {info.isRecurringReferral && !isHeldView && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
-                                    {isOverflow && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">⚠️ Slot Overflow</span>}
+                                    {isOverflow && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">{isOneTimeLimit ? '⚠️ Limit Reached' : '⚠️ Slot Overflow'}</span>}
                                     {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-3 w-3"><span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
                                 </h4>
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -350,7 +355,7 @@ const Referrals: React.FC = () => {
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
-                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : isOverflow ? 'OVERFLOW INCIDENTS' : 'EARNING TIMELINE BREAKDOWN'}
+                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : isOverflow ? 'ISSUE INCIDENTS' : 'EARNING TIMELINE BREAKDOWN'}
                             </p>
                             {info.held > 0 && !isHeldView && (
                                 <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded-lg border border-orange-500/20">
@@ -420,19 +425,23 @@ const Referrals: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* INFO BOX FOR OVERFLOW */}
+                    {/* INFO BOX FOR OVERFLOW/LIMIT */}
                     {isOverflow && !isHeldView && (
                          <div className="mt-6 p-4 bg-red-600/10 border border-red-500/30 rounded-[1.5rem]">
-                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">CAPACITY REACHED</p>
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">
+                                {isOneTimeLimit ? 'ONE-TIME POLICY ACTIVE' : 'CAPACITY REACHED'}
+                            </p>
                             <p className="text-xs text-gray-300 leading-relaxed font-medium">
-                                Your current plan's direct referral limit was reached during this transaction. 
-                                <strong className="text-white"> To avoid missing future commissions, upgrade to a plan with more slots.</strong>
+                                {isOneTimeLimit ? 
+                                    'This sponsor is configured for one-time commissions. To earn repeatedly from the same referral, you must upgrade to a Recurring-eligible plan.' : 
+                                    "Your current plan's direct referral limit was reached. To avoid missing future commissions, upgrade to a plan with more slots."
+                                }
                             </p>
                             <button 
                                 onClick={() => navigate('/member/plans')}
                                 className="mt-3 text-xs font-black text-blue-500 uppercase hover:underline"
                             >
-                                View Higher Plans &rarr;
+                                View Eligible Plans &rarr;
                             </button>
                         </div>
                     )}
