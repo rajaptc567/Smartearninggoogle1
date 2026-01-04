@@ -15,6 +15,7 @@ const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus
 
 /**
  * Helper: Checks if a held commission can be released.
+ * Enforces: Plan Ownership, Direct Referral Limits, and One-Time Rules.
  */
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
@@ -22,6 +23,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
     let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
     if (!targetPlanId) return false;
 
+    // --- 1. ONE-TIME COMMISSION CHECK ---
     if (settings.oneTimeCommissionPerGroup) {
         const recurringPlanIds = settings.recurringCommissionPlanIds || [];
         const hasRecurringPlan = (user.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
@@ -44,6 +46,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
         }
     }
 
+    // Determine equivalency group IDs
     let equivIds = [targetPlanId];
     if (settings.planEquivalencyGroups) {
         const group = (settings.planEquivalencyGroups || []).find(g => 
@@ -56,6 +59,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
         }
     }
 
+    // 2. Eligibility Check (Ownership)
     const sponsorActivePlanIds = (user.activePlans || []).map(p => String(p.planId));
     const qualifyingActivePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
 
@@ -65,6 +69,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
         if (sponsorActivePlanIds.length === 0) return false;
     }
 
+    // 3. Direct Referral Limit Check (Level 1 only)
     if (commission.level === 1 && qualifyingActivePlan) {
         const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan.planId));
         const limit = planConfig?.directReferralLimit || 0;
@@ -82,6 +87,14 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
                 commission.status = 'Rejected';
                 commission.description = `[Overflow] Slot Limit (${limit}) reached for ${planConfig.name}.`;
                 await commission.save();
+                
+                // Only notify for Level 1
+                await Notification.create({
+                    userId: user._id,
+                    subject: 'Slot Limit Reached',
+                    message: `Held commission from ${commission.userName} overflowed because your slots for ${planConfig.name} are full. Note: You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.`,
+                    isPopup: true
+                });
                 return false;
             }
         }
@@ -115,6 +128,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
     const checkInitialEligibility = async (uplineUser, purchasePlanId, level, referralId) => {
         if (uplineUser.restrictions?.earning) return { status: 'Pending', message: `Commission Held! Earnings paused.` };
 
+        // --- 1. ONE-TIME COMMISSION CHECK (ALL LEVELS) ---
         if (settings.oneTimeCommissionPerGroup) {
             const recurringPlanIds = settings.recurringCommissionPlanIds || [];
             const hasRecurringPlan = (uplineUser.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
@@ -127,7 +141,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     status: 'Approved'
                 });
 
-                if (alreadyReceived) return { status: 'Rejected', message: `[Limit] One-time commission limit reached.` };
+                if (alreadyReceived) {
+                    return { 
+                        status: 'Rejected', 
+                        message: `[Limit] One-time commission limit reached for this referral.` 
+                    };
+                }
             }
         }
 
@@ -138,17 +157,21 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 String(g.pkrPlanId) === purchasePlanId.toString() || 
                 String(g.eurPlanId) === purchasePlanId.toString()
             );
-            if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.push(String(id)));
+            if (group) {
+                [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.push(String(id)));
+            }
         }
 
         const qualifyingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
 
+        // 2. Ownership Check
         if (settings.requirePlanMatchForCommission) {
             if (!qualifyingActivePlan) return { status: 'Pending', message: `Commission Held! Equivalent plan required.` };
         } else if (settings.requireActivePlanForCommission) {
             if ((uplineUser.activePlans || []).length === 0) return { status: 'Pending', message: `Commission Held! Active plan required.` };
         }
 
+        // 3. Direct Referral Limit Check (L1)
         if (level === 1 && qualifyingActivePlan) {
             const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan.planId));
             const limit = planConfig?.directReferralLimit || 0;
@@ -162,7 +185,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     status: 'Approved'
                 });
 
-                if (approvedCount >= limit) return { status: 'Rejected', message: `[Overflow] Slot Limit (${limit}) reached.` };
+                if (approvedCount >= limit) {
+                    return { 
+                        status: 'Rejected', 
+                        message: `[Overflow] Slot Limit (${limit}) reached for ${planConfig.name}.` 
+                    };
+                }
             }
         }
 
@@ -183,12 +211,15 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user._id);
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
+        // --- IMPROVED COMMISSION CONFIG SELECTION ---
         let commissionConfig;
         if (level === 0) {
+            // Direct Referral Logic: Select based on slot index
             const directComms = plan.directCommissions || [];
             if (directComms.length === 0) {
-                commissionConfig = { type: 'percentage', value: 0, enabled: true };
+                commissionConfig = { type: 'percentage', value: 0 };
             } else {
+                // Determine equivalency group IDs for counting slots
                 let targetPlanId = plan._id.toString();
                 let equivIds = [targetPlanId];
                 if (settings.planEquivalencyGroups) {
@@ -197,10 +228,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                         String(g.pkrPlanId) === targetPlanId || 
                         String(g.eurPlanId) === targetPlanId
                     );
-                    if (group) equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+                    if (group) {
+                        equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+                    }
                 }
 
-                // FIX: Count existing slots to pick the correct commission from the admin's list
+                // Count how many Level 1 commissions this sponsor has ALREADY received for this plan group
                 const existingSlotCount = await Transaction.countDocuments({
                     userId: uplineUser._id,
                     type: 'Commission',
@@ -209,17 +242,17 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     status: { $in: ['Approved', 'Pending'] }
                 });
 
+                // Use the slot count as index. If count is 0, gets index 0 (1st ref). 
+                // Cap at the last element if count exceeds defined list.
                 const slotIndex = Math.min(existingSlotCount, directComms.length - 1);
                 commissionConfig = directComms[slotIndex];
             }
         } else {
+            // Indirect logic (standard leveling)
             commissionConfig = (plan.indirectCommissions || [])[level - 1];
         }
 
-        if (!commissionConfig || commissionConfig.enabled === false) {
-            currentUplineUsername = uplineUser.sponsor;
-            continue; 
-        }
+        if (!commissionConfig) break;
 
         const rawAmount = calculateAmount(commissionConfig, plan.price);
         if (rawAmount <= 0) { currentUplineUsername = uplineUser.sponsor; continue; }
@@ -230,13 +263,36 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
         } else if (eligibility.status === 'Rejected') {
+            const isOneTimeHit = eligibility.message.includes('[Limit]');
             const isDirect = (level === 0);
-            await Notification.create({
-                userId: uplineUser._id,
-                subject: 'Commission Missed',
-                message: `${eligibility.message} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`,
-                isPopup: isDirect
-            });
+
+            if (isOneTimeHit && isDirect) {
+                // Fetch recurring plan names for the notification
+                const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+                const recurringPlanNames = allPlans
+                    .filter(p => recurringPlanIds.includes(p._id.toString()))
+                    .map(p => p.name)
+                    .join(', ');
+
+                await Notification.create({
+                    userId: uplineUser._id,
+                    subject: 'One-Time Limit Reached',
+                    message: `Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost. Plz update or join recurring plan (${recurringPlanNames || 'Available Recurring Plans'}) to get repeated Commission everytime your ref upgrade or join more plans.`,
+                    isPopup: true
+                });
+            } else if (!isOneTimeHit || isDirect) {
+                let note = '';
+                if (eligibility.message.includes('[Overflow]')) {
+                    note = ' Note: You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.';
+                }
+
+                await Notification.create({
+                    userId: uplineUser._id,
+                    subject: 'Commission Missed',
+                    message: `${eligibility.message.replace('[Limit] ', '').replace('[Overflow] ', '')} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.${note}`,
+                    isPopup: isDirect
+                });
+            }
         }
 
         await Transaction.create({

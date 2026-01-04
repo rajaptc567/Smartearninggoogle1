@@ -552,7 +552,7 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                             type="number" 
                             value={minReferrals} 
                             onChange={e => setMinReferrals(e.target.value)} 
-                             placeholder="0"
+                            placeholder="0"
                             className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600"
                         />
                     </div>
@@ -573,7 +573,7 @@ interface PlanFormModalProps {
     onSave: (plan: InvestmentPlan) => void;
 }
 
-const defaultCommission: Commission = { type: 'percentage', value: 0, enabled: true };
+const defaultCommission: Commission = { type: 'percentage', value: 0 };
 const defaultPlan: Partial<InvestmentPlan> = {
     name: '',
     currency: 'PKR',
@@ -608,9 +608,8 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         ...defaultPlan,
         ...plan,
         directCommissions: plan.directCommissions && plan.directCommissions.length > 0 
-            ? plan.directCommissions.map(c => ({ ...c, enabled: c.enabled !== false })) 
+            ? plan.directCommissions 
             : (plan.directReferralLimit > 0 ? new Array(plan.directReferralLimit).fill(defaultCommission) : [defaultCommission]),
-        indirectCommissions: (plan.indirectCommissions || []).map(c => ({ ...c, enabled: c.enabled !== false })),
         customFeatures: plan.customFeatures || [],
         displayConfig: plan.displayConfig || { 
             showDuration: true, 
@@ -650,7 +649,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                 if (newComms.length < targetLen) {
                     const fillCount = targetLen - newComms.length;
                     for(let i=0; i<fillCount; i++) {
-                        newComms.push({ type: 'percentage', value: 0, enabled: true });
+                        newComms.push({ type: 'percentage', value: 0 });
                     }
                 } else if (newComms.length > targetLen) {
                     newComms = newComms.slice(0, targetLen);
@@ -663,15 +662,13 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         }
     };
 
-    const handleCommissionChange = (path: string, field: 'type' | 'value' | 'enabled', value: any) => {
+    const handleCommissionChange = (path: string, field: 'type' | 'value', value: string) => {
         const [main, sub] = path.split('.');
         setFormData(prev => {
             const newFormData = { ...prev };
             const commissionObject = (newFormData as any)[main][sub];
             if (field === 'value') {
                 commissionObject.value = parseFloat(value) || 0;
-            } else if (field === 'enabled') {
-                commissionObject.enabled = value;
             } else {
                 commissionObject.type = value as CommissionType;
             }
@@ -679,29 +676,27 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         });
     };
 
-    const handleDirectCommissionChange = (index: number, field: 'type' | 'value' | 'enabled', value: any) => {
+    const handleDirectCommissionChange = (index: number, field: 'type' | 'value', value: string) => {
         setFormData(prev => {
             const newComms = [...(prev!.directCommissions || [])];
             if (!newComms[index]) {
-                newComms[index] = { type: 'percentage', value: 0, enabled: true };
+                newComms[index] = { type: 'percentage', value: 0 };
             }
             newComms[index] = {
                 ...newComms[index],
-                [field]: field === 'value' ? parseFloat(value) || 0 : field === 'enabled' ? value : value as CommissionType
+                [field]: field === 'value' ? parseFloat(value) || 0 : value as CommissionType
             };
             return { ...prev, directCommissions: newComms };
         });
     };
 
-    const handleIndirectCommissionChange = (index: number, field: 'type' | 'value' | 'enabled', value: any) => {
+    const handleIndirectCommissionChange = (index: number, field: 'type' | 'value', value: string) => {
         setFormData(prev => {
             if (!prev) return prev;
             const updatedIndirectCommissions = (prev.indirectCommissions || []).map((commission, i) => {
                 if (i === index) {
                     if (field === 'type') {
                         return { ...commission, type: value as CommissionType };
-                    } else if (field === 'enabled') {
-                        return { ...commission, enabled: value };
                     }
                     return { ...commission, value: parseFloat(value) || 0 };
                 }
@@ -714,7 +709,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const addIndirectLevel = () => {
         setFormData(prev => {
             if (!prev) return prev;
-            const newCommission: Commission = { type: 'percentage', value: 0, enabled: true };
+            const newCommission: Commission = { type: 'percentage', value: 0 };
             const newCommissions = [...(prev.indirectCommissions || []), newCommission];
             return { ...prev, indirectCommissions: newCommissions };
         });
@@ -754,19 +749,16 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const CommissionInput: React.FC<{
         label: string; path: string;
         value: Commission;
-        onChange: (path: string, field: 'type' | 'value' | 'enabled', value: any) => void;
+        onChange: (path: string, field: 'type' | 'value', value: string) => void;
     }> = ({ label, path, value, onChange }) => (
         <div>
             <label className="block text-sm font-medium">{label}</label>
             <div className="flex gap-2 mt-1">
-                <select value={value.type} onChange={(e) => onChange(path, 'type', e.target.value)} className="w-1/3 rounded-md dark:bg-gray-700 dark:border-gray-600">
+                <select value={value.type} onChange={(e) => onChange(path, 'type', e.target.value)} className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600">
                     <option value="percentage">%</option>
                     <option value="fixed">Fixed</option>
                 </select>
-                <input type="number" step="0.01" value={value.value} onChange={(e) => onChange(path, 'value', e.target.value)} placeholder="Value" className="w-1/3 rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                 <div className="w-1/3 flex items-center justify-center">
-                    <ToggleSwitch size="sm" checked={value.enabled !== false} onChange={() => onChange(path, 'enabled', !(value.enabled ?? true))} />
-                </div>
+                <input type="number" step="0.01" value={value.value} onChange={(e) => onChange(path, 'value', e.target.value)} placeholder="Value" className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600" />
             </div>
         </div>
     );
@@ -864,26 +856,20 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                 </fieldset>
 
                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Direct Commissions (Per Slot)</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                    <legend className="px-2 font-semibold">Direct Commissions</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {formData.directCommissions?.map((comm, index) => (
-                            <div key={index} className="flex flex-col gap-1 border-b dark:border-gray-700 pb-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-bold uppercase text-gray-500">
-                                        {formData.directReferralLimit === 0 ? 'Direct Earning Slot' : `Direct Ref #${index + 1}`}
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black uppercase text-gray-400">{comm.enabled !== false ? 'Active' : 'Disabled'}</span>
-                                        <ToggleSwitch size="sm" checked={comm.enabled !== false} onChange={() => handleDirectCommissionChange(index, 'enabled', !(comm.enabled ?? true))} />
-                                    </div>
-                                </div>
+                            <div key={index}>
+                                <label className="block text-sm font-medium">
+                                    {formData.directReferralLimit === 0 ? 'Direct Commission (Standard)' : `Direct Ref #${index + 1}`}
+                                </label>
                                 <div className="flex gap-2 mt-1">
-                                    <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-[80px] rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
+                                    <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-[100px] rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
                                         <option value="percentage">%</option>
-                                        <option value="fixed">Fix</option>
+                                        <option value="fixed">Fixed</option>
                                     </select>
                                     <input type="number" step="0.01" value={comm.value} onChange={(e) => handleDirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
-                                    <span className="flex items-center justify-center w-24 text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md">
+                                    <span className="flex items-center justify-center w-24 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md">
                                         = {formatCurrency(
                                             comm.type === 'percentage'
                                                 ? ((formData.price || 0) * comm.value) / 100
@@ -898,17 +884,17 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                 </fieldset>
 
                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Indirect Commissions (Downline Slots)</legend>
-                    <div className="mt-2 space-y-3">
+                    <legend className="px-2 font-semibold">Indirect Commissions</legend>
+                    <div className="mt-2 space-y-2">
                         {formData.indirectCommissions?.map((comm, index) => (
-                            <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border dark:border-gray-700">
-                                <span className="col-span-2 text-xs font-black uppercase text-gray-500">Lvl {index + 2}:</span>
-                                <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="col-span-2 rounded-md dark:bg-gray-700 dark:border-gray-600 text-xs py-1.5">
+                            <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                                <span className="col-span-2 text-sm font-medium">Level {index + 2}:</span>
+                                <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5">
                                     <option value="percentage">%</option>
-                                    <option value="fixed">Fix</option>
+                                    <option value="fixed">Fixed</option>
                                 </select>
-                                <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="col-span-2 rounded-md dark:bg-gray-700 dark:border-gray-600 text-xs py-1.5" />
-                                <span className="col-span-3 flex items-center justify-center text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md py-1.5">
+                                <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5" />
+                                <span className="col-span-3 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md py-1.5">
                                 = {formatCurrency(
                                     comm.type === 'percentage'
                                         ? ((formData.price || 0) * comm.value) / 100
@@ -916,15 +902,12 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                     formData.currency || 'PKR'
                                 )}
                                 </span>
-                                <div className="col-span-2 flex items-center justify-center">
-                                    <ToggleSwitch size="sm" checked={comm.enabled !== false} onChange={() => handleIndirectCommissionChange(index, 'enabled', !(comm.enabled ?? true))} />
-                                </div>
                                 <div className="col-span-1 text-right">
-                                    <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)} className="py-1 px-2">×</Button>
+                                    <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)} className="py-1 px-2">X</Button>
                                 </div>
                             </div>
                         ))}
-                        <Button type="button" variant="secondary" size="sm" onClick={addIndirectLevel} className="mt-2">+ Add Downline Slot</Button>
+                        <Button type="button" variant="secondary" size="sm" onClick={addIndirectLevel} className="mt-2">+ Add Level</Button>
                     </div>
                 </fieldset>
 
