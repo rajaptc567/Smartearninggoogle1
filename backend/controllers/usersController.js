@@ -92,7 +92,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
                 await Notification.create({
                     userId: user._id,
                     subject: 'Slot Limit Reached',
-                    message: `Held commission from ${commission.userName} overflowed because your slots for ${planConfig.name} are full.`,
+                    message: `Held commission from ${commission.userName} overflowed because your slots for ${planConfig.name} are full. Note: You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.`,
                     isPopup: true
                 });
                 return false;
@@ -228,10 +228,15 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const isDirect = (level === 0);
 
             if (!isOneTimeHit || isDirect) {
+                let note = '';
+                if (eligibility.message.includes('[Overflow]')) {
+                    note = ' Note: You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.';
+                }
+
                 await Notification.create({
                     userId: uplineUser._id,
                     subject: 'Commission Missed',
-                    message: `${eligibility.message.replace('[Limit] ', '').replace('[Overflow] ', '')} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`,
+                    message: `${eligibility.message.replace('[Limit] ', '').replace('[Overflow] ', '')} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.${note}`,
                     isPopup: isDirect
                 });
             }
@@ -475,10 +480,10 @@ export const createBulkDummyUsers = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-export const userRequestPasswordReset = async (req, res) => {
-    const { email } = req.body;
+export const userRequestPasswordReset = async (email) => {
+    const { email: emailInput } = req.body;
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: emailInput });
         if (!user) return res.status(200).json({ success: true, data: 'Admin notified.' });
         await PasswordResetRequest.create({ userId: user._id, userEmail: user.email, userName: user.username });
         res.status(200).json({ success: true, data: 'Sent to admin.' });

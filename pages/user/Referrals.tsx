@@ -133,14 +133,7 @@ const Referrals: React.FC = () => {
             )
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        // A referral is tagged as overflow if ANY commission from them was rejected due to slot limits
-        const globalOverflowTx = referralComms.find(t => isTransactionOverflow(t));
-        const isOverflow = !!globalOverflowTx;
-
-        const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
-        const recurringPlanIds = settings.recurringCommissionPlanIds || [];
-        const isRecurringReferral = !!(oldestComm?.relatedPlanId && recurringPlanIds.includes(String(oldestComm.relatedPlanId)));
-
+        // Context-aware grouping
         const contextComms = referralComms.filter(t => {
             if (contextPlanIds.size === 0) return true;
             if (!t.relatedPlanId) return false;
@@ -151,6 +144,14 @@ const Referrals: React.FC = () => {
         const held = contextComms.filter(t => t.status === 'Pending' && !isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         const overflow = contextComms.filter(t => isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         
+        // REFINED LOGIC: A referral is only an "Overflow Ref" in this scope if they have
+        // triggered an overflow AND have ZERO valid earnings (earned or held) in this scope.
+        const isOverflow = (overflow > 0) && (earned === 0 && held === 0);
+
+        const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
+        const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+        const isRecurringReferral = !!(oldestComm?.relatedPlanId && recurringPlanIds.includes(String(oldestComm.relatedPlanId)));
+
         const pendingComm = contextComms.find(t => t.status === 'Pending');
         const relatedPlanId = pendingComm ? String(pendingComm.relatedPlanId) : null;
 
@@ -164,7 +165,7 @@ const Referrals: React.FC = () => {
         let statusText = 'Eligible Team Member';
         if (referral.activePlans && referral.activePlans.length > 0) statusText = 'Active Earner';
         if (isOneTimeBlocked) statusText = 'One-Time Payout Consumed';
-        if (isOverflow) statusText = 'Plan Slot Capacity Reached';
+        if (isOverflow) statusText = 'You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.';
 
         return { earned, held, overflow, history: contextComms, isOverflow, isRecurringReferral, shouldRemoveCompletely, statusText, level, relatedPlanId };
     }, [currentUser, transactions, settings, users]);
@@ -252,10 +253,8 @@ const Referrals: React.FC = () => {
 
             // Distribution to specific tabs
             if (info.isOverflow) {
-                // Requirement: Add overflow user under overflow tab
                 overflowList.push({ ...node, info });
             } else {
-                // Requirement: remove inactive user from all referral tab
                 const isActive = node.user.activePlans && node.user.activePlans.length > 0;
                 
                 // Member counts for stats (only if not overflow)
@@ -264,7 +263,7 @@ const Referrals: React.FC = () => {
                 if (info.level === 1) directCount++;
                 else indirectCount++;
 
-                // Commission check for Earning tab logic
+                // If they generated commission, they go to Earning Tab
                 if (info.earned > 0 || info.held > 0) {
                     if (info.level === 1) directEarnersList.push({ ...node, info });
                     else indirectEarnersList.push({ ...node, info });
@@ -274,7 +273,7 @@ const Referrals: React.FC = () => {
             }
         });
 
-        // "All Referral" tab logic: Exclude overflow AND inactive users as requested
+        // "All Referral" tab logic: Exclude overflow AND inactive users
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
@@ -285,18 +284,14 @@ const Referrals: React.FC = () => {
         );
 
         // "Ref Tree" logic: synchronized with Earning tab logic
-        // Shows hierarchy including any direct referral OR any indirect who has paid commission.
-        // Paths to indirect earners are preserved.
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                // Requirement: don't show overflow user under ref tree
+                // Don't show overflow in tree
                 if (info.shouldRemoveCompletely || info.isOverflow) return null;
                 
                 const filteredChildren = filterRecursive(node.children);
                 const hasPaidChild = filteredChildren.length > 0;
-                
-                // Requirement: include indirect referral that generate Commission to login user to ref tree tab
                 const hasPaidSelf = info.earned > 0 || info.held > 0;
                 
                 // Keep if direct OR if they/their descendants paid commission
@@ -333,7 +328,10 @@ const Referrals: React.FC = () => {
         const globalHistory = heldStats?.breakdown || [];
         
         const historyToShow = isHeldView ? globalHistory : info.history;
-        const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow && info.earned === 0 ? info.held : info.earned);
+        
+        // Amount logic: 
+        const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow ? info.overflow : info.earned);
+        
         const hasHeld = totalHeldGlobal > 0;
         const isOverflow = info.isOverflow;
 
@@ -700,8 +698,19 @@ const Referrals: React.FC = () => {
                 )}
 
                 {viewMode === 'overflow' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-40 text-center text-gray-400 font-black italic text-xl">You have full capacity in all your levels. No overflow events recorded.</div>}
+                    <div className="space-y-10">
+                         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-10 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row gap-10 items-center border border-white/10">
+                            <div className="w-24 h-24 bg-white/20 backdrop-blur-2xl flex items-center justify-center rounded-[2rem] text-5xl shrink-0 shadow-inner">📈</div>
+                            <div className="text-center md:text-left">
+                                <h4 className="text-3xl font-black uppercase tracking-tighter">Network Capacity Insight</h4>
+                                <p className="text-blue-50/80 font-medium mt-2 leading-relaxed max-w-4xl text-lg">
+                                    The team members listed below have reached your current plan's direct referral limit. <strong className="underline decoration-wavy underline-offset-4 decoration-white/40">You can still earn</strong> from these referrals when a slot is available in any higher plan and your referral buys that plan, then you get commission.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-40 text-center text-gray-400 font-black italic text-xl">You have full capacity in all your levels. No overflow events recorded.</div>}
+                        </div>
                     </div>
                 )}
 
