@@ -263,8 +263,9 @@ const Referrals: React.FC = () => {
                 if (info.level === 1) directCount++;
                 else indirectCount++;
 
-                // If they generated commission, they go to Earning Tab
-                if (info.earned > 0 || info.held > 0) {
+                // If they generated REAL (Approved) commission, they go to Earning Tab
+                // User Request: Do not show held commission refs here.
+                if (info.earned > 0) {
                     if (info.level === 1) directEarnersList.push({ ...node, info });
                     else indirectEarnersList.push({ ...node, info });
                 } else if (!isActive) {
@@ -283,7 +284,7 @@ const Referrals: React.FC = () => {
             n.user.activePlans && n.user.activePlans.length > 0
         );
 
-        // "Ref Tree" logic: synchronized with Earning tab logic
+        // "Ref Tree" logic: synchronized with Earning tab logic (Only approved earners)
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
@@ -292,9 +293,9 @@ const Referrals: React.FC = () => {
                 
                 const filteredChildren = filterRecursive(node.children);
                 const hasPaidChild = filteredChildren.length > 0;
-                const hasPaidSelf = info.earned > 0 || info.held > 0;
+                // Only show if they have APPROVED earnings (Earner Logic)
+                const hasPaidSelf = info.earned > 0;
                 
-                // Keep if they/their descendants paid commission (Earner Logic)
                 if (hasPaidSelf || hasPaidChild) {
                     return { ...node, children: filteredChildren };
                 }
@@ -329,7 +330,7 @@ const Referrals: React.FC = () => {
         
         const historyToShow = isHeldView ? globalHistory : info.history;
         
-        // Amount logic: 
+        // Amount logic
         const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow ? info.overflow : info.earned);
         
         const hasHeld = totalHeldGlobal > 0;
