@@ -113,6 +113,26 @@ export interface Withdrawal {
     matchedDepositIds?: Deposit[];
 }
 
+export type CommissionType = 'percentage' | 'fixed';
+
+export interface Commission {
+    type: CommissionType;
+    value: number;
+    enabled?: boolean; // Added to support per-slot disabling
+}
+
+// Added missing PaymentMethod and related interfaces
+export interface CustomField {
+    title: string;
+    value: string;
+}
+
+export interface HowToStep {
+    title: string;
+    description: string;
+    imageUrl?: string;
+}
+
 export interface PaymentMethod {
     _id: string;
     name: string;
@@ -127,22 +147,11 @@ export interface PaymentMethod {
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
     p2pWithdrawalId?: string;
-    customFields?: { title: string; value: string }[];
+    customFields?: CustomField[];
     howToDeposit?: {
         enabled: boolean;
-        steps: {
-            title: string;
-            description: string;
-            imageUrl?: string;
-        }[];
+        steps: HowToStep[];
     };
-}
-
-export type CommissionType = 'percentage' | 'fixed';
-
-export interface Commission {
-    type: CommissionType;
-    value: number;
 }
 
 export interface InvestmentPlan {
@@ -346,6 +355,7 @@ export interface Settings {
         excludedCurrencies: Currency[];
     };
     tickerHiddenEventIds?: string[];
+    // Fixed: Removed duplicate tickerRealActivityConfig property
     tickerRealActivityTemplates?: {
         deposits: string[];
         withdrawals: string[];
