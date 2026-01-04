@@ -143,6 +143,7 @@ export type CommissionType = 'percentage' | 'fixed';
 export interface Commission {
     type: CommissionType;
     value: number;
+    disabledLevels?: number[]; // Array of levels (1=Direct, 2=Level 2, etc.) disabled for this slot
 }
 
 export interface InvestmentPlan {

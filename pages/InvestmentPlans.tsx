@@ -552,7 +552,7 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                             type="number" 
                             value={minReferrals} 
                             onChange={e => setMinReferrals(e.target.value)} 
-                            placeholder="0"
+                             placeholder="0"
                             className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600"
                         />
                     </div>
@@ -573,7 +573,7 @@ interface PlanFormModalProps {
     onSave: (plan: InvestmentPlan) => void;
 }
 
-const defaultCommission: Commission = { type: 'percentage', value: 0 };
+const defaultCommission: Commission = { type: 'percentage', value: 0, disabledLevels: [] };
 const defaultPlan: Partial<InvestmentPlan> = {
     name: '',
     currency: 'PKR',
@@ -608,7 +608,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         ...defaultPlan,
         ...plan,
         directCommissions: plan.directCommissions && plan.directCommissions.length > 0 
-            ? plan.directCommissions 
+            ? plan.directCommissions.map(c => ({ ...c, disabledLevels: c.disabledLevels || [] })) 
             : (plan.directReferralLimit > 0 ? new Array(plan.directReferralLimit).fill(defaultCommission) : [defaultCommission]),
         customFeatures: plan.customFeatures || [],
         displayConfig: plan.displayConfig || { 
@@ -623,8 +623,11 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
     const [formData, setFormData] = useState<Partial<InvestmentPlan>>(initialPlan);
     const [isSaving, setIsSaving] = useState(false);
     const [newFeature, setNewFeature] = useState('');
+    
+    // Slot control state
+    const [configSlotIndex, setConfigSlotIndex] = useState<number | null>(null);
 
-     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         
         if(name.startsWith('displayConfig.')) {
@@ -649,7 +652,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                 if (newComms.length < targetLen) {
                     const fillCount = targetLen - newComms.length;
                     for(let i=0; i<fillCount; i++) {
-                        newComms.push({ type: 'percentage', value: 0 });
+                        newComms.push({ type: 'percentage', value: 0, disabledLevels: [] });
                     }
                 } else if (newComms.length > targetLen) {
                     newComms = newComms.slice(0, targetLen);
@@ -680,7 +683,7 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         setFormData(prev => {
             const newComms = [...(prev!.directCommissions || [])];
             if (!newComms[index]) {
-                newComms[index] = { type: 'percentage', value: 0 };
+                newComms[index] = { type: 'percentage', value: 0, disabledLevels: [] };
             }
             newComms[index] = {
                 ...newComms[index],
@@ -706,10 +709,24 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         });
     };
 
+    const handleToggleSlotLevel = (slotIdx: number, level: number) => {
+        setFormData(prev => {
+            const newComms = [...(prev!.directCommissions || [])];
+            const disabled = [...(newComms[slotIdx].disabledLevels || [])];
+            
+            const newDisabled = disabled.includes(level) 
+                ? disabled.filter(l => l !== level) 
+                : [...disabled, level];
+                
+            newComms[slotIdx] = { ...newComms[slotIdx], disabledLevels: newDisabled };
+            return { ...prev, directCommissions: newComms };
+        });
+    };
+
     const addIndirectLevel = () => {
         setFormData(prev => {
             if (!prev) return prev;
-            const newCommission: Commission = { type: 'percentage', value: 0 };
+            const newCommission: Commission = { type: 'percentage', value: 0, disabledLevels: [] };
             const newCommissions = [...(prev.indirectCommissions || []), newCommission];
             return { ...prev, indirectCommissions: newCommissions };
         });
@@ -754,199 +771,262 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         <div>
             <label className="block text-sm font-medium">{label}</label>
             <div className="flex gap-2 mt-1">
-                <select value={value.type} onChange={(e) => onChange(path, 'type', e.target.value)} className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600">
+                <select value={value.type} onChange={(e) => onChange(path, 'type', e.target.value)} className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
                     <option value="percentage">%</option>
                     <option value="fixed">Fixed</option>
                 </select>
-                <input type="number" step="0.01" value={value.value} onChange={(e) => onChange(path, 'value', e.target.value)} placeholder="Value" className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                <input type="number" step="0.01" value={value.value} onChange={(e) => onChange(path, 'value', e.target.value)} placeholder="Value" className="w-1/2 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
             </div>
         </div>
     );
     
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <form onSubmit={handleSubmit} className="p-4 space-y-6 max-h-[85vh] overflow-y-auto">
-                <h2 className="text-xl font-bold">{plan ? 'Edit Plan' : 'Create New Plan'}</h2>
-                
-                <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Basic Information</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Plan Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
-                         <div>
-                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
-                            <select
-                                name="currency"
-                                value={formData.currency || 'PKR'}
-                                onChange={handleChange}
-                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
-                                required
-                            >
-                                <option value="PKR">PKR (Rs)</option>
-                                <option value="EUR">EUR (€)</option>
-                                <option value="USD">USD ($)</option>
-                            </select>
-                        </div>
-                        <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} placeholder="Price" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
-                        <input type="number" name="durationDays" value={formData.durationDays || ''} onChange={handleChange} placeholder="Duration (Days, 0=unlimited)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                        <input type="number" step="0.01" name="minWithdraw" value={formData.minWithdraw || ''} onChange={handleChange} placeholder="Min Withdraw" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Direct Referral Limit (0 = Unlimited)</label>
-                            <input type="number" name="directReferralLimit" value={formData.directReferralLimit || ''} onChange={handleChange} placeholder="Limit" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
-                        </div>
-                        <select name="status" value={formData.status} onChange={handleChange} className="md:col-start-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
-                            <option value={Status.Active}>Active</option>
-                            <option value={Status.Disabled}>Disabled</option>
-                        </select>
-                        <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Description" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    </div>
-                </fieldset>
-
-                <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Display Customization</legend>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" name="displayConfig.showDuration" checked={formData.displayConfig?.showDuration} onChange={handleChange} />
-                            <span>Show Duration</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" name="displayConfig.showMinWithdraw" checked={formData.displayConfig?.showMinWithdraw} onChange={handleChange} />
-                            <span>Show Min Withdraw</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" name="displayConfig.showDirectReferrals" checked={formData.displayConfig?.showDirectReferrals} onChange={handleChange} />
-                            <span>Show Direct Referrals</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" name="displayConfig.showDirectCommission" checked={formData.displayConfig?.showDirectCommission} onChange={handleChange} />
-                            <span>Show Direct Commission</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" name="displayConfig.showIndirectCommission" checked={formData.displayConfig?.showIndirectCommission} onChange={handleChange} />
-                            <span>Show Indirect Levels</span>
-                        </label>
-                    </div>
+            <div className="p-4 w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <h2 className="text-xl font-bold">{plan ? 'Edit Plan' : 'Create New Plan'}</h2>
                     
-                    <div className="mt-6 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-600">
-                        <label className="block text-sm font-bold mb-2">Custom Features List</label>
-                        <div className="flex gap-2 mb-3">
-                            <input 
-                                className="flex-grow rounded-md border dark:bg-gray-700 dark:border-gray-600 p-2 text-sm" 
-                                placeholder="e.g., '24/7 Support' or 'VIP Access'" 
-                                value={newFeature}
-                                onChange={(e) => setNewFeature(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
-                            />
-                            <Button type="button" size="sm" onClick={handleAddFeature}>Add</Button>
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Basic Information</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="Plan Name" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Currency</label>
+                                <select
+                                    name="currency"
+                                    value={formData.currency || 'PKR'}
+                                    onChange={handleChange}
+                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                    required
+                                >
+                                    <option value="PKR">PKR (Rs)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="USD">USD ($)</option>
+                                </select>
+                            </div>
+                            <input type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} placeholder="Price" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
+                            <input type="number" name="durationDays" value={formData.durationDays || ''} onChange={handleChange} placeholder="Duration (Days, 0=unlimited)" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            <input type="number" step="0.01" name="minWithdraw" value={formData.minWithdraw || ''} onChange={handleChange} placeholder="Min Withdraw" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required/>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Direct Referral Limit (0 = Unlimited)</label>
+                                <input type="number" name="directReferralLimit" value={formData.directReferralLimit || ''} onChange={handleChange} placeholder="Limit" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                            </div>
+                            <select name="status" value={formData.status} onChange={handleChange} className="md:col-start-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                <option value={Status.Active}>Active</option>
+                                <option value={Status.Disabled}>Disabled</option>
+                            </select>
+                            <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Description" className="md:col-span-2 w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                         </div>
-                        {formData.customFeatures && formData.customFeatures.length > 0 ? (
-                            <ul className="space-y-1 max-h-40 overflow-y-auto">
-                                {formData.customFeatures.map((feat, index) => (
-                                    <li key={index} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 rounded shadow-sm border border-gray-100 dark:border-gray-700 text-sm">
-                                        <span className="truncate mr-2">{feat}</span>
-                                        <button type="button" onClick={() => handleRemoveFeature(index)} className="text-red-500 hover:text-red-700 font-bold px-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
-                                            ×
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                             <p className="text-xs text-gray-400 italic text-center py-2">No custom features added.</p>
-                        )}
-                    </div>
-                </fieldset>
+                    </fieldset>
 
-                <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Direct Commissions</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {formData.directCommissions?.map((comm, index) => (
-                            <div key={index}>
-                                <label className="block text-sm font-medium">
-                                    {formData.directReferralLimit === 0 ? 'Direct Commission (Standard)' : `Direct Ref #${index + 1}`}
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Display Customization</legend>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                            {[
+                                { key: 'showDuration', label: 'Show Duration' },
+                                { key: 'showMinWithdraw', label: 'Show Min Withdraw' },
+                                { key: 'showDirectReferrals', label: 'Show Direct Referrals' },
+                                { key: 'showDirectCommission', label: 'Show Direct Commission' },
+                                { key: 'showIndirectCommission', label: 'Show Indirect Levels' }
+                            ].map(item => (
+                                <label key={item.key} className="flex items-center space-x-2 text-sm">
+                                    <input type="checkbox" name={`displayConfig.${item.key}`} checked={(formData.displayConfig as any)?.[item.key]} onChange={handleChange} />
+                                    <span>{item.label}</span>
                                 </label>
-                                <div className="flex gap-2 mt-1">
-                                    <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-[100px] rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
+                            ))}
+                        </div>
+                        
+                        <div className="mt-6 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-600">
+                            <label className="block text-sm font-bold mb-2">Custom Features List</label>
+                            <div className="flex gap-2 mb-3">
+                                <input 
+                                    className="flex-grow rounded-md border dark:bg-gray-700 dark:border-gray-600 p-2 text-sm" 
+                                    placeholder="e.g., '24/7 Support' or 'VIP Access'" 
+                                    value={newFeature}
+                                    onChange={(e) => setNewFeature(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddFeature())}
+                                />
+                                <Button type="button" size="sm" onClick={handleAddFeature}>Add</Button>
+                            </div>
+                            {formData.customFeatures && formData.customFeatures.length > 0 ? (
+                                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                                    {formData.customFeatures.map((feat, index) => (
+                                        <li key={index} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 rounded shadow-sm border border-gray-100 dark:border-gray-700 text-sm">
+                                            <span className="truncate mr-2">{feat}</span>
+                                            <button type="button" onClick={() => handleRemoveFeature(index)} className="text-red-500 hover:text-red-700 font-bold px-2 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                ×
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-xs text-gray-400 italic text-center py-2">No custom features added.</p>
+                            )}
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Direct Commissions (Per Slot Configuration)</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {formData.directCommissions?.map((comm, index) => (
+                                <div key={index} className="p-3 bg-gray-50 dark:bg-gray-900/40 rounded-lg border dark:border-gray-700">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                                            {formData.directReferralLimit === 0 ? 'Recurring Commission Slot' : `Slot #${index + 1}`}
+                                        </label>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setConfigSlotIndex(index)}
+                                            className="text-xs text-blue-600 hover:underline flex items-center"
+                                        >
+                                            <span className="mr-1">⚙️</span> Configure Downline
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <select value={comm.type} onChange={(e) => handleDirectCommissionChange(index, 'type', e.target.value)} className="w-[80px] rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm">
+                                            <option value="percentage">%</option>
+                                            <option value="fixed">Fixed</option>
+                                        </select>
+                                        <input type="number" step="0.01" value={comm.value} onChange={(e) => handleDirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
+                                        <span className="flex items-center justify-center px-2 text-xs font-bold text-green-600 dark:text-green-400 bg-white dark:bg-gray-800 rounded-md border dark:border-gray-700">
+                                            {formatCurrency(
+                                                comm.type === 'percentage'
+                                                    ? ((formData.price || 0) * comm.value) / 100
+                                                    : comm.value,
+                                                formData.currency || 'PKR'
+                                            )}
+                                        </span>
+                                    </div>
+                                    {comm.disabledLevels && comm.disabledLevels.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                            {comm.disabledLevels.map(lvl => (
+                                                <span key={lvl} className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                    L{lvl} Blocked
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Global Indirect Level Definitions</legend>
+                        <p className="text-xs text-gray-500 mb-3">Define the default commission values for Level 2 and deeper. These levels can be disabled per-slot above.</p>
+                        <div className="space-y-2">
+                            {formData.indirectCommissions?.map((comm, index) => (
+                                <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                                    <span className="col-span-2 text-sm font-medium">Level {index + 2}:</span>
+                                    <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5">
                                         <option value="percentage">%</option>
                                         <option value="fixed">Fixed</option>
                                     </select>
-                                    <input type="number" step="0.01" value={comm.value} onChange={(e) => handleDirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="flex-grow rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm" />
-                                    <span className="flex items-center justify-center w-24 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md">
-                                        = {formatCurrency(
-                                            comm.type === 'percentage'
-                                                ? ((formData.price || 0) * comm.value) / 100
-                                                : comm.value,
-                                            formData.currency || 'PKR'
-                                        )}
+                                    <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5" />
+                                    <span className="col-span-3 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md py-1.5">
+                                    = {formatCurrency(
+                                        comm.type === 'percentage'
+                                            ? ((formData.price || 0) * comm.value) / 100
+                                            : comm.value,
+                                        formData.currency || 'PKR'
+                                    )}
                                     </span>
+                                    <div className="col-span-1 text-right">
+                                        <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)} className="py-1 px-2">X</Button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                </fieldset>
+                            ))}
+                            <Button type="button" variant="secondary" size="sm" onClick={addIndirectLevel} className="mt-2">+ Add Level</Button>
+                        </div>
+                    </fieldset>
 
-                <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Indirect Commissions</legend>
-                    <div className="mt-2 space-y-2">
-                        {formData.indirectCommissions?.map((comm, index) => (
-                            <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                                <span className="col-span-2 text-sm font-medium">Level {index + 2}:</span>
-                                <select value={comm.type} onChange={(e) => handleIndirectCommissionChange(index, 'type', e.target.value)} className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5">
-                                    <option value="percentage">%</option>
-                                    <option value="fixed">Fixed</option>
-                                </select>
-                                <input type="number" step="0.01" value={comm.value} onChange={(e) => handleIndirectCommissionChange(index, 'value', e.target.value)} placeholder="Value" className="col-span-3 rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm py-1.5" />
-                                <span className="col-span-3 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md py-1.5">
-                                = {formatCurrency(
-                                    comm.type === 'percentage'
-                                        ? ((formData.price || 0) * comm.value) / 100
-                                        : comm.value,
-                                    formData.currency || 'PKR'
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Commission Deductions</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <CommissionInput label="After Max Payout" path="commissionDeductions.afterMaxPayout" value={formData.commissionDeductions!.afterMaxPayout} onChange={handleCommissionChange} />
+                            <CommissionInput label="After Max Earning" path="commissionDeductions.afterMaxEarning" value={formData.commissionDeductions!.afterMaxEarning} onChange={handleCommissionChange} />
+                            <CommissionInput label="After Max Direct" path="commissionDeductions.afterMaxDirect" value={formData.commissionDeductions!.afterMaxDirect} onChange={handleCommissionChange} />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="p-4 border rounded-md dark:border-gray-600">
+                        <legend className="px-2 font-semibold">Advanced Options</legend>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="autoUpgrade.enabled" checked={formData.autoUpgrade?.enabled} onChange={handleChange} className="rounded" />
+                                    <span className="text-sm font-medium">Enable Auto Upgrade upon completion</span>
+                                </label>
+                                {formData.autoUpgrade?.enabled && (
+                                    <select 
+                                        name="autoUpgrade.toPlanId" 
+                                        value={formData.autoUpgrade.toPlanId} 
+                                        onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} 
+                                        className="mt-2 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
+                                    >
+                                        <option value="">- Select Target Plan -</option>
+                                        {state.investmentPlans
+                                            .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
+                                            .map(p => (
+                                                <option key={p._id} value={p._id}>
+                                                    {p.name} ({formatCurrency(p.price, p.currency)})
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
                                 )}
-                                </span>
-                                <div className="col-span-1 text-right">
-                                    <Button type="button" variant="danger" size="sm" onClick={() => removeIndirectLevel(index)} className="py-1 px-2">X</Button>
-                                </div>
                             </div>
-                        ))}
-                        <Button type="button" variant="secondary" size="sm" onClick={addIndirectLevel} className="mt-2">+ Add Level</Button>
-                    </div>
-                </fieldset>
+                        </div>
+                    </fieldset>
 
-                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Commission Deductions</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <CommissionInput label="After Max Payout" path="commissionDeductions.afterMaxPayout" value={formData.commissionDeductions!.afterMaxPayout} onChange={handleCommissionChange} />
-                        <CommissionInput label="After Max Earning" path="commissionDeductions.afterMaxEarning" value={formData.commissionDeductions!.afterMaxEarning} onChange={handleCommissionChange} />
-                        <CommissionInput label="After Max Direct" path="commissionDeductions.afterMaxDirect" value={formData.commissionDeductions!.afterMaxDirect} onChange={handleCommissionChange} />
+                    <div className="mt-6 flex justify-end space-x-3 sticky bottom-0 bg-white dark:bg-gray-800 py-4 border-t dark:border-gray-700">
+                        <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+                        <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Investment Plan'}</Button>
                     </div>
-                </fieldset>
+                </form>
+            </div>
 
-                 <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                    <legend className="px-2 font-semibold">Advanced</legend>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="flex items-center space-x-2"><input type="checkbox" name="autoUpgrade.enabled" checked={formData.autoUpgrade?.enabled} onChange={handleChange} /> <span>Enable Auto Upgrade</span></label>
-                            {formData.autoUpgrade?.enabled && (
-                                <select name="autoUpgrade.toPlanId" value={formData.autoUpgrade.toPlanId} onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} className="mt-1 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
-                                    <option value="">- Select Plan -</option>
-                                    {state.investmentPlans
-                                        .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
-                                        .map(p => (
-                                            <option key={p._id} value={p._id}>
-                                                {p.name} ({formatCurrency(p.price, p.currency)})
-                                            </option>
-                                        ))
-                                    }
-                                </select>
-                            )}
+            {/* PER-SLOT DOWNLINE CONFIG MODAL */}
+            {configSlotIndex !== null && (
+                <Modal isOpen={true} onClose={() => setConfigSlotIndex(null)}>
+                    <div className="p-6 w-[400px] max-w-full">
+                        <h3 className="text-lg font-bold mb-2">Slot #{configSlotIndex + 1} Earning Controls</h3>
+                        <p className="text-sm text-gray-500 mb-6">Select which downline levels are ENABLED for commissions in this specific referral slot.</p>
+                        
+                        <div className="space-y-3">
+                            {/* Direct Commission Toggle */}
+                            <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 cursor-pointer hover:bg-gray-100">
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-sm">Level 1 (Direct)</span>
+                                    <span className="text-xs text-gray-500">Value: {formData.directCommissions![configSlotIndex].value}{formData.directCommissions![configSlotIndex].type === 'percentage' ? '%' : ' FIX'}</span>
+                                </div>
+                                <ToggleSwitch 
+                                    checked={!formData.directCommissions![configSlotIndex].disabledLevels?.includes(1)} 
+                                    onChange={() => handleToggleSlotLevel(configSlotIndex, 1)} 
+                                />
+                            </label>
+
+                            {/* Indirect Levels Toggles */}
+                            {(formData.indirectCommissions || []).map((lvl, idx) => (
+                                <label key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 cursor-pointer hover:bg-gray-100">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm">Level {idx + 2} (Indirect)</span>
+                                        <span className="text-xs text-gray-500">Global Value: {lvl.value}{lvl.type === 'percentage' ? '%' : ' FIX'}</span>
+                                    </div>
+                                    <ToggleSwitch 
+                                        checked={!formData.directCommissions![configSlotIndex].disabledLevels?.includes(idx + 2)} 
+                                        onChange={() => handleToggleSlotLevel(configSlotIndex, idx + 2)} 
+                                    />
+                                </label>
+                            ))}
+                        </div>
+
+                        <div className="mt-8 pt-4 border-t dark:border-gray-700 flex justify-end">
+                            <Button onClick={() => setConfigSlotIndex(null)}>Close Configurator</Button>
                         </div>
                     </div>
-                </fieldset>
-
-                 <div className="mt-6 flex justify-end space-x-3">
-                    <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
-                    <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Plan'}</Button>
-                </div>
-            </form>
+                </Modal>
+            )}
         </Modal>
     )
 }

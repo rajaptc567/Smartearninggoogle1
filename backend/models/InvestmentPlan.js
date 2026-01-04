@@ -11,6 +11,10 @@ const CommissionSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    disabledLevels: {
+        type: [Number],
+        default: []
+    }
 }, { _id: false });
 
 const InvestmentPlanSchema = new mongoose.Schema({
