@@ -133,7 +133,7 @@ const Referrals: React.FC = () => {
             )
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        // Context-aware grouping
+        // Context-aware grouping (THIS SCOPE ONLY)
         const contextComms = referralComms.filter(t => {
             if (contextPlanIds.size === 0) return true;
             if (!t.relatedPlanId) return false;
@@ -162,8 +162,14 @@ const Referrals: React.FC = () => {
         const isOneTimeBlocked = settings.oneTimeCommissionPerGroup && hasPaidElseWhere && !isRecurringReferral;
         const shouldRemoveCompletely = isOneTimeBlocked && (earned + held === 0);
         
+        // Context-Aware Status Text
         let statusText = 'Eligible Team Member';
-        if (referral.activePlans && referral.activePlans.length > 0) statusText = 'Active Earner';
+        const isActiveGlobally = referral.activePlans && referral.activePlans.length > 0;
+        const isActiveInScope = referral.activePlans?.some(p => contextPlanIds.has(String(p.planId)));
+
+        if (isActiveInScope) statusText = 'Active Scope Contributor';
+        else if (isActiveGlobally) statusText = 'Active in Different Plan';
+        
         if (isOneTimeBlocked) statusText = 'One-Time Payout Consumed';
         if (isOverflow) statusText = 'You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.';
 
@@ -264,7 +270,6 @@ const Referrals: React.FC = () => {
                 else indirectCount++;
 
                 // If they generated REAL (Approved) commission, they go to Earning Tab
-                // User Request: Strictly don't show held commission refs in Earning tab
                 if (info.earned > 0) {
                     if (info.level === 1) directEarnersList.push({ ...node, info });
                     else indirectEarnersList.push({ ...node, info });
@@ -274,28 +279,26 @@ const Referrals: React.FC = () => {
             }
         });
 
-        // "All Referral" tab logic: Exclude overflow AND inactive users
-        // User Request: strictly don't show overflow refs here.
+        // "All Referral" tab logic: Strictly show contributors to THIS specific scope.
+        // User requested: don't show overflow refs from other scopes here.
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
         })).filter(n => 
             !n.info.shouldRemoveCompletely && 
-            n.info.overflow === 0 && // Explicitly hide anyone with any overflow amount
-            n.user.activePlans && n.user.activePlans.length > 0
+            (n.info.earned > 0 || n.info.held > 0) && // Must have some financial contribution in THIS scope
+            n.info.overflow === 0 // Must NOT be an overflowed ref in THIS scope
         );
 
-        // "Ref Tree" logic: synchronized with Earning tab logic (Only APPROVED earners)
+        // "Ref Tree" logic: synchronized with contribution logic
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
-                // Don't show overflow in tree
                 if (info.shouldRemoveCompletely || info.isOverflow) return null;
                 
                 const filteredChildren = filterRecursive(node.children);
                 const hasPaidChild = filteredChildren.length > 0;
-                // User Request: Ref tree only shows EARNERS (matching Earning tab)
-                const hasPaidSelf = info.earned > 0;
+                const hasPaidSelf = info.earned > 0 || info.held > 0;
                 
                 if (hasPaidSelf || hasPaidChild) {
                     return { ...node, children: filteredChildren };
@@ -670,7 +673,7 @@ const Referrals: React.FC = () => {
                 {viewMode === 'all' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                         {allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />)}
-                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No active team members found for the selected plan scope.</div>}
+                        {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No active team members have contributed to this specific plan scope yet.</div>}
                     </div>
                 )}
 
@@ -695,7 +698,7 @@ const Referrals: React.FC = () => {
 
                 {viewMode === 'tree' && (
                     <div className="bg-white dark:bg-gray-800 p-16 rounded-[4rem] border border-gray-100 dark:border-gray-700 shadow-2xl">
-                        {genealogyTree.length > 0 ? <ul className="space-y-8">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <div className="py-40 text-center text-gray-400 font-black italic text-xl">The architecture map is waiting for your first referral.</div>}
+                        {genealogyTree.length > 0 ? <ul className="space-y-8">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <div className="py-40 text-center text-gray-400 font-black italic text-xl">The architecture map is waiting for your first contributor in this scope.</div>}
                     </div>
                 )}
 
