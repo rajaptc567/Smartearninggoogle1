@@ -211,7 +211,47 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user._id);
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
-        let commissionConfig = level === 0 ? (plan.directCommissions?.[0] || {type: 'percentage', value: 0}) : (plan.indirectCommissions || [])[level - 1];
+        // --- IMPROVED COMMISSION CONFIG SELECTION ---
+        let commissionConfig;
+        if (level === 0) {
+            // Direct Referral Logic: Select based on slot index
+            const directComms = plan.directCommissions || [];
+            if (directComms.length === 0) {
+                commissionConfig = { type: 'percentage', value: 0 };
+            } else {
+                // Determine equivalency group IDs for counting slots
+                let targetPlanId = plan._id.toString();
+                let equivIds = [targetPlanId];
+                if (settings.planEquivalencyGroups) {
+                    const group = (settings.planEquivalencyGroups || []).find(g => 
+                        String(g.usdPlanId) === targetPlanId ||
+                        String(g.pkrPlanId) === targetPlanId || 
+                        String(g.eurPlanId) === targetPlanId
+                    );
+                    if (group) {
+                        equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+                    }
+                }
+
+                // Count how many Level 1 commissions this sponsor has ALREADY received for this plan group
+                const existingSlotCount = await Transaction.countDocuments({
+                    userId: uplineUser._id,
+                    type: 'Commission',
+                    level: 1,
+                    relatedPlanId: { $in: equivIds },
+                    status: { $in: ['Approved', 'Pending'] }
+                });
+
+                // Use the slot count as index. If count is 0, gets index 0 (1st ref). 
+                // Cap at the last element if count exceeds defined list.
+                const slotIndex = Math.min(existingSlotCount, directComms.length - 1);
+                commissionConfig = directComms[slotIndex];
+            }
+        } else {
+            // Indirect logic (standard leveling)
+            commissionConfig = (plan.indirectCommissions || [])[level - 1];
+        }
+
         if (!commissionConfig) break;
 
         const rawAmount = calculateAmount(commissionConfig, plan.price);
