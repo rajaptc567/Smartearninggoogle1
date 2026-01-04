@@ -16,7 +16,7 @@ const transactionTypes = [
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users, investmentPlans } = state;
+    const { users, investmentPlans, transactions, settings } = state;
     
     const isLoading = users.length === 0;
     
@@ -135,6 +135,41 @@ const Users: React.FC = () => {
         });
     }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
 
+    // Check if any plan for a user has reached its limit
+    const getLimitStatus = useCallback((user: User) => {
+        if (!user.activePlans || user.activePlans.length === 0) return null;
+        
+        for (const ap of user.activePlans) {
+            const plan = investmentPlans.find(p => p._id === ap.planId);
+            if (!plan || plan.directReferralLimit <= 0) continue;
+
+            const equivIds = new Set<string>();
+            equivIds.add(ap.planId);
+            const group = settings.planEquivalencyGroups?.find(g =>
+                String(g.usdPlanId) === ap.planId || String(g.pkrPlanId) === ap.planId || String(g.eurPlanId) === ap.planId
+            );
+            if (group) {
+                if (group.usdPlanId) equivIds.add(String(group.usdPlanId));
+                if (group.pkrPlanId) equivIds.add(String(group.pkrPlanId));
+                if (group.eurPlanId) equivIds.add(String(group.eurPlanId));
+            }
+
+            const used = transactions.filter(t => 
+                String(t.userId) === String(user._id) &&
+                t.type === 'Commission' &&
+                t.level === 1 &&
+                t.relatedPlanId &&
+                equivIds.has(String(t.relatedPlanId)) &&
+                t.status === 'Approved'
+            ).length;
+
+            if (used >= plan.directReferralLimit) {
+                return { planName: plan.name, used, limit: plan.directReferralLimit };
+            }
+        }
+        return null;
+    }, [investmentPlans, settings.planEquivalencyGroups, transactions]);
+
     const handleSelectUser = (userId: string) => {
         setSelectedUserIds(prev => {
             const newSet = new Set(prev);
@@ -157,42 +192,6 @@ const Users: React.FC = () => {
             filteredUsers.forEach(u => currentSelectedSet.add(u._id));
             setSelectedUserIds(Array.from(currentSelectedSet));
         }
-    };
-
-    const handleDownloadSelected = () => {
-        if (selectedUserIds.length === 0) return;
-        const usersToExport = users.filter(u => selectedUserIds.includes(u._id));
-        const csvEscape = (field: any): string => {
-            if (field === null || field === undefined) return '""';
-            const str = String(field);
-            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                return `"${str.replace(/"/g, '""')}"`;
-            }
-            return `"${str}"`;
-        };
-        const csvHeaders = ['Username', 'Full Name', 'Email', 'Phone', 'WhatsApp', 'Country', 'Wallet Balance', 'Currency', 'Status'];
-        const csvRows = [
-            csvHeaders.join(','),
-            ...usersToExport.map(user => [
-                csvEscape(user.username),
-                csvEscape(user.fullName),
-                csvEscape(user.email),
-                csvEscape(user.phone),
-                csvEscape(user.whatsapp),
-                csvEscape(user.country),
-                user.walletBalance,
-                csvEscape(user.currency),
-                csvEscape(user.status)
-            ].join(','))
-        ];
-        const csvContent = csvRows.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `exported_users_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
@@ -253,19 +252,17 @@ const Users: React.FC = () => {
                                 {selectedUserIds.length} users selected
                             </span>
                             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                            <Button size="sm" variant="secondary" onClick={handleDownloadSelected}>Download CSV</Button>
                             <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
                                 {isProcessing ? 'Processing...' : 'Delete Selected'}
                             </Button>
                         </div>
                     ) : (
-                        <span className="text-sm text-gray-500">Select users to perform bulk actions</span>
+                        <span className="text-sm text-gray-500">Select users for bulk actions</span>
                     )}
                 </div>
                 <div className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
                     <Button variant="secondary" size="sm" onClick={() => setIsBulkDummyModalOpen(true)}>Bulk Dummy Add</Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleOpenMessage(null)}>Send Announcement</Button>
                     <Button size="sm" onClick={() => handleOpenUserManagementModal(null)}>Add New User</Button>
                 </div>
             </div>
@@ -292,7 +289,9 @@ const Users: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y dark:divide-gray-700 dark:bg-gray-800">
-                                {filteredUsers.map((user: User) => (
+                                {filteredUsers.map((user: User) => {
+                                    const limitStatus = getLimitStatus(user);
+                                    return (
                                     <tr key={user._id} className={`text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${selectedUserIds.includes(user._id) ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
                                         <td className="px-4 py-3">
                                              <input
@@ -305,7 +304,12 @@ const Users: React.FC = () => {
                                         <td className="px-4 py-3">
                                             <div className="flex items-center text-sm">
                                                 <div>
-                                                    <p className="font-bold text-gray-900 dark:text-white">{user.fullName}</p>
+                                                    <p className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                        {user.fullName}
+                                                        {limitStatus && (
+                                                            <span className="animate-pulse px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-black uppercase tracking-tighter" title={`Limit reached for ${limitStatus.planName}`}>LIMIT FULL</span>
+                                                        )}
+                                                    </p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400">@{user.username}</p>
                                                 </div>
                                             </div>
@@ -347,7 +351,7 @@ const Users: React.FC = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                )})}
                             </tbody>
                         </table>
                     </div>
@@ -493,8 +497,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         }
     };
 
-    const handleManualActivatePlan = async () => {
+    const handleManualActivatePlan = async (isBonus = false) => {
         if (!user || !activationPlanId) return;
+        const plan = investmentPlans.find(p => p._id === activationPlanId);
+        if (isBonus && !window.confirm(`Are you sure you want to grant the ${plan?.name} plan as a BONUS upgrade? This will bypass payment and credit all downline commissions.`)) return;
+        
         setIsActivatingPlan(true);
         try {
             const result = await adminActivatePlan(user._id, activationPlanId);
@@ -502,7 +509,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             dispatch({ type: 'ADD_TRANSACTION', payload: result.transaction });
             setFormData(prev => ({ ...prev, activePlans: result.user.activePlans, walletBalance: result.user.walletBalance }));
             setActivationPlanId('');
-            alert(`Plan activated successfully!`);
+            alert(`${isBonus ? 'Bonus upgrade' : 'Plan'} activated successfully!`);
         } catch (error) {
             console.error(error);
             alert(`Failed to activate plan.`);
@@ -566,7 +573,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         const totalRevenue = flatDownline.reduce((sum, item) => sum + item.revenueGenerated, 0);
         const activeCount = flatDownline.filter(item => item.isActive).length;
 
-        // Recursive tree builder using the flat data
         const buildTree = (sponsorUsername: string): any[] => {
             return flatDownline
                 .filter(item => item.user.sponsor === sponsorUsername)
@@ -647,25 +653,42 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         </li>
     );
 
-    const filteredUserTransactions = useMemo(() => {
-        if (!user) return [];
-        return transactions
-            .filter(t => t.userId === user._id)
-            .filter(t => !historyTypeFilter || t.type === historyTypeFilter)
-            .filter(t => !historyStatusFilter || (t.status || 'Approved') === historyStatusFilter)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [user, transactions, historyTypeFilter, historyStatusFilter]);
-
-    const userActivityLogs = useMemo(() => {
-        if (!user) return [];
-        return logs.filter(l => l.affectedUser === user.username || l.performedBy === user.username).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    }, [user, logs]);
-
     const activatablePlans = useMemo(() => {
         if (!user) return [];
         const currentOwnedPlanIds = (formData.activePlans || []).map(p => p.planId.toString());
         return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency && !currentOwnedPlanIds.includes(p._id.toString()));
     }, [user, investmentPlans, formData.activePlans]);
+
+    // Slot usage per active plan
+    const slotStats = useMemo(() => {
+        if (!user || !user.activePlans) return [];
+        return user.activePlans.map(ap => {
+            const plan = investmentPlans.find(p => p._id === ap.planId);
+            if (!plan || plan.directReferralLimit <= 0) return null;
+
+            const equivIds = new Set<string>();
+            equivIds.add(ap.planId);
+            const group = settings.planEquivalencyGroups?.find(g =>
+                String(g.usdPlanId) === ap.planId || String(g.pkrPlanId) === ap.planId || String(g.eurPlanId) === ap.planId
+            );
+            if (group) {
+                if (group.usdPlanId) equivIds.add(String(group.usdPlanId));
+                if (group.pkrPlanId) equivIds.add(String(group.pkrPlanId));
+                if (group.eurPlanId) equivIds.add(String(group.eurPlanId));
+            }
+
+            const used = transactions.filter(t => 
+                String(t.userId) === String(user._id) &&
+                t.type === 'Commission' &&
+                t.level === 1 &&
+                t.relatedPlanId &&
+                equivIds.has(String(t.relatedPlanId)) &&
+                t.status === 'Approved'
+            ).length;
+
+            return { planName: plan.name, used, limit: plan.directReferralLimit };
+        }).filter(Boolean);
+    }, [user, investmentPlans, settings, transactions]);
 
     return (
          <Modal isOpen={true} onClose={onClose}>
@@ -711,6 +734,35 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             </div>
                             {user && (
                                 <div className="space-y-6">
+                                    {/* Slot Usage Visuals */}
+                                    {slotStats.length > 0 && (
+                                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border dark:border-gray-700 shadow-sm">
+                                            <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                                Slot Capacity Audit
+                                            </h3>
+                                            <div className="space-y-4">
+                                                {slotStats.map((stat: any, idx: number) => {
+                                                    const isFull = stat.used >= stat.limit;
+                                                    const percent = Math.min(100, (stat.used / stat.limit) * 100);
+                                                    return (
+                                                        <div key={idx}>
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="text-xs font-bold">{stat.planName}</span>
+                                                                <span className={`text-[10px] font-black uppercase ${isFull ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
+                                                                    {stat.used} / {stat.limit} {isFull ? 'Limit Full' : 'Slots'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full bg-gray-100 dark:bg-gray-900 rounded-full h-1.5 overflow-hidden border dark:border-gray-700">
+                                                                <div className={`h-full transition-all duration-1000 ${isFull ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="bg-gray-50 dark:bg-gray-700/30 p-5 rounded-2xl border dark:border-gray-600">
                                         <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Direct Wallet Adjustment</h3>
                                         <div className="grid grid-cols-2 gap-4">
@@ -734,53 +786,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         </div>
                     )}
 
-                    {activeTab === 'permissions' && user && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-                            <div className="space-y-6">
-                                <section>
-                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Action Restrictions</h4>
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {Object.keys(formData.restrictions || {}).map(key => (
-                                            <label key={key} className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer ${(formData.restrictions as any)[key] ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'}`}>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold capitalize">Block {key}</span>
-                                                    <span className="text-[10px] text-gray-400">Prohibits this action for user</span>
-                                                </div>
-                                                <input type="checkbox" className="w-5 h-5 rounded text-red-600" checked={(formData.restrictions as any)[key]} onChange={() => handleRestrictionsChange(key as keyof UserRestrictions)} />
-                                            </label>
-                                        ))}
-                                    </div>
-                                </section>
-                            </div>
-                            
-                            <div className="space-y-6">
-                                <section className="p-5 bg-gray-50 dark:bg-gray-700/30 rounded-2xl border dark:border-gray-600">
-                                    <h4 className="font-black text-[10px] text-gray-400 uppercase tracking-widest mb-4">Authentication Reset</h4>
-                                    <Button onClick={handleGenerateResetLink} disabled={isGeneratingLink} className="w-full">Generate Password Reset Link</Button>
-                                    {resetLink && (
-                                        <div className="mt-4 p-3 bg-white dark:bg-gray-900 rounded-xl border shadow-inner flex gap-2">
-                                            <input readOnly value={resetLink} className="w-full text-[10px] font-mono bg-transparent border-none p-0 outline-none"/>
-                                            <button onClick={() => {navigator.clipboard.writeText(resetLink); alert('Link Copied');}} className="text-blue-500 font-bold text-xs uppercase shrink-0">Copy</button>
-                                        </div>
-                                    )}
-                                </section>
-
-                                <section className="p-5 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/30">
-                                    <h4 className="font-black text-[10px] text-blue-500 uppercase tracking-widest mb-4">Identity Verification</h4>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Verified Badge Status:</span>
-                                        <button onClick={() => setFormData({...formData, isVerified: !formData.isVerified})} className={`px-4 py-1.5 rounded-full text-xs font-black uppercase transition-all ${formData.isVerified ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-gray-200 text-gray-500'}`}>
-                                            {formData.isVerified ? 'Verified' : 'Unverified'}
-                                        </button>
-                                    </div>
-                                </section>
-                            </div>
-                        </div>
-                    )}
-
                     {activeTab === 'network' && user && (
                          <div className="flex flex-col gap-6 animate-fade-in">
-                             {/* Network Analytics Header */}
                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border dark:border-blue-800 text-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Team Size</p>
@@ -883,7 +890,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                 </div>
 
                                 <div className="lg:col-span-1 space-y-6">
-                                     {/* Activated Plans Portfolio Section */}
                                      <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[2.5rem] border border-indigo-100 dark:border-indigo-900/50 h-fit shadow-lg">
                                         <h4 className="font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
                                             <span className="text-xl">💼</span> Live Plan Portfolio
@@ -914,36 +920,45 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         </div>
                                      </div>
 
-                                     <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/50 h-fit">
+                                     <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/50 h-fit shadow-lg">
                                         <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
-                                            <span className="text-xl">🛡️</span> Grant Plan Access
+                                            <span className="text-xl">🏆</span> Bonus Upgrade
                                         </h4>
-                                        <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-4 font-black uppercase tracking-widest">Manual Administrative Activation</p>
+                                        <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mb-4 font-black uppercase tracking-widest">Administrative Reward Portal</p>
                                         
                                         <div className="space-y-4">
                                             <div>
-                                                <label className="text-[9px] font-black text-gray-400 uppercase block mb-1.5 tracking-tighter ml-1">Available {user?.currency} Plans</label>
+                                                <label className="text-[9px] font-black text-gray-400 uppercase block mb-1.5 tracking-tighter ml-1">Available {user?.currency} Bonus Plans</label>
                                                 <select 
                                                     value={activationPlanId} 
                                                     onChange={e => setActivationPlanId(e.target.value)}
-                                                    className="w-full rounded-2xl dark:bg-gray-800 dark:border-gray-700 text-sm font-bold p-3"
+                                                    className="w-full rounded-2xl dark:bg-gray-800 dark:border-gray-700 text-sm font-bold p-3 border-blue-200"
                                                 >
-                                                    <option value="">-- Choose Target Plan --</option>
+                                                    <option value="">-- Choose Reward Plan --</option>
                                                     {activatablePlans.map(p => (
                                                         <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>
                                                     ))}
-                                                    {activatablePlans.length === 0 && <option disabled>All {user?.currency} plans are already active.</option>}
                                                 </select>
                                             </div>
-                                            <Button 
-                                                onClick={handleManualActivatePlan} 
-                                                disabled={isActivatingPlan || !activationPlanId}
-                                                className="w-full bg-blue-700 hover:bg-blue-800 shadow-xl shadow-blue-500/20 py-4 rounded-2xl font-black uppercase text-xs tracking-widest"
-                                            >
-                                                {isActivatingPlan ? 'Activating...' : 'Activate Selected Plan'}
-                                            </Button>
+                                            <div className="flex gap-2">
+                                                <Button 
+                                                    onClick={() => handleManualActivatePlan(true)} 
+                                                    disabled={isActivatingPlan || !activationPlanId}
+                                                    className="flex-1 bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-xl shadow-blue-500/20 py-4 rounded-2xl font-black uppercase text-xs tracking-widest border-0"
+                                                >
+                                                    {isActivatingPlan ? 'Processing...' : 'Grant Bonus'}
+                                                </Button>
+                                                <Button 
+                                                    onClick={() => handleManualActivatePlan(false)} 
+                                                    disabled={isActivatingPlan || !activationPlanId}
+                                                    variant="secondary"
+                                                    className="flex-1 py-4 rounded-2xl font-black uppercase text-xs tracking-widest"
+                                                >
+                                                    Standard
+                                                </Button>
+                                            </div>
                                             <p className="text-[9px] text-gray-400 italic text-center px-4 leading-relaxed">
-                                                * This will instantly assign the plan without deducting balance. Upline commissions will be distributed normally.
+                                                * Granting a bonus bypasses payment and sends commissions to all upline sponsors.
                                             </p>
                                         </div>
                                      </div>
@@ -957,7 +972,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                             </div>
                                             <Button variant="secondary" onClick={() => setNewSponsorUsername('')} size="sm" className="mb-0.5 rounded-xl">Clear</Button>
                                         </div>
-                                        <p className="text-[9px] text-gray-500 mt-3 italic leading-relaxed">* Changing sponsor will shift commissions for all future purchases to the new upline. Use with caution.</p>
                                     </div>
                                 </div>
                              </div>
@@ -981,7 +995,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                             <tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {filteredUserTransactions.length > 0 ? filteredUserTransactions.map(tx => (
+                                            {transactions.filter(t => t.userId === user._id).map(tx => (
                                                 <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                                     <td className="p-4 font-mono text-gray-400">{new Date(tx.date).toLocaleDateString()}</td>
                                                     <td className="p-4 font-bold">{tx.type}</td>
@@ -989,9 +1003,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                     <td className="p-4 text-center"><Badge status={tx.status as Status || Status.Approved} /></td>
                                                     <td className="p-4 opacity-80 italic">{tx.description}</td>
                                                 </tr>
-                                            )) : (
-                                                <tr><td colSpan={5} className="p-12 text-center text-gray-500 italic">No transactions found matching filters.</td></tr>
-                                            )}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1041,7 +1053,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                     </tr>
                                                 );
                                             }) : (
-                                                <tr><td colSpan={6} className="p-12 text-center text-gray-500 italic text-sm">No commissions have been earned by this member yet.</td></tr>
+                                                <tr><td colSpan={6} className="p-12 text-center text-gray-500 italic text-sm">No commissions recorded.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -1060,16 +1072,14 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                             <tr><th className="p-4">Timestamp</th><th className="p-4">Action</th><th className="p-4">Performed By</th><th className="p-4">Technical Details</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {userActivityLogs.length > 0 ? userActivityLogs.map(log => (
+                                            {logs.filter(l => l.affectedUser === user.username || l.performedBy === user.username).map(log => (
                                                 <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                                     <td className="p-4 font-mono text-gray-400">{new Date(log.timestamp).toLocaleString()}</td>
                                                     <td className="p-4 font-black uppercase tracking-tight">{log.action}</td>
                                                     <td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${log.performedBy === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>{log.performedBy}</span></td>
                                                     <td className="p-4 opacity-80 italic">{log.details}</td>
                                                 </tr>
-                                            )) : (
-                                                <tr><td colSpan={4} className="p-12 text-center text-gray-500 italic">No action logs found for this member.</td></tr>
-                                            )}
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1090,18 +1100,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     </div>
                 </div>
             </div>
-            <style>{`
-                .no-scrollbar::-webkit-scrollbar { display: none; }
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-                @keyframes slide-up {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-slide-up {
-                    animation: slide-up 0.3s ease-out forwards;
-                }
-            `}</style>
         </Modal>
     );
 };
@@ -1215,14 +1213,13 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
     const [balance, setBalance] = useState('0');
     const [country, setCountry] = useState(countries[0]);
     const [currency, setCurrency] = useState<Currency>('PKR');
-    const [planId, setPlanId] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleCreate = async () => {
         if (!sponsor) return alert('Sponsor username is required');
         setIsProcessing(true);
         try {
-            await createBulkDummyUsers({ count: parseInt(count), sponsor, balance: parseFloat(balance), country, currency, planId: planId || undefined });
+            await createBulkDummyUsers({ count: parseInt(count), sponsor, balance: parseFloat(balance), country, currency });
             const updatedUsers = await getUsers();
             dispatch({ type: 'SET_USERS', payload: updatedUsers });
             alert('Bulk dummy users created successfully');
@@ -1247,7 +1244,6 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
                     <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Country</label><select value={country} onChange={e => setCountry(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                     <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Currency</label><select value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="PKR">PKR</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
                 </div>
-                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Auto-Activate Plan (Optional)</label><select value={planId} onChange={e => setPlanId(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="">-- No Plan --</option>{investmentPlans.filter(p => p.currency === currency).map(p => <option key={p._id} value={p._id}>{p.name} ({formatCurrency(p.price, p.currency)})</option>)}</select></div>
                 <div className="pt-4 border-t flex justify-end gap-2">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleCreate} disabled={isProcessing}>{isProcessing ? 'Generating...' : 'Generate Dummy Users'}</Button>
@@ -1336,7 +1332,6 @@ interface DeleteUserModalProps {
 }
 
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
-    const { state } = useData();
     const [isDeleting, setIsDeleting] = useState(false);
     
     const handleConfirm = async () => {
