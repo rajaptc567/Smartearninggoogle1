@@ -130,9 +130,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             }
         }
 
-        // We count how many Level 1 commissions this sponsor has received for this plan group 
-        // PRIOR to (or including) this chain's direct referral.
-        // For simplicity in this logic, we find the index of the direct referral in the sponsor's direct list.
         const directs = await User.find({ sponsor: sponsorUsername }).sort({ registrationDate: 1 });
         const index = directs.findIndex(d => d._id.toString() === purchaserId.toString());
         return index >= 0 ? index : 0;
@@ -175,14 +172,14 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             if ((uplineUser.activePlans || []).length === 0) return { status: 'Pending', message: `Commission Held! Active plan required.` };
         }
 
-        // --- NEW GRANULAR SLOT CONTROL CHECK ---
-        // Find slot index of the direct referral that initiated this chain for this upline
+        // --- GRANULAR SLOT CONTROL CHECK ---
         const slotIndex = await getSlotIndex(uplineUser.username, purchaserDirectOfUplineId, purchasePlanId);
         const directComms = plan.directCommissions || [];
         const slotConfig = directComms[Math.min(slotIndex, directComms.length - 1)];
         
         if (slotConfig && slotConfig.disabledLevels && slotConfig.disabledLevels.includes(level)) {
-            return { status: 'Rejected', message: `[Config] Earning disabled for Slot ${slotIndex + 1} at Level ${level}.` };
+            // FIX: Changed from 'Rejected' to 'Skipped' so that the user does not receive a "lost commission" notification
+            return { status: 'Skipped', message: `[Config] Earning disabled for Slot ${slotIndex + 1} at Level ${level}.` };
         }
 
         if (level === 1 && qualifyingActivePlan) {
@@ -198,7 +195,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     status: 'Approved'
                 });
 
-                if (approvedCount >= limit) return { status: 'Rejected', message: `[Overflow] Slot Limit (${limit}) reached.` };
+                if (approvedCount >= limit) return { status: 'Rejected', message: `[Overflow] Slot Limit reached.` };
             }
         }
 
@@ -206,7 +203,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
     };
 
     let currentUplineUsername = user.sponsor;
-    let purchaserDirectOfUplineId = user._id; // Start with the actual purchaser
+    let purchaserDirectOfUplineId = user._id; 
     const totalCommissionLevels = 1 + (plan.indirectCommissions || []).length;
     let isPreviousUplineEligible = true;
 
@@ -218,6 +215,15 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         if (settings.requireUplineEligibility && level > 0 && !isPreviousUplineEligible) break;
 
         let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user._id, purchaserDirectOfUplineId);
+        
+        // Handle skipped status (Disabled by admin via slot config)
+        if (eligibility.status === 'Skipped') {
+            isPreviousUplineEligible = false; // Count as break in the chain for Pass-Through rules
+            purchaserDirectOfUplineId = uplineUser._id;
+            currentUplineUsername = uplineUser.sponsor;
+            continue; 
+        }
+
         isPreviousUplineEligible = (eligibility.status === 'Approved');
 
         let commissionConfig;
