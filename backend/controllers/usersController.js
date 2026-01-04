@@ -223,11 +223,24 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
         } else if (eligibility.status === 'Rejected') {
-            // Send Notification ONLY IF Direct Referral (Level 1) OR NOT One-Time Limit (e.g. Overflow)
             const isOneTimeHit = eligibility.message.includes('[Limit]');
             const isDirect = (level === 0);
 
-            if (!isOneTimeHit || isDirect) {
+            if (isOneTimeHit && isDirect) {
+                // Fetch recurring plan names for the notification
+                const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+                const recurringPlanNames = allPlans
+                    .filter(p => recurringPlanIds.includes(p._id.toString()))
+                    .map(p => p.name)
+                    .join(', ');
+
+                await Notification.create({
+                    userId: uplineUser._id,
+                    subject: 'One-Time Limit Reached',
+                    message: `Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost. Plz update or join recurring plan (${recurringPlanNames || 'Available Recurring Plans'}) to get repeated Commission everytime your ref upgrade or join more plans.`,
+                    isPopup: true
+                });
+            } else if (!isOneTimeHit || isDirect) {
                 let note = '';
                 if (eligibility.message.includes('[Overflow]')) {
                     note = ' Note: You can still earn from this referral when a slot is available in any higher plan and your referral buys that plan, then you get commission.';

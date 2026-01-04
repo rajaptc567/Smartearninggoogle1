@@ -264,7 +264,7 @@ const Referrals: React.FC = () => {
                 else indirectCount++;
 
                 // If they generated REAL (Approved) commission, they go to Earning Tab
-                // User Request: Do not show held commission refs here.
+                // User Request: Strictly don't show held commission refs in Earning tab
                 if (info.earned > 0) {
                     if (info.level === 1) directEarnersList.push({ ...node, info });
                     else indirectEarnersList.push({ ...node, info });
@@ -275,16 +275,17 @@ const Referrals: React.FC = () => {
         });
 
         // "All Referral" tab logic: Exclude overflow AND inactive users
+        // User Request: strictly don't show overflow refs here.
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
         })).filter(n => 
             !n.info.shouldRemoveCompletely && 
-            !n.info.isOverflow &&
+            n.info.overflow === 0 && // Explicitly hide anyone with any overflow amount
             n.user.activePlans && n.user.activePlans.length > 0
         );
 
-        // "Ref Tree" logic: synchronized with Earning tab logic (Only approved earners)
+        // "Ref Tree" logic: synchronized with Earning tab logic (Only APPROVED earners)
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
@@ -293,7 +294,7 @@ const Referrals: React.FC = () => {
                 
                 const filteredChildren = filterRecursive(node.children);
                 const hasPaidChild = filteredChildren.length > 0;
-                // Only show if they have APPROVED earnings (Earner Logic)
+                // User Request: Ref tree only shows EARNERS (matching Earning tab)
                 const hasPaidSelf = info.earned > 0;
                 
                 if (hasPaidSelf || hasPaidChild) {
