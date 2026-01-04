@@ -294,8 +294,8 @@ const Referrals: React.FC = () => {
                 const hasPaidChild = filteredChildren.length > 0;
                 const hasPaidSelf = info.earned > 0 || info.held > 0;
                 
-                // Keep if direct OR if they/their descendants paid commission
-                if (info.level === 1 || hasPaidSelf || hasPaidChild) {
+                // Keep if they/their descendants paid commission (Earner Logic)
+                if (hasPaidSelf || hasPaidChild) {
                     return { ...node, children: filteredChildren };
                 }
                 return null;
