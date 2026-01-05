@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan } from '../types';
 import Table from '../components/ui/Table';
@@ -395,9 +394,19 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const { users, transactions, investmentPlans, settings, logs } = state;
 
     const [activeTab, setActiveTab] = useState<'profile' | 'permissions' | 'network' | 'transactions' | 'commissions' | 'activity'>('profile');
-    const [formData, setFormData] = useState<Partial<User>>(
-        user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0, restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false } }
-    );
+    
+    // Robust initialization of formData, ensuring restrictions is always an object
+    const [formData, setFormData] = useState<Partial<User>>(() => {
+        const base = user || { fullName: '', username: '', email: '', phone: '', whatsapp: '', country: '', status: Status.Active, walletBalance: 0 };
+        return {
+            ...base,
+            restrictions: {
+                deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false,
+                ...(user?.restrictions || {})
+            }
+        };
+    });
+    
     const [isSaving, setIsSaving] = useState(false);
 
     // Wallet Adjustment State
@@ -431,7 +440,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         setFormData(prev => ({
             ...prev,
             restrictions: {
-                ...prev.restrictions!,
+                ...(prev.restrictions as UserRestrictions),
                 [key]: !prev.restrictions![key]
             }
         }));
@@ -783,6 +792,94 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {activeTab === 'permissions' && user && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+                            {/* Restrictions Section */}
+                            <div className="space-y-6">
+                                <div>
+                                    <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Activity Restrictions</h3>
+                                    <p className="text-xs text-gray-400 mb-4">Toggle checkboxes to block specific member capabilities. Checked means the action is BLOCKED.</p>
+                                    
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'login', label: 'Block Account Access', desc: 'Prevent user from logging in' },
+                                            { key: 'deposit', label: 'Block Deposits', desc: 'Disable deposit form for user' },
+                                            { key: 'withdrawal', label: 'Block Withdrawals', desc: 'Disable withdrawal form for user' },
+                                            { key: 'transfer', label: 'Block Transfers', desc: 'Disable sending funds to others' },
+                                            { key: 'purchase', label: 'Block Plan Purchases', desc: 'Disable buying new plans' },
+                                            { key: 'earning', label: 'Block Commissions', desc: 'Pause all referral earnings' },
+                                            { key: 'dispute', label: 'Block Disputes', desc: 'Prevent opening new support tickets' },
+                                        ].map((item) => (
+                                            <div key={item.key} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">{item.label}</p>
+                                                    <p className="text-[10px] text-gray-500">{item.desc}</p>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!formData.restrictions?.[item.key as keyof UserRestrictions]} 
+                                                    onChange={() => handleRestrictionsChange(item.key as keyof UserRestrictions)}
+                                                    className="w-5 h-5 rounded text-red-600 focus:ring-red-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Security & Visibility Section */}
+                            <div className="space-y-8">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border dark:border-gray-700 shadow-sm">
+                                    <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Password Security</h3>
+                                    <div className="space-y-4">
+                                        <p className="text-xs text-gray-500 leading-relaxed">Generate a one-time secure link to allow the user to reset their password without admin knowing the new one.</p>
+                                        
+                                        {!resetLink ? (
+                                            <Button 
+                                                variant="secondary" 
+                                                className="w-full py-3 rounded-2xl font-bold text-xs uppercase tracking-widest"
+                                                onClick={handleGenerateResetLink}
+                                                disabled={isGeneratingLink}
+                                            >
+                                                {isGeneratingLink ? 'Generating...' : 'Generate Reset Link'}
+                                            </Button>
+                                        ) : (
+                                            <div className="space-y-3 animate-slide-up">
+                                                <div className="flex gap-2">
+                                                    <input 
+                                                        type="text" 
+                                                        readOnly 
+                                                        value={resetLink} 
+                                                        className="flex-grow text-xs font-mono p-3 bg-gray-50 dark:bg-gray-900 border dark:border-gray-600 rounded-xl"
+                                                    />
+                                                    <Button size="sm" onClick={() => { navigator.clipboard.writeText(resetLink); alert('Copied!'); }}>Copy</Button>
+                                                </div>
+                                                <p className="text-[10px] text-amber-600 font-bold uppercase italic">* Send this link to the user. Valid for 48 hours.</p>
+                                                <Button variant="secondary" size="sm" onClick={() => setResetLink('')}>Generate New</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/40">
+                                    <h3 className="font-black text-xs uppercase text-blue-600 dark:text-blue-300 tracking-widest mb-4">Public Visibility</h3>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white">Exclude from Activity Ticker</p>
+                                            <p className="text-[10px] text-gray-500 max-w-[200px]">Hide this user's deposits, withdrawals, and joins from the homepage ticker.</p>
+                                        </div>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={!!formData.restrictions?.excludeFromTicker} 
+                                            onChange={() => handleRestrictionsChange('excludeFromTicker')}
+                                            className="w-6 h-6 rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 
