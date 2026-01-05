@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -22,7 +21,7 @@ const PaymentMethods: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
-    const [typeFilter, setTypeFilter] = useState<'Deposit' | 'Withdrawal' | ''>('');
+    const [typeFilter, setTypeFilter] = useState<'Deposit' | 'Withdrawal' | 'P2P' | ''>('');
     const [statusFilter, setStatusFilter] = useState<'Enabled' | 'Disabled' | ''>('');
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -84,7 +83,13 @@ const PaymentMethods: React.FC = () => {
     
     const filteredMethods = paymentMethods.filter(method => {
         const matchesCurrency = !currencyFilter || method.currency?.toUpperCase() === currencyFilter;
-        const matchesType = !typeFilter || method.type === typeFilter;
+        
+        const matchesType = (() => {
+            if (!typeFilter) return true;
+            if (typeFilter === 'P2P') return !!method.p2pWithdrawalId;
+            return method.type === typeFilter;
+        })();
+
         const matchesStatus = !statusFilter || method.status === statusFilter;
         return matchesCurrency && matchesType && matchesStatus;
     });
@@ -106,12 +111,13 @@ const PaymentMethods: React.FC = () => {
                     </select>
                      <select
                         value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value as 'Deposit' | 'Withdrawal' | '')}
+                        onChange={(e) => setTypeFilter(e.target.value as 'Deposit' | 'Withdrawal' | 'P2P' | '')}
                         className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
                         <option value="">All Types</option>
                         <option value="Deposit">Deposit</option>
                         <option value="Withdrawal">Withdrawal</option>
+                        <option value="P2P">P2P Matching</option>
                     </select>
                     <select
                         value={statusFilter}
