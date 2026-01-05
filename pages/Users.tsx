@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan } from '../types';
+import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan, currencySymbols } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -159,7 +159,7 @@ const Users: React.FC = () => {
                 t.level === 1 &&
                 t.relatedPlanId &&
                 equivIds.has(String(t.relatedPlanId)) &&
-                t.status === 'Approved'
+                (t.status === 'Approved' || t.status === 'Pending')
             ).length;
 
             if (used >= plan.directReferralLimit) {
@@ -393,7 +393,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const { state, dispatch } = useData();
     const { users, transactions, investmentPlans, settings, logs } = state;
 
-    const [activeTab, setActiveTab] = useState<'profile' | 'permissions' | 'network' | 'transactions' | 'commissions' | 'activity'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'permissions' | 'team' | 'network' | 'transactions' | 'commissions' | 'activity'>('profile');
     
     // Robust initialization of formData, ensuring restrictions is always an object
     const [formData, setFormData] = useState<Partial<User>>(() => {
@@ -417,8 +417,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [resetLink, setResetLink] = useState('');
     const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
-    // Network Tab Advanced State
-    const [networkSearch, setNetworkSearch] = useState('');
+    // Network Tab Advanced State (The member-side view logic)
+    const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+    const [networkViewMode, setNetworkViewMode] = useState<'earning' | 'all' | 'held' | 'tree' | 'overflow' | 'inactive'>('earning');
+
+    // Team & Hierarchy Tab State (The original admin side logic)
+    const [teamSearch, setTeamSearch] = useState('');
     const [isTreeView, setIsTreeView] = useState(true);
     const [drilldownMemberId, setDrilldownMemberId] = useState<string | null>(null);
 
@@ -430,6 +434,22 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     const [activationPlanId, setActivationPlanId] = useState('');
     const [isActivatingPlan, setIsActivatingPlan] = useState(false);
     const [newSponsorUsername, setNewSponsorUsername] = useState(user?.sponsor || '');
+
+    const uniqueActivePlans = useMemo(() => {
+        if (!user || !user.activePlans) return [];
+        const seen = new Set();
+        return user.activePlans.filter(p => {
+            const duplicate = seen.has(p.planId);
+            seen.add(p.planId);
+            return !duplicate;
+        });
+    }, [user]);
+
+    useEffect(() => {
+        if (uniqueActivePlans.length > 0 && !selectedPlanId) {
+            setSelectedPlanId(uniqueActivePlans[0].planId);
+        }
+    }, [uniqueActivePlans, selectedPlanId]);
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -548,8 +568,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         <button type="button" onClick={() => setActiveTab(tabId)} className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === tabId ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>{children}</button>
     );
 
-    // --- Advanced Network Logic ---
-    const networkData = useMemo(() => {
+    // --- Team & Hierarchy Logic (The Original Admin View) ---
+    const teamData = useMemo(() => {
         if (!user) return { tree: [], flat: [], stats: { total: 0, revenue: 0, active: 0 } };
         
         const myCommissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission');
@@ -603,11 +623,11 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     }, [user, users, transactions]);
 
     const filteredFlatDownline = useMemo(() => {
-        return networkData.flat.filter(item => 
-            item.user.username.toLowerCase().includes(networkSearch.toLowerCase()) ||
-            item.user.fullName.toLowerCase().includes(networkSearch.toLowerCase())
+        return teamData.flat.filter(item => 
+            item.user.username.toLowerCase().includes(teamSearch.toLowerCase()) ||
+            item.user.fullName.toLowerCase().includes(teamSearch.toLowerCase())
         );
-    }, [networkData.flat, networkSearch]);
+    }, [teamData.flat, teamSearch]);
 
     const drilldownTransactions = useMemo(() => {
         if (!drilldownMemberId || !user) return [];
@@ -618,14 +638,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [drilldownMemberId, transactions, user]);
 
-    const userCommissions = useMemo(() => {
-        if (!user) return [];
-        return transactions
-            .filter(t => t.userId === user._id && t.type === 'Commission')
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [user, transactions]);
-
-    const renderTreeNode = (node: any) => (
+    const renderTeamTreeNode = (node: any) => (
         <li key={node.user._id} className="relative pl-6 pt-4">
             <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
             <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
@@ -649,16 +662,125 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         <button onClick={() => onNavigateToUser?.(node.user)} className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Manage Member"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
                     </div>
                 </div>
-                
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     <div className="p-1.5 bg-gray-50 dark:bg-gray-900 rounded">Balance: <span className="text-gray-900 dark:text-white">{formatCurrency(node.user.walletBalance, node.user.currency)}</span></div>
                     <div className="p-1.5 bg-gray-50 dark:bg-gray-900 rounded">Active: <span className="text-gray-900 dark:text-white">{node.user.activePlans?.length || 0} Plans</span></div>
                 </div>
             </div>
-
             {node.children.length > 0 && (
-                <ul className="ml-4">{node.children.map(child => renderTreeNode(child))}</ul>
+                <ul className="ml-4">{node.children.map(child => renderTeamTreeNode(child))}</ul>
             )}
+        </li>
+    );
+
+    // --- My Network Logic (Ported from Referrals.tsx) ---
+    const getEquivalentIds = useCallback((planId: string) => {
+        const ids = new Set<string>();
+        if (planId) {
+            ids.add(planId);
+            const group = settings.planEquivalencyGroups?.find(g =>
+                String(g.usdPlanId) === planId || String(g.pkrPlanId) === planId || String(g.eurPlanId) === planId
+            );
+            if (group) {
+                if (group.usdPlanId) ids.add(String(group.usdPlanId));
+                if (group.pkrPlanId) ids.add(String(group.pkrPlanId));
+                if (group.eurPlanId) ids.add(String(group.eurPlanId));
+            }
+        }
+        return ids;
+    }, [settings.planEquivalencyGroups]);
+
+    const getCommissionInfoForReferral = useCallback((referral: User, contextPlanIds: Set<string>) => {
+        if (!user) return null;
+        
+        const findLevel = (sponsor: string, targetId: string, currentLvl: number): number => {
+            const directs = users.filter(u => u.sponsor === sponsor);
+            if (directs.some(u => u._id === targetId)) return currentLvl;
+            for (const d of directs) {
+                const lvl = findLevel(d.username, targetId, currentLvl + 1);
+                if (lvl > 0) return lvl;
+            }
+            return 0;
+        };
+        const level = findLevel(user.username, referral._id, 1);
+
+        const referralComms = transactions.filter(t => 
+            String(t.userId) === String(user._id) &&
+            t.type === 'Commission' &&
+            t.sourceUserId && String(t.sourceUserId) === String(referral._id)
+        );
+
+        const contextComms = referralComms.filter(t => {
+            if (contextPlanIds.size === 0) return true;
+            if (!t.relatedPlanId) return false;
+            return contextPlanIds.has(String(t.relatedPlanId));
+        });
+
+        const earned = contextComms.filter(t => t.status === 'Approved').reduce((sum, t) => sum + t.amount, 0);
+        const held = contextComms.filter(t => t.status === 'Pending' && !t.description.toLowerCase().includes('overflow')).reduce((sum, t) => sum + t.amount, 0);
+        const overflow = contextComms.filter(t => t.description.toLowerCase().includes('overflow')).reduce((sum, t) => sum + t.amount, 0);
+        
+        const isOverflow = (overflow > 0) && (earned === 0 && held === 0);
+
+        return { earned, held, overflow, history: contextComms, isOverflow, level };
+    }, [user, transactions, users]);
+
+    const networkAnalytics = useMemo(() => {
+        if (!user) return null;
+        const equivIds = getEquivalentIds(selectedPlanId);
+
+        const buildTree = (sponsorUsername: string, level: number): any[] => {
+            const children = users.filter(u => u.sponsor === sponsorUsername);
+            return children.map(child => ({
+                user: child,
+                children: buildTree(child.username, level + 1),
+                level,
+                info: getCommissionInfoForReferral(child, equivIds)
+            }));
+        };
+
+        const fullTree = buildTree(user.username, 1);
+        const flattened: any[] = [];
+        const flatten = (nodes: any[]) => nodes.forEach(n => { flattened.push(n); flatten(n.children); });
+        flatten(fullTree);
+
+        const earned = flattened.reduce((sum, n) => sum + (n.info?.earned || 0), 0);
+        const held = flattened.reduce((sum, n) => sum + (n.info?.held || 0), 0);
+        const directs = flattened.filter(n => n.level === 1).length;
+
+        return { tree: fullTree, flat: flattened, stats: { earned, held, directs } };
+    }, [user, selectedPlanId, users, getEquivalentIds, getCommissionInfoForReferral]);
+
+    const renderReferralCard = (node: any) => {
+        const { user: refUser, info, level } = node;
+        const symbol = currencySymbols[user?.currency || 'USD'];
+        
+        return (
+            <div className={`p-4 rounded-3xl border mb-4 bg-gray-50 dark:bg-gray-900 border-l-8 ${info.held > 0 ? 'border-l-orange-500' : info.isOverflow ? 'border-l-red-500' : level === 1 ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
+                <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-black">{refUser.username.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <p className="font-bold text-gray-900 dark:text-white">@{refUser.username} <span className="text-[10px] text-gray-500 ml-1 uppercase">Lvl {level}</span></p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{refUser.fullName}</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-[9px] font-black text-gray-400 uppercase">Scoped Earnings</p>
+                        <p className={`font-black ${info.earned > 0 ? 'text-green-600' : 'text-gray-400'}`}>{symbol} {info.earned.toFixed(2)}</p>
+                        {info.held > 0 && <p className="text-[9px] font-bold text-orange-500">Held: {symbol}{info.held.toFixed(2)}</p>}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderTreeItem = (node: any) => (
+        <li key={node.user._id} className="relative pl-6 pt-4">
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
+            <div className="absolute left-0 top-8 w-4 h-px bg-gray-200 dark:bg-gray-700 -ml-3"></div>
+            {renderReferralCard(node)}
+            {node.children.length > 0 && <ul className="ml-4">{node.children.map((c: any) => renderTreeItem(c))}</ul>}
         </li>
     );
 
@@ -667,37 +789,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         const currentOwnedPlanIds = (formData.activePlans || []).map(p => p.planId.toString());
         return investmentPlans.filter(p => p.status === 'Active' && p.currency === user.currency && !currentOwnedPlanIds.includes(p._id.toString()));
     }, [user, investmentPlans, formData.activePlans]);
-
-    // Slot usage per active plan
-    const slotStats = useMemo(() => {
-        if (!user || !user.activePlans) return [];
-        return user.activePlans.map(ap => {
-            const plan = investmentPlans.find(p => p._id === ap.planId);
-            if (!plan || plan.directReferralLimit <= 0) return null;
-
-            const equivIds = new Set<string>();
-            equivIds.add(ap.planId);
-            const group = settings.planEquivalencyGroups?.find(g =>
-                String(g.usdPlanId) === ap.planId || String(g.pkrPlanId) === ap.planId || String(g.eurPlanId) === ap.planId
-            );
-            if (group) {
-                if (group.usdPlanId) equivIds.add(String(group.usdPlanId));
-                if (group.pkrPlanId) equivIds.add(String(group.pkrPlanId));
-                if (group.eurPlanId) equivIds.add(String(group.eurPlanId));
-            }
-
-            const used = transactions.filter(t => 
-                String(t.userId) === String(user._id) &&
-                t.type === 'Commission' &&
-                t.level === 1 &&
-                t.relatedPlanId &&
-                equivIds.has(String(t.relatedPlanId)) &&
-                t.status === 'Approved'
-            ).length;
-
-            return { planName: plan.name, used, limit: plan.directReferralLimit };
-        }).filter(Boolean);
-    }, [user, investmentPlans, settings, transactions]);
 
     return (
          <Modal isOpen={true} onClose={onClose}>
@@ -718,14 +809,15 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     <nav className="-mb-px flex space-x-2">
                         <TabButton tabId="profile">Basic Profile</TabButton>
                         {user && <TabButton tabId="permissions">Security & Controls</TabButton>}
-                        {user && <TabButton tabId="network">Team & Hierarchy</TabButton>}
+                        {user && <TabButton tabId="team">Team & Hierarchy</TabButton>}
+                        {user && <TabButton tabId="network">My Network</TabButton>}
                         {user && <TabButton tabId="transactions">Financials</TabButton>}
                         {user && <TabButton tabId="commissions">Commissions</TabButton>}
                         {user && <TabButton tabId="activity">Action Logs</TabButton>}
                     </nav>
                 </div>
 
-                <div className="flex-grow overflow-y-auto pt-6 space-y-6 px-1">
+                <div className="flex-grow overflow-y-auto pt-6 space-y-6 px-1 custom-scrollbar">
                     {activeTab === 'profile' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-4">
@@ -743,35 +835,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             </div>
                             {user && (
                                 <div className="space-y-6">
-                                    {/* Slot Usage Visuals */}
-                                    {slotStats.length > 0 && (
-                                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border dark:border-gray-700 shadow-sm">
-                                            <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                                Slot Capacity Audit
-                                            </h3>
-                                            <div className="space-y-4">
-                                                {slotStats.map((stat: any, idx: number) => {
-                                                    const isFull = stat.used >= stat.limit;
-                                                    const percent = Math.min(100, (stat.used / stat.limit) * 100);
-                                                    return (
-                                                        <div key={idx}>
-                                                            <div className="flex justify-between items-center mb-1">
-                                                                <span className="text-xs font-bold">{stat.planName}</span>
-                                                                <span className={`text-[10px] font-black uppercase ${isFull ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
-                                                                    {stat.used} / {stat.limit} {isFull ? 'Limit Full' : 'Slots'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="w-full bg-gray-100 dark:bg-gray-900 rounded-full h-1.5 overflow-hidden border dark:border-gray-700">
-                                                                <div className={`h-full transition-all duration-1000 ${isFull ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${percent}%` }}></div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="bg-gray-50 dark:bg-gray-700/30 p-5 rounded-2xl border dark:border-gray-600">
                                         <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Direct Wallet Adjustment</h3>
                                         <div className="grid grid-cols-2 gap-4">
@@ -797,7 +860,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
 
                     {activeTab === 'permissions' && user && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-                            {/* Restrictions Section */}
                             <div className="space-y-6">
                                 <div>
                                     <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Activity Restrictions</h3>
@@ -830,7 +892,6 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                 </div>
                             </div>
 
-                            {/* Security & Visibility Section */}
                             <div className="space-y-8">
                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border dark:border-gray-700 shadow-sm">
                                     <h3 className="font-black text-xs uppercase text-gray-500 tracking-widest mb-4">Password Security</h3>
@@ -883,28 +944,28 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                         </div>
                     )}
 
-                    {activeTab === 'network' && user && (
-                         <div className="flex flex-col gap-6 animate-fade-in">
-                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {activeTab === 'team' && user && (
+                        <div className="flex flex-col gap-6 animate-fade-in">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border dark:border-blue-800 text-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Team Size</p>
-                                    <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{networkData.stats.total}</p>
+                                    <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{teamData.stats.total}</p>
                                 </div>
                                 <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-2xl border dark:border-green-800 text-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Network Revenue</p>
-                                    <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(networkData.stats.revenue, user.currency)}</p>
+                                    <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(teamData.stats.revenue, user.currency)}</p>
                                 </div>
                                 <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border dark:border-purple-800 text-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Active Earners</p>
-                                    <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{networkData.stats.active}</p>
+                                    <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{teamData.stats.active}</p>
                                 </div>
                                 <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border dark:border-indigo-800 text-center">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Team Sponsor</p>
                                     <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 truncate">@{user.sponsor || 'None'}</p>
                                 </div>
-                             </div>
+                            </div>
 
-                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-2 space-y-4">
                                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-gray-700/30 p-4 rounded-2xl border dark:border-gray-600">
                                         <div className="flex items-center gap-2">
@@ -916,8 +977,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                 type="text" 
                                                 placeholder="Search members..." 
                                                 className="w-full text-xs font-bold rounded-xl dark:bg-gray-800 dark:border-gray-700 pl-8" 
-                                                value={networkSearch}
-                                                onChange={e => setNetworkSearch(e.target.value)}
+                                                value={teamSearch}
+                                                onChange={e => setTeamSearch(e.target.value)}
                                             />
                                             <svg className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                         </div>
@@ -961,7 +1022,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         <div className="bg-white dark:bg-gray-800 p-6 rounded-[2.5rem] border dark:border-gray-700 h-[450px] overflow-y-auto custom-scrollbar">
                                             {isTreeView ? (
                                                 <ul className="space-y-4">
-                                                    {networkData.tree.length > 0 ? networkData.tree.map(node => renderTreeNode(node)) : <p className="text-center py-20 text-gray-500 italic">No network downline detected.</p>}
+                                                    {teamData.tree.length > 0 ? teamData.tree.map(node => renderTeamTreeNode(node)) : <p className="text-center py-20 text-gray-500 italic">No network downline detected.</p>}
                                                 </ul>
                                             ) : (
                                                 <div className="space-y-3">
@@ -1072,7 +1133,83 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                     </div>
                                 </div>
                              </div>
-                         </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'network' && user && networkAnalytics && (
+                        <div className="space-y-8 animate-fade-in">
+                            <div className="flex flex-col md:flex-row justify-between gap-6">
+                                <div className="flex-grow bg-[#0f172a] p-6 rounded-[2.5rem] border border-gray-800 shadow-xl">
+                                    <div className="flex flex-wrap gap-2 justify-center">
+                                        {uniqueActivePlans.map(p => (
+                                            <button key={p.planId} onClick={() => setSelectedPlanId(p.planId)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border-2 ${selectedPlanId === p.planId ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-gray-800 border-gray-700 text-gray-500 hover:text-white'}`}>{p.planName}</button>
+                                        ))}
+                                        {uniqueActivePlans.length === 0 && <span className="text-gray-500 text-sm font-bold italic">User has no active plan scope.</span>}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 shrink-0">
+                                    <div className="p-4 bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 text-center shadow-sm">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Earned</p>
+                                        <p className="text-lg font-black text-green-600">{formatCurrency(networkAnalytics.stats.earned, user.currency)}</p>
+                                    </div>
+                                    <div className="p-4 bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 text-center shadow-sm">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Held</p>
+                                        <p className="text-lg font-black text-orange-500">{formatCurrency(networkAnalytics.stats.held, user.currency)}</p>
+                                    </div>
+                                    <div className="p-4 bg-white dark:bg-gray-800 rounded-3xl border dark:border-gray-700 text-center shadow-sm">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Direct Team</p>
+                                        <p className="text-lg font-black text-blue-600">{networkAnalytics.stats.directs}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-2 bg-gray-100 dark:bg-gray-900 rounded-[2rem] border dark:border-gray-700 flex flex-wrap gap-1 justify-center">
+                                {[
+                                    { id: 'earning', label: 'Earning List' },
+                                    { id: 'all', label: 'All Referrals' },
+                                    { id: 'held', label: 'Held Funds' },
+                                    { id: 'tree', label: 'Gen. Tree' },
+                                    { id: 'overflow', label: 'Overflow' },
+                                    { id: 'inactive', label: 'Inactive' }
+                                ].map(tab => (
+                                    <button key={tab.id} onClick={() => setNetworkViewMode(tab.id as any)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${networkViewMode === tab.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}>{tab.label}</button>
+                                ))}
+                            </div>
+
+                            <div className="min-h-[400px]">
+                                {networkViewMode === 'earning' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {networkAnalytics.flat.filter(n => n.info.earned > 0).map(n => renderReferralCard(n))}
+                                        {networkAnalytics.flat.filter(n => n.info.earned > 0).length === 0 && <p className="col-span-full py-20 text-center text-gray-400 font-bold italic">No active earners found in this scope.</p>}
+                                    </div>
+                                )}
+                                {networkViewMode === 'all' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {networkAnalytics.flat.filter(n => !n.info.isOverflow && (n.info.earned > 0 || n.info.held > 0)).map(n => renderReferralCard(n))}
+                                    </div>
+                                )}
+                                {networkViewMode === 'held' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {networkAnalytics.flat.filter(n => n.info.held > 0).map(n => renderReferralCard(n))}
+                                    </div>
+                                )}
+                                {networkViewMode === 'tree' && (
+                                    <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] border dark:border-gray-700 shadow-inner">
+                                        {networkAnalytics.tree.length > 0 ? <ul className="space-y-4">{networkAnalytics.tree.map(n => renderTreeItem(n))}</ul> : <p className="py-20 text-center text-gray-400 italic">Empty genealogy.</p>}
+                                    </div>
+                                )}
+                                {networkViewMode === 'overflow' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {networkAnalytics.flat.filter(n => n.info.isOverflow).map(n => renderReferralCard(n))}
+                                    </div>
+                                )}
+                                {networkViewMode === 'inactive' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {networkAnalytics.flat.filter(n => !n.user.activePlans || n.user.activePlans.length === 0).map(n => renderReferralCard(n))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
 
                     {activeTab === 'transactions' && user && (
@@ -1117,7 +1254,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Commission Earnings</p>
-                                    <p className="text-2xl font-black text-green-600">{formatCurrency(userCommissions.reduce((sum, t) => sum + t.amount, 0), user.currency)}</p>
+                                    <p className="text-2xl font-black text-green-600">{formatCurrency(transactions.filter(t => t.userId === user._id && t.type === 'Commission').reduce((sum, t) => sum + t.amount, 0), user.currency)}</p>
                                 </div>
                             </div>
                             
@@ -1135,7 +1272,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
-                                            {userCommissions.length > 0 ? userCommissions.map(comm => {
+                                            {transactions.filter(t => t.userId === user._id && t.type === 'Commission').length > 0 ? transactions.filter(t => t.userId === user._id && t.type === 'Commission').map(comm => {
                                                 const sourceUser = users.find(u => u._id === comm.sourceUserId);
                                                 return (
                                                     <tr key={comm._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
@@ -1197,6 +1334,12 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                     </div>
                 </div>
             </div>
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 20px; }
+                .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; }
+            `}</style>
         </Modal>
     );
 };
