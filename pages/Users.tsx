@@ -5,7 +5,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
-import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, createBulkDummyUsers } from '../services/api';
+import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, createBulkDummyUsers, getUploadsBaseUrl } from '../services/api';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -15,7 +15,8 @@ const transactionTypes = [
 
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { users, investmentPlans, transactions, settings } = state;
+    const { users, investmentPlans, transactions, settings, deposits, withdrawals, transfers } = state;
+    const UPLOADS_URL = getUploadsBaseUrl();
     
     const isLoading = users.length === 0;
     
@@ -37,6 +38,75 @@ const Users: React.FC = () => {
     // Selection State
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // --- DOSSIER GENERATION LOGIC (Unified for Delete flow) ---
+    const getReceiptInfo = (tx: Transaction) => {
+        if (tx.type !== 'Deposit') return 'N/A';
+        const match = tx.description.match(/#(\w+)/);
+        const depositId = match ? match[1] : null;
+        let deposit: Deposit | undefined;
+        if (depositId) deposit = deposits.find(d => d._id === depositId);
+        if (!deposit) deposit = deposits.find(d => d.transactionId === tx.description || (d.userId === tx.userId && d.amount === tx.amount && new Date(d.date).getTime() === new Date(tx.date).getTime()));
+        if (deposit && deposit.receiptUrl) {
+            if (deposit.receiptUrl.startsWith('data:')) return '[Base64 Image Data]';
+            return `${UPLOADS_URL}${deposit.receiptUrl}`;
+        }
+        return 'N/A';
+    };
+
+    const calculateUserAnalytics = (user: User) => {
+        const approvedDeposits = deposits.filter(d => d.userId === user._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0);
+        const paidWithdrawals = withdrawals.filter(w => w.userId === user._id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0);
+        const sentTransfers = transfers.filter(t => t.senderId === user._id && t.status === Status.Approved).reduce((sum, t) => sum + t.amount, 0);
+        const commissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission' && t.status === 'Approved');
+        const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
+        const directs = users.filter(u => u.sponsor === user.username);
+        return { totalDeposit: approvedDeposits, totalWithdrawal: paidWithdrawals, totalTransfer: sentTransfers, totalCommission, totalDirectRef: directs.length };
+    };
+
+    const handleDownloadDossiers = (ids: string[]) => {
+        if (ids.length === 0) return;
+        const rows: string[][] = [];
+        ids.forEach((userId, index) => {
+            const user = users.find(u => u._id === userId);
+            if (!user) return;
+            const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const stats = calculateUserAnalytics(user);
+            if (index > 0) rows.push([], [], []);
+            rows.push([`=== PRE-DELETE USER DOSSIER: ${user.username} (${user.email}) ===`]);
+            rows.push(['--- ANALYTICS SUMMARY ---']);
+            rows.push(['Metric', 'Value']);
+            rows.push(['Total Approved Deposits', formatCurrency(stats.totalDeposit, user.currency)]);
+            rows.push(['Total Paid Withdrawals', formatCurrency(stats.totalWithdrawal, user.currency)]);
+            rows.push(['Total Transfers Sent', formatCurrency(stats.totalTransfer, user.currency)]);
+            rows.push(['Total Commission Earned', formatCurrency(stats.totalCommission, user.currency)]);
+            rows.push(['Total Direct Referrals', `${stats.totalDirectRef}`]);
+            rows.push([]);
+            rows.push(['--- PROFILE ---']);
+            rows.push(['User ID', user._id]);
+            rows.push(['Full Name', user.fullName]);
+            rows.push(['Sponsor', user.sponsor || 'N/A']);
+            rows.push(['Status', user.status]);
+            rows.push(['Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
+            rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
+            rows.push([]); 
+            rows.push(['--- ACTIVITY LOG ---']);
+            rows.push(['Date', 'Type', 'Amount', 'Status', 'Description', 'Proof/Receipt']);
+            userTx.forEach(tx => {
+                const proof = getReceiptInfo(tx);
+                rows.push([ new Date(tx.date).toLocaleString(), tx.type, formatCurrency(tx.amount, tx.currency), tx.status || 'Approved', tx.description, proof ]);
+            });
+        });
+        const csvContent = rows.map(e => e.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const filename = ids.length === 1 ? `Dossier_PreDelete_${users.find(u => u._id === ids[0])?.username}.csv` : `Bulk_Dossiers_PreDelete_${ids.length}_Users.csv`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const handleOpenUserManagementModal = (user: User | null = null) => {
         setManagingUser(user);
@@ -251,6 +321,7 @@ const Users: React.FC = () => {
                                 {selectedUserIds.length} users selected
                             </span>
                             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                            <Button size="sm" variant="secondary" onClick={() => handleDownloadDossiers(selectedUserIds)}>Download Dossiers</Button>
                             <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
                                 {isProcessing ? 'Processing...' : 'Delete Selected'}
                             </Button>
@@ -374,7 +445,12 @@ const Users: React.FC = () => {
                 <MessageUserModal user={managingUser} allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isDeleteModalOpen && userToDelete && (
-                <DeleteUserModal user={userToDelete} onClose={handleCloseAllModals} onConfirmDelete={handleConfirmDelete}/>
+                <DeleteUserModal 
+                    user={userToDelete} 
+                    onClose={handleCloseAllModals} 
+                    onConfirmDelete={handleConfirmDelete}
+                    onDownloadDossier={() => handleDownloadDossiers([userToDelete._id])}
+                />
             )}
         </div>
     );
@@ -1569,9 +1645,10 @@ interface DeleteUserModalProps {
     user: User;
     onClose: () => void;
     onConfirmDelete: (userId: string) => Promise<void>;
+    onDownloadDossier: () => void;
 }
 
-const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete }) => {
+const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete, onDownloadDossier }) => {
     const [isDeleting, setIsDeleting] = useState(false);
     
     const handleConfirm = async () => {
@@ -1588,9 +1665,17 @@ const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConf
                 </div>
                 <h3 className="text-xl font-bold">Confirm Deletion</h3>
                 <p className="text-sm text-gray-500">Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>? This action is irreversible.</p>
-                <div className="flex gap-2 pt-4">
-                    <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
-                    <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete All'}</Button>
+                
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
+                    <strong>Tip:</strong> You can download a complete history of this user before deleting.
+                </div>
+
+                <div className="space-y-2">
+                    <Button className="w-full" variant="secondary" onClick={onDownloadDossier} disabled={isDeleting}>Download User Dossier (CSV)</Button>
+                    <div className="flex gap-2">
+                        <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+                        <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete All'}</Button>
+                    </div>
                 </div>
             </div>
         </Modal>
