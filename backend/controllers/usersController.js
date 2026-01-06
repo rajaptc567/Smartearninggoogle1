@@ -162,7 +162,14 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
 
-            // --- ADMIN NOTIFICATION FOR LIMIT REACHED ---
+            // --- USER NOTIFICATION FOR SUCCESSFUL COMMISSION ---
+            await Notification.create({
+                userId: uplineUser._id,
+                subject: 'Commission Received!',
+                message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.`
+            });
+
+            // --- ADMIN & USER NOTIFICATION FOR LIMIT REACHED ---
             if (level === 0) {
                 const equivIds = [plan._id.toString()];
                 if (settings.planEquivalencyGroups) {
@@ -171,6 +178,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
                 const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
                 if (plan.directReferralLimit > 0 && approvedCount === plan.directReferralLimit) {
+                    // Notify Admin
                     const admin = await User.findOne({ username: 'admin' });
                     if (admin) {
                         await Notification.create({
@@ -180,6 +188,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                             isPopup: true
                         });
                     }
+                    // Notify User
+                    await Notification.create({
+                        userId: uplineUser._id,
+                        subject: '⚠️ Slot Limit Reached!',
+                        message: `Your referral slots for ${plan.name} are now FULL. Purchase a higher plan to continue receiving direct commissions from new referrals!`,
+                        isPopup: true
+                    });
                 }
             }
         } else if (eligibility.status === 'Rejected') {
@@ -194,15 +209,29 @@ export const createUser = async (req, res) => {
     try {
         const { fullName, username, email, password, phone, sponsor, country } = req.body;
         if (!country) return res.status(400).json({ success: false, error: 'Country is required.' });
+        
+        let sponsorUser = null;
         if (sponsor) {
-            const s = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
-            if (!s) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
-            req.body.sponsor = s.username;
+            sponsorUser = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
+            if (!sponsorUser) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
+            req.body.sponsor = sponsorUser.username;
         }
+        
         req.body.currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
         req.body.activePlans = [];
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
+        
         const user = await User.create(req.body);
+        
+        // --- NEW REFERRAL NOTIFICATION ---
+        if (sponsorUser) {
+            await Notification.create({
+                userId: sponsorUser._id,
+                subject: 'New Team Member!',
+                message: `Great news! @${user.username} has joined your network using your link.`
+            });
+        }
+
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.fullName}!` });
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -237,6 +266,17 @@ export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
+        
+        // --- STATUS CHANGE NOTIFICATION ---
+        if (req.body.status && req.body.status !== userToUpdate.status) {
+            await Notification.create({
+                userId: userToUpdate._id,
+                subject: 'Account Status Updated',
+                message: `Your account status has been changed to: ${req.body.status}.`,
+                isPopup: true
+            });
+        }
+
         Object.assign(userToUpdate, req.body);
         let updatedUser = await userToUpdate.save();
         const settings = await Setting.getSettings();
@@ -381,6 +421,14 @@ export const adjustWallet = async (req, res) => {
         const { amount, description } = req.body;
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         await user.save();
+        
+        // --- WALLET ADJUSTMENT NOTIFICATION ---
+        await Notification.create({
+            userId: user._id,
+            subject: 'Wallet Adjusted',
+            message: `Admin has ${amount > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(amount)}. Reason: ${description || 'Manual adjustment'}`
+        });
+
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
