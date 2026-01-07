@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../hooks/useData';
+// Fixed: Added Status to the imports
 import { Task, countries, Currency, formatCurrency, Status } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
@@ -51,7 +52,7 @@ const AdminTasks: React.FC = () => {
             type: 'Link', 
             platform: 'Other',
             action: 'Watch',
-            category: 'General Engagement',
+            category: 'Video Watch (Timed)',
             priority: 0,
             frequency: 'Once',
             cooldownHours: 0,
@@ -310,7 +311,7 @@ const AdminTasks: React.FC = () => {
                                         <select className="w-full rounded-xl dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-xs font-bold" value={editingTask.category} onChange={e => setEditingTask({...editingTask, category: e.target.value})}>
                                             <option value="Video Watch (Timed)">Video Watch (Timed)</option>
                                             <option value="Social Engagement">Social Engagement</option>
-                                            <option value="Task Verification">Task Verification</option>
+                                            <option value="Video Verification">Video Verification</option>
                                             <option value="General Engagement">General Engagement</option>
                                             <option value="Promotion">Promotion</option>
                                         </select>

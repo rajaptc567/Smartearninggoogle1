@@ -127,6 +127,10 @@ const SettingSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    isTasksEnabled: {
+        type: Boolean,
+        default: true,
+    },
     transferConfig: {
         enabled: { type: Boolean, default: true },
         tiers: [TransferTierSchema],
@@ -323,7 +327,7 @@ SettingSchema.statics.getSettings = async function() {
             withdrawals: ['<strong class="font-semibold">{name}</strong> withdrew <strong>{amount}</strong>'],
             registrations: ['<strong class="font-semibold">{name}</strong> from {country} just joined!'],
             commissions: ['<strong class="font-semibold">{name}</strong> earned <strong>{amount}</strong> commission ({source})'],
-            transfers: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'] ,
+            transfers: ['<strong class="font-semibold">{name}</strong> transferred <strong>{amount}</strong> to {recipient}'],
             planPurchases: ['<strong class="font-semibold">{name}</strong> purchased <strong>{plan}</strong> ({amount})']
         };
         needsSave = true;
