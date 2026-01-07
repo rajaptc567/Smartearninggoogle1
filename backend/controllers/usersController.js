@@ -198,9 +198,36 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
             }
         } else if (eligibility.status === 'Rejected') {
-            await Notification.create({ userId: uplineUser._id, subject: 'Commission Missed', message: `${eligibility.message} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`, isPopup: level === 0 });
+            const isLimitRejected = eligibility.message.includes('[Limit]');
+            
+            // Check admin preference for notifications on rejected commissions
+            if (!isLimitRejected || (isLimitRejected && settings.notifySponsorOnCommissionLimit)) {
+                await Notification.create({ 
+                    userId: uplineUser._id, 
+                    subject: 'Commission Missed', 
+                    message: `${eligibility.message} Commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`, 
+                    isPopup: level === 0 
+                });
+            }
         }
-        await Transaction.create({ userId: uplineUser._id, userName: uplineUser.username, currency: uplineUser.currency, type: 'Commission', amount: finalAmount, level: level + 1, sourceUserId: user._id, description: eligibility.message || `Commission from ${user.username} (L${level + 1})`, status: eligibility.status, relatedPlanId: plan._id });
+
+        // Check admin preference for transaction record visibility on rejected commissions
+        const isLimitRejectedTx = eligibility.status === 'Rejected' && eligibility.message.includes('[Limit]');
+        if (!isLimitRejectedTx || (isLimitRejectedTx && settings.showRejectedCommissionTransaction)) {
+            await Transaction.create({ 
+                userId: uplineUser._id, 
+                userName: uplineUser.username, 
+                currency: uplineUser.currency, 
+                type: 'Commission', 
+                amount: finalAmount, 
+                level: level + 1, 
+                sourceUserId: user._id, 
+                description: eligibility.message || `Commission from ${user.username} (L${level + 1})`, 
+                status: eligibility.status, 
+                relatedPlanId: plan._id 
+            });
+        }
+
         currentUplineUsername = uplineUser.sponsor;
     }
 };

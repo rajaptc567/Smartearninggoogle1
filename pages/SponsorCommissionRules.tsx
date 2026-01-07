@@ -76,7 +76,7 @@ const SponsorCommissionRules: React.FC = () => {
     );
 
     return (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto pb-20">
             <form onSubmit={handleSave} className="space-y-8">
                 <div className="flex justify-between items-center">
                     <div>
@@ -103,40 +103,77 @@ const SponsorCommissionRules: React.FC = () => {
                             onChange={handleCheckboxChange}
                         />
                          {localSettings.oneTimeCommissionPerGroup && (
-                            <div className="mt-4 p-4 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20">
-                                <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Plans</h4>
-                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-2">
-                                    Select plans that grant recurring commissions. If a sponsor owns any of these plans, they will bypass the 'one-time' rule and earn a commission every time one of their referrals buys or upgrades ANY plan.
-                                </p>
-                                <p className="text-xs text-gray-500 mb-4">
-                                    Missing a plan? <Link to="/admin/investment-plans" className="text-blue-600 hover:underline">Click here to add or manage investment plans.</Link>
-                                </p>
-                                <div className="space-y-4">
-                                    {(['USD', 'EUR', 'PKR'] as const).map(currency => {
-                                        const plansForCurrency = investmentPlans.filter(p => p.currency === currency && p.status === 'Active');
-                                        return (
-                                            <div key={currency}>
-                                                <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
-                                                {plansForCurrency.length === 0 ? (
-                                                     <p className="text-xs text-gray-400 italic mt-1">No active plans found for this currency.</p>
-                                                ) : (
-                                                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                                        {plansForCurrency.map(plan => (
-                                                            <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="rounded text-blue-500 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500"
-                                                                    checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
-                                                                    onChange={() => handleRecurringPlanChange(plan._id)}
-                                                                />
-                                                                <span className="text-sm">{plan.name}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                )}
+                            <div className="mt-4 p-6 border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20 space-y-6">
+                                <div>
+                                    <h4 className="font-semibold text-blue-800 dark:text-blue-200">Missed Commission Handling</h4>
+                                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                                        When a user is blocked by the One-Time limit, decide if the sponsor should see the record or receive a notification.
+                                    </p>
+                                    <div className="mt-4 space-y-3">
+                                        <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 shadow-sm">
+                                            <div className="pr-4">
+                                                <div className="text-sm font-bold">Show "Rejected" in Transaction History</div>
+                                                <div className="text-xs text-gray-500">Record a 'Rejected' entry in the sponsor's wallet log when they miss a commission.</div>
                                             </div>
-                                        )
-                                    })}
+                                            <Toggle
+                                                name="showRejectedCommissionTransaction"
+                                                label=""
+                                                description=""
+                                                checked={localSettings.showRejectedCommissionTransaction ?? true}
+                                                onChange={handleCheckboxChange}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700 shadow-sm">
+                                            <div className="pr-4">
+                                                <div className="text-sm font-bold">Send Notification to Sponsor</div>
+                                                <div className="text-xs text-gray-500">Send a system alert to the sponsor explaining that a commission from their referral was lost due to limits.</div>
+                                            </div>
+                                            <Toggle
+                                                name="notifySponsorOnCommissionLimit"
+                                                label=""
+                                                description=""
+                                                checked={localSettings.notifySponsorOnCommissionLimit ?? true}
+                                                onChange={handleCheckboxChange}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-blue-100 dark:border-blue-900/50 pt-4">
+                                    <h4 className="font-semibold text-blue-800 dark:text-blue-200">Recurring Commission Plans (VIP/Whitelist)</h4>
+                                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1 mb-2">
+                                        Select plans that grant recurring commissions. If a sponsor owns any of these plans, they will bypass the 'one-time' rule and earn a commission every time one of their referrals buys or upgrades ANY plan.
+                                    </p>
+                                    <p className="text-xs text-gray-500 mb-4">
+                                        Missing a plan? <Link to="/admin/investment-plans" className="text-blue-600 hover:underline">Click here to add or manage investment plans.</Link>
+                                    </p>
+                                    <div className="space-y-4">
+                                        {(['USD', 'EUR', 'PKR'] as const).map(currency => {
+                                            const plansForCurrency = investmentPlans.filter(p => p.currency === currency && p.status === 'Active');
+                                            return (
+                                                <div key={currency}>
+                                                    <h5 className="font-bold text-sm text-gray-600 dark:text-gray-400">{currency} Plans</h5>
+                                                    {plansForCurrency.length === 0 ? (
+                                                         <p className="text-xs text-gray-400 italic mt-1">No active plans found for this currency.</p>
+                                                    ) : (
+                                                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                            {plansForCurrency.map(plan => (
+                                                                <label key={plan._id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-800/50 rounded-md border dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="rounded text-blue-500 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500"
+                                                                        checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
+                                                                        onChange={() => handleRecurringPlanChange(plan._id)}
+                                                                    />
+                                                                    <span className="text-sm">{plan.name}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
                                 </div>
                             </div>
                         )}

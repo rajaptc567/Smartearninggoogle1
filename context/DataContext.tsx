@@ -1,6 +1,6 @@
 
 import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
-import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task } from '../types';
+import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks 
@@ -15,16 +15,25 @@ interface AppState {
     investmentPlans: InvestmentPlan[];
     transactions: Transaction[];
     rules: Rule[];
+    tasks: Task[];
     settings: Settings;
     notifications: Notification[];
     logs: Log[];
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
-    tasks: Task[];
     currentUser: User | null;
 }
 
-const defaultHomepageContent = {
+const defaultHomepageContent: HomepageContent = {
+    showHero: true,
+    showFeatures: true,
+    showMultiCurrency: true,
+    showInvestmentPlans: true,
+    showMLM: true,
+    showPaymentMethods: true,
+    showVideoSection: true,
+    showFAQ: true,
+    showCTA: true,
     heroTitle: "Invest in Your Future, Grow Your Network",
     heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
     feature1Title: "Secure Investments",
@@ -39,6 +48,10 @@ const defaultHomepageContent = {
     multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
     mlmTitle: "Understanding Our Earning System",
     mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
+    paymentMethodsTitle: "Supported Payment Partners",
+    paymentMethodsDesc: "We support a variety of secure payment gateways for your convenience.",
+    paymentMethodsDisplayType: 'static',
+    paymentMethodsColorStyle: 'color',
     ctaTitle: "Ready to Start Your Journey?",
     ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
 };
@@ -70,6 +83,8 @@ const initialState: AppState = {
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,
         oneTimeCommissionPerGroup: false,
+        showRejectedCommissionTransaction: true,
+        notifySponsorOnCommissionLimit: true,
         requireUplineEligibility: false,
         withdrawalFrequency: {
             enabled: false,
@@ -157,6 +172,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.exchangeRates && !newSettings.exchangeRates.EUR) newSettings.exchangeRates.EUR = 0.92;
         if (newSettings.exchangeRates && !newSettings.exchangeRates.USD) newSettings.exchangeRates.USD = 1;
         if (newSettings.isTasksEnabled === undefined) newSettings.isTasksEnabled = true;
+        if (newSettings.showRejectedCommissionTransaction === undefined) newSettings.showRejectedCommissionTransaction = true;
+        if (newSettings.notifySponsorOnCommissionLimit === undefined) newSettings.notifySponsorOnCommissionLimit = true;
         return newSettings;
     };
 

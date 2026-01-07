@@ -117,6 +117,9 @@ export const mockSettings: Settings = {
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,
     oneTimeCommissionPerGroup: false,
+    // Added missing properties showRejectedCommissionTransaction and notifySponsorOnCommissionLimit
+    showRejectedCommissionTransaction: true,
+    notifySponsorOnCommissionLimit: true,
     requireUplineEligibility: false,
     withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
     tickerSpeed: 6,

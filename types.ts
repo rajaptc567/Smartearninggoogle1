@@ -201,9 +201,9 @@ export interface Rule {
     targetPlanName: string;
     requiredPlanIds: string[];
     requiredPlanNames: string[];
-    minTotalEarnings?: number;
+    minTotalEarnings: number;
     maxTotalEarnings?: number;
-    minDirectReferrals?: number;
+    minDirectReferrals: number;
     currency: Currency;
     isActive?: boolean;
 }
@@ -314,6 +314,8 @@ export interface Settings {
     requirePlanMatchForCommission: boolean;
     requireActivePlanForCommission: boolean;
     oneTimeCommissionPerGroup: boolean;
+    showRejectedCommissionTransaction: boolean; // Control visibility of rejected transactions
+    notifySponsorOnCommissionLimit: boolean; // Control notifications for missed commissions
     recurringCommissionPlanIds?: string[];
     requireUplineEligibility: boolean;
     withdrawalFrequency: {

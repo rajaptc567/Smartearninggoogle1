@@ -153,6 +153,14 @@ const SettingSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    showRejectedCommissionTransaction: {
+        type: Boolean,
+        default: true,
+    },
+    notifySponsorOnCommissionLimit: {
+        type: Boolean,
+        default: true,
+    },
     recurringCommissionPlanIds: {
         type: [String],
         default: [],
@@ -338,6 +346,16 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.tickerHiddenEventIds) {
         settings.tickerHiddenEventIds = [];
+        needsSave = true;
+    }
+    
+    if (settings.showRejectedCommissionTransaction === undefined) {
+        settings.showRejectedCommissionTransaction = true;
+        needsSave = true;
+    }
+    
+    if (settings.notifySponsorOnCommissionLimit === undefined) {
+        settings.notifySponsorOnCommissionLimit = true;
         needsSave = true;
     }
 
