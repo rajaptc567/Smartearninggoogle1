@@ -689,68 +689,68 @@ const HomePage: React.FC = () => {
 
                 {/* FAQ Section - SMART DISPLAY (First 6 Only) */}
                 {(showFAQ || editMode) && (
-                    <section className={`py-20 bg-white dark:bg-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-24 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
-                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Frequently Asked Questions</h2>
-                                <p className="text-lg text-gray-600 dark:text-gray-400">Everything you need to know about getting started.</p>
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+                            <div className="text-center mb-16">
+                                <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter mb-4 uppercase">Featured Support Queries</h2>
+                                <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {(editMode ? localFaqs : localFaqs.slice(0, 6)).map((faq, index) => (
-                                    <div key={index} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
-                                        <div className="p-6">
-                                            {editMode ? (
-                                                <div className="space-y-3">
-                                                    <input 
-                                                        type="text" 
-                                                        className="w-full font-bold text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2" 
-                                                        value={faq.question} 
-                                                        onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
-                                                        placeholder="Question"
-                                                    />
-                                                    <textarea 
-                                                        className="w-full text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2 h-24" 
-                                                        value={faq.answer} 
-                                                        onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
-                                                        placeholder="Answer"
-                                                    />
-                                                    <div className="text-right">
-                                                        <Button size="sm" variant="danger" onClick={() => handleDeleteFaq(index)}><TrashIcon/> Delete FAQ</Button>
-                                                    </div>
+                                    <div key={index} className="bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all hover:shadow-xl hover:border-blue-500/30 group">
+                                        {editMode ? (
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Question #{index + 1}</span>
+                                                    <button onClick={() => handleDeleteFaq(index)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon /></button>
                                                 </div>
-                                            ) : (
-                                                <details className="group">
-                                                    <summary className="flex justify-between items-center font-medium cursor-pointer list-none text-lg text-gray-900 dark:text-white">
-                                                        <span>{faq.question}</span>
-                                                        <span className="transition group-open:rotate-180">
-                                                            <svg fill="none" height="24" shapeRendering="geometricPrecision" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
-                                                        </span>
-                                                    </summary>
-                                                    <p className="text-gray-600 dark:text-gray-300 mt-3 group-open:animate-fadeIn">
-                                                        {faq.answer}
-                                                    </p>
-                                                </details>
-                                            )}
-                                        </div>
+                                                <input 
+                                                    type="text" 
+                                                    className="w-full font-bold text-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                                    value={faq.question} 
+                                                    onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
+                                                    placeholder="Enter Question..."
+                                                />
+                                                <textarea 
+                                                    className="w-full text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                                    value={faq.answer} 
+                                                    onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
+                                                    placeholder="Enter Detailed Answer..."
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col h-full">
+                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-start gap-3">
+                                                    <span className="text-blue-500 font-black shrink-0">Q.</span>
+                                                    {faq.question}
+                                                </h3>
+                                                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
+                                                    {faq.answer}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
-                                
-                                {!editMode && localFaqs.length > 6 && (
-                                    <div className="text-center pt-8">
-                                        <Button variant="secondary" size="lg" onClick={() => navigate('/faqs')} className="px-10 rounded-xl">
-                                            View All Frequently Asked Questions
-                                        </Button>
-                                    </div>
-                                )}
-
-                                {editMode && (
-                                    <div className="text-center pt-6">
-                                        <Button onClick={handleAddFaq}><PlusIcon/> Add New Question</Button>
-                                    </div>
-                                )}
                             </div>
+                            
+                            {!editMode && localFaqs.length > 6 && (
+                                <div className="text-center mt-16 animate-bounce">
+                                    <Link to="/faqs" className="inline-flex items-center gap-3 px-12 py-5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-full font-black uppercase text-sm tracking-[0.2em] shadow-2xl shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95">
+                                        View Full Knowledge Base
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                                    </Link>
+                                </div>
+                            )}
+
+                            {editMode && (
+                                <div className="text-center mt-12 pt-8 border-t dark:border-gray-700">
+                                    <Button onClick={handleAddFaq} className="rounded-2xl px-10 py-4 font-black uppercase tracking-widest flex items-center gap-2 mx-auto">
+                                        <PlusIcon/> Add New Question
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     </section>
                 )}
