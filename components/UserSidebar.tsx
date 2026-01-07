@@ -64,7 +64,8 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                 </div>
                 <nav className="mt-6 px-4 flex-grow">
                     {userNavLinks.map(({ to, label, icon, condition, badge }) => {
-                        if (condition && !settings[condition as keyof typeof settings]) {
+                        // FIX: Explicitly check if feature is enabled in settings
+                        if (condition && (settings as any)[condition] === false) {
                           return null;
                         }
                         return (
