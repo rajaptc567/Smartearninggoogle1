@@ -30,6 +30,7 @@ import Register from './pages/Register';
 import AdminLogin from './pages/AdminLogin';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import FaqPage from './pages/FaqPage';
 
 // User facing components
 import UserLayout from './components/UserLayout';
@@ -55,6 +56,7 @@ const App: React.FC = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/faqs" element={<FaqPage />} />
         <Route path="/secure-admin-login56" element={<AdminLogin />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

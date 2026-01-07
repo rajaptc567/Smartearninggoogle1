@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
@@ -687,7 +687,7 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
-                {/* FAQ Section */}
+                {/* FAQ Section - SMART DISPLAY (First 6 Only) */}
                 {(showFAQ || editMode) && (
                     <section className={`py-20 bg-white dark:bg-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
@@ -698,49 +698,53 @@ const HomePage: React.FC = () => {
                             </div>
 
                             <div className="space-y-4">
-                                {localFaqs.length > 0 ? (
-                                    localFaqs.map((faq, index) => (
-                                        <div key={index} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
-                                            <div className="p-6">
-                                                {editMode ? (
-                                                    <div className="space-y-3">
-                                                        <input 
-                                                            type="text" 
-                                                            className="w-full font-bold text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2" 
-                                                            value={faq.question} 
-                                                            onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
-                                                            placeholder="Question"
-                                                        />
-                                                        <textarea 
-                                                            className="w-full text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2 h-24" 
-                                                            value={faq.answer} 
-                                                            onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
-                                                            placeholder="Answer"
-                                                        />
-                                                        <div className="text-right">
-                                                            <Button size="sm" variant="danger" onClick={() => handleDeleteFaq(index)}><TrashIcon/> Delete FAQ</Button>
-                                                        </div>
+                                {(editMode ? localFaqs : localFaqs.slice(0, 6)).map((faq, index) => (
+                                    <div key={index} className="bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all hover:shadow-md">
+                                        <div className="p-6">
+                                            {editMode ? (
+                                                <div className="space-y-3">
+                                                    <input 
+                                                        type="text" 
+                                                        className="w-full font-bold text-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2" 
+                                                        value={faq.question} 
+                                                        onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
+                                                        placeholder="Question"
+                                                    />
+                                                    <textarea 
+                                                        className="w-full text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded p-2 h-24" 
+                                                        value={faq.answer} 
+                                                        onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
+                                                        placeholder="Answer"
+                                                    />
+                                                    <div className="text-right">
+                                                        <Button size="sm" variant="danger" onClick={() => handleDeleteFaq(index)}><TrashIcon/> Delete FAQ</Button>
                                                     </div>
-                                                ) : (
-                                                    <details className="group">
-                                                        <summary className="flex justify-between items-center font-medium cursor-pointer list-none text-lg text-gray-900 dark:text-white">
-                                                            <span>{faq.question}</span>
-                                                            <span className="transition group-open:rotate-180">
-                                                                <svg fill="none" height="24" shapeRendering="geometricPrecision" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
-                                                            </span>
-                                                        </summary>
-                                                        <p className="text-gray-600 dark:text-gray-300 mt-3 group-open:animate-fadeIn">
-                                                            {faq.answer}
-                                                        </p>
-                                                    </details>
-                                                )}
-                                            </div>
+                                                </div>
+                                            ) : (
+                                                <details className="group">
+                                                    <summary className="flex justify-between items-center font-medium cursor-pointer list-none text-lg text-gray-900 dark:text-white">
+                                                        <span>{faq.question}</span>
+                                                        <span className="transition group-open:rotate-180">
+                                                            <svg fill="none" height="24" shapeRendering="geometricPrecision" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                                                        </span>
+                                                    </summary>
+                                                    <p className="text-gray-600 dark:text-gray-300 mt-3 group-open:animate-fadeIn">
+                                                        {faq.answer}
+                                                    </p>
+                                                </details>
+                                            )}
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center text-gray-500 py-8">No FAQs available yet.</div>
-                                )}
+                                    </div>
+                                ))}
                                 
+                                {!editMode && localFaqs.length > 6 && (
+                                    <div className="text-center pt-8">
+                                        <Button variant="secondary" size="lg" onClick={() => navigate('/faqs')} className="px-10 rounded-xl">
+                                            View All Frequently Asked Questions
+                                        </Button>
+                                    </div>
+                                )}
+
                                 {editMode && (
                                     <div className="text-center pt-6">
                                         <Button onClick={handleAddFaq}><PlusIcon/> Add New Question</Button>
