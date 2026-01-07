@@ -550,3 +550,19 @@ export const completeTask = async (taskId: string, userId: string, proof?: File)
     const result = await handleResponse(response);
     return result.data;
 };
+
+export const getPendingTaskVerifications = async (): Promise<any[]> => {
+    const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`);
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const verifyTask = async (userId: string, taskId: string, status: 'Approved' | 'Rejected', adminNotes: string): Promise<User> => {
+    const response = await fetch(`${API_BASE_URL}/tasks/verify/${userId}/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, adminNotes }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};

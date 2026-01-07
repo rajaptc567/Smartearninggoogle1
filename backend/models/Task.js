@@ -20,6 +20,33 @@ const TaskSchema = new mongoose.Schema({
         enum: ['Video', 'Link', 'Social', 'Subscription'],
         default: 'Link'
     },
+    platform: {
+        type: String,
+        enum: ['YouTube', 'Facebook', 'Instagram', 'Telegram', 'TikTok', 'X', 'Other'],
+        default: 'Other'
+    },
+    action: {
+        type: String,
+        enum: ['Watch', 'Follow', 'Like', 'Subscribe', 'Comment', 'Share'],
+        default: 'Watch'
+    },
+    category: {
+        type: String,
+        default: 'General'
+    },
+    priority: {
+        type: Number,
+        default: 0
+    },
+    frequency: {
+        type: String,
+        enum: ['Once', 'Daily', 'Weekly', 'Custom'],
+        default: 'Once'
+    },
+    cooldownHours: {
+        type: Number,
+        default: 0
+    },
     videoDurationType: {
         type: String,
         enum: ['Full', 'Specific'],
@@ -27,7 +54,7 @@ const TaskSchema = new mongoose.Schema({
     },
     videoDurationValue: {
         type: Number,
-        default: 60 // Default 60 seconds
+        default: 60
     },
     requireProof: {
         type: Boolean,
@@ -41,13 +68,40 @@ const TaskSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    targetPlanIds: [{
+        type: mongoose.Schema.ObjectId,
+        ref: 'InvestmentPlan'
+    }],
+    targetCountries: [String],
+    targetCurrencies: [{
+        type: String,
+        enum: ['USD', 'EUR', 'PKR']
+    }],
+    minPlanValue: {
+        type: Number,
+        default: 0
+    },
+    activeFrom: {
+        type: Date
+    },
+    activeTo: {
+        type: Date
+    },
+    maxGlobalCompletions: {
+        type: Number,
+        default: 0 // 0 for unlimited
+    },
+    currentGlobalCompletions: {
+        type: Number,
+        default: 0
+    },
     rewardAmount: {
         type: Number,
         default: 0
     },
     status: {
         type: String,
-        enum: ['Active', 'Disabled'],
+        enum: ['Active', 'Disabled', 'Draft', 'Archived'],
         default: 'Active'
     }
 }, {

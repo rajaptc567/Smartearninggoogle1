@@ -24,8 +24,8 @@ export interface UserRestrictions {
     earning: boolean;
     dispute: boolean;
     excludeFromTicker: boolean;
-    login: boolean; // New: Block account access
-    purchase: boolean; // New: Block plan purchases
+    login: boolean; 
+    purchase: boolean;
 }
 
 export interface ActivePlan {
@@ -38,7 +38,10 @@ export interface ActivePlan {
 export interface CompletedTask {
     taskId: string;
     proofUrl?: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    adminNotes?: string;
     completedAt: string;
+    retryCount?: number;
 }
 
 export interface User {
@@ -58,7 +61,117 @@ export interface User {
     restrictions?: UserRestrictions;
     sponsor?: string;
     completedTasks?: CompletedTask[];
-    isVerified?: boolean; // Added for admin management
+    isVerified?: boolean;
+}
+
+export interface RecurringPlanConfig {
+    planId: string;
+    applyToAllPlans: boolean;
+    targetPlanIds: string[];
+    bypassDirect: boolean;
+    bypassIndirect: boolean;
+}
+
+export interface DemoProfile {
+    _id: string;
+    name: string;
+    country: string;
+    currency: Currency;
+}
+
+export interface DemoActivityTemplate {
+    _id: string;
+    template: string;
+    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan' | 'commission';
+    enabled: boolean;
+}
+
+export interface Notice {
+    _id: string;
+    message: string;
+    targetType: 'all' | 'plan' | 'inactive' | 'manual';
+    targetIds?: string[];
+    style: 'sliding' | 'blinking' | 'static';
+    speed?: 'slow' | 'normal' | 'fast';
+    enabled: boolean;
+    color: 'info' | 'success' | 'warning' | 'danger';
+    startTime?: string;
+    endTime?: string;
+}
+
+export interface Settings {
+    isUserTransferEnabled: boolean;
+    isTasksEnabled: boolean; 
+    transferConfig: {
+        enabled: boolean;
+        tiers: TransferFeeTier[];
+        allowCrossCurrency: boolean;
+    };
+    exchangeRates: {
+        USD: number;
+        EUR: number;
+        PKR: number;
+    };
+    restrictWithdrawalAmount: boolean;
+    requirePlanMatchForCommission: boolean;
+    requireActivePlanForCommission: boolean;
+    oneTimeCommissionPerGroup: boolean;
+    showRejectedCommissionTransaction: boolean;
+    notifySponsorOnCommissionLimit: boolean;
+    recurringCommissionConfigs: RecurringPlanConfig[];
+    requireUplineEligibility: boolean;
+    withdrawalFrequency: {
+        enabled: boolean;
+        value: number;
+        unit: 'hours' | 'days' | 'weeks' | 'months';
+    };
+    planSortType?: 'price-asc' | 'price-desc' | 'manual';
+    manualPlanOrder?: string[];
+    tickerSpeed: number;
+    tickerContentSource: 'hybrid' | 'real_only' | 'demo_only';
+    tickerEnabled?: boolean;
+    tickerPauseOnHover?: boolean;
+    tickerStyle?: {
+        backgroundColor?: string;
+        textColor?: string;
+        accentColor?: string;
+    };
+    tickerRealActivities?: {
+        deposits: boolean;
+        withdrawals: boolean;
+        registrations: boolean;
+        commissions: boolean;
+        transfers: boolean;
+        planPurchases: boolean;
+    };
+    tickerRealActivityConfig?: {
+        minAmount: number;
+        privacyMode: boolean;
+        excludedCurrencies: Currency[];
+    };
+    tickerHiddenEventIds?: string[];
+    tickerRealActivityTemplates?: {
+        deposits: string[];
+        withdrawals: string[];
+        registrations: string[];
+        commissions: string[];
+        transfers: string[];
+        planPurchases: string[];
+    };
+    tickerDemoAmountRanges?: {
+        USD: { min: number; max: number };
+        EUR: { min: number; max: number };
+        PKR: { min: number; max: number };
+    };
+    planEquivalencyGroups?: PlanEquivalencyGroup[];
+    demoProfiles?: DemoProfile[];
+    demoActivityTemplates?: DemoActivityTemplate[];
+    notices?: Notice[];
+    faqs?: FaqItem[];
+    homepageVideoUrl?: string;
+    homepageContent?: HomepageContent;
+    homepagePaymentLogos?: HomepagePaymentLogo[];
+    featuredPlanIds?: string[];
 }
 
 export interface Task {
@@ -67,12 +180,26 @@ export interface Task {
     description: string;
     link: string;
     type: 'Video' | 'Link' | 'Social' | 'Subscription';
+    platform: 'YouTube' | 'Facebook' | 'Instagram' | 'Telegram' | 'TikTok' | 'X' | 'Other';
+    action: 'Watch' | 'Follow' | 'Like' | 'Subscribe' | 'Comment' | 'Share';
+    category?: string;
+    priority: number;
+    frequency: 'Once' | 'Daily' | 'Weekly' | 'Custom';
+    cooldownHours?: number;
     videoDurationType?: 'Full' | 'Specific';
-    videoDurationValue?: number; // Seconds
+    videoDurationValue?: number;
     requireProof: boolean;
     proofInstructions?: string;
     isRequiredForWithdrawal: boolean;
-    status: 'Active' | 'Disabled';
+    targetPlanIds: string[];
+    targetCountries: string[];
+    targetCurrencies: Currency[];
+    minPlanValue: number;
+    activeFrom?: string;
+    activeTo?: string;
+    maxGlobalCompletions: number;
+    currentGlobalCompletions: number;
+    status: 'Active' | 'Disabled' | 'Draft' | 'Archived';
     rewardAmount?: number;
     createdAt: string;
 }
@@ -143,7 +270,7 @@ export type CommissionType = 'percentage' | 'fixed';
 export interface Commission {
     type: CommissionType;
     value: number;
-    disabledLevels?: number[]; // Array of levels (1=Direct, 2=Level 2, etc.) disabled for this slot
+    disabledLevels?: number[]; 
 }
 
 export interface InvestmentPlan {
@@ -201,9 +328,9 @@ export interface Rule {
     targetPlanName: string;
     requiredPlanIds: string[];
     requiredPlanNames: string[];
-    minTotalEarnings: number;
+    minTotalEarnings?: number;
     maxTotalEarnings?: number;
-    minDirectReferrals: number;
+    minDirectReferrals?: number;
     currency: Currency;
     isActive?: boolean;
 }
@@ -217,38 +344,11 @@ export interface TransferFeeTier {
     enabled?: boolean;
 }
 
-export interface DemoProfile {
-    _id: string;
-    name: string;
-    country: string;
-    currency: Currency;
-}
-
-export interface DemoActivityTemplate {
-    _id: string;
-    template: string;
-    type: 'withdrawal' | 'transfer' | 'joined' | 'deposit' | 'plan' | 'commission';
-    enabled: boolean;
-}
-
-export interface Notice {
-    _id: string;
-    message: string;
-    targetType: 'all' | 'plan' | 'inactive' | 'manual';
-    targetIds?: string[];
-    style: 'sliding' | 'blinking' | 'static';
-    speed?: 'slow' | 'normal' | 'fast';
-    enabled: boolean;
-    color?: 'info' | 'success' | 'warning' | 'danger';
-    startTime?: string;
-    endTime?: string;
-}
-
 export interface PlanEquivalencyGroup {
     _id: string;
+    usdPlanId?: string;
     pkrPlanId?: string;
     eurPlanId?: string;
-    usdPlanId?: string;
 }
 
 export interface FaqItem {
@@ -262,18 +362,15 @@ export interface HomepagePaymentLogo {
 }
 
 export interface HomepageContent {
-    // Visibility flags
-    showHero?: boolean;
-    showFeatures?: boolean;
-    showMultiCurrency?: boolean;
-    showInvestmentPlans?: boolean;
-    showMLM?: boolean;
-    showPaymentMethods?: boolean;
-    showVideoSection?: boolean;
-    showFAQ?: boolean;
-    showCTA?: boolean;
-
-    // Content fields
+    showHero: boolean;
+    showFeatures: boolean;
+    showMultiCurrency: boolean;
+    showInvestmentPlans: boolean;
+    showMLM: boolean;
+    showPaymentMethods: boolean;
+    showVideoSection: boolean;
+    showFAQ: boolean;
+    showCTA: boolean;
     heroTitle: string;
     heroSubtitle: string;
     feature1Title: string;
@@ -288,89 +385,12 @@ export interface HomepageContent {
     multiCurrencyDesc: string;
     mlmTitle: string;
     mlmDesc: string;
+    paymentMethodsTitle: string;
+    paymentMethodsDesc: string;
+    paymentMethodsDisplayType: 'static' | 'sliding' | 'pulsing';
+    paymentMethodsColorStyle: 'color' | 'grayscale';
     ctaTitle: string;
     ctaDesc: string;
-    paymentMethodsTitle?: string;
-    paymentMethodsDesc?: string;
-    paymentMethodsDisplayType?: 'static' | 'sliding' | 'pulsing';
-    paymentMethodsColorStyle?: 'color' | 'grayscale';
-    [key: string]: string | boolean | undefined;
-}
-
-export interface Settings {
-    isUserTransferEnabled: boolean;
-    isTasksEnabled: boolean; // New Flag
-    transferConfig: {
-        enabled: boolean;
-        tiers: TransferFeeTier[];
-        allowCrossCurrency: boolean;
-    };
-    exchangeRates: {
-        USD: number;
-        EUR: number;
-        PKR: number;
-    };
-    restrictWithdrawalAmount: boolean;
-    requirePlanMatchForCommission: boolean;
-    requireActivePlanForCommission: boolean;
-    oneTimeCommissionPerGroup: boolean;
-    showRejectedCommissionTransaction: boolean; // Control visibility of rejected transactions
-    notifySponsorOnCommissionLimit: boolean; // Control notifications for missed commissions
-    recurringCommissionPlanIds?: string[];
-    requireUplineEligibility: boolean;
-    withdrawalFrequency: {
-        enabled: boolean;
-        value: number;
-        unit: 'hours' | 'days' | 'weeks' | 'months';
-    };
-    // Added planSortType and manualPlanOrder to support plan ordering features and fix TypeScript errors
-    planSortType?: 'price-asc' | 'price-desc' | 'manual';
-    manualPlanOrder?: string[];
-    tickerSpeed: number;
-    tickerContentSource: 'hybrid' | 'real_only' | 'demo_only';
-    tickerEnabled?: boolean;
-    tickerPauseOnHover?: boolean;
-    tickerStyle?: {
-        backgroundColor?: string;
-        textColor?: string;
-        accentColor?: string;
-    };
-    tickerRealActivities?: {
-        deposits: boolean;
-        withdrawals: boolean;
-        registrations: boolean;
-        commissions: boolean;
-        transfers: boolean;
-        planPurchases: boolean;
-    };
-    tickerRealActivityConfig?: {
-        minAmount: number;
-        privacyMode: boolean;
-        excludedCurrencies: Currency[];
-    };
-    tickerHiddenEventIds?: string[];
-    tickerRealActivityTemplates?: {
-        deposits: string[];
-        withdrawals: string[];
-        registrations: string[];
-        commissions: string[];
-        transfers: string[];
-        planPurchases: string[];
-    };
-    tickerDemoAmountRanges?: {
-        USD: { min: number; max: number };
-        EUR: { min: number; max: number };
-        PKR: { min: number; max: number };
-    };
-    demoProfiles?: DemoProfile[];
-    demoActivityTemplates?: DemoActivityTemplate[];
-    notices?: Notice[];
-    faqs?: FaqItem[];
-    planEquivalencyGroups?: PlanEquivalencyGroup[];
-    homepageVideoUrl?: string;
-    homepageContent?: HomepageContent;
-    homepagePaymentLogos?: HomepagePaymentLogo[];
-    featuredPlanIds?: string[];
 }
 
 export interface Notification {

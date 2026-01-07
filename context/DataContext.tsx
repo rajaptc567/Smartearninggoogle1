@@ -85,6 +85,8 @@ const initialState: AppState = {
         oneTimeCommissionPerGroup: false,
         showRejectedCommissionTransaction: true,
         notifySponsorOnCommissionLimit: true,
+        // Fixed: Added missing required property recurringCommissionConfigs
+        recurringCommissionConfigs: [],
         requireUplineEligibility: false,
         withdrawalFrequency: {
             enabled: false,

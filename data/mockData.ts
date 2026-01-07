@@ -120,6 +120,8 @@ export const mockSettings: Settings = {
     // Added missing properties showRejectedCommissionTransaction and notifySponsorOnCommissionLimit
     showRejectedCommissionTransaction: true,
     notifySponsorOnCommissionLimit: true,
+    // Added missing required property recurringCommissionConfigs
+    recurringCommissionConfigs: [],
     requireUplineEligibility: false,
     withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
     tickerSpeed: 6,
@@ -136,6 +138,16 @@ export const mockSettings: Settings = {
     ],
     homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
     homepageContent: {
+        // Added missing visibility booleans
+        showHero: true,
+        showFeatures: true,
+        showMultiCurrency: true,
+        showInvestmentPlans: true,
+        showMLM: true,
+        showPaymentMethods: true,
+        showVideoSection: true,
+        showFAQ: true,
+        showCTA: true,
         heroTitle: "Invest in Your Future",
         heroSubtitle: "Join the best platform today.",
         feature1Title: "Secure", feature1Desc: "Protected funds.",
@@ -144,6 +156,11 @@ export const mockSettings: Settings = {
         videoTitle: "Watch Intro", videoDesc: "See how it works.",
         multiCurrencyTitle: "Multi-Currency", multiCurrencyDesc: "EUR, PKR support.",
         mlmTitle: "Earn More", mlmDesc: "Referral bonuses.",
+        // Added missing payment methods display properties
+        paymentMethodsTitle: "Secure Payments",
+        paymentMethodsDesc: "We support multiple gateways.",
+        paymentMethodsDisplayType: 'static',
+        paymentMethodsColorStyle: 'color',
         ctaTitle: "Join Now", ctaDesc: "Start earning."
     }
 };
