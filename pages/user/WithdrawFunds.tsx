@@ -50,7 +50,8 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
 
 const WithdrawFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { currentUser, paymentMethods, withdrawals, tasks, settings: { restrictWithdrawalAmount, withdrawalFrequency } } = state;
+    const { currentUser, paymentMethods, withdrawals, tasks, settings } = state;
+    const { restrictWithdrawalAmount, withdrawalFrequency, isTasksEnabled } = settings;
     const navigate = useNavigate();
 
     // Wizard State
@@ -72,10 +73,11 @@ const WithdrawFunds: React.FC = () => {
 
     // --- ELIGIBILITY CHECK: UNCOMPLETED REQUIRED TASKS ---
     const pendingRequiredTasks = useMemo(() => {
-        if (!currentUser) return [];
+        // If the Task feature is disabled globally, we don't enforce these requirements
+        if (!currentUser || !isTasksEnabled) return [];
         const completedTaskIds = (currentUser.completedTasks || []).map(ct => ct.taskId);
         return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !completedTaskIds.includes(t._id));
-    }, [tasks, currentUser]);
+    }, [tasks, currentUser, isTasksEnabled]);
 
     // Derived Data
     const withdrawalMethods = useMemo(() => {
@@ -548,7 +550,7 @@ const WithdrawFunds: React.FC = () => {
                             <Button type="button" variant="secondary" onClick={() => setStep(3)}>
                                 &larr; Back
                             </Button>
-                            <Button type="submit" onClick={handleSubmit} className="flex-grow py-3 text-lg shadow-lg shadow-blue-500/30 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                            <Button type="submit" onClick={handleSubmit} className="flex-grow py-3 text-lg shadow-lg shadow-green-500/30 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
                                 {isSubmitting ? 'Processing...' : `Submit Request`}
                             </Button>
                         </div>
