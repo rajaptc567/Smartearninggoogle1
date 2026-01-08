@@ -213,9 +213,11 @@ const Settings: React.FC = () => {
 
     // --- FAQ Handlers ---
     const handleFaqChange = (index: number, field: keyof FaqItem, value: any) => {
-        const updatedFaqs = [...(localSettings.faqs || [])];
-        updatedFaqs[index] = { ...updatedFaqs[index], [field]: value };
-        setLocalSettings(prev => ({ ...prev, faqs: updatedFaqs }));
+        setLocalSettings(prev => {
+            const updatedFaqs = [...(prev.faqs || [])];
+            updatedFaqs[index] = { ...updatedFaqs[index], [field]: value };
+            return { ...prev, faqs: updatedFaqs };
+        });
         setIsDirty(true);
     };
 
