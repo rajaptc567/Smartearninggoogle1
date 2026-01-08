@@ -1,4 +1,5 @@
 
+
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -144,6 +145,7 @@ export interface Settings {
         transfers: boolean;
         planPurchases: boolean;
     };
+    // Fix: Removed duplicated properties here
     tickerRealActivityConfig?: {
         minAmount: number;
         privacyMode: boolean;
@@ -354,6 +356,7 @@ export interface PlanEquivalencyGroup {
 export interface FaqItem {
     question: string;
     answer: string;
+    showOnHomepage?: boolean;
 }
 
 export interface HomepagePaymentLogo {
