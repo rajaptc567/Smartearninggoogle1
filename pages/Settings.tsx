@@ -368,7 +368,7 @@ const Settings: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">System Settings</h2>
       </div>
 
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto no-scrollbar">
           <TabButton id="general" label="General" />
           <TabButton id="homepage" label="Homepage" />
           <TabButton id="faqs" label="FAQs" />
