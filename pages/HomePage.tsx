@@ -68,6 +68,7 @@ const PkrIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-
 const PlusIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
 const TrashIcon = () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const GenericPaymentIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+const ChevronDownIcon = ({ className = "" }) => <svg className={`w-5 h-5 transition-transform duration-300 ${className}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>;
 
 // Reusable Payment Method Card Component - MAXIMIZED VISIBILITY & FIXED SPACING
 const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
@@ -182,6 +183,7 @@ const HomePage: React.FC = () => {
     const [pageContent, setPageContent] = useState<Partial<HomepageContent>>(settings.homepageContent || {});
     const [videoUrl, setVideoUrl] = useState(settings.homepageVideoUrl || '');
     const [localFaqs, setLocalFaqs] = useState<FaqItem[]>([]);
+    const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
     useEffect(() => {
         const hash = window.location.hash;
@@ -687,7 +689,7 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
-                {/* FAQ Section - SMART DISPLAY (First 6 Only) */}
+                {/* FAQ Section - SMART DISPLAY (Accordion Style) */}
                 {(showFAQ || editMode) && (
                     <section className={`py-24 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
@@ -697,9 +699,9 @@ const HomePage: React.FC = () => {
                                 <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                                 {(editMode ? localFaqs : localFaqs.slice(0, 6)).map((faq, index) => (
-                                    <div key={index} className="bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all hover:shadow-xl hover:border-blue-500/30 group">
+                                    <div key={index} className={`bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-xl hover:border-blue-500/30 group ${!editMode && openFaqIndex === index ? 'ring-2 ring-blue-500/10 border-blue-500/40 bg-white dark:bg-gray-800' : ''}`}>
                                         {editMode ? (
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between">
@@ -722,13 +724,25 @@ const HomePage: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div className="flex flex-col h-full">
-                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-start gap-3">
-                                                    <span className="text-blue-500 font-black shrink-0">Q.</span>
-                                                    {faq.question}
-                                                </h3>
-                                                <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
-                                                    {faq.answer}
-                                                </p>
+                                                <button 
+                                                    onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                                                    className="flex justify-between items-start w-full text-left focus:outline-none"
+                                                >
+                                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-start gap-3 pr-4">
+                                                        <span className="text-blue-500 font-black shrink-0">Q.</span>
+                                                        {faq.question}
+                                                    </h3>
+                                                    <div className={`mt-1.5 p-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 transition-colors ${openFaqIndex === index ? 'bg-blue-600 text-white' : ''}`}>
+                                                        <ChevronDownIcon className={openFaqIndex === index ? 'rotate-180' : ''} />
+                                                    </div>
+                                                </button>
+                                                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === index ? 'max-h-[500px] opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
+                                                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                                                        <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
+                                                            {faq.answer}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
