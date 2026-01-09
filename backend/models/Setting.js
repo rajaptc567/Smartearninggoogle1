@@ -153,6 +153,7 @@ const SettingSchema = new mongoose.Schema({
         PKR: { type: Number, default: 278.00 }
     },
     restrictWithdrawalAmount: { type: Boolean, default: false },
+    restrictDepositAmount: { type: Boolean, default: false },
     requirePlanMatchForCommission: { type: Boolean, default: false },
     requireActivePlanForCommission: { type: Boolean, default: false },
     oneTimeCommissionPerGroup: { type: Boolean, default: false },

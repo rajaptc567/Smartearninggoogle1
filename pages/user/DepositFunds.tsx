@@ -30,7 +30,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isCompleted ? 'bg-green-50 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
                         <span className={`text-xs mt-2 font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
@@ -39,15 +39,14 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
             })}
             {/* Progress Bar Background */}
             <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-700 -z-0 hidden sm:block"></div>
-            {/* Progress Bar Active */}
-             {/* This simple CSS logic for the bar is tricky with flex-between, keeping it simple with just dots for now or absolute positioning if needed exact */}
         </div>
     );
 };
 
 const DepositFunds: React.FC = () => {
     const { state, dispatch } = useData();
-    const { paymentMethods, currentUser, investmentPlans, deposits } = state;
+    const { paymentMethods, currentUser, investmentPlans, deposits, settings } = state;
+    const { restrictDepositAmount } = settings;
     const navigate = useNavigate();
 
     // Wizard State
@@ -156,7 +155,6 @@ const DepositFunds: React.FC = () => {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        // Could add a toast here
     };
     
     // Reset method if amount changes significantly (invalidating the method)
@@ -234,21 +232,29 @@ const DepositFunds: React.FC = () => {
                             </div>
                         )}
                         
-                        <div className="relative">
-                            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Custom Amount</label>
+                        {!restrictDepositAmount ? (
                             <div className="relative">
-                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
-                                    {currencySymbols[currentUser.currency]}
-                                </span>
-                                <input
-                                    type="number"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    className="w-full pl-8 p-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white text-lg font-medium"
-                                    placeholder="Enter amount"
-                                />
+                                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Custom Amount</label>
+                                <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                                        {currencySymbols[currentUser.currency]}
+                                    </span>
+                                    <input
+                                        type="number"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        className="w-full pl-8 p-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white text-lg font-medium"
+                                        placeholder="Enter amount"
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl text-center">
+                                <p className="text-sm text-blue-700 dark:text-blue-300">
+                                    <span className="font-bold">Notice:</span> Only plan-equivalent deposit amounts are allowed. Please select an amount from the options above.
+                                </p>
+                            </div>
+                        )}
 
                         <div className="pt-4 flex justify-end">
                             <Button 

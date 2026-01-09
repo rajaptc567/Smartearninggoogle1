@@ -114,6 +114,8 @@ export const mockSettings: Settings = {
     },
     exchangeRates: { EUR: 300.00, PKR: 1, USD: 280.00 },
     restrictWithdrawalAmount: false,
+    // FIX: Added missing required property restrictDepositAmount
+    restrictDepositAmount: false,
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,
     oneTimeCommissionPerGroup: false,

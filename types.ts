@@ -1,5 +1,4 @@
 
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -114,6 +113,7 @@ export interface Settings {
         PKR: number;
     };
     restrictWithdrawalAmount: boolean;
+    restrictDepositAmount: boolean;
     requirePlanMatchForCommission: boolean;
     requireActivePlanForCommission: boolean;
     oneTimeCommissionPerGroup: boolean;
@@ -145,7 +145,6 @@ export interface Settings {
         transfers: boolean;
         planPurchases: boolean;
     };
-    // Fix: Removed duplicated properties here
     tickerRealActivityConfig?: {
         minAmount: number;
         privacyMode: boolean;

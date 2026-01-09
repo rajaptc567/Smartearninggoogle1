@@ -80,6 +80,7 @@ const initialState: AppState = {
             PKR: 278.00,
         },
         restrictWithdrawalAmount: false,
+        restrictDepositAmount: false,
         requirePlanMatchForCommission: false,
         requireActivePlanForCommission: false,
         oneTimeCommissionPerGroup: false,
@@ -175,6 +176,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.isTasksEnabled === undefined) newSettings.isTasksEnabled = true;
         if (newSettings.showRejectedCommissionTransaction === undefined) newSettings.showRejectedCommissionTransaction = true;
         if (newSettings.notifySponsorOnCommissionLimit === undefined) newSettings.notifySponsorOnCommissionLimit = true;
+        if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
         return newSettings;
     };
 
