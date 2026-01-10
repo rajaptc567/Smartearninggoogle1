@@ -23,22 +23,23 @@ const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
     const steps = ['Amount', 'Method', 'Instructions', 'Confirm'];
     return (
-        <div className="flex items-center justify-between mb-8 w-full max-w-2xl mx-auto px-4">
+        <div className="flex items-center justify-between mb-10 w-full max-w-2xl mx-auto px-4 relative">
+             {/* Progress Line */}
+             <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-800 -z-0 hidden sm:block"></div>
+             
             {steps.map((label, index) => {
                 const stepNum = index + 1;
                 const isActive = stepNum === currentStep;
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isCompleted ? 'bg-green-50 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
-                        <span className={`text-xs mt-2 font-medium ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
+                        <span className={`text-[10px] mt-3 font-black uppercase tracking-[0.1em] transition-colors duration-300 ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
                     </div>
                 );
             })}
-            {/* Progress Bar Background */}
-            <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-700 -z-0 hidden sm:block"></div>
         </div>
     );
 };
@@ -169,61 +170,61 @@ const DepositFunds: React.FC = () => {
 
     if (isSubmitted) {
         return (
-            <div className="max-w-xl mx-auto mt-10 p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl text-center border border-green-100 dark:border-green-900 animate-fade-in">
-                <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-green-400 to-green-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/30">
+            <div className="max-w-xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl text-center border border-gray-100 dark:border-gray-800 animate-fade-in">
+                <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-green-400 to-green-600 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-green-500/30">
                     <CheckCircleIcon className="h-12 w-12 text-white" />
                 </div>
-                <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">Deposit Submitted!</h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-8">
-                    Your request has been securely transmitted. Our team will verify your transaction shortly.
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tighter">Deposit Transmitted!</h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-10 leading-relaxed font-medium">
+                    Your request has been securely received by our verification engine. Our auditors will confirm your transaction shortly.
                 </p>
-                <div className="flex gap-4 justify-center">
-                    <Button onClick={() => window.location.reload()} variant="primary">Make Another</Button>
-                    <Button onClick={() => navigate('/member')} variant="secondary">Go to Dashboard</Button>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <Button onClick={() => window.location.reload()} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transaction</Button>
+                    <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">Back to Hub</Button>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-8 max-w-4xl mx-auto pb-10">
-            {/* Hero Header */}
-            <div className="relative bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-8 text-white shadow-xl overflow-hidden mb-8">
+        <div className="space-y-10 max-w-5xl mx-auto pb-16 px-2">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 md:p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-12 group">
+                <div className="absolute inset-0 bg-white/5 opacity-10 pointer-events-none"></div>
+                <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
+                <div className="absolute top-1/2 right-10 -translate-y-1/2 opacity-10 hidden lg:block">
+                    <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                </div>
                 <div className="relative z-10">
-                    <h1 className="text-3xl font-bold mb-2">Deposit Funds</h1>
-                    <p className="text-blue-100 max-w-2xl">
+                    <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter uppercase leading-none">Deposit Funds</h1>
+                    <p className="text-blue-50 text-sm md:text-base max-w-2xl leading-relaxed font-medium">
                         Add funds to your wallet securely. Select an amount, choose your preferred payment gateway, and follow the instructions to complete your deposit.
                     </p>
-                </div>
-                <div className="absolute right-0 top-0 h-full w-1/3 bg-white/5 skew-x-12 transform origin-bottom-right"></div>
-                <div className="absolute right-10 bottom-[-20px] text-white/10">
-                    <DepositIcon className="w-32 h-32" />
                 </div>
             </div>
 
             <StepIndicator currentStep={step} />
 
-            <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-950 p-8 sm:p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800">
                 
                 {/* STEP 1: AMOUNT */}
                 {step === 1 && (
-                    <div className="animate-fade-in space-y-6 max-w-lg mx-auto">
-                        <div className="text-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Step 1: Enter Amount</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">How much would you like to deposit?</p>
+                    <div className="animate-fade-in space-y-8 max-w-2xl mx-auto">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Enter Value</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 1: Funding Amount</p>
                         </div>
                         
                         {planPrices.length > 0 && (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                 {planPrices.map(price => (
                                     <button
                                         key={price}
                                         type="button"
                                         onClick={() => setAmount(price.toString())}
-                                        className={`py-3 px-4 rounded-lg font-semibold transition-all border ${
+                                        className={`py-5 px-6 rounded-3xl font-black uppercase text-xs tracking-widest transition-all duration-300 border-2 ${
                                             amount === price.toString()
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105'
-                                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500'
+                                            ? 'bg-blue-600 text-white border-blue-400 shadow-2xl shadow-blue-500/40 scale-105'
+                                            : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-gray-800 hover:border-blue-500/30'
                                         }`}
                                     >
                                         {formatCurrency(price, currentUser.currency)}
@@ -233,159 +234,171 @@ const DepositFunds: React.FC = () => {
                         )}
                         
                         {!restrictDepositAmount ? (
-                            <div className="relative">
-                                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Custom Amount</label>
+                            <div className="relative pt-4">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block ml-2">Manual Allocation</label>
                                 <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                                    <span className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-gray-400 font-bold">
                                         {currencySymbols[currentUser.currency]}
                                     </span>
                                     <input
                                         type="number"
                                         value={amount}
                                         onChange={(e) => setAmount(e.target.value)}
-                                        className="w-full pl-8 p-4 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white text-lg font-medium"
-                                        placeholder="Enter amount"
+                                        className="w-full pl-12 p-6 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none transition-all dark:text-white text-2xl font-black tracking-tighter"
+                                        placeholder="0.00"
                                     />
                                 </div>
                             </div>
                         ) : (
-                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl text-center">
-                                <p className="text-sm text-blue-700 dark:text-blue-300">
-                                    <span className="font-bold">Notice:</span> Only plan-equivalent deposit amounts are allowed. Please select an amount from the options above.
+                            <div className="p-6 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-3xl text-center">
+                                <p className="text-sm text-blue-700 dark:text-blue-300 font-bold leading-relaxed">
+                                    Strategic Limit Active: To maintain network stability, only standardized plan values are permitted for direct deposits.
                                 </p>
                             </div>
                         )}
 
-                        <div className="pt-4 flex justify-end">
+                        <div className="pt-6">
                             <Button 
                                 onClick={() => setStep(2)} 
                                 disabled={!amount || parseFloat(amount) <= 0}
-                                className="w-full sm:w-auto px-8"
+                                className="w-full py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-blue-600/30"
                             >
-                                Next Step &rarr;
+                                Select Gateway &rarr;
                             </Button>
                         </div>
                     </div>
                 )}
 
-                {/* STEP 2: METHOD */}
+                {/* STEP 2: METHOD - REDESIGNED 2 PER ROW, NO LIMIT TEXT */}
                 {step === 2 && (
-                    <div className="animate-fade-in space-y-6">
-                        <div className="text-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Step 2: Choose Payment Method</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">Select a gateway for {formatCurrency(parseFloat(amount), currentUser.currency)}</p>
+                    <div className="animate-fade-in space-y-10">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Gateway Selection</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 2: Choose your payment provider</p>
                         </div>
 
                         {availableMethods.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 gap-4 md:gap-6">
                                 {availableMethods.map(method => (
                                     <div 
                                         key={method._id}
                                         onClick={() => { setSelectedMethodId(method._id); setStep(3); }}
-                                        className="relative cursor-pointer p-5 rounded-xl border-2 border-gray-100 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all duration-200 flex flex-col gap-4 bg-white dark:bg-gray-800 group"
+                                        className="relative cursor-pointer p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border-2 border-gray-50 dark:border-gray-800 hover:border-blue-500 dark:hover:border-blue-600 hover:shadow-2xl transition-all duration-500 flex flex-col items-center text-center bg-white dark:bg-gray-900 group transform hover:-translate-y-1 active:scale-95 shadow-sm"
                                     >
-                                        <div className="flex items-center gap-4">
-                                            {method.logoUrl ? (
-                                                <img src={method.logoUrl} alt={method.name} className="w-12 h-12 object-contain rounded bg-white p-1 shadow-sm" />
-                                            ) : (
-                                                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-lg">
-                                                    {method.name.substring(0,1)}
-                                                </div>
-                                            )}
-                                            <div>
-                                                <h4 className="font-bold text-gray-900 dark:text-white">{method.name}</h4>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">Limit: {formatCurrency(method.maxAmount, method.currency)}</p>
+                                        <div className="absolute top-3 right-3 md:top-4 md:right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="p-1 bg-blue-600 rounded-full text-white">
+                                                <svg className="w-2.5 h-2.5 md:w-3 md:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                                             </div>
                                         </div>
-                                        <div className="w-full h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-blue-500 w-0 group-hover:w-full transition-all duration-500"></div>
+
+                                        <div className="w-16 h-16 md:w-20 md:h-20 bg-gray-50 dark:bg-black rounded-2xl md:rounded-3xl flex items-center justify-center p-2.5 md:p-3 shadow-inner border border-gray-100 dark:border-gray-800 transition-transform group-hover:scale-105">
+                                            {method.logoUrl ? (
+                                                <img src={method.logoUrl} alt={method.name} className="max-w-full max-h-full object-contain" />
+                                            ) : (
+                                                <div className="text-blue-600 dark:text-blue-400 font-black text-2xl md:text-3xl uppercase">{method.name.substring(0,1)}</div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="mt-4 md:mt-6 space-y-1">
+                                            <h4 className="text-sm md:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-tight">{method.name}</h4>
+                                            <span className="inline-block px-2 md:px-3 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest rounded-full border border-green-200 dark:border-green-800/30">Verified</span>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center p-8 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
-                                <p className="text-gray-500 dark:text-gray-400">No payment methods available for {formatCurrency(parseFloat(amount), currentUser.currency)}.</p>
-                                <Button variant="secondary" onClick={() => setStep(1)} className="mt-4">Change Amount</Button>
+                            <div className="text-center py-16 bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-800 max-w-lg mx-auto">
+                                <p className="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest text-sm mb-6">Insufficient Gateways</p>
+                                <p className="text-xs text-gray-400 mb-10 px-8 leading-relaxed">No payment providers currently match your selected allocation.</p>
+                                <Button variant="secondary" onClick={() => setStep(1)} className="rounded-xl px-10 py-4 font-black uppercase text-[10px] tracking-widest">Modify Amount</Button>
                             </div>
                         )}
 
                         <div className="pt-6 flex justify-start">
-                            <Button variant="secondary" onClick={() => setStep(1)}>
-                                &larr; Back
-                            </Button>
+                            <button onClick={() => setStep(1)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors">
+                                &larr; Return to Step 1
+                            </button>
                         </div>
                     </div>
                 )}
 
                 {/* STEP 3: INSTRUCTIONS */}
                 {step === 3 && selectedMethod && (
-                    <div className="animate-fade-in space-y-6">
-                        <div className="text-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Step 3: Payment Instructions</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">Please transfer the exact amount to the account below.</p>
+                    <div className="animate-fade-in space-y-8">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Instructions</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 3: Transfer your funds</p>
                         </div>
 
-                        <div className="bg-blue-50 dark:bg-blue-900/10 p-6 rounded-xl border border-blue-100 dark:border-blue-800 max-w-2xl mx-auto">
-                            <div className="text-center mb-6">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide font-semibold">Total to Pay</p>
-                                <p className="text-4xl font-extrabold text-blue-600 dark:text-blue-400 my-2">{formatCurrency(parseFloat(amount), currentUser.currency)}</p>
-                                {selectedMethod.feePercent > 0 && <p className="text-xs text-gray-500">Includes {selectedMethod.feePercent}% fee</p>}
+                        <div className="bg-[#0f172a] p-10 rounded-[2.5rem] border border-gray-800 max-w-3xl mx-auto shadow-2xl relative overflow-hidden">
+                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+
+                            <div className="text-center mb-10">
+                                <p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mb-2">Order Total</p>
+                                <p className="text-5xl font-black text-blue-400 tracking-tighter">{formatCurrency(parseFloat(amount), currentUser.currency)}</p>
+                                {selectedMethod.feePercent > 0 && <p className="text-[10px] text-gray-500 font-bold mt-2 uppercase tracking-widest italic">Includes {selectedMethod.feePercent}% Network Fee</p>}
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                                    <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Account Details</label>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-gray-600 dark:text-gray-400">Bank/Platform:</span>
-                                        <span className="font-bold text-gray-900 dark:text-white">{selectedMethod.name}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-gray-600 dark:text-gray-400">Account Title:</span>
-                                        <span className="font-bold text-gray-900 dark:text-white">{selectedMethod.accountTitle}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded border border-gray-100 dark:border-gray-600">
-                                        <span className="font-mono text-lg font-bold text-gray-900 dark:text-white tracking-wide break-all">{selectedMethod.accountNumber}</span>
-                                        <button 
-                                            onClick={() => copyToClipboard(selectedMethod.accountNumber)}
-                                            className="ml-2 p-2 bg-white dark:bg-gray-600 rounded-full shadow-sm hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors text-blue-600 dark:text-blue-300"
-                                            title="Copy Number"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                        </button>
+                            <div className="space-y-6">
+                                <div className="bg-white/5 backdrop-blur-md p-8 rounded-[2rem] border border-white/5 shadow-inner">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                        <div>
+                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Provider</label>
+                                            <span className="text-lg font-black text-white uppercase">{selectedMethod.name}</span>
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Account Holder</label>
+                                            <span className="text-lg font-black text-white uppercase truncate block">{selectedMethod.accountTitle}</span>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">System Identifier / ID</label>
+                                            <div className="flex items-center justify-between mt-2 p-5 bg-black/40 rounded-2xl border border-white/5">
+                                                <span className="font-mono text-xl font-black text-blue-400 tracking-widest break-all select-all">{selectedMethod.accountNumber}</span>
+                                                <button 
+                                                    onClick={() => { copyToClipboard(selectedMethod.accountNumber); alert('Copied to clipboard!'); }}
+                                                    className="ml-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg transition-all text-white active:scale-90"
+                                                    title="Copy Identifier"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Custom Fields */}
-                                {selectedMethod.customFields && selectedMethod.customFields.map((field, idx) => (
-                                    <div key={idx} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                                        <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">{field.title}:</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-gray-900 dark:text-white">{field.value}</span>
-                                            <button onClick={() => copyToClipboard(field.value)} className="text-gray-400 hover:text-blue-500"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></button>
-                                        </div>
+                                {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {selectedMethod.customFields.map((field, idx) => (
+                                            <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                                                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{field.title}</span>
+                                                <span className="font-bold text-white text-sm">{field.value}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
 
                                 {selectedMethod.howToDeposit?.enabled && (
-                                    <div className="pt-2">
+                                    <div className="pt-4">
                                         <button 
                                             onClick={() => setShowGuide(!showGuide)}
-                                            className="w-full py-2 px-3 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-bold rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center justify-center gap-2"
+                                            className="w-full py-4 bg-white/5 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-3 border border-white/5 shadow-lg"
                                         >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            {showGuide ? 'Hide Guide' : 'View How-to Deposit Guide'}
+                                            <svg className={`w-4 h-4 transition-transform duration-300 ${showGuide ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                            {showGuide ? 'Collapse workflow guide' : 'Detailed workflow guide'}
                                         </button>
                                         
                                         {showGuide && selectedMethod.howToDeposit.steps.length > 0 && (
-                                            <div className="mt-4 space-y-4 animate-fade-in bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                                            <div className="mt-6 space-y-6 animate-fade-in bg-black/30 p-6 rounded-[2rem] border border-white/5">
                                                 {selectedMethod.howToDeposit.steps.map((step, idx) => (
-                                                    <div key={idx} className="relative pl-6 pb-4 border-l-2 border-blue-200 dark:border-blue-800 last:pb-0 last:border-l-0">
-                                                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-500 border-2 border-white dark:border-gray-800"></div>
-                                                        <h5 className="font-bold text-sm text-gray-800 dark:text-white mb-1">Step {idx+1}: {step.title}</h5>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{step.description}</p>
+                                                    <div key={idx} className="relative pl-10 pb-6 border-l-2 border-blue-500/30 last:pb-0 last:border-l-0">
+                                                        <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-blue-600 border-4 border-[#0f172a] shadow-xl"></div>
+                                                        <h5 className="font-black text-xs text-white uppercase tracking-wider mb-2">Step {idx+1}: {step.title}</h5>
+                                                        <p className="text-xs text-gray-400 mb-4 leading-relaxed">{step.description}</p>
                                                         {step.imageUrl && (
-                                                            <img src={step.imageUrl} alt={step.title} className="rounded-md w-full object-cover max-h-48 border border-gray-200 dark:border-gray-600" />
+                                                            <div className="rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+                                                                <img src={step.imageUrl} alt={step.title} className="w-full object-cover max-h-64" />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 ))}
@@ -395,20 +408,20 @@ const DepositFunds: React.FC = () => {
                                 )}
 
                                 {selectedMethod.instructions && (
-                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-100 dark:border-yellow-800 text-sm text-yellow-800 dark:text-yellow-200 flex gap-2">
-                                        <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        <p className="opacity-90">{selectedMethod.instructions}</p>
+                                    <div className="bg-blue-600/10 p-5 rounded-2xl border border-blue-500/20 text-xs text-blue-400 flex gap-4 items-start shadow-inner">
+                                        <div className="shrink-0 pt-0.5"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                                        <p className="font-medium leading-relaxed">{selectedMethod.instructions}</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className="pt-6 flex justify-between">
-                            <Button variant="secondary" onClick={() => setStep(2)}>
-                                &larr; Back
-                            </Button>
-                            <Button onClick={() => setStep(4)} className="px-8 shadow-lg shadow-blue-500/30">
-                                I Have Made The Payment &rarr;
+                        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-6">
+                            <button onClick={() => setStep(2)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors">
+                                &larr; Return to Gateway Selection
+                            </button>
+                            <Button onClick={() => setStep(4)} className="w-full sm:w-auto px-12 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-blue-600/30">
+                                Transfer Completed &rarr;
                             </Button>
                         </div>
                     </div>
@@ -416,81 +429,87 @@ const DepositFunds: React.FC = () => {
 
                 {/* STEP 4: CONFIRMATION */}
                 {step === 4 && selectedMethod && (
-                    <div className="animate-fade-in space-y-6 max-w-lg mx-auto">
-                        <div className="text-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">Step 4: Confirm Payment</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">Provide your transaction details to verify.</p>
+                    <div className="animate-fade-in space-y-10 max-w-2xl mx-auto">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Final Verification</h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 4: Audit trail details</p>
                         </div>
 
-                        <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-lg border dark:border-gray-600 mb-6 flex justify-between items-center text-sm">
+                        <div className="bg-gray-50 dark:bg-gray-900 p-8 rounded-[2rem] border border-gray-100 dark:border-gray-800 flex justify-between items-center">
                             <div>
-                                <span className="block text-gray-500 dark:text-gray-400 text-xs uppercase">Method</span>
-                                <span className="font-semibold text-gray-900 dark:text-white">{selectedMethod.name}</span>
+                                <span className="block text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">Gateway</span>
+                                <span className="font-black text-gray-900 dark:text-white uppercase">{selectedMethod.name}</span>
                             </div>
                             <div className="text-right">
-                                <span className="block text-gray-500 dark:text-gray-400 text-xs uppercase">Amount</span>
-                                <span className="font-bold text-blue-600 dark:text-blue-400 text-lg">{formatCurrency(parseFloat(amount), currentUser.currency)}</span>
+                                <span className="block text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">Audit Value</span>
+                                <span className="font-black text-blue-600 dark:text-blue-400 text-3xl tracking-tighter">{formatCurrency(parseFloat(amount), currentUser.currency)}</span>
                             </div>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender Account Name</label>
-                                <input 
-                                    type="text" 
-                                    value={senderAccountTitle}
-                                    onChange={e => setSenderAccountTitle(e.target.value)}
-                                    className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                                    placeholder="e.g. John Doe"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Transaction ID (Trx ID)</label>
-                                <input 
-                                    type="text" 
-                                    value={transactionId}
-                                    onChange={e => setTransactionId(e.target.value)}
-                                    className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-                                    placeholder="e.g. 8273827382"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upload Receipt</label>
-                                <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${receipt ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'}`}>
+                        <form onSubmit={handleSubmit} className="space-y-8">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Verification Account Name</label>
                                     <input 
-                                        type="file" 
-                                        id="receipt-upload"
-                                        className="hidden" 
-                                        onChange={e => e.target.files && setReceipt(e.target.files[0])}
-                                        accept="image/*"
+                                        type="text" 
+                                        value={senderAccountTitle}
+                                        onChange={e => setSenderAccountTitle(e.target.value)}
+                                        className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none font-bold"
+                                        placeholder="EXACT NAME ON RECEIPT"
                                         required
                                     />
-                                    <label htmlFor="receipt-upload" className="cursor-pointer block">
-                                        {receipt ? (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <CheckCircleIcon className="w-8 h-8 text-green-500" />
-                                                <span className="text-sm font-medium text-green-700 dark:text-green-300">{receipt.name} selected</span>
-                                                <span className="text-xs text-green-600 dark:text-green-400 underline">Click to change</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                                                <span className="text-sm text-gray-600 dark:text-gray-400">Click to upload screenshot</span>
-                                                <span className="text-xs text-gray-400">JPG, PNG up to 10MB</span>
-                                            </div>
-                                        )}
-                                    </label>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Transaction Reference (Trx ID)</label>
+                                    <input 
+                                        type="text" 
+                                        value={transactionId}
+                                        onChange={e => setTransactionId(e.target.value)}
+                                        className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none font-mono font-bold tracking-widest"
+                                        placeholder="REFERENCE NUMBER"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Digital Receipt (Audit Proof)</label>
+                                    <div className={`border-2 border-dashed rounded-[2rem] p-10 text-center transition-all duration-300 ${receipt ? 'border-green-500 bg-green-50/30 dark:bg-green-900/10' : 'border-gray-100 dark:border-gray-800 hover:border-blue-500/50 bg-gray-50 dark:bg-gray-900/50'}`}>
+                                        <input 
+                                            type="file" 
+                                            id="receipt-upload"
+                                            className="hidden" 
+                                            onChange={e => e.target.files && setReceipt(e.target.files[0])}
+                                            accept="image/*"
+                                            required
+                                        />
+                                        <label htmlFor="receipt-upload" className="cursor-pointer block">
+                                            {receipt ? (
+                                                <div className="flex flex-col items-center gap-3 animate-fade-in">
+                                                    <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white shadow-lg"><CheckCircleIcon className="w-6 h-6" /></div>
+                                                    <span className="text-xs font-black text-green-700 dark:text-green-300 uppercase tracking-widest">{receipt.name} attached</span>
+                                                    <span className="text-[10px] text-gray-400 uppercase tracking-tighter hover:text-blue-500 underline transition-colors">Tap to swap file</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-4 group">
+                                                    <div className="w-16 h-16 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-300 dark:text-gray-600 group-hover:scale-110 group-hover:text-blue-500 transition-all duration-300 shadow-sm border border-gray-100 dark:border-gray-700">
+                                                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <span className="block text-sm font-black text-gray-700 dark:text-gray-300 uppercase tracking-widest">Select Audit Screenshot</span>
+                                                        <span className="block text-[10px] text-gray-400 uppercase tracking-tighter">MAX FILE SIZE 10MB • PNG, JPG, WEBP</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div className="pt-6 flex justify-between items-center gap-4">
-                                <Button type="button" variant="secondary" onClick={() => setStep(3)}>
-                                    &larr; Back
-                                </Button>
-                                <Button type="submit" className="flex-grow py-3 text-lg shadow-lg shadow-green-500/30 bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
-                                    {isSubmitting ? 'Verifying...' : `Submit Deposit Request`}
+                            <div className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-6">
+                                <button type="button" onClick={() => setStep(3)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors">
+                                    &larr; Return to Step 3
+                                </button>
+                                <Button type="submit" className="w-full sm:w-auto px-16 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-green-600/30 bg-green-600 hover:bg-green-700 border-0" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Syncing...' : `Submit Audit Request`}
                                 </Button>
                             </div>
                         </form>
@@ -499,54 +518,61 @@ const DepositFunds: React.FC = () => {
             </div>
 
             {/* DEPOSIT HISTORY SECTION */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 mt-8">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white">Recent Deposits</h3>
+            <div className="bg-white dark:bg-gray-950 p-10 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 mt-12">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 rounded-xl flex items-center justify-center text-gray-400">
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                        <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Audit Ledger</h3>
+                    </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                         <select 
                             value={historyStatus} 
                             onChange={(e) => setHistoryStatus(e.target.value)} 
-                            className="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                            className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20"
                         >
                             <option value="">All Statuses</option>
                             <option value={Status.Approved}>Approved</option>
                             <option value={Status.Pending}>Pending</option>
                             <option value={Status.Rejected}>Rejected</option>
                         </select>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800">
                             <input 
                                 type="date" 
                                 value={historyDateFrom} 
                                 onChange={(e) => setHistoryDateFrom(e.target.value)} 
-                                className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" 
+                                className="bg-transparent border-none dark:text-white text-[10px] font-black uppercase focus:ring-0" 
                             />
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-300 dark:text-gray-700">|</span>
                             <input 
                                 type="date" 
                                 value={historyDateTo} 
                                 onChange={(e) => setHistoryDateTo(e.target.value)} 
-                                className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" 
+                                className="bg-transparent border-none dark:text-white text-[10px] font-black uppercase focus:ring-0" 
                             />
                         </div>
                     </div>
                 </div>
 
                 {filteredDeposits.length > 0 ? (
-                    <Table headers={['Date', 'Method', 'Amount', 'Tx ID', 'Status']}>
-                        {filteredDeposits.map((deposit) => (
-                            <tr key={deposit._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
-                                <td className="px-4 py-3 text-sm">{deposit.method}</td>
-                                <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">{formatCurrency(deposit.amount, deposit.currency)}</td>
-                                <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
-                                <td className="px-4 py-3"><Badge status={deposit.status} /></td>
-                            </tr>
-                        ))}
-                    </Table>
+                    <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                        <Table headers={['Date', 'Provider', 'Allocation', 'Reference', 'State']}>
+                            {filteredDeposits.map((deposit) => (
+                                <tr key={deposit._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
+                                    <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(deposit.date).toLocaleDateString()}</td>
+                                    <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{deposit.method}</td>
+                                    <td className="px-6 py-5 font-black text-green-600 dark:text-green-400 text-base">{formatCurrency(deposit.amount, deposit.currency)}</td>
+                                    <td className="px-6 py-5 text-[10px] font-mono font-bold uppercase tracking-widest opacity-60">{deposit.transactionId}</td>
+                                    <td className="px-6 py-5"><Badge status={deposit.status} /></td>
+                                </tr>
+                            ))}
+                        </Table>
+                    </div>
                 ) : (
-                    <div className="text-center py-8 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-600">
-                        <p className="text-gray-500 dark:text-gray-400">No deposit history found matching the criteria.</p>
+                    <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
+                        <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">Empty Audit Record</p>
                     </div>
                 )}
             </div>
