@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 
 interface SidebarProps {
@@ -21,7 +21,6 @@ const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentCol
 const ActivePlansIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>;
 const InboxIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>;
 const TaskIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>;
-
 
 const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     const { state, dispatch } = useData();
@@ -44,9 +43,9 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
         { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
     ];
 
-    const baseLinkClass = "flex items-center px-4 py-2.5 rounded-lg transition-colors duration-200";
-    const inactiveLinkClass = "text-gray-400 hover:bg-gray-700 hover:text-white";
-    const activeLinkClass = "bg-blue-600 text-white";
+    const baseLinkClass = "flex items-center px-4 py-3 rounded-xl transition-all duration-200 mx-2 mb-1";
+    const inactiveLinkClass = "text-gray-400 hover:bg-gray-700/50 hover:text-white";
+    const activeLinkClass = "bg-blue-600 text-white shadow-lg shadow-blue-600/20";
 
     const handleLogout = () => {
         dispatch({ type: 'SET_CURRENT_USER', payload: null });
@@ -55,49 +54,63 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
 
     return (
         <>
-            <div className={`fixed inset-0 z-20 bg-black bg-opacity-50 transition-opacity lg:hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            <div className={`fixed inset-0 z-40 bg-black bg-opacity-60 transition-opacity lg:hidden ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                  onClick={() => setSidebarOpen(false)}>
             </div>
-            <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-gray-800 dark:bg-gray-900 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 flex flex-col`}>
-                <div className="flex items-center justify-center h-20 border-b border-gray-700 flex-shrink-0">
-                    <h1 className="text-2xl font-bold text-white">Member Area</h1>
+            <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-gray-900 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 flex flex-col shadow-2xl`}>
+                <div className="flex items-center justify-center h-24 border-b border-gray-800 flex-shrink-0">
+                    <div className="w-10 h-10 bg-blue-600 rounded-lg mr-3 shadow-md"></div>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Member Area</h1>
                 </div>
-                <nav className="mt-6 px-4 flex-grow">
-                    {userNavLinks.map(({ to, label, icon, condition, badge }) => {
-                        // FIX: Explicitly check if feature is enabled in settings
-                        if (condition && (settings as any)[condition] === false) {
-                          return null;
-                        }
-                        return (
-                          <NavLink
-                              key={label}
-                              to={to}
-                              end={to === '/member'}
-                              onClick={() => setSidebarOpen(false)}
-                              className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} mt-2`}
-                          >
-                              {icon}
-                              <span className="mx-4 font-medium">{label}</span>
-                              {badge !== undefined && badge > 0 && (
-                                <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                    {badge}
-                                </span>
-                            )}
-                          </NavLink>
-                        )
-                    })}
-                </nav>
-                <div className="px-4 pb-6">
-                     <NavLink
-                        to="/"
-                        onClick={handleLogout}
-                        className={`${baseLinkClass} ${inactiveLinkClass} mt-2`}
-                    >
-                        <LogoutIcon />
-                        <span className="mx-4 font-medium">Logout</span>
-                    </NavLink>
+                
+                {/* Scrollable navigation area */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar pt-6 flex flex-col">
+                    <nav className="flex-1 px-2">
+                        {userNavLinks.map(({ to, label, icon, condition, badge }) => {
+                            if (condition && (settings as any)[condition] === false) {
+                              return null;
+                            }
+                            return (
+                              <NavLink
+                                  key={label}
+                                  to={to}
+                                  end={to === '/member'}
+                                  onClick={() => setSidebarOpen(false)}
+                                  className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass}`}
+                              >
+                                  <div className="shrink-0">{icon}</div>
+                                  <span className="ml-4 font-bold text-sm tracking-tight">{label}</span>
+                                  {badge !== undefined && badge > 0 && (
+                                    <span className="ml-auto inline-flex items-center justify-center h-5 w-5 text-[10px] font-black leading-none text-white bg-red-600 rounded-full shadow-sm">
+                                        {badge}
+                                    </span>
+                                )}
+                              </NavLink>
+                            )
+                        })}
+                    </nav>
+                    
+                    {/* Fixed-at-bottom-of-content area */}
+                    <div className="px-2 pb-8 mt-4 pt-4 border-t border-gray-800">
+                         <button
+                            onClick={handleLogout}
+                            className={`${baseLinkClass} ${inactiveLinkClass} w-[calc(100%-1rem)] text-left hover:bg-red-900/20 hover:text-red-400 group transition-colors`}
+                        >
+                            <div className="group-hover:translate-x-1 transition-transform">
+                                <LogoutIcon />
+                            </div>
+                            <span className="ml-4 font-bold text-sm tracking-tight">Secure Logout</span>
+                        </button>
+                    </div>
                 </div>
             </div>
+            
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+            `}</style>
         </>
     );
 };
