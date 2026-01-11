@@ -21,8 +21,14 @@ const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 const LockIcon = () => (
-    <svg className="w-20 h-20 text-red-500 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="w-20 h-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+);
+
+const ShieldExclamationIcon = () => (
+    <svg className="w-20 h-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
     </svg>
 );
 
@@ -222,6 +228,38 @@ const WithdrawFunds: React.FC = () => {
     };
 
     if (!currentUser) return null;
+
+    // --- INSTANT RESTRICTION CHECK ---
+    if (currentUser.restrictions?.withdrawal) {
+        return (
+            <div className="max-w-2xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-fade-in">
+                <div className="flex flex-col items-center">
+                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/20 rounded-3xl flex items-center justify-center mb-8 border border-red-200 dark:border-red-800">
+                        <ShieldExclamationIcon />
+                    </div>
+                    <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4 leading-none">Withdrawal Access Blocked</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-10 max-w-md mx-auto leading-relaxed font-medium">
+                        Your account's ability to liquidate earnings has been temporarily restricted by the security department for your protection.
+                    </p>
+                    
+                    <div className="w-full p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800 mb-8">
+                        <div className="flex items-center gap-4 text-left">
+                            <span className="text-2xl">🚨</span>
+                            <div>
+                                <p className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tight">Security Review Active</p>
+                                <p className="text-xs text-gray-500 font-medium">Please contact our support team or open a formal dispute for manual account verification.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                        <Button onClick={() => navigate('/member/disputes')} className="rounded-2xl py-4 px-8 font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-500/20">Open Support Ticket</Button>
+                        <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 px-8 font-black uppercase tracking-widest text-xs">Return Dashboard</Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // --- RENDER LOCKED SCREEN IF TASKS PENDING ---
     if (pendingRequiredTasks.length > 0) {

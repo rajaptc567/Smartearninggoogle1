@@ -7,10 +7,18 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { createDispute, updateDispute, markDisputeAsRead } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+
+const ShieldExclamationIcon = () => (
+    <svg className="w-20 h-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+);
 
 const UserDisputes: React.FC = () => {
     const { state, dispatch } = useData();
     const { disputes, currentUser, deposits, withdrawals, transfers } = state;
+    const navigate = useNavigate();
 
     // Creation State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -51,6 +59,37 @@ const UserDisputes: React.FC = () => {
 
 
     if (!currentUser) return <div>Loading...</div>;
+
+    // --- INSTANT RESTRICTION CHECK ---
+    if (currentUser.restrictions?.dispute) {
+        return (
+            <div className="max-w-2xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-fade-in">
+                <div className="flex flex-col items-center">
+                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/20 rounded-3xl flex items-center justify-center mb-8 border border-red-200 dark:border-red-800">
+                        <ShieldExclamationIcon />
+                    </div>
+                    <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-4 leading-none">Support Access Blocked</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-10 max-w-md mx-auto leading-relaxed font-medium">
+                        Your account's ability to raise new formal disputes has been temporarily suspended by the compliance department.
+                    </p>
+                    
+                    <div className="w-full p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800 mb-8">
+                        <div className="flex items-center gap-4 text-left">
+                            <span className="text-2xl">🚨</span>
+                            <div>
+                                <p className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tight">Compliance Review Active</p>
+                                <p className="text-xs text-gray-500 font-medium">Please await resolution of existing tickets or contact your administrator directly via external channels if applicable.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                        <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 px-12 font-black uppercase tracking-widest text-xs">Return to Hub</Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const userDisputes = disputes.filter(d => d.userId === currentUser._id);
 
