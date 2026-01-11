@@ -360,105 +360,57 @@ const DepositFunds: React.FC = () => {
                     </div>
                 )}
 
-                {/* STEP 3: INSTRUCTIONS */}
+                {/* STEP 3: INSTRUCTIONS - MATCHED TO SCREENSHOT */}
                 {step === 3 && selectedMethod && (
                     <div className="animate-fade-in space-y-8">
-                        <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Instructions</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 3: Transfer your funds</p>
+                        <div className="text-center">
+                            <h1 className="text-5xl md:text-6xl font-black text-[#3b82f6] tracking-tighter mb-2">
+                                {formatCurrency(parseFloat(amount), currentUser.currency).replace(currencySymbols[currentUser.currency] || '', '').trim()}
+                            </h1>
                         </div>
 
-                        <div className="bg-[#0f172a] p-10 rounded-[2.5rem] border border-gray-800 max-w-3xl mx-auto shadow-2xl relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-
-                            <div className="text-center mb-10">
-                                <p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mb-2">Order Total</p>
-                                <p className="text-5xl font-black text-blue-400 tracking-tighter">{formatCurrency(parseFloat(amount), currentUser.currency)}</p>
-                                {selectedMethod.feePercent > 0 && <p className="text-[10px] text-gray-500 font-bold mt-2 uppercase tracking-widest italic">Includes {selectedMethod.feePercent}% Network Fee</p>}
-                            </div>
-
-                            <div className="space-y-6">
-                                <div className="bg-white/5 backdrop-blur-md p-8 rounded-[2rem] border border-white/5 shadow-inner">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                                        <div>
-                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Provider</label>
-                                            <span className="text-lg font-black text-white uppercase">{selectedMethod.name}</span>
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Account Holder</label>
-                                            <span className="text-lg font-black text-white uppercase truncate block">{selectedMethod.accountTitle}</span>
-                                        </div>
-                                        <div className="sm:col-span-2">
-                                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">System Identifier / ID</label>
-                                            <div className="flex items-center justify-between mt-2 p-5 bg-black/40 rounded-2xl border border-white/5">
-                                                <span className="font-mono text-xl font-black text-blue-400 tracking-widest break-all select-all">{selectedMethod.accountNumber}</span>
-                                                <button 
-                                                    onClick={() => { copyToClipboard(selectedMethod.accountNumber); alert('Copied to clipboard!'); }}
-                                                    className="ml-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg transition-all text-white active:scale-90"
-                                                    title="Copy Identifier"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                                </button>
-                                            </div>
-                                        </div>
+                        <div className="bg-[#111827] p-8 md:p-12 rounded-[3rem] border border-gray-800 max-w-xl mx-auto shadow-2xl space-y-10">
+                            <div className="space-y-8">
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-2">Provider</label>
+                                    <span className="text-2xl font-black text-white uppercase tracking-tight">{selectedMethod.name}</span>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-2">Account Holder</label>
+                                    <span className="text-2xl font-black text-white uppercase tracking-tight block">{selectedMethod.accountTitle}</span>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-2">System Identifier / ID</label>
+                                    <div className="flex items-center justify-between mt-3 p-6 bg-black/60 rounded-[2rem] border border-white/5 shadow-inner">
+                                        <span className="font-mono text-2xl font-black text-[#3b82f6] tracking-[0.15em] break-all select-all mr-4">
+                                            {selectedMethod.accountNumber}
+                                        </span>
+                                        <button 
+                                            onClick={() => { copyToClipboard(selectedMethod.accountNumber); alert('Copied to clipboard!'); }}
+                                            className="shrink-0 p-4 bg-[#3b82f6] hover:bg-blue-600 rounded-2xl shadow-xl transition-all text-white active:scale-90"
+                                            title="Copy Identifier"
+                                        >
+                                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                        </button>
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Custom Fields */}
-                                {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {selectedMethod.customFields.map((field, idx) => (
-                                            <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
-                                                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{field.title}</span>
-                                                <span className="font-bold text-white text-sm">{field.value}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {selectedMethod.howToDeposit?.enabled && (
-                                    <div className="pt-4">
-                                        <button 
-                                            onClick={() => setShowGuide(!showGuide)}
-                                            className="w-full py-4 bg-white/5 text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-3 border border-white/5 shadow-lg"
-                                        >
-                                            <svg className={`w-4 h-4 transition-transform duration-300 ${showGuide ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                                            {showGuide ? 'Collapse workflow guide' : 'Detailed workflow guide'}
-                                        </button>
-                                        
-                                        {showGuide && selectedMethod.howToDeposit.steps.length > 0 && (
-                                            <div className="mt-6 space-y-6 animate-fade-in bg-black/30 p-6 rounded-[2rem] border border-white/5">
-                                                {selectedMethod.howToDeposit.steps.map((step, idx) => (
-                                                    <div key={idx} className="relative pl-10 pb-6 border-l-2 border-blue-500/30 last:pb-0 last:border-l-0">
-                                                        <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-blue-600 border-4 border-[#0f172a] shadow-xl"></div>
-                                                        <h5 className="font-black text-xs text-white uppercase tracking-wider mb-2">Step {idx+1}: {step.title}</h5>
-                                                        <p className="text-xs text-gray-400 mb-4 leading-relaxed">{step.description}</p>
-                                                        {step.imageUrl && (
-                                                            <div className="rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-                                                                <img src={step.imageUrl} alt={step.title} className="w-full object-cover max-h-64" />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {selectedMethod.instructions && (
-                                    <div className="bg-blue-600/10 p-5 rounded-2xl border border-blue-500/20 text-xs text-blue-400 flex gap-4 items-start shadow-inner">
-                                        <div className="shrink-0 pt-0.5"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
-                                        <p className="font-medium leading-relaxed">{selectedMethod.instructions}</p>
-                                    </div>
-                                )}
+                            <div className="bg-[#1e293b]/40 p-6 rounded-[2rem] border border-blue-500/20 text-xs text-blue-300 flex gap-4 items-start shadow-sm">
+                                <div className="shrink-0 pt-0.5">
+                                    <svg className="w-6 h-6 text-[#3b82f6]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <p className="font-bold leading-relaxed text-gray-400">
+                                    Please send the exact amount. Kindly share a screenshot or copy of the payment confirmation as proof.
+                                </p>
                             </div>
                         </div>
 
-                        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-6">
+                        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-6 max-w-xl mx-auto">
                             <button onClick={() => setStep(2)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-500 transition-colors">
-                                &larr; Return to Gateway Selection
+                                &larr; Return to Gateways
                             </button>
-                            <Button onClick={() => setStep(4)} className="w-full sm:w-auto px-12 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-blue-600/30">
+                            <Button onClick={() => setStep(4)} className="w-full sm:w-auto px-16 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-blue-600/30">
                                 Transfer Completed &rarr;
                             </Button>
                         </div>
