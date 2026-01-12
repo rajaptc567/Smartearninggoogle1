@@ -209,6 +209,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                     isPopup: level === 0 
                 });
             }
+        } else if (eligibility.status === 'Pending') {
+            // --- NEW: USER NOTIFICATION FOR HELD COMMISSION ---
+            await Notification.create({
+                userId: uplineUser._id,
+                subject: 'Commission Held',
+                message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}, but it is currently held. Reason: ${eligibility.message}`
+            });
         }
 
         // Check admin preference for transaction record visibility on rejected commissions
