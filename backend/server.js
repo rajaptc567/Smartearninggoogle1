@@ -27,6 +27,12 @@ import taskRoutes from './routes/taskRoutes.js'; // Import new task routes
 // Load env vars
 dotenv.config();
 
+// --- REAL-TIME SYNC ENGINE ---
+// Initialize a global version timestamp. 
+// Any operation that changes data will update this.
+global.appDataVersion = Date.now();
+// -----------------------------
+
 // Connect to database
 connectDB();
 

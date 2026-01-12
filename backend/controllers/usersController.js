@@ -260,6 +260,10 @@ export const createUser = async (req, res) => {
         }
 
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.fullName}!` });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -320,6 +324,10 @@ export const updateUser = async (req, res) => {
             updatedUser = await updatedUser.save();
             await Notification.create({ userId: updatedUser._id, message: `Commission Release: ${updatedUser.currency}${releasedAmount.toFixed(2)} unlocked.` });
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -345,6 +353,10 @@ export const adminActivatePlan = async (req, res) => {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -373,6 +385,10 @@ export const purchasePlan = async (req, res) => {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -411,6 +427,10 @@ export const bulkUpdateRestrictions = async (req, res) => {
                 await user.save();
             }
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, message: `Bulk updated users.` });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -424,6 +444,10 @@ export const bulkDeleteUsers = async (req, res) => {
         await Notification.deleteMany({ userId: { $in: ids } });
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
         await User.deleteMany({ _id: { $in: ids } });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -437,6 +461,10 @@ export const deleteUser = async (req, res) => {
         await Transaction.deleteMany({ userId: user._id });
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -457,6 +485,10 @@ export const adjustWallet = async (req, res) => {
         });
 
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 }
@@ -470,6 +502,10 @@ export const createBulkDummyUsers = async (req, res) => {
             const suf = Math.floor(1000 + Math.random() * 9000);
             await User.create({ fullName: `Dummy User ${suf}`, username: `user_${suf}`, email: `user_${suf}@test.com`, password: 'password123', phone: '000000', country, currency, walletBalance: balance, sponsor: s.username });
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, message: 'Created dummy users' });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

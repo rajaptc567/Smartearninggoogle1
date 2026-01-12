@@ -123,6 +123,9 @@ export const createWithdrawal = async (req, res) => {
         
         await user.save();
         
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -252,6 +255,9 @@ export const updateWithdrawal = async (req, res) => {
         await withdrawal.save();
         await user.save();
 
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+
         res.status(200).json({ success: true, data: { withdrawal, user } });
 
     } catch (err) {
@@ -272,6 +278,9 @@ export const deleteWithdrawal = async (req, res) => {
         if (withdrawal.status === 'Matching') {
              await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         }
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
 
         res.status(200).json({ success: true, data: {} });
     } catch (err) {

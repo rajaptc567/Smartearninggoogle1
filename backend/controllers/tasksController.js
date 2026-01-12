@@ -20,6 +20,10 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
     try {
         const task = await Task.create(req.body);
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: task });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -32,6 +36,10 @@ export const updateTask = async (req, res) => {
     try {
         const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: task });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -44,6 +52,10 @@ export const deleteTask = async (req, res) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -143,6 +155,9 @@ export const completeTask = async (req, res) => {
                 ? `Submission for "${task.title}" received and awaiting verification.` 
                 : `Task Completed: ${task.title}. Reward added to wallet.`
         });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
 
         res.status(200).json({ success: true, data: user });
     } catch (err) {
@@ -195,6 +210,10 @@ export const verifyTaskSubmission = async (req, res) => {
         }
 
         await user.save();
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: user });
 
     } catch (err) {

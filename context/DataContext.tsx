@@ -1,9 +1,10 @@
 
-import React, { createContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
-    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks 
+    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
+    getDataVersion
 } from '../services/api';
 
 interface AppState {
@@ -287,11 +288,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     }
 
     // --- CACHE PERSISTENCE ---
-    // Every time state updates, save a copy to localStorage (excluding the user session if handled separately)
     try {
         localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
-            currentUser: state.currentUser // Keep existing user ref if needed
+            currentUser: state.currentUser 
         }));
     } catch (e) {
         console.warn("Failed to update app cache", e);
@@ -338,20 +338,24 @@ interface DataProviderProps {
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
+    const lastVersionRef = useRef<number>(0);
 
+    // Initial Data Fetch
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch fresh data from server
                 const [
                     users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                    currentVersion
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                    getDataVersion()
                 ]);
                 
-                // Silent background update of local state
+                lastVersionRef.current = currentVersion;
+
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
@@ -366,6 +370,52 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         fetchData();
     }, []);
+
+    // --- REAL-TIME SYNC POLLING ---
+    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
+    useEffect(() => {
+        const pollInterval = setInterval(async () => {
+            if (!state.currentUser) return; // Only poll if logged in
+
+            try {
+                const serverVersion = await getDataVersion();
+                
+                if (lastVersionRef.current === 0) {
+                    lastVersionRef.current = serverVersion;
+                    return;
+                }
+
+                if (serverVersion > lastVersionRef.current) {
+                    console.log("Remote changes detected by admin. Synchronizing app state...");
+                    
+                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
+                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
+                        lastVersionRef.current = serverVersion;
+                        // Just trigger data fetch instead of refresh for admin
+                        // This keeps their modal/forms open but refreshes background data
+                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        ]);
+                        dispatch({ 
+                            type: 'SET_ALL_DATA', 
+                            payload: { 
+                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                            } 
+                        });
+                    } else {
+                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
+                        window.location.reload();
+                    }
+                }
+            } catch (err) {
+                // Silently ignore polling errors
+            }
+        }, 5000); // Check every 5 seconds
+
+        return () => clearInterval(pollInterval);
+    }, [state.currentUser]);
 
     return (
         <DataContext.Provider value={{ state, dispatch }}>

@@ -90,7 +90,7 @@ export const getPaymentMethods = async (req, res) => {
                     status: 'Enabled',
                     minAmount: 20,
                     maxAmount: 100000,
-                    logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png' 
+                    logoUrl: 'https://upload.wikimedia.org/wikipedia/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png' 
                 }
             ];
             
@@ -129,11 +129,14 @@ export const createPaymentMethod = async (req, res) => {
                 methodData.howToDeposit = JSON.parse(methodData.howToDeposit);
             } catch (e) {
                 console.error("Failed to parse howToDeposit", e);
-                // Don't overwrite if parse fails, might mess up existing data structure if strict
             }
         }
 
         const method = await PaymentMethod.create(methodData);
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: method });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -171,6 +174,10 @@ export const updatePaymentMethod = async (req, res) => {
 
         const method = await PaymentMethod.findByIdAndUpdate(req.params.id, methodData, { new: true, runValidators: true });
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: method });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -181,6 +188,10 @@ export const deletePaymentMethod = async (req, res) => {
     try {
         const method = await PaymentMethod.findByIdAndDelete(req.params.id);
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

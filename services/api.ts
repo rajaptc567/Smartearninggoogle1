@@ -37,6 +37,17 @@ const handleResponse = async (response: Response) => {
     }
 };
 
+// --- [Sync API Functions] ---
+export const getDataVersion = async (): Promise<number> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/settings/version`);
+        const result = await handleResponse(response);
+        return result.version;
+    } catch (e) {
+        return 0; // Fallback to avoid error loops
+    }
+};
+
 // --- [User API Functions] ---
 export const getUsers = async (): Promise<User[]> => {
     const response = await fetch(`${API_BASE_URL}/users`);
