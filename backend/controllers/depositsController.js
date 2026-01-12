@@ -94,7 +94,7 @@ export const createDeposit = async (req, res) => {
             message: `Your deposit request #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} is pending review.`
         });
 
-        // --- HANDLE P2P UPDATE (Silent to withdrawal user) ---
+        // --- HANDLE P2P UPDATE (Partial Payout Notification) ---
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             const depositAmount = deposit.amount;
@@ -115,12 +115,17 @@ export const createDeposit = async (req, res) => {
                     { p2pWithdrawalId: withdrawal._id },
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
-                // NOTE: Notification to withdrawal user removed to keep P2P invisible
             } else {
-                // 4. FULLY MATCHED! Disable the Payment Method instantly
+                // FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
-                // NOTE: Notification to withdrawal user removed to keep P2P invisible
             }
+
+            // 4. Send "Partial Payout Initiated" notification to the withdrawal user
+            await Notification.create({
+                userId: withdrawal.userId,
+                subject: 'Payout Processing Update',
+                message: `Good news! A portion of your withdrawal request #${withdrawal._id} (${user.currency}${deposit.amount.toFixed(2)}) has been initiated and is now being processed by our secondary gateway.`
+            });
         }
         
         res.status(201).json({ success: true, data: { deposit, transaction } });
@@ -174,7 +179,18 @@ export const updateDeposit = async (req, res) => {
                 userId: user._id,
                 message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been approved.`
             });
-            // NOTE: P2P payment confirmation notification to withdrawal user removed
+            
+            // --- P2P Notification: Payment Verified ---
+            if (deposit.matchedWithdrawalId) {
+                const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
+                if (withdrawal) {
+                    await Notification.create({
+                        userId: withdrawal.userId,
+                        subject: 'Payment Verified',
+                        message: `The payment of ${deposit.currency}${deposit.amount.toFixed(2)} for your withdrawal request #${withdrawal._id} has been successfully verified.`
+                    });
+                }
+            }
         } 
         else if (originalStatus === 'Approved' && status !== 'Approved') {
             user.walletBalance = Number((user.walletBalance - deposit.amount).toFixed(2));
@@ -212,7 +228,12 @@ export const updateDeposit = async (req, res) => {
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
                     await withdrawal.save();
                     
-                    // NOTE: Restoration notification to withdrawal user removed
+                    // --- P2P Notification: Payment Unverified/Returned to Queue ---
+                    await Notification.create({
+                        userId: withdrawal.userId,
+                        subject: 'Withdrawal Update',
+                        message: `A partial payment of ${deposit.currency}${deposit.amount.toFixed(2)} for your request #${withdrawal._id} could not be verified. Your request has been returned to the active processing queue.`
+                    });
 
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
                     
