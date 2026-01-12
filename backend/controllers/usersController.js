@@ -210,7 +210,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 });
             }
         } else if (eligibility.status === 'Pending') {
-            // --- NEW: USER NOTIFICATION FOR HELD COMMISSION (Inbox & Bell) ---
+            // --- USER NOTIFICATION FOR HELD COMMISSION (Inbox & Bell) ---
             await Notification.create({
                 userId: uplineUser._id,
                 subject: 'Commission Locked 🔐',
@@ -324,13 +324,22 @@ export const updateUser = async (req, res) => {
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
             if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
-                comm.status = 'Approved'; await comm.save(); releasedAmount += comm.amount;
+                comm.status = 'Approved'; 
+                comm.description = `Unlocked: Commission from referral payout.`;
+                await comm.save(); 
+                releasedAmount += comm.amount;
             }
         }
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            await Notification.create({ userId: updatedUser._id, message: `Commission Release: ${updatedUser.currency}${releasedAmount.toFixed(2)} unlocked.` });
+            
+            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
+            await Notification.create({ 
+                userId: updatedUser._id, 
+                subject: 'Commission Unlocked 🔓',
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+            });
         }
         
         // Update version for real-time sync
@@ -354,12 +363,22 @@ export const adminActivatePlan = async (req, res) => {
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
             if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
-                comm.status = 'Approved'; await comm.save(); releasedAmount += comm.amount;
+                comm.status = 'Approved'; 
+                comm.description = `Unlocked: Commission from referral payout.`;
+                await comm.save(); 
+                releasedAmount += comm.amount;
             }
         }
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
+            
+            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
+            await Notification.create({ 
+                userId: updatedUser._id, 
+                subject: 'Commission Unlocked 🔓',
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+            });
         }
         
         // Update version for real-time sync
@@ -386,12 +405,22 @@ export const purchasePlan = async (req, res) => {
         let releasedAmount = 0;
         for (const comm of pendingCommissions) {
             if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
-                comm.status = 'Approved'; await comm.save(); releasedAmount += comm.amount;
+                comm.status = 'Approved'; 
+                comm.description = `Unlocked: Commission from referral payout.`;
+                await comm.save(); 
+                releasedAmount += comm.amount;
             }
         }
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
+            
+            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
+            await Notification.create({ 
+                userId: updatedUser._id, 
+                subject: 'Commission Unlocked 🔓',
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+            });
         }
         
         // Update version for real-time sync
@@ -429,8 +458,24 @@ export const bulkUpdateRestrictions = async (req, res) => {
                 if (checkRel) {
                     const pending = await Transaction.find({ userId: user._id, type: 'Commission', status: 'Pending' });
                     let rel = 0;
-                    for (const comm of pending) if (await canReleaseCommission(comm, user, settings, allPlans)) { comm.status = 'Approved'; await comm.save(); rel += comm.amount; }
-                    if (rel > 0) user.walletBalance = Number((user.walletBalance + rel).toFixed(2));
+                    for (const comm of pending) {
+                        if (await canReleaseCommission(comm, user, settings, allPlans)) { 
+                            comm.status = 'Approved'; 
+                            comm.description = `Unlocked: Commission from referral payout.`;
+                            await comm.save(); 
+                            rel += comm.amount; 
+                        }
+                    }
+                    if (rel > 0) {
+                        user.walletBalance = Number((user.walletBalance + rel).toFixed(2));
+                        
+                        // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION (Bulk path) ---
+                        await Notification.create({ 
+                            userId: user._id, 
+                            subject: 'Commission Unlocked 🔓',
+                            message: `Success! A total of ${user.currency}${rel.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+                        });
+                    }
                 }
                 await user.save();
             }
