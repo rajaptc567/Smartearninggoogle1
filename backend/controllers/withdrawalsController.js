@@ -10,7 +10,6 @@ import PaymentMethod from '../models/PaymentMethod.js';
 // @route   GET /api/v1/withdrawals
 export const getWithdrawals = async (req, res) => {
     try {
-        // Populate matched deposits to show details in admin panel
         const withdrawals = await Withdrawal.find()
             .sort({ date: -1 })
             .populate({
@@ -47,17 +46,13 @@ export const createWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        // Check specific activity restriction or blocked status
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.withdrawal)) {
             return res.status(403).json({ success: false, error: `Withdrawals are currently disabled for your account.` });
         }
         
-        // --- FREQUENCY LIMIT CHECK ---
         const settings = await Setting.getSettings();
         if (settings.withdrawalFrequency && settings.withdrawalFrequency.enabled) {
             const { value, unit } = settings.withdrawalFrequency;
-            
-            // Find the latest withdrawal for this user
             const lastWithdrawal = await Withdrawal.findOne({ userId: user._id }).sort({ date: -1 });
             
             if (lastWithdrawal) {
@@ -69,15 +64,13 @@ export const createWithdrawal = async (req, res) => {
                     case 'hours': durationMs = value * 60 * 60 * 1000; break;
                     case 'days': durationMs = value * 24 * 60 * 60 * 1000; break;
                     case 'weeks': durationMs = value * 7 * 24 * 60 * 60 * 1000; break;
-                    case 'months': durationMs = value * 30 * 24 * 60 * 60 * 1000; break; // Approx
+                    case 'months': durationMs = value * 30 * 24 * 60 * 60 * 1000; break;
                 }
 
                 const nextAllowedTime = lastDate + durationMs;
                 
                 if (now < nextAllowedTime) {
                     const remainingMs = nextAllowedTime - now;
-                    
-                    // Format remaining time
                     const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
                     const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                     const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -94,13 +87,11 @@ export const createWithdrawal = async (req, res) => {
                 }
             }
         }
-        // --- END FREQUENCY CHECK ---
 
         if (user.walletBalance < req.body.amount) {
             return res.status(400).json({ success: false, error: 'Insufficient balance' });
         }
 
-        // Deduct amount from user's balance immediately
         user.walletBalance -= req.body.amount;
         
         const withdrawalData = { ...req.body, currency: user.currency };
@@ -122,16 +113,12 @@ export const createWithdrawal = async (req, res) => {
         });
         
         await user.save();
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
-
 
 // @desc    Update withdrawal (Approve/Reject)
 // @route   PUT /api/v1/withdrawals/:id
@@ -151,69 +138,54 @@ export const updateWithdrawal = async (req, res) => {
 
         const originalStatus = withdrawal.status;
 
-        // --- P2P MATCHING LOGIC ---
-        // 1. If changing TO 'Matching', create a temporary Payment Method
         if (status === 'Matching') {
-            // Initialize remaining amount if not set or if resetting logic
             const remainingAmount = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
 
             const methodData = {
-                name: p2pName || `P2P - ${withdrawal.method}`,
+                name: p2pName || `Gateway - ${withdrawal.method}`,
                 type: 'Deposit',
                 currency: withdrawal.currency,
                 accountTitle: p2pAccountTitle || withdrawal.accountTitle,
                 accountNumber: p2pAccountNumber || withdrawal.accountNumber,
-                minAmount: 1, // Allow partial deposits
-                maxAmount: remainingAmount, // Cap at exact remaining amount
+                minAmount: 1,
+                maxAmount: remainingAmount,
                 feePercent: 0,
                 status: 'Enabled',
                 instructions: p2pInstructions || '', 
-                logoUrl: p2pLogoUrl || '', // Store the selected branding logo
+                logoUrl: p2pLogoUrl || '',
                 p2pWithdrawalId: withdrawal._id,
                 customFields: p2pCustomFields || []
             };
 
             if (originalStatus === 'Matching') {
-                // Update existing P2P method
                 await PaymentMethod.findOneAndUpdate({ p2pWithdrawalId: withdrawal._id }, methodData);
             } else {
-                // Create new
                 await PaymentMethod.create(methodData);
-                // Initial set of remaining amount if undefined
                 if (withdrawal.matchRemainingAmount === undefined) {
                     withdrawal.matchRemainingAmount = withdrawal.finalAmount;
                 }
             }
         }
 
-        // 2. If changing FROM 'Matching' to something else (Paid, Rejected, etc.), delete the P2P Method
         if (originalStatus === 'Matching' && status !== 'Matching') {
             await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         }
-        // --- END P2P MATCHING LOGIC ---
 
-
-        // If status is not changing (and we already handled P2P detail updates above), just update notes and return.
         if (originalStatus === status) {
             withdrawal.adminNotes = adminNotes || withdrawal.adminNotes;
             await withdrawal.save();
             return res.status(200).json({ success: true, data: { withdrawal, user } });
         }
         
-        // --- Handle Transaction Logic ---
-        
-        // Find the original transaction to update its status and description
         const originalTransaction = await Transaction.findOne({
             userId: user._id,
             type: 'Withdrawal Request',
             description: { $regex: `Withdrawal #${withdrawal._id}` }
         });
 
-        // If request was pending/matching and is now being rejected, refund the user
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
             user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
             
-            // Create a refund transaction
             await Transaction.create({
                 userId: user._id,
                 userName: user.username,
@@ -248,16 +220,12 @@ export const updateWithdrawal = async (req, res) => {
             await Notification.create({ userId: user._id, message });
         }
         
-        // Update the withdrawal document
         withdrawal.status = status;
         withdrawal.adminNotes = adminNotes;
         
         await withdrawal.save();
         await user.save();
-
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-
         res.status(200).json({ success: true, data: { withdrawal, user } });
 
     } catch (err) {
@@ -274,14 +242,11 @@ export const deleteWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
         
-        // Cleanup P2P method if exists
         if (withdrawal.status === 'Matching') {
              await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         }
         
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

@@ -40,44 +40,37 @@ export const createDeposit = async (req, res) => {
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
-        // Check specific activity restriction or blocked status
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.deposit)) {
             return res.status(403).json({ success: false, error: `Deposits are currently disabled for your account.` });
         }
         
-        // Add user's currency to the deposit data
         depositData.currency = user.currency;
 
-        // Check P2P Matching logic BEFORE creating deposit
         if (depositData.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(depositData.matchedWithdrawalId);
             if (!withdrawal) {
-                return res.status(400).json({ success: false, error: 'Matched withdrawal request not found.' });
+                return res.status(400).json({ success: false, error: 'Target gateway not found.' });
             }
             
             const depositAmount = parseFloat(depositData.amount);
             const remaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
 
-            // Ensure deposit does not exceed remaining needed
             if (depositAmount > remaining) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Deposit amount ${user.currency}${depositAmount} exceeds the remaining needed amount of ${user.currency}${remaining}.`
+                    error: `Deposit amount exceeds the remaining limit for this gateway.`
                 });
             }
         }
 
         if (req.file) {
-            // Convert buffer to Base64 string
             const b64 = Buffer.from(req.file.buffer).toString('base64');
             const mimeType = req.file.mimetype;
-            // Store as Data URI in database
             depositData.receiptUrl = `data:${mimeType};base64,${b64}`;
         }
 
         const deposit = await Deposit.create(depositData);
         
-        // Create a Transaction record immediately (Pending)
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,
@@ -88,43 +81,36 @@ export const createDeposit = async (req, res) => {
             description: `Pending Deposit #${deposit._id}`
         });
         
-        // Create a notification for the depositor
         await Notification.create({
             userId: deposit.userId,
             message: `Your deposit request #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} is pending review.`
         });
 
-        // --- HANDLE P2P UPDATE (Partial Payout Notification) ---
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             const depositAmount = deposit.amount;
             
-            // 1. Deduct amount from remaining IMMEDIATELY (even if pending) - Precision Fix
             const currentRemaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
             withdrawal.matchRemainingAmount = Number((currentRemaining - depositAmount).toFixed(2));
             
-            // 2. Add to list of matched deposits
             if (!withdrawal.matchedDepositIds) withdrawal.matchedDepositIds = [];
             withdrawal.matchedDepositIds.push(deposit._id);
 
             await withdrawal.save();
 
-            // 3. Update Payment Method Max Amount (to prevent over-deposit on next try)
             if (withdrawal.matchRemainingAmount > 0) {
                 await PaymentMethod.findOneAndUpdate(
                     { p2pWithdrawalId: withdrawal._id },
                     { maxAmount: withdrawal.matchRemainingAmount }
                 );
             } else {
-                // FULLY MATCHED! Disable the Payment Method instantly
                 await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
             }
 
-            // 4. Send "Partial Payout Initiated" notification to the withdrawal user
             await Notification.create({
                 userId: withdrawal.userId,
-                subject: 'Payout Processing Update',
-                message: `Good news! A portion of your withdrawal request #${withdrawal._id} (${user.currency}${deposit.amount.toFixed(2)}) has been initiated and is now being processed by our secondary gateway.`
+                subject: 'Payout Update',
+                message: `Your withdrawal request #${withdrawal._id} has been processed through a secondary gateway and is now being verified.`
             });
         }
         
@@ -180,15 +166,46 @@ export const updateDeposit = async (req, res) => {
                 message: `Your deposit #${deposit._id} for ${user.currency}${deposit.amount.toFixed(2)} has been approved.`
             });
             
-            // --- P2P Notification: Payment Verified ---
             if (deposit.matchedWithdrawalId) {
-                const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
+                const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId).populate('matchedDepositIds');
                 if (withdrawal) {
                     await Notification.create({
                         userId: withdrawal.userId,
-                        subject: 'Payment Verified',
-                        message: `The payment of ${deposit.currency}${deposit.amount.toFixed(2)} for your withdrawal request #${withdrawal._id} has been successfully verified.`
+                        subject: 'Payment Received',
+                        message: `A payment of ${deposit.currency}${deposit.amount.toFixed(2)} for your withdrawal request #${withdrawal._id} has been verified.`
                     });
+
+                    const approvedDeposits = await Deposit.find({
+                        _id: { $in: withdrawal.matchedDepositIds },
+                        status: 'Approved'
+                    });
+                    
+                    const totalApproved = approvedDeposits.reduce((sum, d) => sum + d.amount, 0);
+                    
+                    if (totalApproved >= (withdrawal.finalAmount - 0.01)) {
+                        withdrawal.status = 'Paid';
+                        await withdrawal.save();
+                        
+                        const withdrawalTx = await Transaction.findOne({
+                           userId: withdrawal.userId,
+                           type: 'Withdrawal Request',
+                           description: { $regex: `Withdrawal #${withdrawal._id}` }
+                        });
+                        
+                        if (withdrawalTx) {
+                            withdrawalTx.status = 'Approved';
+                            withdrawalTx.description = `Paid Withdrawal #${withdrawal._id}`;
+                            await withdrawalTx.save();
+                        }
+
+                        await Notification.create({
+                            userId: withdrawal.userId,
+                            subject: 'Withdrawal Success',
+                            message: `Congratulations! Your withdrawal request #${withdrawal._id} has been fully settled and marked as Paid.`
+                        });
+                        
+                        global.appDataVersion = Date.now();
+                    }
                 }
             }
         } 
@@ -211,9 +228,9 @@ export const updateDeposit = async (req, res) => {
         }
         
         if (status === 'Rejected') {
-            let rejectionReason = adminNotes || 'Contact support';
+            let rejectionReason = adminNotes || 'Please contact support for more information.';
             if (deposit.matchedWithdrawalId) {
-                rejectionReason = 'Payment could not be verified. Please contact support if this is an error.';
+                rejectionReason = 'The transfer could not be verified by our clearing department.';
             }
 
              await Notification.create({
@@ -228,11 +245,10 @@ export const updateDeposit = async (req, res) => {
                     withdrawal.matchedDepositIds = withdrawal.matchedDepositIds.filter(id => id.toString() !== deposit._id.toString());
                     await withdrawal.save();
                     
-                    // --- P2P Notification: Payment Unverified/Returned to Queue ---
                     await Notification.create({
                         userId: withdrawal.userId,
-                        subject: 'Withdrawal Update',
-                        message: `A partial payment of ${deposit.currency}${deposit.amount.toFixed(2)} for your request #${withdrawal._id} could not be verified. Your request has been returned to the active processing queue.`
+                        subject: 'Gateway Update',
+                        message: `A partial payment for your request #${withdrawal._id} could not be verified. Your request remains active in our priority queue.`
                     });
 
                     const p2pMethod = await PaymentMethod.findOne({ p2pWithdrawalId: withdrawal._id });
@@ -243,7 +259,7 @@ export const updateDeposit = async (req, res) => {
                         await p2pMethod.save();
                     } else {
                         await PaymentMethod.create({
-                            name: `P2P - ${withdrawal.method}`,
+                            name: `Gateway - ${withdrawal.method}`,
                             type: 'Deposit',
                             currency: withdrawal.currency,
                             accountTitle: withdrawal.accountTitle,
