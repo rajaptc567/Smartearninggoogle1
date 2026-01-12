@@ -394,6 +394,29 @@ const DepositFunds: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* RENDER DYNAMIC CUSTOM FIELDS */}
+                                {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
+                                    <div className="space-y-8 border-t border-gray-800 pt-8">
+                                        {selectedMethod.customFields.map((field, idx) => (
+                                            <div key={idx}>
+                                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-2">{field.title}</label>
+                                                <div className="flex items-center justify-between mt-3 p-6 bg-black/60 rounded-[2rem] border border-white/5 shadow-inner">
+                                                    <span className="font-mono text-xl font-bold text-white tracking-widest break-all select-all mr-4">
+                                                        {field.value}
+                                                    </span>
+                                                    <button 
+                                                        onClick={() => { copyToClipboard(field.value); alert(`${field.title} copied!`); }}
+                                                        className="shrink-0 p-3 bg-gray-800 hover:bg-gray-700 rounded-xl transition-all text-gray-300 active:scale-90"
+                                                        title={`Copy ${field.title}`}
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="bg-[#1e293b]/40 p-6 rounded-[2rem] border border-blue-500/20 text-xs text-blue-300 flex gap-4 items-start shadow-sm">
