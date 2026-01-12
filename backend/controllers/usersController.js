@@ -210,11 +210,11 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 });
             }
         } else if (eligibility.status === 'Pending') {
-            // --- NEW: USER NOTIFICATION FOR HELD COMMISSION ---
+            // --- NEW: USER NOTIFICATION FOR HELD COMMISSION (Inbox & Bell) ---
             await Notification.create({
                 userId: uplineUser._id,
-                subject: 'Commission Held',
-                message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}, but it is currently held. Reason: ${eligibility.message}`
+                subject: 'Commission Locked 🔐',
+                message: `A commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} has been held. Reason: ${eligibility.message}`
             });
         }
 
@@ -266,7 +266,8 @@ export const createUser = async (req, res) => {
             });
         }
 
-        await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.fullName}!` });
+        // Welcome Notification updated to match screenshot format
+        await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
         
         // Update version for real-time sync
         global.appDataVersion = Date.now();
