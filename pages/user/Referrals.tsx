@@ -553,7 +553,7 @@ const Referrals: React.FC = () => {
                                     <p className="text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                                     <div>
                                         <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Min. Withdrawal</h5>
                                         <p className="text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
@@ -566,6 +566,18 @@ const Referrals: React.FC = () => {
                                                 if(!c) return 'None';
                                                 return c.type === 'percentage' ? `${c.value}%` : formatCurrency(c.value, selectedPlanDetails.currency);
                                             })()}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Direct Slot Cap</h5>
+                                        <p className="text-lg font-bold text-blue-400">
+                                            {selectedPlanDetails.directReferralLimit === 0 ? 'Unlimited' : `${selectedPlanDetails.directReferralLimit} Slots`}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Network Depth</h5>
+                                        <p className="text-lg font-bold text-purple-400">
+                                            {1 + (selectedPlanDetails.indirectCommissions?.length || 0)} Levels Deep
                                         </p>
                                     </div>
                                 </div>
@@ -658,21 +670,21 @@ const Referrals: React.FC = () => {
                                 <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Direct Earning History (L1)</h3>
                                 <span className="bg-blue-600 text-white px-3 py-0.5 rounded-full text-[10px] font-black uppercase">{directEarners.length} Contributors</span>
                             </div>
-                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No Level 1 commissions detected in this network.</div>}
+                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No Level 1 commissions detected in this network.</div>}
                         </div>
                         <div className="space-y-8">
                             <div className="flex items-center gap-4 pl-3 border-l-4 border-purple-500">
                                 <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Indirect Team Payouts (L2+)</h3>
                                 <span className="bg-purple-600 text-white px-3 py-0.5 rounded-full text-[10px] font-black uppercase">{indirectEarners.length} Contributors</span>
                             </div>
-                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No multi-level payouts found yet.</div>}
+                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No multi-level payouts found yet.</div>}
                         </div>
                     </div>
                 )}
 
                 {viewMode === 'all' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {allNodes.map(node => <ReferralCardContent key={node.user._id} node={node} showHeldAlert={true} />)}
+                        {allNodes.map(node => <ReferralCardContent node={node} showHeldAlert={true} />)}
                         {allNodes.length === 0 && <div className="col-span-full py-40 text-center text-gray-400 font-bold italic text-xl">No active team members have contributed to this specific plan scope yet.</div>}
                     </div>
                 )}
@@ -762,3 +774,4 @@ const Referrals: React.FC = () => {
 };
 
 export default Referrals;
+
