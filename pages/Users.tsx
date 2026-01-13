@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan, currencySymbols } from '../types';
 import Table from '../components/ui/Table';
@@ -656,6 +657,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             
             children.forEach(child => {
                 const childComms = myCommissions.filter(t => t.sourceUserId === child._id);
+                // FIX: Corrected variable name from 'revenue generated' to 'revenueGenerated' to satisfy shorthand property usage
                 const revenueGenerated = childComms.reduce((sum, t) => sum + t.amount, 0);
                 const isActive = (child.activePlans || []).length > 0;
 
@@ -1525,6 +1527,7 @@ interface BulkDummyUserModalProps {
 const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investmentPlans, onClose }) => {
     const { dispatch } = useData();
     const [count, setCount] = useState('10');
+    const [customUsernames, setCustomUsernames] = useState('');
     const [sponsor, setSponsor] = useState('');
     const [balance, setBalance] = useState('0');
     const [country, setCountry] = useState(countries[0]);
@@ -1533,12 +1536,22 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
 
     const handleCreate = async () => {
         if (!sponsor) return alert('Sponsor username is required');
+        
+        const usernameList = customUsernames.split('\n').map(u => u.trim()).filter(u => u !== '');
+        
         setIsProcessing(true);
         try {
-            await createBulkDummyUsers({ count: parseInt(count), sponsor, balance: parseFloat(balance), country, currency });
+            await createBulkDummyUsers({ 
+                count: usernameList.length > 0 ? usernameList.length : parseInt(count), 
+                usernames: usernameList.length > 0 ? usernameList : undefined,
+                sponsor, 
+                balance: parseFloat(balance), 
+                country, 
+                currency 
+            });
             const updatedUsers = await getUsers();
             dispatch({ type: 'SET_USERS', payload: updatedUsers });
-            alert('Bulk dummy users created successfully');
+            alert('Bulk dummy user generation process completed.');
             onClose();
         } catch (err: any) {
             alert(err.message || 'Operation failed');
@@ -1549,17 +1562,42 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
 
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-4 w-[500px] max-w-full space-y-4">
+            <div className="p-4 w-[550px] max-w-full space-y-4">
                 <h3 className="text-xl font-bold">Bulk Dummy User Generator</h3>
+                
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Number of Users</label><input type="number" value={count} onChange={e => setCount(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Number of Random Users</label>
+                        <input 
+                            type="number" 
+                            value={count} 
+                            onChange={e => setCount(e.target.value)} 
+                            disabled={customUsernames.trim().length > 0}
+                            className={`w-full border rounded p-2 text-sm dark:bg-gray-700 ${customUsernames.trim().length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                        />
+                    </div>
                     <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Initial Balance</label><input type="number" value={balance} onChange={e => setBalance(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
                 </div>
+
+                <div>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Custom Usernames (optional, one per line)</label>
+                    <textarea 
+                        value={customUsernames} 
+                        onChange={e => setCustomUsernames(e.target.value)} 
+                        rows={3}
+                        placeholder="pro_investor&#10;crypto_king&#10;earning_master"
+                        className="w-full border rounded p-2 text-sm dark:bg-gray-700 font-mono"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 italic">If provided, the "Number of Users" field will be ignored.</p>
+                </div>
+
                 <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Sponsor Username</label><input type="text" value={sponsor} onChange={e => setSponsor(e.target.value)} placeholder="Username of the sponsor" className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                
                 <div className="grid grid-cols-2 gap-4">
                     <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Country</label><select value={country} onChange={e => setCountry(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                     <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Currency</label><select value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="PKR">PKR</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
                 </div>
+                
                 <div className="pt-4 border-t flex justify-end gap-2">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleCreate} disabled={isProcessing}>{isProcessing ? 'Generating...' : 'Generate Dummy Users'}</Button>

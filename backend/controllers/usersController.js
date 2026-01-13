@@ -548,19 +548,45 @@ export const adjustWallet = async (req, res) => {
 
 export const createBulkDummyUsers = async (req, res) => {
     try {
-        const { count, sponsor, balance, country, currency } = req.body;
+        const { count, sponsor, balance, country, currency, usernames } = req.body;
         const s = await User.findOne({ username: sponsor });
         if (!s) return res.status(404).json({ success: false, error: 'Sponsor not found' });
-        for (let i = 0; i < count; i++) {
-            const suf = Math.floor(1000 + Math.random() * 9000);
-            await User.create({ fullName: `Dummy User ${suf}`, username: `user_${suf}`, email: `user_${suf}@test.com`, password: 'password123', phone: '000000', country, currency, walletBalance: balance, sponsor: s.username });
+
+        const createOne = async (uname) => {
+            const existing = await User.findOne({ username: uname });
+            if (existing) return; // Skip duplicates
+            await User.create({
+                fullName: `Dummy ${uname}`,
+                username: uname,
+                email: `${uname}@test-${Math.floor(Math.random() * 1000)}.com`,
+                password: 'password123',
+                phone: '000000',
+                country,
+                currency,
+                walletBalance: balance,
+                sponsor: s.username
+            });
+        };
+
+        if (usernames && Array.isArray(usernames) && usernames.length > 0) {
+            for (const uname of usernames) {
+                if (uname.trim()) await createOne(uname.trim());
+            }
+        } else {
+            const iterations = parseInt(count) || 0;
+            for (let i = 0; i < iterations; i++) {
+                const suf = Math.floor(1000 + Math.random() * 9000);
+                await createOne(`user_${suf}`);
+            }
         }
         
         // Update version for real-time sync
         global.appDataVersion = Date.now();
         
-        res.status(201).json({ success: true, message: 'Created dummy users' });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+        res.status(201).json({ success: true, message: 'Process completed' });
+    } catch (err) { 
+        res.status(400).json({ success: false, error: err.message }); 
+    }
 };
 
 export const userRequestPasswordReset = async (req, res) => {
