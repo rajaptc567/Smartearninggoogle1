@@ -542,24 +542,24 @@ const Referrals: React.FC = () => {
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/5 blur-[60px] group-hover:bg-blue-500/10 transition-all duration-1000"></div>
                         <div className="flex flex-col md:flex-row gap-8 items-center md:items-stretch">
                             <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-6 bg-black/20 rounded-[2rem] border border-white/5 shadow-inner shrink-0">
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Scope Target</h4>
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">SCOPE TARGET</h4>
                                 <span className="text-2xl font-black text-blue-400">{selectedPlanDetails.name}</span>
                                 <span className="text-3xl font-black text-white mt-3">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
                             </div>
                             
                             <div className="flex-grow flex flex-col justify-between py-2 space-y-6">
                                 <div className="p-4 bg-black/10 rounded-2xl border border-white/5">
-                                    <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Strategic Overview</h5>
+                                    <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">STRATEGIC OVERVIEW</h5>
                                     <p className="text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
                                 </div>
 
                                 <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Min. Withdrawal</h5>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">MIN. WITHDRAWAL</h5>
                                         <p className="text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Direct Earning Rate</h5>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">DIRECT EARNING RATE</h5>
                                         <p className="text-lg font-bold text-[#22c55e]">
                                             {(() => {
                                                 const c = selectedPlanDetails.directCommissions?.[0];
@@ -569,13 +569,13 @@ const Referrals: React.FC = () => {
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Direct Slot Cap</h5>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">DIRECT SLOT CAP</h5>
                                         <p className="text-lg font-bold text-blue-400">
                                             {selectedPlanDetails.directReferralLimit === 0 ? 'Unlimited' : `${selectedPlanDetails.directReferralLimit} Slots`}
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">Network Depth</h5>
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">NETWORK DEPTH</h5>
                                         <p className="text-lg font-bold text-purple-400">
                                             {1 + (selectedPlanDetails.indirectCommissions?.length || 0)} Levels Deep
                                         </p>
@@ -774,4 +774,3 @@ const Referrals: React.FC = () => {
 };
 
 export default Referrals;
-

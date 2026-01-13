@@ -256,6 +256,23 @@ const UserInvestmentPlans: React.FC = () => {
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto px-2">
+       <style>{`
+          @keyframes pulse-subtle {
+            0%, 100% { transform: scale(1.05); }
+            50% { transform: scale(1.065); }
+          }
+          @keyframes high-pulse {
+            0%, 100% { ring-width: 8px; transform: scale(1.08); box-shadow: 0 0 30px rgba(251, 191, 36, 0.4); }
+            50% { ring-width: 12px; transform: scale(1.1); box-shadow: 0 0 50px rgba(251, 191, 36, 0.7); }
+          }
+          .animate-pulse-subtle {
+            animation: pulse-subtle 2s ease-in-out infinite;
+          }
+          .animate-high-pulse {
+            animation: high-pulse 1.5s ease-in-out infinite;
+          }
+       `}</style>
+
        <div className="text-center space-y-3">
             <h2 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
                 Choose Your Investment Plan
@@ -291,10 +308,15 @@ const UserInvestmentPlans: React.FC = () => {
                         id={`plan-${plan._id}`}
                         className={`group relative flex flex-col bg-white dark:bg-gray-800 rounded-3xl shadow-xl transition-all duration-300 hover:-translate-y-2
                             ${isHighlighted 
-                                ? 'ring-4 ring-yellow-400 dark:ring-yellow-500 scale-105 z-10' 
+                                ? 'ring-8 ring-yellow-400 dark:ring-yellow-500 animate-high-pulse scale-105 z-20' 
                                 : `hover:shadow-2xl ${theme.shadow}`
                             }`}
                     >
+                        {isHighlighted && (
+                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-yellow-400 text-gray-900 font-black text-[10px] uppercase tracking-widest px-6 py-2 rounded-full shadow-2xl z-30 animate-bounce">
+                                Unlock Target Found
+                            </div>
+                        )}
                         <div className={`h-2 rounded-t-3xl bg-gradient-to-r ${theme.gradient}`}></div>
                         {isPopular && (
                             <div className="absolute top-0 right-0 -mt-3 mr-4">
@@ -343,7 +365,7 @@ const UserInvestmentPlans: React.FC = () => {
                                             <CheckIcon className={`w-4 h-4 ${theme.text}`} />
                                         </div>
                                         <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                            <span className="font-semibold">Direct Referrals:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `Max ${plan.directReferralLimit}`}
+                                            <span className="font-semibold">Direct Slots:</span> {plan.directReferralLimit === 0 ? 'Unlimited' : `${plan.directReferralLimit} Capacity`}
                                         </span>
                                     </li>
                                 )}
@@ -363,7 +385,7 @@ const UserInvestmentPlans: React.FC = () => {
                                             <CheckIcon className={`w-4 h-4 ${theme.text}`} />
                                         </div>
                                         <span className="ml-3 text-sm text-gray-700 dark:text-gray-200">
-                                            <span className="font-semibold">Network:</span> {plan.indirectCommissions.length} Levels Deep
+                                            <span className="font-semibold">Network Depth:</span> {1 + (plan.indirectCommissions?.length || 0)} Levels Deep
                                         </span>
                                     </li>
                                 )}
