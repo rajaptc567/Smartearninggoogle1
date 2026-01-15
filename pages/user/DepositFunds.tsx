@@ -14,6 +14,47 @@ const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const ExternalLinkIcon = () => (
+    <svg className="w-3.5 h-3.5 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+);
+
+// Helper component to detect and highlight links in text with premium styling
+const Linkify: React.FC<{ text: string; primaryColor: string }> = ({ text, primaryColor }) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <span className="whitespace-pre-line leading-relaxed">
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    return (
+                        <a
+                            key={i}
+                            href={part}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center font-black underline decoration-2 underline-offset-4 hover:opacity-80 transition-all px-2 py-0.5 rounded-lg mx-0.5 shadow-sm"
+                            style={{ 
+                                color: primaryColor, 
+                                backgroundColor: `${primaryColor}15`,
+                                border: `1px solid ${primaryColor}25`
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {part.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                            <ExternalLinkIcon />
+                        </a>
+                    );
+                }
+                return part;
+            })}
+        </span>
+    );
+};
+
 const StepIndicator: React.FC<{ currentStep: number; primaryColor?: string }> = ({ currentStep, primaryColor = '#2563eb' }) => {
     const steps = ['Amount', 'Method', 'Instructions', 'Confirm'];
     return (
@@ -258,20 +299,15 @@ const DepositFunds: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* SPECIAL INSTRUCTIONS FROM ADMIN */}
+                        {/* SPECIAL INSTRUCTIONS WITH LINK DETECTION */}
                         {selectedMethod.instructions && (
-                            <div className="p-8 bg-blue-50/50 dark:bg-blue-900/10 border-2 border-dashed border-blue-200 dark:border-blue-900/40 rounded-[2.5rem] relative overflow-hidden animate-slide-up">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                            <div className="p-8 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-[2.5rem] shadow-sm">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <span className="text-2xl">⚡</span>
+                                    <h4 className="font-black text-sm uppercase text-amber-700 dark:text-amber-500 tracking-widest">Admin Advisory & Instructions</h4>
                                 </div>
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">!</span>
-                                        <h4 className="font-black text-xs uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Special Instructions</h4>
-                                    </div>
-                                    <p className="text-gray-700 dark:text-gray-300 text-sm font-medium leading-relaxed italic whitespace-pre-line">
-                                        "{selectedMethod.instructions}"
-                                    </p>
+                                <div className="text-gray-700 dark:text-gray-300 font-bold text-base leading-relaxed">
+                                    <Linkify text={selectedMethod.instructions} primaryColor={pageConfig.primaryColor} />
                                 </div>
                             </div>
                         )}
@@ -429,7 +465,9 @@ const DepositFunds: React.FC = () => {
 
                                     <div className="space-y-6">
                                         <h4 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{step.title}</h4>
-                                        <p className="text-gray-600 dark:text-gray-400 font-medium text-lg leading-relaxed max-w-2xl">{step.description}</p>
+                                        <div className="text-gray-600 dark:text-gray-400 font-medium text-lg leading-relaxed max-w-2xl">
+                                            <Linkify text={step.description} primaryColor={pageConfig.primaryColor} />
+                                        </div>
                                         
                                         {step.imageUrl && (
                                             <div className="mt-8 rounded-[2.5rem] overflow-hidden border-8 border-gray-100 dark:border-gray-900 shadow-2xl bg-white dark:bg-gray-900 group relative">
