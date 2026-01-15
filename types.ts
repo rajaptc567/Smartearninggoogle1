@@ -1,4 +1,3 @@
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -64,6 +63,26 @@ export interface User {
     isVerified?: boolean;
 }
 
+export interface PageStyling {
+    title: string;
+    subtitle: string;
+    primaryColor: string;
+    backgroundColor: string;
+    cardBackgroundColor: string;
+    textColor: string;
+    accentColor: string;
+    buttonText: string;
+    buttonColor: string;
+    fontSizeTitle: string;
+    fontSizeBody: string;
+    cardRounding: string;
+    tabSize: 'sm' | 'md' | 'lg';
+    mobileAdjustment: {
+        fontSizeTitle: string;
+        padding: string;
+    }
+}
+
 export interface RecurringPlanConfig {
     planId: string;
     applyToAllPlans: boolean;
@@ -111,6 +130,15 @@ export interface Settings {
         USD: number;
         EUR: number;
         PKR: number;
+    };
+    uiCustomization?: {
+        depositPage: PageStyling;
+        withdrawPage: PageStyling;
+        networkPage: PageStyling & { 
+            highlightRingColor: string;
+            slotCapLabel: string;
+            depthLabel: string;
+        };
     };
     restrictWithdrawalAmount: boolean;
     restrictDepositAmount: boolean;
