@@ -258,6 +258,24 @@ const DepositFunds: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* SPECIAL INSTRUCTIONS FROM ADMIN */}
+                        {selectedMethod.instructions && (
+                            <div className="p-8 bg-blue-50/50 dark:bg-blue-900/10 border-2 border-dashed border-blue-200 dark:border-blue-900/40 rounded-[2.5rem] relative overflow-hidden animate-slide-up">
+                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                    <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                                </div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">!</span>
+                                        <h4 className="font-black text-xs uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Special Instructions</h4>
+                                    </div>
+                                    <p className="text-gray-700 dark:text-gray-300 text-sm font-medium leading-relaxed italic whitespace-pre-line">
+                                        "{selectedMethod.instructions}"
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* HOW TO GUIDE TRIGGER */}
                         {selectedMethod.howToDeposit?.enabled && selectedMethod.howToDeposit.steps?.length > 0 && (
                             <div className="p-8 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/40 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
