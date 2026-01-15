@@ -45,7 +45,6 @@ const DepositFunds: React.FC = () => {
     const navigate = useNavigate();
 
     // Default or Custom Page config
-    // FIX: Access uiCustomization from settings object instead of global scope
     const pageConfig = settings.uiCustomization?.depositPage || {
         primaryColor: '#2563eb',
         cardRounding: '2.5rem',
@@ -147,7 +146,7 @@ const DepositFunds: React.FC = () => {
     };
 
     if (!currentUser) return null;
-    if (currentUser.restrictions?.deposit) return <div className="p-20 text-center font-black">Deposit Restricted</div>;
+    if (currentUser.restrictions?.deposit) return <div className="p-20 text-center font-black uppercase text-red-500 tracking-widest">Access Restricted: Deposits Disabled</div>;
 
     if (isSubmitted) {
         return (
@@ -189,6 +188,10 @@ const DepositFunds: React.FC = () => {
             <div className="bg-white dark:bg-gray-950 p-8 sm:p-12 shadow-xl border border-gray-100 dark:border-gray-800" style={{ borderRadius: pageConfig.cardRounding }}>
                 {step === 1 && (
                     <div className="animate-fade-in space-y-8 max-w-2xl mx-auto">
+                        <div className="text-center space-y-2 mb-6">
+                            <h3 className="text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Amount Selection</h3>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Select an amount based on active plan pricing</p>
+                        </div>
                         {planPrices.length > 0 && (
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                 {planPrices.map(price => (
@@ -221,11 +224,12 @@ const DepositFunds: React.FC = () => {
                 )}
                 
                 {step === 2 && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 animate-fade-in">
                         {availableMethods.map(m => (
-                            <div key={m._id} onClick={() => { setSelectedMethodId(m._id); setStep(3); }} className="p-8 border-2 text-center cursor-pointer transition-all hover:scale-105 rounded-3xl bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800 hover:border-blue-500">
-                                <img src={m.logoUrl} className="h-16 mx-auto mb-4 object-contain" alt={m.name} />
+                            <div key={m._id} onClick={() => { setSelectedMethodId(m._id); setStep(3); }} className="p-8 border-2 text-center cursor-pointer transition-all hover:scale-105 rounded-3xl bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800 hover:border-blue-500 shadow-sm hover:shadow-xl">
+                                <img src={m.logoUrl} className="h-20 mx-auto mb-4 object-contain" alt={m.name} />
                                 <h4 className="font-black uppercase text-sm tracking-tight">{m.name}</h4>
+                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1 block">Click to select</span>
                             </div>
                         ))}
                     </div>
@@ -235,7 +239,7 @@ const DepositFunds: React.FC = () => {
                     <div className="animate-fade-in space-y-10">
                         <div className="text-center">
                             <h2 className="text-5xl font-black mb-2" style={{ color: pageConfig.primaryColor }}>{formatCurrency(parseFloat(amount), currentUser.currency)}</h2>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Destination Identity Verified</p>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Payment Destination Instructions</p>
                         </div>
 
                         <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-10 shadow-2xl border border-white/5">
@@ -247,7 +251,7 @@ const DepositFunds: React.FC = () => {
                                 <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">Transfer Identifier (ID)</p>
                                 <div className="flex items-center justify-between p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner">
                                     <p className="text-2xl font-black font-mono text-blue-400 break-all select-all">{selectedMethod.accountNumber}</p>
-                                    <button onClick={() => { navigator.clipboard.writeText(selectedMethod.accountNumber); alert('Copied!'); }} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4">
+                                    <button onClick={() => { navigator.clipboard.writeText(selectedMethod.accountNumber); alert('Copied!'); }} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4 shadow-lg">
                                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                                     </button>
                                 </div>
@@ -261,7 +265,7 @@ const DepositFunds: React.FC = () => {
                                     <div className="w-16 h-16 rounded-[1.5rem] bg-white dark:bg-gray-800 flex items-center justify-center text-3xl shadow-sm border border-blue-100 dark:border-blue-800">📖</div>
                                     <div>
                                         <h4 className="font-black text-lg uppercase tracking-tight text-gray-900 dark:text-white">Visual How-To Guide</h4>
-                                        <p className="text-sm text-gray-500 font-medium">Need help? Walk through the step-by-step tutorial.</p>
+                                        <p className="text-sm text-gray-500 font-medium">New member? Walk through the step-by-step tutorial.</p>
                                     </div>
                                 </div>
                                 <button 
@@ -275,27 +279,31 @@ const DepositFunds: React.FC = () => {
 
                         <div className="pt-6 flex flex-col sm:flex-row gap-4">
                             <button onClick={() => setStep(2)} className="flex-1 py-5 rounded-2xl font-black uppercase text-xs text-gray-400 hover:text-blue-600 transition-colors">Return to Methods</button>
-                            <Button className="flex-[2] py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" onClick={() => setStep(4)} style={{ backgroundColor: pageConfig.primaryColor }}>Transfer Completed &rarr;</Button>
+                            <Button className="flex-[2] py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" onClick={() => setStep(4)} style={{ backgroundColor: pageConfig.primaryColor }}>I have transferred funds &rarr;</Button>
                         </div>
                     </div>
                 )}
 
                  {step === 4 && (
                     <form onSubmit={handleSubmit} className="space-y-8 animate-fade-in max-w-2xl mx-auto">
+                        <div className="text-center space-y-2 mb-6">
+                            <h3 className="text-2xl font-black uppercase tracking-tighter text-gray-800 dark:text-white">Audit Submission</h3>
+                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Step 4: Final verification and proof</p>
+                        </div>
                         <div className="space-y-6">
-                            <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Verification Name</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="FULL NAME ON SLIP" value={senderAccountTitle} onChange={e => setSenderAccountTitle(e.target.value)} required /></div>
-                            <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Digital ID (Trx ID)</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-mono font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="REFERENCE NUMBER" value={transactionId} onChange={e => setTransactionId(e.target.value)} required /></div>
+                            <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Sender Account Name</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="TITLE OF YOUR SENDER ACCOUNT" value={senderAccountTitle} onChange={e => setSenderAccountTitle(e.target.value)} required /></div>
+                            <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Digital ID (Transaction ID)</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-mono font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="REFERENCE NUMBER FROM SLIP" value={transactionId} onChange={e => setTransactionId(e.target.value)} required /></div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Audit Proof (Screenshot)</label>
-                                <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-[2rem] p-10 text-center bg-gray-50 dark:bg-gray-900/30">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Verification Proof (Screenshot)</label>
+                                <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-[2rem] p-10 text-center bg-gray-50 dark:bg-gray-900/30 group hover:border-blue-500 transition-colors">
                                     <input type="file" id="receipt" className="hidden" onChange={e => e.target.files && setReceipt(e.target.files[0])} required />
                                     <label htmlFor="receipt" className="cursor-pointer">
-                                        {receipt ? <div className="flex flex-col items-center gap-2"><div className="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center">✓</div><span className="text-xs font-bold text-green-600">{receipt.name}</span></div> : <div className="flex flex-col items-center gap-2"><div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-gray-400">📁</div><span className="text-[10px] text-gray-500 font-black uppercase">Click to Select Receipt</span></div>}
+                                        {receipt ? <div className="flex flex-col items-center gap-2"><div className="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-green-500/20">✓</div><span className="text-xs font-bold text-green-600">{receipt.name}</span></div> : <div className="flex flex-col items-center gap-2"><div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-gray-400">📁</div><span className="text-[10px] text-gray-500 font-black uppercase">Click to Select Receipt</span></div>}
                                     </label>
                                 </div>
                             </div>
                         </div>
-                        <Button type="submit" disabled={isSubmitting} className="w-full py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" style={{ backgroundColor: pageConfig.primaryColor }}>{pageConfig.buttonText}</Button>
+                        <Button type="submit" disabled={isSubmitting} className="w-full py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" style={{ backgroundColor: pageConfig.primaryColor }}>{isSubmitting ? 'Transmitting Data...' : pageConfig.buttonText}</Button>
                     </form>
                 )}
             </div>
@@ -307,7 +315,7 @@ const DepositFunds: React.FC = () => {
                         <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 rounded-xl flex items-center justify-center text-gray-400">
                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                         </div>
-                        <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Deposit History Log</h3>
+                        <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">History Log</h3>
                     </div>
                     
                     <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
@@ -402,7 +410,7 @@ const DepositFunds: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-6">
-                                        <h4 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight"></h4>
+                                        <h4 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{step.title}</h4>
                                         <p className="text-gray-600 dark:text-gray-400 font-medium text-lg leading-relaxed max-w-2xl">{step.description}</p>
                                         
                                         {step.imageUrl && (

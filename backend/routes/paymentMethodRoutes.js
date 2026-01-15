@@ -1,4 +1,3 @@
-
 import express from 'express';
 import multer from 'multer';
 import {
@@ -12,7 +11,10 @@ import {
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // Increase Limit to 10MB to support multiple step images
+    limits: { 
+        fileSize: 10 * 1024 * 1024, // 10MB limit for the logo file
+        fieldSize: 10 * 1024 * 1024 // 10MB limit for text fields (crucial for Base64 strings in howToDeposit JSON)
+    }
 });
 
 const router = express.Router();
