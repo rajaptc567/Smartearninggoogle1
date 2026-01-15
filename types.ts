@@ -199,6 +199,7 @@ export interface Settings {
     faqs?: FaqItem[];
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
+    homepageVideoId?: string;
     homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
 }
@@ -282,6 +283,7 @@ export interface PaymentMethod {
     feePercent: number;
     status: 'Enabled' | 'Disabled';
     logoUrl?: string;
+    qrCodeUrl?: string;
     p2pWithdrawalId?: string;
     customFields?: { title: string; value: string }[];
     howToDeposit?: {
@@ -484,8 +486,8 @@ export interface Dispute {
     description: string;
     proofUrl?: string;
     status: Status | 'Open' | 'Processing' | 'Resolved' | 'Closed';
-    adminResponse?: string;
-    messages?: Message[];
+    adminResponse: string;
+    messages: Message[];
     adminUnread: boolean;
     userUnread: boolean;
     date: string;

@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 
 const PaymentMethodSchema = new mongoose.Schema({
@@ -47,6 +46,9 @@ const PaymentMethodSchema = new mongoose.Schema({
         default: 'Enabled',
     },
     logoUrl: {
+        type: String,
+    },
+    qrCodeUrl: {
         type: String,
     },
     p2pWithdrawalId: {

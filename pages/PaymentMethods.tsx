@@ -171,6 +171,12 @@ const PaymentMethods: React.FC = () => {
                                 {method.customFields && method.customFields.length > 0 && (
                                     <p className="text-xs text-blue-500 italic">+{method.customFields.length} custom fields</p>
                                 )}
+                                {method.qrCodeUrl && (
+                                    <p className="text-xs text-indigo-500 italic flex items-center">
+                                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+                                        QR Code Set
+                                    </p>
+                                )}
                                 {isP2P && (
                                     <div className="mt-2 p-2 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded text-[10px] text-orange-700 dark:text-orange-300 font-bold uppercase italic">
                                         Linked to Matching Withdrawal: #{method.p2pWithdrawalId?.toString().substring(0, 8)}...
@@ -231,6 +237,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
     );
     const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
     const [saveToLibrary, setSaveToLibrary] = useState(false);
@@ -265,6 +272,12 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         if (e.target.files && e.target.files[0]) {
             setLogoFile(e.target.files[0]);
             setLogoUrlOverride(null); // Clear selected library logo if user uploads new one
+        }
+    };
+
+    const handleQrCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setQrCodeFile(e.target.files[0]);
         }
     };
 
@@ -352,7 +365,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit') {
+            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit') {
                 data.append(key, String(value));
             }
         });
@@ -363,6 +376,12 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             data.append('logoUrl', logoUrlOverride);
         } else if (method?.logoUrl) {
             data.append('logoUrl', method.logoUrl);
+        }
+
+        if (qrCodeFile) {
+            data.append('qrCode', qrCodeFile);
+        } else if (method?.qrCodeUrl) {
+            data.append('qrCodeUrl', method.qrCodeUrl);
         }
 
         // Clean empty custom fields
@@ -471,6 +490,20 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account / Wallet Number</label>
                         <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="e.g. 03001234567" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     </div>
+
+                    {formData.type === 'Deposit' && (
+                        <div className="md:col-span-2 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                            <label className="block text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 mb-3 tracking-widest">QR Code (Scan to Pay)</label>
+                            <div className="flex items-center gap-4">
+                                {method?.qrCodeUrl && !qrCodeFile && (
+                                    <img src={method.qrCodeUrl} className="h-20 w-20 object-contain rounded-lg bg-white p-1 shadow-sm" alt="QR Preview" />
+                                )}
+                                <input type="file" accept="image/*" onChange={handleQrCodeChange} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-2">Upload a QR code image to help users pay faster in the deposit form.</p>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Minimum Limit</label>
                         <input type="number" name="minAmount" value={formData.minAmount || ''} onChange={handleChange} placeholder="0" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />

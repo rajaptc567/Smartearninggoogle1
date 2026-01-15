@@ -1,4 +1,3 @@
-
 import PaymentMethod from '../models/PaymentMethod.js';
 
 export const getPaymentMethods = async (req, res) => {
@@ -107,10 +106,15 @@ export const createPaymentMethod = async (req, res) => {
     try {
         const methodData = { ...req.body };
 
-        if (req.file) {
-            const b64 = Buffer.from(req.file.buffer).toString('base64');
-            const mimeType = req.file.mimetype;
-            methodData.logoUrl = `data:${mimeType};base64,${b64}`;
+        if (req.files) {
+            if (req.files['logo']) {
+                const b64 = Buffer.from(req.files['logo'][0].buffer).toString('base64');
+                methodData.logoUrl = `data:${req.files['logo'][0].mimetype};base64,${b64}`;
+            }
+            if (req.files['qrCode']) {
+                const b64 = Buffer.from(req.files['qrCode'][0].buffer).toString('base64');
+                methodData.qrCodeUrl = `data:${req.files['qrCode'][0].mimetype};base64,${b64}`;
+            }
         }
 
         // Parse customFields if it comes as a string (FormData)
@@ -147,10 +151,15 @@ export const updatePaymentMethod = async (req, res) => {
     try {
         const methodData = { ...req.body };
 
-        if (req.file) {
-            const b64 = Buffer.from(req.file.buffer).toString('base64');
-            const mimeType = req.file.mimetype;
-            methodData.logoUrl = `data:${mimeType};base64,${b64}`;
+        if (req.files) {
+            if (req.files['logo']) {
+                const b64 = Buffer.from(req.files['logo'][0].buffer).toString('base64');
+                methodData.logoUrl = `data:${req.files['logo'][0].mimetype};base64,${b64}`;
+            }
+            if (req.files['qrCode']) {
+                const b64 = Buffer.from(req.files['qrCode'][0].buffer).toString('base64');
+                methodData.qrCodeUrl = `data:${req.files['qrCode'][0].mimetype};base64,${b64}`;
+            }
         }
 
         // Parse customFields if it comes as a string (FormData)

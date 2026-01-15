@@ -12,19 +12,24 @@ const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
     limits: { 
-        fileSize: 10 * 1024 * 1024, // 10MB limit for the logo file
-        fieldSize: 10 * 1024 * 1024 // 10MB limit for text fields (crucial for Base64 strings in howToDeposit JSON)
+        fileSize: 10 * 1024 * 1024, // 10MB limit for files
+        fieldSize: 10 * 1024 * 1024 // 10MB limit for text fields
     }
 });
 
 const router = express.Router();
 
+const cpUpload = upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'qrCode', maxCount: 1 }
+]);
+
 router.route('/')
     .get(getPaymentMethods)
-    .post(upload.single('logo'), createPaymentMethod);
+    .post(cpUpload, createPaymentMethod);
 
 router.route('/:id')
-    .put(upload.single('logo'), updatePaymentMethod)
+    .put(cpUpload, updatePaymentMethod)
     .delete(deletePaymentMethod);
 
 export default router;
