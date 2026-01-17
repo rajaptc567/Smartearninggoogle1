@@ -1,4 +1,3 @@
-
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -6,8 +5,6 @@ import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 
-// @desc    Get all withdrawals
-// @route   GET /api/v1/withdrawals
 export const getWithdrawals = async (req, res) => {
     try {
         const withdrawals = await Withdrawal.find()
@@ -23,8 +20,6 @@ export const getWithdrawals = async (req, res) => {
     }
 };
 
-// @desc    Get single withdrawal
-// @route   GET /api/v1/withdrawals/:id
 export const getWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
@@ -37,8 +32,6 @@ export const getWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Create new withdrawal request
-// @route   POST /api/v1/withdrawals
 export const createWithdrawal = async (req, res) => {
     try {
         const user = await User.findById(req.body.userId);
@@ -92,7 +85,8 @@ export const createWithdrawal = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Insufficient balance' });
         }
 
-        user.walletBalance -= req.body.amount;
+        // MATH FIX: Use toFixed(2) to prevent precision errors
+        user.walletBalance = Number((user.walletBalance - req.body.amount).toFixed(2));
         
         const withdrawalData = { ...req.body, currency: user.currency };
         const withdrawal = await Withdrawal.create(withdrawalData);
@@ -120,8 +114,6 @@ export const createWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Update withdrawal (Approve/Reject)
-// @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
         const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pLogoUrl, p2pCustomFields } = req.body;
@@ -138,6 +130,7 @@ export const updateWithdrawal = async (req, res) => {
 
         const originalStatus = withdrawal.status;
 
+        // P2P GATEWAY LIFECYCLE
         if (status === 'Matching') {
             const remainingAmount = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
 
@@ -148,7 +141,7 @@ export const updateWithdrawal = async (req, res) => {
                 accountTitle: p2pAccountTitle || withdrawal.accountTitle,
                 accountNumber: p2pAccountNumber || withdrawal.accountNumber,
                 minAmount: 1,
-                maxAmount: remainingAmount,
+                maxAmount: Number(remainingAmount.toFixed(2)),
                 feePercent: 0,
                 status: 'Enabled',
                 instructions: p2pInstructions || '', 
@@ -167,7 +160,10 @@ export const updateWithdrawal = async (req, res) => {
             }
         }
 
-        if (originalStatus === 'Matching' && status !== 'Matching') {
+        // AUTO-CLEANUP: Only delete gateway if status moves to a terminal state (Paid/Rejected)
+        // and NOT if it's just being temporarily processed.
+        const terminalStates = ['Paid', 'Rejected', 'Approved'];
+        if (originalStatus === 'Matching' && terminalStates.includes(status)) {
             await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         }
 
@@ -233,8 +229,6 @@ export const updateWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Delete withdrawal
-// @route   DELETE /api/v1/withdrawals/:id
 export const deleteWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findByIdAndDelete(req.params.id);

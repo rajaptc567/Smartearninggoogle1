@@ -18,23 +18,24 @@ import {
     bulkUpdateRestrictions,
     createBulkDummyUsers
 } from '../controllers/usersController.js';
+import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.route('/').get(getUsers).post(createUser);
+router.route('/').get(protect, admin, getUsers).post(createUser);
 router.post('/login', loginUser);
 router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
-router.put('/bulk-restrictions', bulkUpdateRestrictions);
-router.post('/bulk-dummy', createBulkDummyUsers);
-router.delete('/bulk', bulkDeleteUsers);
+router.put('/bulk-restrictions', protect, admin, bulkUpdateRestrictions);
+router.post('/bulk-dummy', protect, admin, createBulkDummyUsers);
+router.delete('/bulk', protect, admin, bulkDeleteUsers);
 
-router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
+router.route('/:id').get(protect, getUser).put(protect, updateUser).delete(protect, admin, deleteUser);
 
-router.post('/:id/adjust-wallet', adjustWallet);
-router.post('/:id/purchase-plan', purchasePlan);
-router.post('/:id/activate-plan', adminActivatePlan);
-router.post('/:id/admin-reset-password', adminInitiatePasswordReset);
+router.post('/:id/adjust-wallet', protect, admin, adjustWallet);
+router.post('/:id/purchase-plan', protect, purchasePlan);
+router.post('/:id/activate-plan', protect, admin, adminActivatePlan);
+router.post('/:id/admin-reset-password', protect, admin, adminInitiatePasswordReset);
 
 export default router;
