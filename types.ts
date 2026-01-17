@@ -286,6 +286,11 @@ export interface PaymentMethod {
     qrCodeUrl?: string;
     p2pWithdrawalId?: string;
     customFields?: { title: string; value: string }[];
+    customLabels?: {
+        providerLabel?: string;
+        accountTitleLabel?: string;
+        accountNumberLabel?: string;
+    };
     howToDeposit?: {
         enabled: boolean;
         steps: {

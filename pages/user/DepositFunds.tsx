@@ -293,11 +293,23 @@ const DepositFunds: React.FC = () => {
                                 {/* ACCOUNT MAIN INFO */}
                                 <div className="space-y-10 flex-grow w-full">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                                        <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Provider</p><p className="text-xl font-bold">{selectedMethod.name}</p></div>
-                                        <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Account Title</p><p className="text-xl font-bold">{selectedMethod.accountTitle}</p></div>
+                                        <div>
+                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
+                                                {selectedMethod.customLabels?.providerLabel || 'Method Name'}
+                                            </p>
+                                            <p className="text-xl font-bold">{selectedMethod.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
+                                                {selectedMethod.customLabels?.accountTitleLabel || 'Account Title'}
+                                            </p>
+                                            <p className="text-xl font-bold">{selectedMethod.accountTitle}</p>
+                                        </div>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">Transfer Identifier (ID)</p>
+                                        <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">
+                                            {selectedMethod.customLabels?.accountNumberLabel || 'Account / Wallet Number'}
+                                        </p>
                                         <div className="flex items-center justify-between p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner">
                                             <p className="text-2xl font-black font-mono text-blue-400 break-all select-all">{selectedMethod.accountNumber}</p>
                                             <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4 shadow-lg">

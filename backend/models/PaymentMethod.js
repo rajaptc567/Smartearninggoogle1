@@ -59,6 +59,11 @@ const PaymentMethodSchema = new mongoose.Schema({
         title: { type: String, required: true },
         value: { type: String, required: true }
     }],
+    customLabels: {
+        providerLabel: { type: String },
+        accountTitleLabel: { type: String },
+        accountNumberLabel: { type: String }
+    },
     howToDeposit: {
         enabled: { type: Boolean, default: false },
         steps: [{

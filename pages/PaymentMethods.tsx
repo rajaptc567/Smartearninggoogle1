@@ -243,6 +243,9 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
     const [saveToLibrary, setSaveToLibrary] = useState(false);
     
+    // Label Customization
+    const [customLabels, setCustomLabels] = useState(method?.customLabels || { providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
+
     // How To Deposit State
     const [howToEnabled, setHowToEnabled] = useState(false);
     const [howToSteps, setHowToSteps] = useState<Step[]>([]);
@@ -252,12 +255,14 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     useEffect(() => {
         if (method) {
             if (method.customFields) setCustomFields(method.customFields);
+            if (method.customLabels) setCustomLabels(method.customLabels);
             if (method.howToDeposit) {
                 setHowToEnabled(method.howToDeposit.enabled);
                 setHowToSteps(method.howToDeposit.steps.map(s => ({ ...s })));
             }
         } else {
             setCustomFields([]);
+            setCustomLabels({ providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
             setHowToEnabled(false);
             setHowToSteps([]);
         }
@@ -267,6 +272,10 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         const { name, value } = e.target;
         const numValue = ['minAmount', 'maxAmount', 'feePercent'].includes(name) ? parseFloat(value) : value;
         setFormData(prev => ({ ...prev, [name]: numValue }));
+    };
+
+    const handleLabelChange = (field: keyof typeof customLabels, value: string) => {
+        setCustomLabels(prev => ({ ...prev, [field]: value }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -372,7 +381,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit') {
+            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit' && key !== 'customLabels') {
                 data.append(key, String(value));
             }
         });
@@ -398,6 +407,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         // Clean empty custom fields
         const cleanedCustomFields = customFields.filter(f => f.title.trim() !== '');
         data.append('customFields', JSON.stringify(cleanedCustomFields));
+        data.append('customLabels', JSON.stringify(customLabels));
 
         const processedSteps = await Promise.all(howToSteps.map(async (step) => {
             if (step.imageFile && !step.imageUrl?.startsWith('data:')) {
@@ -500,6 +510,41 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                     <div>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account / Wallet Number</label>
                         <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="e.g. 03001234567" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
+                    </div>
+
+                    {/* LABEL OVERRIDES SECTION */}
+                    <div className="md:col-span-2 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                        <h3 className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 mb-3 tracking-widest">UI Label Customization (Frontend)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Method Name Label</label>
+                                <input 
+                                    value={customLabels.providerLabel} 
+                                    onChange={e => handleLabelChange('providerLabel', e.target.value)} 
+                                    placeholder="Default: Method Name" 
+                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account Title Label</label>
+                                <input 
+                                    value={customLabels.accountTitleLabel} 
+                                    onChange={e => handleLabelChange('accountTitleLabel', e.target.value)} 
+                                    placeholder="Default: Account Title" 
+                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account No. Label</label>
+                                <input 
+                                    value={customLabels.accountNumberLabel} 
+                                    onChange={e => handleLabelChange('accountNumberLabel', e.target.value)} 
+                                    placeholder="Default: Acc / Wallet No" 
+                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-2 italic">Leave blank to use system defaults (Method Name, Account Title, Account / Wallet Number).</p>
                     </div>
 
                     {formData.type === 'Deposit' && (
