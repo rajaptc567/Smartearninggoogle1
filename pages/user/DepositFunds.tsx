@@ -186,6 +186,11 @@ const DepositFunds: React.FC = () => {
         } finally { setIsSubmitting(false); }
     };
 
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        alert('Data copied to clipboard!');
+    };
+
     if (!currentUser) return null;
     if (currentUser.restrictions?.deposit) return <div className="p-20 text-center font-black uppercase text-red-500 tracking-widest">Access Restricted: Deposits Disabled</div>;
 
@@ -283,29 +288,53 @@ const DepositFunds: React.FC = () => {
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Payment Destination Instructions</p>
                         </div>
 
-                        <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white flex flex-col md:flex-row gap-10 shadow-2xl border border-white/5 items-center">
-                            <div className="flex-grow space-y-10 w-full">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Provider</p><p className="text-xl font-bold">{selectedMethod.name}</p></div>
-                                    <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Account Title</p><p className="text-xl font-bold">{selectedMethod.accountTitle}</p></div>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">Transfer Identifier (ID)</p>
-                                    <div className="flex items-center justify-between p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner">
-                                        <p className="text-2xl font-black font-mono text-blue-400 break-all select-all">{selectedMethod.accountNumber}</p>
-                                        <button onClick={() => { navigator.clipboard.writeText(selectedMethod.accountNumber); alert('Copied!'); }} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4 shadow-lg">
-                                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                        </button>
+                        <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-10 shadow-2xl border border-white/5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
+                                {/* ACCOUNT MAIN INFO */}
+                                <div className="space-y-10 flex-grow w-full">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                        <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Provider</p><p className="text-xl font-bold">{selectedMethod.name}</p></div>
+                                        <div><p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">Account Title</p><p className="text-xl font-bold">{selectedMethod.accountTitle}</p></div>
                                     </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">Transfer Identifier (ID)</p>
+                                        <div className="flex items-center justify-between p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner">
+                                            <p className="text-2xl font-black font-mono text-blue-400 break-all select-all">{selectedMethod.accountNumber}</p>
+                                            <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4 shadow-lg">
+                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* DYNAMIC EXTRA FIELDS */}
+                                    {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
+                                        <div className="pt-4 space-y-6">
+                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest border-b border-white/5 pb-2">Required Supplementary Details</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                {selectedMethod.customFields.map((field, idx) => (
+                                                    <div key={idx} className="group">
+                                                        <p className="text-[9px] uppercase text-gray-500 font-black tracking-widest mb-1 opacity-80 group-hover:text-blue-400 transition-colors">{field.title}</p>
+                                                        <div className="flex items-center justify-between bg-black/30 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all">
+                                                            <p className="text-base font-bold text-gray-100 truncate pr-2">{field.value}</p>
+                                                            <button onClick={() => handleCopy(field.value)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors">
+                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+                                
+                                {/* QR CODE (IF AVAILABLE) */}
+                                {selectedMethod.qrCodeUrl && (
+                                    <div className="shrink-0 flex flex-col items-center gap-4 bg-white p-6 rounded-[2.5rem] shadow-xl border-4 border-blue-500/10">
+                                        <img src={selectedMethod.qrCodeUrl} alt="Scan to Pay" className="w-48 h-48 object-contain" />
+                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">Scan to Pay</span>
+                                    </div>
+                                )}
                             </div>
-                            
-                            {selectedMethod.qrCodeUrl && (
-                                <div className="shrink-0 flex flex-col items-center gap-4 bg-white p-6 rounded-[2rem] shadow-xl border-4 border-blue-500/10">
-                                    <img src={selectedMethod.qrCodeUrl} alt="Scan to Pay" className="w-40 h-40 object-contain" />
-                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Scan to Pay</span>
-                                </div>
-                            )}
                         </div>
 
                         {/* SPECIAL INSTRUCTIONS WITH LINK DETECTION */}
