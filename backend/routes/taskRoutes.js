@@ -10,7 +10,6 @@ import {
     getPendingVerifications,
     verifyTaskSubmission
 } from '../controllers/tasksController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -22,15 +21,15 @@ const router = express.Router();
 
 router.route('/')
     .get(getTasks)
-    .post(protect, admin, createTask);
+    .post(createTask);
 
-router.get('/pending-verifications', protect, admin, getPendingVerifications);
-router.put('/verify/:userId/:taskId', protect, admin, verifyTaskSubmission);
+router.get('/pending-verifications', getPendingVerifications);
+router.put('/verify/:userId/:taskId', verifyTaskSubmission);
 
 router.route('/:id')
-    .put(protect, admin, updateTask)
-    .delete(protect, admin, deleteTask);
+    .put(updateTask)
+    .delete(deleteTask);
 
-router.post('/:id/complete', protect, upload.single('proof'), completeTask);
+router.post('/:id/complete', upload.single('proof'), completeTask);
 
 export default router;

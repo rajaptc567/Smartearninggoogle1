@@ -342,74 +342,77 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
     // Initial Data Fetch
     useEffect(() => {
-        const fetchAllData = async () => {
-            // STEP 1: Fetch Public Data (No Token Required)
+        const fetchData = async () => {
             try {
-                const [pm, ip, r, s, ver] = await Promise.all([
-                    getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings(), getDataVersion()
+                const [
+                    users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                    currentVersion
+                ] = await Promise.all([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                    getDataVersion()
                 ]);
                 
-                lastVersionRef.current = ver;
+                lastVersionRef.current = currentVersion;
+
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
-                    payload: { paymentMethods: pm, investmentPlans: ip, rules: r, settings: s } 
+                    payload: { 
+                        users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                    } 
                 });
-
-                // STEP 2: Fetch Protected Data (Only if token exists)
-                const savedUser = localStorage.getItem('currentUser');
-                if (savedUser) {
-                    const parsedUser = JSON.parse(savedUser);
-                    if (parsedUser.token) {
-                        const [d, w, t, n, dis, tsk] = await Promise.all([
-                            getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getDisputes(), getTasks()
-                        ]);
-
-                        const protectedData: Partial<AppState> = { 
-                            deposits: d, withdrawals: w, transactions: t, notifications: n, disputes: dis, tasks: tsk 
-                        };
-
-                        // Admin specific fetches
-                        if (parsedUser.role === 'admin') {
-                            const [u, tf, l, pr] = await Promise.all([
-                                getUsers(), getTransfers(), getLogs(), getPasswordResetRequests()
-                            ]);
-                            Object.assign(protectedData, { users: u, transfers: tf, logs: l, passwordResetRequests: pr });
-                        }
-
-                        dispatch({ type: 'SET_ALL_DATA', payload: protectedData });
-                    }
-                }
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);
             }
         };
 
-        fetchAllData();
-    }, [state.currentUser]); // Re-fetch sensitive data when user identity changes (login/logout)
+        fetchData();
+    }, []);
 
     // --- REAL-TIME SYNC POLLING ---
+    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; 
+            if (!state.currentUser) return; // Only poll if logged in
 
             try {
                 const serverVersion = await getDataVersion();
+                
                 if (lastVersionRef.current === 0) {
                     lastVersionRef.current = serverVersion;
                     return;
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    console.log("Remote changes detected. Synchronizing...");
-                    lastVersionRef.current = serverVersion;
+                    console.log("Remote changes detected by admin. Synchronizing app state...");
                     
-                    // Re-triggering the useEffect above by updating nothing specifically is not ideal, 
-                    // but since the useEffect depends on currentUser, we just fetch once manually here.
-                    const [pm, ip, r, s] = await Promise.all([getPaymentMethods(), getInvestmentPlans(), getRules(), getSettings()]);
-                    dispatch({ type: 'SET_ALL_DATA', payload: { paymentMethods: pm, investmentPlans: ip, rules: r, settings: s } });
+                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
+                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
+                        lastVersionRef.current = serverVersion;
+                        // Just trigger data fetch instead of refresh for admin
+                        // This keeps their modal/forms open but refreshes background data
+                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        ]);
+                        dispatch({ 
+                            type: 'SET_ALL_DATA', 
+                            payload: { 
+                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                            } 
+                        });
+                    } else {
+                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
+                        window.location.reload();
+                    }
                 }
-            } catch (err) {}
-        }, 10000); 
+            } catch (err) {
+                // Silently ignore polling errors
+            }
+        }, 5000); // Check every 5 seconds
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);

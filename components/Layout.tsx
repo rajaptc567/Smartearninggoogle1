@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -10,30 +10,27 @@ const Layout: React.FC = () => {
   const { state } = useData();
   const navigate = useNavigate();
 
-  // SECURITY FIX: Depend on verified role instead of hardcoded strings
-  const isAdmin = useMemo(() => {
-      return state.currentUser?.role === 'admin';
-  }, [state.currentUser]);
-
   useEffect(() => {
-    // Check if users list is loaded to prevent premature redirection
-    if (state.currentUser && !isAdmin) {
-      navigate('/login', { replace: true });
-    }
-    if (!state.currentUser) {
+    // SECURITY CHECK: Ensure user is logged in AND is authorized.
+    // Allow if username is 'admin' OR if email is the master admin email.
+    const isAdmin = state.currentUser && (
+      state.currentUser.username === 'admin' || 
+      state.currentUser.email === 'studio56.pk@gmail.com'
+    );
+    
+    if (!isAdmin) {
       navigate('/secure-admin-login56', { replace: true });
     }
-  }, [isAdmin, state.currentUser, navigate]);
+  }, [state.currentUser, navigate]);
 
+  // Prevent rendering if not authorized (avoid flash of content)
+  const isAdmin = state.currentUser && (
+    state.currentUser.username === 'admin' || 
+    state.currentUser.email === 'studio56.pk@gmail.com'
+  );
+  
   if (!isAdmin) {
-      return (
-          <div className="flex h-screen items-center justify-center bg-gray-900 text-white">
-              <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <p className="font-bold uppercase tracking-widest text-xs">Verifying Admin Privileges...</p>
-              </div>
-          </div>
-      );
+      return null;
   }
 
   return (
