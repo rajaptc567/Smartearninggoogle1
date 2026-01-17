@@ -162,6 +162,14 @@ export const updatePaymentMethod = async (req, res) => {
             }
         }
 
+        // Handle QR code removal flag
+        if (methodData.removeQrCode === 'true') {
+            // Only remove if a new file wasn't uploaded in the same request
+            if (!req.files || !req.files['qrCode']) {
+                methodData.qrCodeUrl = '';
+            }
+        }
+
         // Parse customFields if it comes as a string (FormData)
         if (methodData.customFields && typeof methodData.customFields === 'string') {
             try {

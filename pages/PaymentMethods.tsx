@@ -238,6 +238,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     );
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
+    const [qrCodeRemoved, setQrCodeRemoved] = useState(false);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
     const [saveToLibrary, setSaveToLibrary] = useState(false);
@@ -278,7 +279,13 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const handleQrCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setQrCodeFile(e.target.files[0]);
+            setQrCodeRemoved(false);
         }
+    };
+
+    const handleRemoveQrCode = () => {
+        setQrCodeRemoved(true);
+        setQrCodeFile(null);
     };
 
     const handleSelectSavedLogo = (logo: HomepagePaymentLogo) => {
@@ -380,8 +387,12 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
         if (qrCodeFile) {
             data.append('qrCode', qrCodeFile);
-        } else if (method?.qrCodeUrl) {
+        } else if (method?.qrCodeUrl && !qrCodeRemoved) {
             data.append('qrCodeUrl', method.qrCodeUrl);
+        }
+
+        if (qrCodeRemoved) {
+            data.append('removeQrCode', 'true');
         }
 
         // Clean empty custom fields
@@ -495,10 +506,24 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         <div className="md:col-span-2 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                             <label className="block text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 mb-3 tracking-widest">QR Code (Scan to Pay)</label>
                             <div className="flex items-center gap-4">
-                                {method?.qrCodeUrl && !qrCodeFile && (
-                                    <img src={method.qrCodeUrl} className="h-20 w-20 object-contain rounded-lg bg-white p-1 shadow-sm" alt="QR Preview" />
+                                {method?.qrCodeUrl && !qrCodeFile && !qrCodeRemoved ? (
+                                    <div className="relative group">
+                                        <img src={method.qrCodeUrl} className="h-20 w-20 object-contain rounded-lg bg-white p-1 shadow-sm" alt="QR Preview" />
+                                        <button 
+                                            type="button" 
+                                            onClick={handleRemoveQrCode}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Remove QR Code"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2 w-full">
+                                        <input type="file" accept="image/*" onChange={handleQrCodeChange} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                                        {qrCodeRemoved && <span className="text-[10px] text-red-500 font-bold italic">QR code marked for deletion. Save to confirm.</span>}
+                                    </div>
                                 )}
-                                <input type="file" accept="image/*" onChange={handleQrCodeChange} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
                             </div>
                             <p className="text-[10px] text-gray-500 mt-2">Upload a QR code image to help users pay faster in the deposit form.</p>
                         </div>
