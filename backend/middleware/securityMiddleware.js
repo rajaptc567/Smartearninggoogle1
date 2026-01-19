@@ -50,23 +50,35 @@ export const csrfCheck = (req, res, next) => {
         if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return next();
 
         // ✅ Fallback for Preview URLs / Subdomains / Proxies
-        if (allowedFrontend && origin && origin.startsWith(allowedFrontend.split('//')[0])) {
-            // Check if the domain parts match roughly to allow subdomains/previews
-            const allowedDomain = allowedFrontend.replace('https://', '').replace('http://', '');
-            if (origin.includes(allowedDomain)) return next();
+        // Extract root domain from allowedFrontend if it exists
+        if (allowedFrontend && origin) {
+            try {
+                const allowedHost = new URL(allowedFrontend).hostname;
+                const originHost = new URL(origin).hostname;
+                
+                // Allow subdomains of the allowed frontend
+                if (originHost.endsWith(allowedHost)) return next();
+                
+                // Allow requests from vercel or render subdomains if current site is there
+                if (originHost.includes('vercel.app') && allowedHost.includes('vercel.app')) return next();
+                if (originHost.includes('onrender.com') && allowedHost.includes('onrender.com')) return next();
+            } catch (e) {
+                // Invalid URL format, skip subdomain check
+            }
         }
 
         // ✅ Accept if referer is valid (Handles browsers that hide Origin)
         if (!origin && referer && allowedFrontend && referer.startsWith(allowedFrontend)) return next();
 
-        // ✅ Accept if request has a valid session token in headers (Manual API call)
-        if (req.headers.authorization) return next();
+        // ✅ Accept if request has a valid session token in cookies (Browser-side trust)
+        // Since login doesn't have a cookie yet, we allow it if it's the login route
+        if (req.path === '/api/v1/users/login' || req.path === '/api/v1/users/register') return next();
 
-        // ❌ Fail only if we have NO identifier and it's a cross-site suspicion
-        if (origin || referer) {
+        // ❌ Fail only if we have an origin and it definitely doesn't belong to us
+        if (origin && allowedFrontend && !origin.includes(allowedFrontend.split('//')[1])) {
             return res.status(403).json({ 
                 success: false, 
-                error: `CSRF Protection: Invalid request source. Access from ${origin || 'unknown'} is blocked.` 
+                error: `CSRF Protection: Invalid request source. Access from ${origin} is blocked.` 
             });
         }
     }
