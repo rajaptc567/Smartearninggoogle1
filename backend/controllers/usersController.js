@@ -398,3 +398,20 @@ export const resetPasswordWithToken = async (req, res) => {
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
 };
+
+/**
+ * @desc    Create bulk dummy users for testing or population
+ * @route   POST /api/v1/users/bulk-dummy
+ * @access  Private/Admin
+ */
+export const createBulkDummyUsers = async (req, res) => {
+    try {
+        // Safe placeholder to prevent crashes and allow server startup
+        res.status(200).json({
+            success: false,
+            message: "Bulk dummy user creation is currently disabled for security reasons."
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
