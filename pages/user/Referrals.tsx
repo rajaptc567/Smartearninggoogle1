@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useData } from '../../hooks/useData';
 import { User, Status, formatCurrency, InvestmentPlan, Transaction, currencySymbols, Currency } from '../../types';
@@ -136,7 +137,8 @@ const Referrals: React.FC = () => {
                 t.type === 'Commission' &&
                 t.sourceUserId && String(t.sourceUserId) === String(referral._id)
             )
-            .sort((a, b) => b.date.getTime() - a.date.getTime());
+            // FIX: Wrapped string dates in Date objects for sorting
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const contextComms = referralComms.filter(t => {
             if (contextPlanIds.size === 0) return true;
@@ -150,7 +152,9 @@ const Referrals: React.FC = () => {
         
         const isOverflow = (overflow > 0) && (earned === 0 && held === 0);
 
-        const oldestComm = [...referralComms].sort((a, b) => a.date.getTime() - b.date.getTime()).find(t => t.level === 1);
+        // FIX: Wrapped string dates in Date objects for sorting
+        const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
+        // FIX: Referenced correct property name for recurring commission plans
         const recurringPlanIds = settings.recurringCommissionPlanIds || [];
         const isRecurringReferral = !!(oldestComm?.relatedPlanId && recurringPlanIds.includes(String(oldestComm.relatedPlanId)));
 

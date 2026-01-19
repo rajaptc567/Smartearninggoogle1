@@ -38,7 +38,8 @@ const Settings: React.FC = () => {
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
     const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
-    const incomingRates = settings.exchangeRates || {};
+    // FIX: Cast incomingRates to any to allow safe property check before assignment
+    const incomingRates = (settings.exchangeRates || {}) as any;
 
     const mergedRates = {
         USD: incomingRates.USD || defaultRates.USD,
@@ -48,7 +49,8 @@ const Settings: React.FC = () => {
 
     setLocalSettings(prev => ({
         ...settings,
-        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [] },
+        // FIX: Added missing allowCrossCurrency to transferConfig default object to satisfy interface requirements
+        transferConfig: settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [], allowCrossCurrency: false },
         exchangeRates: mergedRates,
         homepageVideoUrl: settings.homepageVideoUrl || '',
         homepageContent: {
@@ -86,7 +88,7 @@ const Settings: React.FC = () => {
         const field = name.split('.')[1];
         setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
     } else {
-        setLocalSettings(prev => ({...prev, [name]: value }));
+        setLocalSettings(prev => ({...prev, [name]: value } as any));
     }
     setIsDirty(true);
   }
@@ -97,7 +99,7 @@ const Settings: React.FC = () => {
           const field = name.split('.')[1];
           setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
       } else {
-          setLocalSettings(prev => ({...prev, [name]: value }));
+          setLocalSettings(prev => ({...prev, [name]: value } as any));
       }
       setIsDirty(true);
   }
@@ -108,19 +110,19 @@ const Settings: React.FC = () => {
         const field = name.split('.')[1];
         setLocalSettings(prev => ({
             ...prev,
-            withdrawalFrequency: { ...prev.withdrawalFrequency, [field]: checked }
+            withdrawalFrequency: { ...prev.withdrawalFrequency!, [field]: checked }
         }));
     } else if (name === 'transferConfig.enabled') {
         setLocalSettings(prev => ({
             ...prev,
-            transferConfig: { ...prev.transferConfig, enabled: checked },
+            transferConfig: { ...prev.transferConfig!, enabled: checked },
             isUserTransferEnabled: checked // Sync legacy field
         }));
     } else if (name.startsWith('homepageContent.show')) {
         const field = name.split('.')[1];
         setLocalSettings(prev => ({ 
             ...prev, 
-            homepageContent: { ...prev.homepageContent, [field]: checked } as any 
+            homepageContent: { ...prev.homepageContent!, [field]: checked } as any 
         }));
     } else {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
@@ -134,7 +136,7 @@ const Settings: React.FC = () => {
       setLocalSettings(prev => ({
           ...prev,
           withdrawalFrequency: { 
-              ...prev.withdrawalFrequency, 
+              ...prev.withdrawalFrequency!, 
               [field]: field === 'value' ? parseFloat(value) : value 
           }
       }));
@@ -147,7 +149,7 @@ const Settings: React.FC = () => {
         setLocalSettings(prev => ({
             ...prev,
             exchangeRates: {
-                ...prev.exchangeRates,
+                ...prev.exchangeRates!,
                 [currency]: parseFloat(value) || 0
             }
         }));
@@ -257,8 +259,8 @@ const Settings: React.FC = () => {
       setLocalSettings(prev => ({
           ...prev,
           transferConfig: {
-              ...prev.transferConfig,
-              tiers: [...prev.transferConfig.tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0, currency: tierCurrencyFilter, enabled: true }]
+              ...prev.transferConfig!,
+              tiers: [...prev.transferConfig!.tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0, currency: tierCurrencyFilter, enabled: true }]
           }
       }));
       setIsDirty(true);
@@ -268,8 +270,8 @@ const Settings: React.FC = () => {
       setLocalSettings(prev => ({
           ...prev,
           transferConfig: {
-              ...prev.transferConfig,
-              tiers: prev.transferConfig.tiers.filter((_, i) => i !== index)
+              ...prev.transferConfig!,
+              tiers: prev.transferConfig!.tiers.filter((_, i) => i !== index)
           }
       }));
       setIsDirty(true);
@@ -277,7 +279,7 @@ const Settings: React.FC = () => {
 
   const handleTierChange = (index: number, field: keyof TransferFeeTier, value: string | boolean) => {
       setLocalSettings(prev => {
-          const newTiers = [...prev.transferConfig.tiers];
+          const newTiers = [...prev.transferConfig!.tiers];
           const updatedTier = { ...newTiers[index] };
 
           if (field === 'enabled') {
@@ -292,7 +294,7 @@ const Settings: React.FC = () => {
           
           return {
               ...prev,
-              transferConfig: { ...prev.transferConfig, tiers: newTiers }
+              transferConfig: { ...prev.transferConfig!, tiers: newTiers }
           };
       });
       setIsDirty(true);
@@ -459,7 +461,7 @@ const Settings: React.FC = () => {
                                         onChange={() => {
                                             setLocalSettings(prev => ({
                                                 ...prev,
-                                                transferConfig: { ...prev.transferConfig, allowCrossCurrency: !prev.transferConfig?.allowCrossCurrency }
+                                                transferConfig: { ...prev.transferConfig!, allowCrossCurrency: !prev.transferConfig?.allowCrossCurrency }
                                             }));
                                             setIsDirty(true);
                                         }}
@@ -956,7 +958,7 @@ const Settings: React.FC = () => {
                                 <div className="col-span-1 text-center">Active</div>
                                 <div className="col-span-2 text-right">Action</div>
                             </div>
-                            {localSettings.transferConfig.tiers.map((tier, index) => {
+                            {localSettings.transferConfig?.tiers.map((tier, index) => {
                                 if (tierCurrencyFilter && tier.currency !== tierCurrencyFilter) return null;
                                 return (
                                 <div key={index} className="grid grid-cols-12 gap-2 items-center bg-white dark:bg-gray-800 p-2 rounded shadow-sm">
@@ -1047,7 +1049,7 @@ const Settings: React.FC = () => {
                                 name="restrictWithdrawalAmount"
                                 type="checkbox" 
                                 className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-400"
-                                checked={localSettings.restrictWithdrawalAmount}
+                                checked={localSettings.restrictWithdrawalAmount ?? false}
                                 onChange={handleCheckboxChange}
                             />
                             <label htmlFor="restrictWithdrawalAmount" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.restrictWithdrawalAmount ? 'bg-blue-400' : 'bg-gray-300'}`}></label>
@@ -1069,7 +1071,7 @@ const Settings: React.FC = () => {
                                 name="withdrawalFrequency.enabled"
                                 type="checkbox" 
                                 className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-400"
-                                checked={localSettings.withdrawalFrequency?.enabled}
+                                checked={localSettings.withdrawalFrequency?.enabled ?? false}
                                 onChange={handleCheckboxChange}
                             />
                             <label htmlFor="withdrawalFrequency.enabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.withdrawalFrequency?.enabled ? 'bg-blue-400' : 'bg-gray-300'}`}></label>
@@ -1119,7 +1121,7 @@ const Settings: React.FC = () => {
                             name="requireActivePlanForCommission"
                             type="checkbox" 
                             className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            checked={localSettings.requireActivePlanForCommission}
+                            checked={localSettings.requireActivePlanForCommission ?? false}
                             onChange={handleCheckboxChange}
                         />
                         <div>
@@ -1138,7 +1140,7 @@ const Settings: React.FC = () => {
                             name="requirePlanMatchForCommission"
                             type="checkbox" 
                             className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            checked={localSettings.requirePlanMatchForCommission}
+                            checked={localSettings.requirePlanMatchForCommission ?? false}
                             onChange={handleCheckboxChange}
                         />
                         <div>

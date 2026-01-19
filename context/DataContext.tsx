@@ -3,7 +3,7 @@ import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, 
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
-    getDataVersion, getMe
+    getDataVersion, getMe, getDownline
 } from '../services/api';
 
 interface AppState {
@@ -330,7 +330,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
             const isAdmin = freshUser.role === 'admin' || freshUser.role === 'superadmin';
 
-            // 🛡️ DATA FETCHING: Transactions, Deposits, Withdrawals, Transfers are now Role-Aware on Backend.
+            // 🛡️ DATA FETCHING: Transactions, Deposits, Withdrawals, Transfers are Role-Aware on Backend.
             // Everyone can fetch them, but users only get their OWN records.
             const commonDataPromise = Promise.all([
                 getTransactions(), 
@@ -347,14 +347,22 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 getDataVersion()
             ]);
 
-            let adminDataPromise = Promise.resolve([[], [], []]);
+            // 🛡️ USER NETWORK: Members need their downline for Dashboard stats and Tree view.
+            // Admins fetch ALL users.
+            let userDataPromise = isAdmin ? getUsers() : getDownline(freshUser.username);
+
+            let adminMetaPromise = Promise.resolve([[], []]);
             if (isAdmin) {
-                adminDataPromise = Promise.all([
-                    getUsers(), getLogs(), getPasswordResetRequests()
+                adminMetaPromise = Promise.all([
+                    getLogs(), getPasswordResetRequests()
                 ]);
             }
 
-            const [commonData, adminData] = await Promise.all([commonDataPromise, adminDataPromise]);
+            const [commonData, users, adminMeta] = await Promise.all([
+                commonDataPromise, 
+                userDataPromise, 
+                adminMetaPromise
+            ]);
             
             const [
                 transactions, notifications, paymentMethods, 
@@ -364,8 +372,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             ] = commonData;
 
             const [
-                users, logs, passwordResetRequests
-            ] = adminData;
+                logs, passwordResetRequests
+            ] = adminMeta;
             
             lastVersionRef.current = currentVersion;
 
