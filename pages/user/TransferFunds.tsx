@@ -81,8 +81,6 @@ const TransferFunds: React.FC = () => {
 
     // Available levels for filtering
     const availableLevels = useMemo(() => {
-        // FIX: Explicitly typing sort function parameters as numbers to resolve arithmetic operation errors on line 85.
-        // This ensures the TypeScript compiler correctly identifies 'a' and 'b' as numeric types.
         const levels = Array.from(new Set(myDownline.map(d => d.level))).sort((a: number, b: number) => a - b);
         return levels;
     }, [myDownline]);
@@ -580,7 +578,7 @@ const TransferFunds: React.FC = () => {
 
                 {paginatedHistory.length > 0 ? (
                     <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
-                        <Table headers={['Date', 'Direction', 'Counterparty', 'Gross Amount', 'Status']}>
+                        <Table headers={['Date', 'Direction', 'Counterparty', 'Amount', 'Fee', 'Status']}>
                             {paginatedHistory.map(t => {
                                 const isSender = t.senderId === currentUser._id;
                                 return (
@@ -594,6 +592,9 @@ const TransferFunds: React.FC = () => {
                                         <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{isSender ? t.recipientName : t.senderName}</td>
                                         <td className={`px-6 py-5 font-black text-base ${isSender ? 'text-red-500' : 'text-green-600'}`}>
                                             {isSender ? '-' : '+'}{formatCurrency(t.amount, t.currency)}
+                                        </td>
+                                        <td className="px-6 py-5 font-bold text-gray-500">
+                                            {isSender ? formatCurrency(t.fee || 0, t.currency) : '-'}
                                         </td>
                                         <td className="px-6 py-5"><Badge status={t.status as Status} /></td>
                                     </tr>
@@ -626,6 +627,7 @@ const TransferFunds: React.FC = () => {
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
             `}</style>
         </div>
     );
