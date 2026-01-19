@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PaymentMethod, Status, formatCurrency, currencySymbols, Deposit } from '../../types';
 import Button from '../../components/ui/Button';
@@ -110,7 +109,6 @@ const DepositFunds: React.FC = () => {
     const modalContentRef = useRef<HTMLDivElement>(null);
 
     // History Filter State (Audit Log)
-    const [historySearch, setHistorySearch] = useState('');
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
@@ -147,16 +145,6 @@ const DepositFunds: React.FC = () => {
         return deposits.filter(d => {
             if (d.userId !== currentUser._id) return false;
             if (historyStatus && d.status !== historyStatus) return false;
-            
-            if (historySearch) {
-                const term = historySearch.toLowerCase();
-                const matches = 
-                    d.transactionId.toLowerCase().includes(term) ||
-                    d.method.toLowerCase().includes(term) ||
-                    (d.senderAccountTitle && d.senderAccountTitle.toLowerCase().includes(term));
-                if (!matches) return false;
-            }
-
             if (historyDateFrom || historyDateTo) {
                 const itemDate = new Date(d.date).setHours(0,0,0,0);
                 const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
@@ -166,7 +154,7 @@ const DepositFunds: React.FC = () => {
             }
             return true;
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [deposits, currentUser, historyStatus, historyDateFrom, historyDateTo, historySearch]);
+    }, [deposits, currentUser, historyStatus, historyDateFrom, historyDateTo]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const target = e.currentTarget;
@@ -426,10 +414,10 @@ const DepositFunds: React.FC = () => {
 
             {/* DEPOSIT HISTORY SECTION (Audit Log) */}
             <div className="bg-white dark:bg-gray-950 p-10 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 mt-12">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 rounded-xl flex items-center justify-center text-gray-400">
-                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                         </div>
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">History Log</h3>
                     </div>
@@ -463,20 +451,6 @@ const DepositFunds: React.FC = () => {
                     </div>
                 </div>
 
-                {/* NEW: Search Bar implementation */}
-                <div className="mb-8 relative group">
-                    <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
-                    <input 
-                        type="text"
-                        value={historySearch}
-                        onChange={(e) => setHistorySearch(e.target.value)}
-                        placeholder="Search by Transaction ID, Provider, or Sender..."
-                        className="w-full pl-12 pr-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-inner"
-                    />
-                </div>
-
                 {filteredDeposits.length > 0 ? (
                     <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
                         <Table headers={['Date', 'Provider', 'Amount', 'Trx ID', 'Status']}>
@@ -495,7 +469,7 @@ const DepositFunds: React.FC = () => {
                     </div>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
-                        <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No matching entries found in ledger</p>
+                        <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No deposit entries found in ledger</p>
                     </div>
                 )}
             </div>

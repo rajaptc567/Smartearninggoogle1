@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Deposit, Status, formatCurrency, Currency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
@@ -9,23 +9,9 @@ import { useData } from '../hooks/useData';
 import { updateDeposit } from '../services/api';
 import { getUploadsBaseUrl } from '../services/api';
 
-// Helper to determine API URL based on environment
-const getApiBaseUrl = () => {
-    const hostname = window.location.hostname;
-    return (hostname === 'localhost' || hostname === '127.0.0.1')
-        ? 'http://localhost:5000/api/v1'
-        : 'https://smartearning-api.onrender.com/api/v1';
-};
-
 const Deposits: React.FC = () => {
     const { state, dispatch } = useData();
     const { deposits } = state;
-
-    // Pagination State
-    const [pagedDeposits, setPagedDeposits] = useState<Deposit[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(100);
-    const [isFetchingPaged, setIsFetchingPaged] = useState(false);
 
     const tableHeaders = ['ID', 'User', 'Amount', 'Method', 'Transaction ID', 'Receipt', 'Status', 'Date'];
     
@@ -45,27 +31,6 @@ const Deposits: React.FC = () => {
 
     const UPLOADS_URL = getUploadsBaseUrl();
 
-    // --- PAGINATED DATA FETCHING ---
-    const fetchPagedDeposits = useCallback(async () => {
-        setIsFetchingPaged(true);
-        try {
-            const url = `${getApiBaseUrl()}/deposits?page=${currentPage}&limit=${limit}`;
-            const response = await fetch(url);
-            const result = await response.json();
-            if (result.success) {
-                setPagedDeposits(result.data);
-            }
-        } catch (error) {
-            console.error("Failed to fetch paginated deposits:", error);
-        } finally {
-            setIsFetchingPaged(false);
-        }
-    }, [currentPage, limit]);
-
-    useEffect(() => {
-        fetchPagedDeposits();
-    }, [fetchPagedDeposits]);
-
     useEffect(() => {
         if (selectedDeposit) {
             setAdminNotes(selectedDeposit.adminNotes || '');
@@ -73,8 +38,8 @@ const Deposits: React.FC = () => {
         }
     }, [selectedDeposit]);
 
-    // Filter Logic (Applied to the current page's results)
-    const filteredDeposits = pagedDeposits.filter(deposit => {
+    // Filter Logic
+    const filteredDeposits = deposits.filter(deposit => {
         const matchesSearch = 
             deposit._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
             deposit.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,6 +47,7 @@ const Deposits: React.FC = () => {
             deposit.amount.toString().includes(searchTerm);
         
         const matchesStatus = statusFilter ? deposit.status === statusFilter : true;
+
         const matchesCurrency = currencyFilter ? deposit.currency?.toUpperCase() === currencyFilter : true;
 
         return matchesSearch && matchesStatus && matchesCurrency;
@@ -95,12 +61,12 @@ const Deposits: React.FC = () => {
                     status: currentStatus,
                     adminNotes: adminNotes,
                 });
+                // The API now returns the updated deposit and user
+                // FIX: The API returns a complex object. Dispatch separate actions to update deposit and user state.
                 dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
                 dispatch({ type: 'UPDATE_USER', payload: result.user });
-                
-                // Update local list state
-                setPagedDeposits(prev => prev.map(d => d._id === result.deposit._id ? result.deposit : d));
-                
+                // We should also refetch transactions and notifications to see changes
+                // For simplicity, we can let the user refresh or build a refetch mechanism
                 handleCloseDetailModal();
             } catch (error) {
                 console.error("Failed to update deposit:", error);
@@ -111,6 +77,7 @@ const Deposits: React.FC = () => {
         }
     };
 
+    // Helper to determine correct image source (Base64 vs File Path)
     const getReceiptSrc = (url: string) => {
         if (url.startsWith('data:')) return url;
         return `${UPLOADS_URL}${url}`;
@@ -172,7 +139,6 @@ const Deposits: React.FC = () => {
                     />
                 </div>
             </div>
-            
             <Table headers={tableHeaders}>
                 {filteredDeposits.map((deposit: Deposit) => (
                     <tr 
@@ -199,43 +165,6 @@ const Deposits: React.FC = () => {
                     </tr>
                 ))}
             </Table>
-
-            {/* SERVER-SIDE PAGINATION CONTROLS */}
-            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t dark:border-gray-700 gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Records per page:</span>
-                    <select 
-                        value={limit} 
-                        onChange={(e) => { setLimit(Number(e.target.value)); setCurrentPage(1); }}
-                        className="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm py-1.5 focus:ring-blue-500"
-                    >
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                    </select>
-                </div>
-                <div className="flex items-center gap-4">
-                    <Button 
-                        size="sm" 
-                        variant="secondary" 
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1 || isFetchingPaged}
-                    >
-                        Previous
-                    </Button>
-                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                        Page {currentPage}
-                    </span>
-                    <Button 
-                        size="sm" 
-                        variant="secondary" 
-                        onClick={() => setCurrentPage(prev => prev + 1)}
-                        disabled={pagedDeposits.length < limit || isFetchingPaged}
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
 
             <Modal isOpen={isImageModalOpen} onClose={handleCloseImageModal}>
                 {selectedReceipt && (

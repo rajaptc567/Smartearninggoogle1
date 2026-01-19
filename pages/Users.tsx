@@ -14,26 +14,12 @@ const transactionTypes = [
     'Transfer Received', 'Transfer Request', 'Transfer Refund'
 ];
 
-// Helper to determine API URL based on environment
-const getApiBaseUrl = () => {
-    const hostname = window.location.hostname;
-    return (hostname === 'localhost' || hostname === '127.0.0.1')
-        ? 'http://localhost:5000/api/v1'
-        : 'https://smartearning-api.onrender.com/api/v1';
-};
-
 const Users: React.FC = () => {
     const { state, dispatch } = useData();
-    const { investmentPlans, transactions, settings, deposits, withdrawals, transfers } = state;
+    const { users, investmentPlans, transactions, settings, deposits, withdrawals, transfers } = state;
     const UPLOADS_URL = getUploadsBaseUrl();
     
-    // Pagination State
-    const [pagedUsers, setPagedUsers] = useState<User[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [limit, setLimit] = useState(100);
-    const [isFetchingPaged, setIsFetchingPaged] = useState(false);
-    
-    const isLoading = isFetchingPaged && pagedUsers.length === 0;
+    const isLoading = users.length === 0;
     
     const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
     const [isBulkRestrictionsModalOpen, setIsBulkRestrictionsModalOpen] = useState(false);
@@ -54,29 +40,7 @@ const Users: React.FC = () => {
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // --- PAGINATED DATA FETCHING ---
-    const fetchPagedUsers = useCallback(async () => {
-        setIsFetchingPaged(true);
-        try {
-            const url = `${getApiBaseUrl()}/users?page=${currentPage}&limit=${limit}`;
-            const response = await fetch(url);
-            const result = await response.json();
-            if (result.success) {
-                setPagedUsers(result.data);
-            }
-        } catch (error) {
-            console.error("Failed to fetch paginated users:", error);
-        } finally {
-            setIsFetchingPaged(false);
-        }
-    }, [currentPage, limit]);
-
-    // Re-fetch when page or limit changes
-    useEffect(() => {
-        fetchPagedUsers();
-    }, [fetchPagedUsers]);
-
-    // --- DOSSIER GENERATION LOGIC ---
+    // --- DOSSIER GENERATION LOGIC (Unified for Delete flow) ---
     const getReceiptInfo = (tx: Transaction) => {
         if (tx.type !== 'Deposit') return 'N/A';
         const match = tx.description.match(/#(\w+)/);
@@ -97,7 +61,7 @@ const Users: React.FC = () => {
         const sentTransfers = transfers.filter(t => t.senderId === user._id && t.status === Status.Approved).reduce((sum, t) => sum + t.amount, 0);
         const commissions = transactions.filter(t => t.userId === user._id && t.type === 'Commission' && t.status === 'Approved');
         const totalCommission = commissions.reduce((sum, t) => sum + t.amount, 0);
-        const directs = state.users.filter(u => u.sponsor === user.username);
+        const directs = users.filter(u => u.sponsor === user.username);
         return { totalDeposit: approvedDeposits, totalWithdrawal: paidWithdrawals, totalTransfer: sentTransfers, totalCommission, totalDirectRef: directs.length };
     };
 
@@ -105,7 +69,7 @@ const Users: React.FC = () => {
         if (ids.length === 0) return;
         const rows: string[][] = [];
         ids.forEach((userId, index) => {
-            const user = state.users.find(u => u._id === userId);
+            const user = users.find(u => u._id === userId);
             if (!user) return;
             const userTx = transactions.filter(t => t.userId === user._id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             const stats = calculateUserAnalytics(user);
@@ -138,7 +102,7 @@ const Users: React.FC = () => {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        const filename = ids.length === 1 ? `Dossier_PreDelete_${state.users.find(u => u._id === ids[0])?.username}.csv` : `Bulk_Dossiers_PreDelete_${ids.length}_Users.csv`;
+        const filename = ids.length === 1 ? `Dossier_PreDelete_${users.find(u => u._id === ids[0])?.username}.csv` : `Bulk_Dossiers_PreDelete_${ids.length}_Users.csv`;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -174,7 +138,6 @@ const Users: React.FC = () => {
         try {
             await deleteUser(userId);
             dispatch({ type: 'DELETE_USER', payload: userId });
-            setPagedUsers(prev => prev.filter(u => u._id !== userId));
             alert('User and all associated data deleted successfully.');
             handleCloseAllModals();
         } catch (error) {
@@ -195,7 +158,6 @@ const Users: React.FC = () => {
                 await bulkDeleteUsers(selectedUserIds);
                 const updatedUsers = await getUsers();
                 dispatch({ type: 'SET_USERS', payload: updatedUsers });
-                setPagedUsers(prev => prev.filter(u => !selectedUserIds.includes(u._id)));
                 setSelectedUserIds([]);
                 alert(`Successfully deleted ${count} users.`);
             } catch (error) {
@@ -208,7 +170,7 @@ const Users: React.FC = () => {
     };
 
     const filteredUsers = useMemo(() => {
-        return pagedUsers.filter(user => {
+        return state.users.filter(user => {
             const matchesSearch = (() => {
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
@@ -241,7 +203,7 @@ const Users: React.FC = () => {
 
             return matchesSearch && matchesStatus && matchesPlan && matchesCurrency;
         });
-    }, [pagedUsers, searchTerm, statusFilter, planFilter, currencyFilter]);
+    }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
 
     // Check if any plan for a user has reached its limit
     const getLimitStatus = useCallback((user: User) => {
@@ -308,7 +270,7 @@ const Users: React.FC = () => {
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management</h2>
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management ({filteredUsers.length})</h2>
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                      <select
                         value={statusFilter}
@@ -466,44 +428,6 @@ const Users: React.FC = () => {
                     </div>
                 </div>
              )}
-
-            {/* SERVER-SIDE PAGINATION CONTROLS */}
-            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t dark:border-gray-700 gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Records per page:</span>
-                    <select 
-                        value={limit} 
-                        onChange={(e) => { setLimit(Number(e.target.value)); setCurrentPage(1); }}
-                        className="rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm py-1.5 focus:ring-blue-500"
-                    >
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                    </select>
-                </div>
-                <div className="flex items-center gap-4">
-                    <Button 
-                        size="sm" 
-                        variant="secondary" 
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1 || isFetchingPaged}
-                    >
-                        Previous
-                    </Button>
-                    <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
-                        Page {currentPage}
-                    </span>
-                    <Button 
-                        size="sm" 
-                        variant="secondary" 
-                        onClick={() => setCurrentPage(prev => prev + 1)}
-                        disabled={pagedUsers.length < limit || isFetchingPaged}
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
-
             {isUserManagementModalOpen && (
                 <UserManagementModal 
                     user={managingUser}
@@ -513,13 +437,13 @@ const Users: React.FC = () => {
                 />
             )}
             {isBulkRestrictionsModalOpen && (
-                <BulkRestrictionsModal allUsers={state.users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
+                <BulkRestrictionsModal allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isBulkDummyModalOpen && (
-                <BulkDummyUserModal users={state.users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
+                <BulkDummyUserModal users={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isMessageModalOpen && (
-                <MessageUserModal user={managingUser} allUsers={state.users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
+                <MessageUserModal user={managingUser} allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isDeleteModalOpen && userToDelete && (
                 <DeleteUserModal 
@@ -532,6 +456,8 @@ const Users: React.FC = () => {
         </div>
     );
 };
+
+// --- UserManagementModal ---
 
 interface UserManagementModalProps {
     user: User | null;
@@ -1132,7 +1058,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                 value={teamSearch}
                                                 onChange={e => setTeamSearch(e.target.value)}
                                             />
-                                            <svg className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                            <svg className="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                         </div>
                                     </div>
 
@@ -1377,7 +1303,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
                                 <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase font-black tracking-widest sticky top-0 z-10 border-b dark:border-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 uppercase font-black sticky top-0 z-10 border-b dark:border-gray-700">
                                             <tr><th className="p-4">Date</th><th className="p-4">Type</th><th className="p-4 text-right">Amount</th><th className="p-4 text-center">Status</th><th className="p-4">Description</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
@@ -1413,7 +1339,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
                                 <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase tracking-widest sticky top-0 border-b dark:border-gray-700 z-10">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0 border-b dark:border-gray-700 z-10">
                                             <tr>
                                                 <th className="p-4">Date</th>
                                                 <th className="p-4">Level</th>
@@ -1454,7 +1380,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                             <div className="overflow-hidden rounded-2xl border dark:border-gray-700 shadow-sm bg-white dark:bg-gray-900">
                                 <div className="max-h-[50vh] overflow-y-auto custom-scrollbar">
                                     <table className="w-full text-xs text-left">
-                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase tracking-widest sticky top-0 z-10 border-b dark:border-gray-700">
+                                        <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-black uppercase sticky top-0 z-10 border-b dark:border-gray-700">
                                             <tr><th className="p-4">Timestamp</th><th className="p-4">Action</th><th className="p-4">Performed By</th><th className="p-4">Technical Details</th></tr>
                                         </thead>
                                         <tbody className="divide-y dark:divide-gray-800">
@@ -1503,85 +1429,89 @@ interface BulkRestrictionsModalProps {
 }
 
 const BulkRestrictionsModal: React.FC<BulkRestrictionsModalProps> = ({ allUsers, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
     const [targetType, setTargetType] = useState<'all' | 'plan' | 'single'>('all');
     const [targetIds, setTargetIds] = useState<string[]>([]);
     const [restrictions, setRestrictions] = useState<Partial<UserRestrictions>>({
-        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false
+        deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false
     });
     const [action, setAction] = useState<'enable' | 'disable' | 'toggle'>('enable');
-    const [isSaving, setIsSaving] = useState(false);
+    const [sendNotification, setSendNotification] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleToggleRestriction = (key: keyof UserRestrictions) => {
+    const handleApply = async () => {
+        if (targetType === 'plan' && targetIds.length === 0) return alert('Select at least one plan');
+        setIsProcessing(true);
+        try {
+            await bulkUpdateUserRestrictions({ targetType, targetIds, restrictions, action, sendNotification });
+            const updatedUsers = await getUsers();
+            dispatch({ type: 'SET_USERS', payload: updatedUsers });
+            alert('Bulk update completed successfully');
+            onClose();
+        } catch (err: any) {
+            alert(err.message || 'Operation failed');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const toggleRestriction = (key: keyof UserRestrictions) => {
         setRestrictions(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            await bulkUpdateUserRestrictions({ targetType, targetIds, restrictions, action });
-            alert('Bulk update completed successfully.');
-            onClose();
-        } catch (error) {
-            console.error(error);
-            alert('Failed to bulk update restrictions.');
-        } finally {
-            setIsSaving(false);
-        }
+    const togglePlan = (id: string) => {
+        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-6 w-[500px] max-w-full space-y-4">
-                <h3 className="text-xl font-bold mb-4">Bulk Restrictions Manager</h3>
-                
-                <div>
-                    <label className="block text-sm font-medium mb-1">Target Audience</label>
-                    <select value={targetType} onChange={(e) => setTargetType(e.target.value as any)} className="w-full rounded-md dark:bg-gray-700">
-                        <option value="all">All Users</option>
-                        <option value="plan">By Active Plan</option>
-                    </select>
-                </div>
-
-                {targetType === 'plan' && (
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Select Plans</label>
-                        <div className="max-h-32 overflow-y-auto border rounded p-2 dark:bg-gray-700">
+            <div className="p-4 w-[500px] max-w-full space-y-6">
+                <h3 className="text-xl font-bold">Bulk Restrictions Manager</h3>
+                <section>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">1. Select Target Users</label>
+                    <div className="flex gap-2 mb-3">
+                        <button onClick={() => setTargetType('all')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>All Users</button>
+                        <button onClick={() => setTargetType('plan')} className={`flex-1 py-2 px-3 text-sm rounded border ${targetType === 'plan' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-700'}`}>By Plan</button>
+                    </div>
+                    {targetType === 'plan' && (
+                        <div className="max-h-40 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
                             {investmentPlans.map(plan => (
-                                <label key={plan._id} className="flex items-center gap-2 mb-1">
-                                    <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => setTargetIds(prev => prev.includes(plan._id) ? prev.filter(id => id !== plan._id) : [...prev, plan._id])} />
-                                    <span className="text-sm">{plan.name}</span>
+                                <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
+                                    <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
+                                    <span>{plan.name} ({plan.currency})</span>
                                 </label>
                             ))}
                         </div>
-                    </div>
-                )}
-
-                <div>
-                    <label className="block text-sm font-medium mb-1">Action</label>
-                    <select value={action} onChange={(e) => setAction(e.target.value as any)} className="w-full rounded-md dark:bg-gray-700">
-                        <option value="enable">Block (Enable Restriction)</option>
-                        <option value="disable">Allow (Disable Restriction)</option>
-                        <option value="toggle">Toggle Status</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium mb-2">Select Restrictions to Apply</label>
+                    )}
+                </section>
+                <section>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">2. Select Restrictions to Affect</label>
                     <div className="grid grid-cols-2 gap-2">
                         {Object.keys(restrictions).map(key => (
-                            <label key={key} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600 cursor-pointer hover:bg-gray-100">
-                                <input type="checkbox" checked={!!restrictions[key as keyof UserRestrictions]} onChange={() => handleToggleRestriction(key as keyof UserRestrictions)} />
-                                <span className="text-xs uppercase font-bold">{key}</span>
+                            <label key={key} className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50 cursor-pointer text-sm">
+                                <input type="checkbox" checked={!!(restrictions as any)[key]} onChange={() => toggleRestriction(key as any)} className="rounded" />
+                                <span className="capitalize">{key}</span>
                             </label>
                         ))}
                     </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSaving || (targetType === 'plan' && targetIds.length === 0)}>
-                        {isSaving ? 'Processing...' : 'Apply Bulk Changes'}
-                    </Button>
+                </section>
+                <section>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">3. Action</label>
+                    <select value={action} onChange={e => setAction(e.target.value as any)} className="w-full border rounded p-2 text-sm">
+                        <option value="enable">Enable Restrictions (BLOCK activity)</option>
+                        <option value="disable">Disable Restrictions (ALLOW activity)</option>
+                        <option value="toggle">Invert Current Status</option>
+                    </select>
+                </section>
+                <div className="pt-4 border-t flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={sendNotification} onChange={e => setSendNotification(e.target.checked)} className="rounded" />
+                        Send notification to affected users
+                    </label>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                        <Button onClick={handleApply} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Apply Bulk Update'}</Button>
+                    </div>
                 </div>
             </div>
         </Modal>
@@ -1595,24 +1525,36 @@ interface BulkDummyUserModalProps {
 }
 
 const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investmentPlans, onClose }) => {
+    const { dispatch } = useData();
     const [count, setCount] = useState('10');
+    const [customUsernames, setCustomUsernames] = useState('');
     const [sponsor, setSponsor] = useState('');
     const [balance, setBalance] = useState('0');
-    const [country, setCountry] = useState('United States');
-    const [currency, setCurrency] = useState<Currency>('USD');
-    const [usernamesText, setUsernamesText] = useState('');
+    const [country, setCountry] = useState(countries[0]);
+    const [currency, setCurrency] = useState<Currency>('PKR');
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleCreate = async () => {
+        if (!sponsor) return alert('Sponsor username is required');
+        
+        const usernameList = customUsernames.split('\n').map(u => u.trim()).filter(u => u !== '');
+        
         setIsProcessing(true);
         try {
-            const usernames = usernamesText.split('\n').map(u => u.trim()).filter(u => u);
-            await createBulkDummyUsers({ count: parseInt(count), sponsor, balance: parseFloat(balance), country, currency, usernames });
-            alert('Dummy users creation process triggered successfully.');
+            await createBulkDummyUsers({ 
+                count: usernameList.length > 0 ? usernameList.length : parseInt(count), 
+                usernames: usernameList.length > 0 ? usernameList : undefined,
+                sponsor, 
+                balance: parseFloat(balance), 
+                country, 
+                currency 
+            });
+            const updatedUsers = await getUsers();
+            dispatch({ type: 'SET_USERS', payload: updatedUsers });
+            alert('Bulk dummy user generation process completed.');
             onClose();
-        } catch (error) {
-            console.error(error);
-            alert('Failed to create dummy users.');
+        } catch (err: any) {
+            alert(err.message || 'Operation failed');
         } finally {
             setIsProcessing(false);
         }
@@ -1620,42 +1562,45 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
 
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-6 w-[500px] max-w-full space-y-4">
-                <h3 className="text-xl font-bold mb-4">Bulk Dummy User Tool</h3>
-                <p className="text-xs text-gray-500 mb-4">Create multiple users for testing or ticker population.</p>
-
+            <div className="p-4 w-[550px] max-w-full space-y-4">
+                <h3 className="text-xl font-bold">Bulk Dummy User Generator</h3>
+                
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">Random Count</label>
-                        <input type="number" value={count} onChange={e => setCount(e.target.value)} className="w-full rounded dark:bg-gray-700" placeholder="e.g. 10" />
+                        <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Number of Random Users</label>
+                        <input 
+                            type="number" 
+                            value={count} 
+                            onChange={e => setCount(e.target.value)} 
+                            disabled={customUsernames.trim().length > 0}
+                            className={`w-full border rounded p-2 text-sm dark:bg-gray-700 ${customUsernames.trim().length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                        />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Sponsor Username</label>
-                        <input value={sponsor} onChange={e => setSponsor(e.target.value)} className="w-full rounded dark:bg-gray-700" placeholder="admin" />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Initial Balance</label>
-                        <input type="number" value={balance} onChange={e => setBalance(e.target.value)} className="w-full rounded dark:bg-gray-700" placeholder="0.00" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Currency</label>
-                        <select value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full rounded dark:bg-gray-700">
-                            <option value="PKR">PKR</option><option value="USD">USD</option><option value="EUR">EUR</option>
-                        </select>
-                    </div>
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Initial Balance</label><input type="number" value={balance} onChange={e => setBalance(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium mb-1">Specific Usernames (One per line)</label>
-                    <textarea value={usernamesText} onChange={e => setUsernamesText(e.target.value)} rows={3} className="w-full rounded dark:bg-gray-700 text-xs font-mono" placeholder="Optional: list specific usernames here" />
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Custom Usernames (optional, one per line)</label>
+                    <textarea 
+                        value={customUsernames} 
+                        onChange={e => setCustomUsernames(e.target.value)} 
+                        rows={3}
+                        placeholder="pro_investor&#10;crypto_king&#10;earning_master"
+                        className="w-full border rounded p-2 text-sm dark:bg-gray-700 font-mono"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1 italic">If provided, the "Number of Users" field will be ignored.</p>
                 </div>
 
-                <div className="mt-6 flex justify-end gap-3">
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Sponsor Username</label><input type="text" value={sponsor} onChange={e => setSponsor(e.target.value)} placeholder="Username of the sponsor" className="w-full border rounded p-2 text-sm dark:bg-gray-700" /></div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Country</label><select value={country} onChange={e => setCountry(e.target.value)} className="w-full border rounded p-2 text-sm dark:bg-gray-700">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Currency</label><select value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full border rounded p-2 text-sm dark:bg-gray-700"><option value="PKR">PKR</option><option value="EUR">EUR</option><option value="USD">USD</option></select></div>
+                </div>
+                
+                <div className="pt-4 border-t flex justify-end gap-2">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleCreate} disabled={isProcessing}>{isProcessing ? 'Processing...' : 'Generate Users'}</Button>
+                    <Button onClick={handleCreate} disabled={isProcessing}>{isProcessing ? 'Generating...' : 'Generate Dummy Users'}</Button>
                 </div>
             </div>
         </Modal>
@@ -1670,78 +1615,66 @@ interface MessageUserModalProps {
 }
 
 const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, investmentPlans, onClose }) => {
-    const [targetType, setTargetType] = useState<'single' | 'all' | 'plan' | 'inactive'>(user ? 'single' : 'all');
+    const { dispatch } = useData();
+    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all' | 'inactive'>(user ? 'single' : 'all');
     const [targetIds, setTargetIds] = useState<string[]>(user ? [user._id] : []);
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isPopup, setIsPopup] = useState(false);
     const [isSending, setIsSending] = useState(false);
+    const [randomCount, setRandomCount] = useState('');
 
-    const handleSend = async () => {
-        if (!message) return alert("Message is required");
+    const handleSend = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!message) return alert('Message is required');
         setIsSending(true);
         try {
-            await sendAdminNotification({ 
-                userId: targetType === 'single' ? targetIds[0] : undefined, 
-                targetType: targetType !== 'single' ? targetType : undefined, 
-                targetIds: targetType !== 'single' ? targetIds : undefined, 
-                message, 
-                subject, 
-                isPopup 
-            });
-            alert('Messages transmitted successfully.');
+            const result = await sendAdminNotification({ userId: targetType === 'single' ? targetIds[0] : undefined, targetType: targetType !== 'single' ? targetType : undefined, targetIds: targetType === 'plan' ? targetIds : undefined, subject, message, isPopup, randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined });
+            dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
+            alert(`Message sent successfully.`);
             onClose();
-        } catch (error) {
-            console.error(error);
-            alert('Failed to send message.');
+        } catch (err: any) {
+            alert(err.message || 'Failed to send message');
         } finally {
             setIsSending(false);
         }
     };
 
+    const togglePlan = (id: string) => {
+        setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-6 w-[600px] max-w-full space-y-4">
-                <h3 className="text-xl font-bold mb-4">Broadcast System Message</h3>
-                
-                {!user && (
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Target Segment</label>
-                        <select value={targetType} onChange={(e) => setTargetType(e.target.value as any)} className="w-full rounded dark:bg-gray-700">
-                            <option value="all">All Registered Users</option>
-                            <option value="plan">By Active Plan</option>
-                            <option value="inactive">Inactive Users (No Plan)</option>
-                        </select>
-                    </div>
-                )}
-
-                {targetType === 'plan' && (
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Select Target Plans</label>
-                        <div className="max-h-32 overflow-y-auto border rounded p-2 dark:bg-gray-700">
-                            {investmentPlans.map(p => (
-                                <label key={p._id} className="flex items-center gap-2 mb-1">
-                                    <input type="checkbox" checked={targetIds.includes(p._id)} onChange={() => setTargetIds(prev => prev.includes(p._id) ? prev.filter(id => id !== p._id) : [...prev, p._id])} />
-                                    <span className="text-sm">{p.name} ({p.currency})</span>
-                                </label>
-                            ))}
+            <form onSubmit={handleSend} className="p-4 w-[500px] max-w-full space-y-4">
+                <h3 className="text-xl font-bold">Send Announcement</h3>
+                <div>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients</label>
+                    {user ? <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div> : (
+                        <div className="space-y-3">
+                            <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full border rounded p-2 text-sm">
+                                <option value="all">All Members</option>
+                                <option value="plan">Members of Specific Plans</option>
+                                <option value="inactive">Inactive Members (No active plan)</option>
+                            </select>
+                            {targetType === 'plan' && (
+                                <div className="max-h-32 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
+                                    {investmentPlans.map(plan => (
+                                        <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
+                                            <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
+                                            <span>{plan.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
-                )}
-
-                <div><label className="block text-sm font-medium mb-1">Subject</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full rounded dark:bg-gray-700" placeholder="Message Subject" /></div>
-                <div><label className="block text-sm font-medium mb-1">Message Content</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} className="w-full rounded dark:bg-gray-700" placeholder="Type your message here..." /></div>
-                
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded text-blue-600" />
-                    <span className="text-sm font-bold">Display as Dashboard Popup</span>
-                </label>
-
-                <div className="mt-6 flex justify-end gap-3">
-                    <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSend} disabled={isSending || !message}>{isSending ? 'Sending...' : 'Send Message'}</Button>
+                    )}
                 </div>
-            </div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" /></div>
+                <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required /></div>
+                <div className="flex items-center gap-2"><input type="checkbox" id="popup-chk" checked={isPopup} onChange={e => setIsPopup(e.target.checked)} className="rounded" /><label htmlFor="popup-chk" className="text-sm font-medium cursor-pointer">Display as urgent POPUP for user</label></div>
+                <div className="flex justify-end gap-2 pt-4 border-t"><Button variant="secondary" onClick={onClose} type="button">Cancel</Button><Button type="submit" disabled={isSending}>{isSending ? 'Sending...' : 'Send Message'}</Button></div>
+            </form>
         </Modal>
     );
 };
@@ -1749,57 +1682,37 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
 interface DeleteUserModalProps {
     user: User;
     onClose: () => void;
-    onConfirmDelete: (userId: string) => void;
+    onConfirmDelete: (userId: string) => Promise<void>;
     onDownloadDossier: () => void;
 }
 
 const DeleteUserModal: React.FC<DeleteUserModalProps> = ({ user, onClose, onConfirmDelete, onDownloadDossier }) => {
-    const [confirmName, setConfirmName] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+    
+    const handleConfirm = async () => {
+        setIsDeleting(true);
+        await onConfirmDelete(user._id);
+        setIsDeleting(false);
+    };
 
     return (
         <Modal isOpen={true} onClose={onClose}>
-            <div className="p-6 w-[500px] max-w-full text-center">
-                <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <div className="p-4 w-96 text-center space-y-4">
+                <div className="mx-auto w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter mb-2">Confirm Destruction</h3>
-                <p className="text-sm text-gray-500 mb-6">
-                    You are about to permanently delete <strong className="text-red-600">@{user.username}</strong> and all associated history. This action is irreversible.
-                </p>
-
-                <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border dark:border-gray-700 mb-6 text-left">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Pre-Deletion Audit</p>
-                    <button 
-                        onClick={onDownloadDossier}
-                        className="w-full py-2 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Activity Dossier (Recommended)
-                    </button>
+                <h3 className="text-xl font-bold">Confirm Deletion</h3>
+                <p className="text-sm text-gray-500">Are you sure you want to permanently delete user <strong className="text-gray-900">@{user.username}</strong>? This action is irreversible.</p>
+                
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
+                    <strong>Tip:</strong> You can download a complete history of this user before deleting.
                 </div>
 
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 text-left ml-1">Type username to confirm</label>
-                        <input 
-                            type="text" 
-                            className="w-full p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-center font-bold text-red-600"
-                            placeholder={user.username}
-                            value={confirmName}
-                            onChange={e => setConfirmName(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <Button variant="secondary" onClick={onClose} className="rounded-xl">Cancel</Button>
-                        <Button 
-                            variant="danger" 
-                            className="rounded-xl"
-                            disabled={confirmName !== user.username}
-                            onClick={() => onConfirmDelete(user._id)}
-                        >
-                            Delete Forever
-                        </Button>
+                <div className="space-y-2">
+                    <Button className="w-full" variant="secondary" onClick={onDownloadDossier} disabled={isDeleting}>Download User Dossier (CSV)</Button>
+                    <div className="flex gap-2">
+                        <Button className="flex-1" variant="secondary" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+                        <Button className="flex-1" variant="danger" onClick={handleConfirm} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Yes, Delete All'}</Button>
                     </div>
                 </div>
             </div>

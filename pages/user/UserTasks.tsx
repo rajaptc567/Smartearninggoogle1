@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../../hooks/useData';
 import { formatCurrency, Task } from '../../types';
@@ -16,6 +17,7 @@ const UserTasks: React.FC = () => {
     const [proofFiles, setProofFiles] = useState<Record<string, File>>({});
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // Dynamic Cooldown Timer State
     const [currentTime, setCurrentTime] = useState(Date.now());
     useEffect(() => {
         const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -51,32 +53,33 @@ const UserTasks: React.FC = () => {
     const visibleTasks = useMemo(() => {
         return tasks.filter(t => {
             if (t.status !== 'Active') return false;
+            
+            // Temporal
             const now = new Date();
             if (t.activeFrom && now < new Date(t.activeFrom)) return false;
             if (t.activeTo && now > new Date(t.activeTo)) return false;
+
+            // Targeting
             if (t.targetCurrencies?.length > 0 && !t.targetCurrencies.includes(currentUser.currency)) return false;
             if (t.targetCountries?.length > 0 && !t.targetCountries.includes(currentUser.country)) return false;
+            
             if (t.minPlanValue > 0) {
                 const maxVal = (currentUser.activePlans || []).reduce((max, p) => Math.max(max, p.price), 0);
                 if (maxVal < t.minPlanValue) return false;
             }
+
+            // Budget
             if (t.maxGlobalCompletions > 0 && t.currentGlobalCompletions >= t.maxGlobalCompletions) return false;
+
             return true;
         });
     }, [tasks, currentUser]);
 
-    const handleTaskAction = async (task: Task) => {
+    const handleTaskAction = (task: Task) => {
         if (task.type === 'Video') {
             setActiveVideoTask(task);
             setTimeLeft(task.videoDurationValue || 60);
             setIsVideoComplete(false);
-            
-            // 🛡️ INITIATE SERVER-SIDE TIMER
-            try {
-                await completeTask(task._id, currentUser._id, undefined, 'start');
-            } catch (e) {
-                console.warn("Timer initiation failed, task may be rejected on completion.");
-            }
         } else {
             window.open(task.link, '_blank');
             setIsProcessing(task._id);
@@ -87,7 +90,7 @@ const UserTasks: React.FC = () => {
         if (task.requireProof && !proofFiles[task._id]) return alert('Screenshot proof is required.');
         setIsProcessing(task._id);
         try {
-            const updatedUser = await completeTask(task._id, currentUser._id, proofFiles[task._id], 'complete');
+            const updatedUser = await completeTask(task._id, currentUser._id, proofFiles[task._id]);
             dispatch({ type: 'UPDATE_USER', payload: updatedUser });
             alert(task.requireProof ? 'Submission received! Awaiting review.' : 'Task completed successfully!');
             setActiveVideoTask(null);
@@ -130,6 +133,7 @@ const UserTasks: React.FC = () => {
                     const isApproved = lastSub?.status === 'Approved';
                     const isRejected = lastSub?.status === 'Rejected';
 
+                    // Cooldown Logic
                     let cooldownMs = task.cooldownHours * 60 * 60 * 1000;
                     if (task.frequency === 'Daily') cooldownMs = Math.max(cooldownMs, 24 * 60 * 60 * 1000);
                     if (task.frequency === 'Weekly') cooldownMs = Math.max(cooldownMs, 7 * 24 * 60 * 60 * 1000);
@@ -217,6 +221,7 @@ const UserTasks: React.FC = () => {
                 })}
             </div>
 
+             {/* Timed Video Player Modal - Enhanced */}
              {activeVideoTask && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 overflow-hidden">
                     <div className="w-full max-w-5xl bg-[#0f172a] rounded-[3rem] overflow-hidden shadow-2xl border border-white/5 flex flex-col h-[90vh] relative animate-fade-in">
@@ -250,7 +255,7 @@ const UserTasks: React.FC = () => {
 
                         <div className="p-10 bg-[#0f172a] border-t border-white/5">
                             <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
-                                <button onClick={() => setActiveVideoTask(null)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors">Abort Mission</button>
+                                <button onClick={() => setActiveVideoTask(null)} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-red-500 transition-colors">Abort Mission</button>
                                 
                                 {isVideoComplete ? (
                                     <div className="flex flex-col sm:flex-row items-center gap-6 w-full sm:w-auto">

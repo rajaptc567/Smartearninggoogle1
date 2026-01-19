@@ -1,95 +1,11 @@
+
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
-import mongoose from 'mongoose';
+import Notification from '../models/Notification.js';
 
-// Financial precision: Cents handling
-const scaleAmount = (val) => Math.round(val * 100);
-const descaleAmount = (val) => val / 100;
-
-export const completeTask = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-        const { userId, action } = req.body;
-        const taskId = req.params.id;
-
-        const user = await User.findById(userId).session(session);
-        if (!user) throw new Error('User not found');
-
-        // 🛡️ TASK BYPASS GUARD
-        // If client sends 'start' flag, we record the timestamp and exit
-        if (action === 'start') {
-            const existingStart = user.startedTasks.find(t => t.taskId.toString() === taskId);
-            if (existingStart) {
-                existingStart.startedAt = new Date();
-            } else {
-                user.startedTasks.push({ taskId, startedAt: new Date() });
-            }
-            await user.save({ session });
-            await session.commitTransaction();
-            return res.status(200).json({ success: true, message: 'Timer initiated.' });
-        }
-
-        // 🛡️ VERIFICATION PHASE
-        const task = await Task.findById(taskId).session(session);
-        if (!task || task.status !== 'Active') throw new Error('Task unavailable.');
-
-        const startTimeRecord = user.startedTasks.find(t => t.taskId.toString() === taskId);
-        if (!startTimeRecord && task.type === 'Video') {
-            throw new Error('Task timer never initiated. Bypass detected.');
-        }
-
-        if (task.type === 'Video' && task.videoDurationType === 'Specific') {
-            const elapsedSeconds = (new Date().getTime() - new Date(startTimeRecord.startedAt).getTime()) / 1000;
-            if (elapsedSeconds < task.videoDurationValue) {
-                throw new Error(`Minimum duration not met. Expected ${task.videoDurationValue}s, found ${Math.floor(elapsedSeconds)}s.`);
-            }
-        }
-
-        // Global Limit Check
-        if (task.maxGlobalCompletions > 0 && task.currentGlobalCompletions >= task.maxGlobalCompletions) {
-            throw new Error('Mission capacity reached.');
-        }
-
-        // Atomic update for global count
-        await Task.updateOne({ _id: taskId }, { $inc: { currentGlobalCompletions: 1 } }, { session });
-
-        // Financial reward with integer precision
-        const rewardAmount = task.rewardAmount || 0;
-        if (rewardAmount > 0) {
-            const balanceInCents = scaleAmount(user.walletBalance);
-            const rewardInCents = scaleAmount(rewardAmount);
-            user.walletBalance = descaleAmount(balanceInCents + rewardInCents);
-
-            await Transaction.create([{
-                userId: user._id, userName: user.username, type: 'Manual Credit',
-                amount: rewardAmount, currency: user.currency,
-                description: `Reward: ${task.title}`, status: 'Approved'
-            }], { session });
-        }
-
-        user.completedTasks.push({
-            taskId: task._id,
-            status: task.requireProof ? 'Pending' : 'Approved',
-            completedAt: new Date()
-        });
-
-        // Cleanup start record
-        user.startedTasks = user.startedTasks.filter(t => t.taskId.toString() !== taskId);
-
-        await user.save({ session });
-        await session.commitTransaction();
-        res.status(200).json({ success: true, data: user });
-    } catch (err) {
-        await session.abortTransaction();
-        res.status(400).json({ success: false, error: err.message });
-    } finally {
-        session.endSession();
-    }
-};
-
+// @desc    Get all tasks
+// @route   GET /api/v1/tasks
 export const getTasks = async (req, res) => {
     try {
         const tasks = await Task.find().sort({ priority: -1, createdAt: -1 });
@@ -99,80 +15,238 @@ export const getTasks = async (req, res) => {
     }
 };
 
+// @desc    Create new task
+// @route   POST /api/v1/tasks
 export const createTask = async (req, res) => {
     try {
         const task = await Task.create(req.body);
+        
+        // Update version for real-time sync
         global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: task });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
+// @desc    Update task
+// @route   PUT /api/v1/tasks/:id
 export const updateTask = async (req, res) => {
     try {
         const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+        
+        // Update version for real-time sync
         global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: task });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
+// @desc    Delete task
+// @route   DELETE /api/v1/tasks/:id
 export const deleteTask = async (req, res) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+        
+        // Update version for real-time sync
         global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
+// @desc    User completes a task
+// @route   POST /api/v1/tasks/:id/complete
+export const completeTask = async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const task = await Task.findById(req.params.id);
+        const user = await User.findById(userId);
+
+        if (!task || !user) return res.status(404).json({ success: false, error: 'User or Task not found' });
+
+        // 1. Eligibility Check: Status
+        if (task.status !== 'Active') return res.status(403).json({ success: false, error: 'Task is not active.' });
+
+        // 2. Temporal Check
+        const now = new Date();
+        if (task.activeFrom && now < new Date(task.activeFrom)) return res.status(403).json({ success: false, error: 'Task is not yet available.' });
+        if (task.activeTo && now > new Date(task.activeTo)) return res.status(403).json({ success: false, error: 'Task has expired.' });
+
+        // 3. Global Budget Check
+        if (task.maxGlobalCompletions > 0 && task.currentGlobalCompletions >= task.maxGlobalCompletions) {
+            return res.status(403).json({ success: false, error: 'Task completion limit reached.' });
+        }
+
+        // 4. Personal Frequency/Cooldown Check
+        if (!user.completedTasks) user.completedTasks = [];
+        
+        const completions = user.completedTasks.filter(ct => ct.taskId.toString() === task._id.toString());
+        const lastCompletion = completions.length > 0 ? completions[completions.length - 1] : null;
+
+        if (lastCompletion) {
+            if (task.frequency === 'Once') return res.status(400).json({ success: false, error: 'Task already completed.' });
+            
+            let cooldownMs = task.cooldownHours * 60 * 60 * 1000;
+            if (task.frequency === 'Daily') cooldownMs = Math.max(cooldownMs, 24 * 60 * 60 * 1000);
+            if (task.frequency === 'Weekly') cooldownMs = Math.max(cooldownMs, 7 * 24 * 60 * 60 * 1000);
+            
+            const nextAvailable = new Date(lastCompletion.completedAt).getTime() + cooldownMs;
+            if (now.getTime() < nextAvailable) {
+                return res.status(400).json({ success: false, error: 'Task is currently in cooldown.' });
+            }
+        }
+
+        // 5. Targeting Check (Plan, Currency, Country, Min Plan Value)
+        if (task.targetCurrencies?.length > 0 && !task.targetCurrencies.includes(user.currency)) {
+            return res.status(403).json({ success: false, error: 'Task not available for your currency.' });
+        }
+        if (task.targetCountries?.length > 0 && !task.targetCountries.includes(user.country)) {
+            return res.status(403).json({ success: false, error: 'Task not available in your region.' });
+        }
+        if (task.targetPlanIds?.length > 0) {
+            const userOwnedIds = (user.activePlans || []).map(p => p.planId.toString());
+            const hasTargetPlan = task.targetPlanIds.some(tid => userOwnedIds.includes(tid.toString()));
+            if (!hasTargetPlan) return res.status(403).json({ success: false, error: 'Required investment plan missing.' });
+        }
+        if (task.minPlanValue > 0) {
+            const maxVal = (user.activePlans || []).reduce((max, p) => Math.max(max, p.price), 0);
+            if (maxVal < task.minPlanValue) return res.status(403).json({ success: false, error: `Minimum active plan value of ${user.currency}${task.minPlanValue} required.` });
+        }
+
+        const completionData = {
+            taskId: task._id,
+            completedAt: now,
+            status: task.requireProof ? 'Pending' : 'Approved'
+        };
+
+        if (task.requireProof) {
+            if (!req.file) return res.status(400).json({ success: false, error: 'Proof screenshot required.' });
+            const b64 = Buffer.from(req.file.buffer).toString('base64');
+            completionData.proofUrl = `data:${req.file.mimetype};base64,${b64}`;
+        }
+
+        user.completedTasks.push(completionData);
+        
+        // Instant Reward if not pending proof
+        if (completionData.status === 'Approved' && task.rewardAmount > 0) {
+            user.walletBalance = Number((user.walletBalance + task.rewardAmount).toFixed(2));
+            await Transaction.create({
+                userId: user._id, userName: user.username, currency: user.currency,
+                type: 'Manual Credit', amount: task.rewardAmount,
+                description: `Reward: ${task.title}`, status: 'Approved'
+            });
+            task.currentGlobalCompletions += 1;
+            await task.save();
+        }
+
+        await user.save();
+        
+        await Notification.create({
+            userId: user._id,
+            message: completionData.status === 'Pending' 
+                ? `Submission for "${task.title}" received and awaiting verification.` 
+                : `Task Completed: ${task.title}. Reward added to wallet.`
+        });
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+
+        res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Admin verify task submission
+// @route   PUT /api/v1/tasks/verify/:userId/:taskId
+export const verifyTaskSubmission = async (req, res) => {
+    try {
+        const { userId, taskId } = req.params;
+        const { status, adminNotes } = req.body; // Approved or Rejected
+
+        const user = await User.findById(userId);
+        const task = await Task.findById(taskId);
+
+        if (!user || !task) return res.status(404).json({ success: false, error: 'User or Task not found.' });
+
+        const submission = user.completedTasks.find(ct => ct.taskId.toString() === taskId && ct.status === 'Pending');
+        if (!submission) return res.status(400).json({ success: false, error: 'No pending submission found.' });
+
+        submission.status = status;
+        submission.adminNotes = adminNotes;
+
+        if (status === 'Approved') {
+            if (task.rewardAmount > 0) {
+                user.walletBalance = Number((user.walletBalance + task.rewardAmount).toFixed(2));
+                await Transaction.create({
+                    userId: user._id, userName: user.username, currency: user.currency,
+                    type: 'Manual Credit', amount: task.rewardAmount,
+                    description: `Verified Reward: ${task.title}`, status: 'Approved'
+                });
+            }
+            task.currentGlobalCompletions += 1;
+            await task.save();
+            
+            await Notification.create({
+                userId: user._id,
+                message: `Submission for "${task.title}" verified! Reward added to wallet.`
+            });
+        } else {
+            submission.retryCount = (submission.retryCount || 0) + 1;
+            await Notification.create({
+                userId: user._id,
+                subject: 'Task Submission Rejected',
+                message: `Your proof for "${task.title}" was rejected. Reason: ${adminNotes}. You can resubmit again.`,
+                isPopup: true
+            });
+        }
+
+        await user.save();
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
+        res.status(200).json({ success: true, data: user });
+
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Get all pending verifications
+// @route   GET /api/v1/tasks/pending-verifications
 export const getPendingVerifications = async (req, res) => {
     try {
         const usersWithPending = await User.find({ 'completedTasks.status': 'Pending' }).select('username fullName currency completedTasks');
+        
         const queue = [];
         usersWithPending.forEach(u => {
             u.completedTasks.forEach(ct => {
                 if (ct.status === 'Pending') {
                     queue.push({
-                        userId: u._id, username: u.username, fullName: u.fullName,
-                        taskId: ct.taskId, proofUrl: ct.proofUrl, completedAt: ct.completedAt
+                        userId: u._id,
+                        username: u.username,
+                        fullName: u.fullName,
+                        currency: u.currency,
+                        taskId: ct.taskId,
+                        proofUrl: ct.proofUrl,
+                        completedAt: ct.completedAt,
+                        retryCount: ct.retryCount || 0
                     });
                 }
             });
         });
-        res.status(200).json({ success: true, data: queue });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
-};
 
-export const verifyTaskSubmission = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-        const { userId, taskId } = req.params;
-        const { status, adminNotes } = req.body;
-        const user = await User.findById(userId).session(session);
-        const task = await Task.findById(taskId).session(session);
-        const idx = user.completedTasks.findIndex(ct => ct.taskId.toString() === taskId && ct.status === 'Pending');
-        if (idx === -1) throw new Error('Submission not found');
-        if (status === 'Approved' && task.rewardAmount > 0) {
-            user.walletBalance = descaleAmount(scaleAmount(user.walletBalance) + scaleAmount(task.rewardAmount));
-            await Transaction.create([{
-                userId: user._id, userName: user.username, type: 'Manual Credit',
-                amount: task.rewardAmount, currency: user.currency,
-                description: `Mission Verified: ${task.title}`, status: 'Approved'
-            }], { session });
-        }
-        user.completedTasks[idx].status = status;
-        await user.save({ session });
-        await session.commitTransaction();
-        res.status(200).json({ success: true, data: user });
+        res.status(200).json({ success: true, data: queue });
     } catch (err) {
-        await session.abortTransaction();
         res.status(400).json({ success: false, error: err.message });
-    } finally { session.endSession(); }
+    }
 };

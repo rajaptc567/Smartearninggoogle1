@@ -1,10 +1,11 @@
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import mongoose from 'mongoose';
-import connectDB, { bucket } from './config/db.js';
+import fs from 'fs';
+import connectDB from './config/db.js';
 import User from './models/User.js';
 import { secureHeaders, apiLimiter, csrfCheck } from './middleware/securityMiddleware.js';
 
@@ -26,76 +27,38 @@ import taskRoutes from './routes/taskRoutes.js';
 
 dotenv.config();
 
-/**
- * 🔒 SECURITY BOOTSTRAP
- * Ensures the app has a valid JWT secret. 
- * Fallback provided to prevent deployment failures before environment variables are configured.
- */
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing or insecure (min 32 chars).');
-    console.warn('⚠️  Using a temporary fallback secret. PLEASE SET A STRONG JWT_SECRET IN YOUR ENVIRONMENT VARIABLES.');
-    process.env.JWT_SECRET = 'smartearning_v1_secure_default_fallback_secret_32_chars_long';
-}
-
 global.appDataVersion = Date.now();
 
 connectDB();
 
 const app = express();
 
-app.set('trust proxy', true);
-
-const allowedOrigins = [
-    process.env.FRONTEND_URL, 
-    'http://localhost:3000',
-    'http://localhost:5173'
-].filter(Boolean);
-
+// SECURITY HARDENING
 app.use(secureHeaders);
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl) or matching origins
-        // Also allow all origins if FRONTEND_URL is not set to facilitate preview environments
-        if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
-}));
-
+app.use(cors());
 app.use('/api', apiLimiter);
 app.use(csrfCheck);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.get('/uploads/:filename', async (req, res) => {
-    try {
-        const files = await bucket.find({ filename: req.params.filename }).toArray();
-        if (!files || files.length === 0) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-        res.set('Content-Type', files[0].contentType);
-        const downloadStream = bucket.openDownloadStreamByName(req.params.filename);
-        downloadStream.pipe(res);
-    } catch (err) {
-        res.status(500).json({ error: 'Error retrieving file' });
-    }
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+app.use('/uploads', express.static(uploadsDir));
 
 const seedAdminUser = async () => {
     try {
-        const adminEmail = process.env.ADMIN_EMAIL || 'studio56.pk@gmail.com';
-        const adminPassword = process.env.ADMIN_PASSWORD; 
+        const adminEmail = 'studio56.pk@gmail.com';
+        const adminPassword = 'raja5207901@'; 
         
-        if (!adminPassword) {
-            console.warn('ADMIN_PASSWORD not set in environment. Seeding skipped.');
-            return;
-        }
-
         const existingUser = await User.findOne({ email: adminEmail });
+        
         if (!existingUser) {
             const anyAdmin = await User.findOne({ username: 'admin' });
             if (!anyAdmin) {
@@ -108,10 +71,8 @@ const seedAdminUser = async () => {
                     country: 'Pakistan',
                     currency: 'PKR',
                     status: 'Active',
-                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false },
-                    role: 'admin'
+                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
-                console.log('Admin user seeded securely.');
             }
         } 
     } catch (error) {
@@ -138,6 +99,7 @@ app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes);
 
+// Centralized Error Handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
     const statusCode = err.statusCode || 500;
@@ -149,7 +111,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     await seedAdminUser();
 });
 

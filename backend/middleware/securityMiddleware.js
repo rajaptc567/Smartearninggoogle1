@@ -11,32 +11,10 @@ export const apiLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-/**
- * 🛡️ SECURITY HARDENING: SECURE HEADERS & CSP
- * Blocks unauthorized script execution and cross-site leaks.
- * REMOVED: 'unsafe-inline' to prevent XSS.
- */
-export const secureHeaders = helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
-            styleSrc: ["'self'", "https://fonts.googleapis.com"],
-            imgSrc: ["'self'", "data:", "https:", "http:"],
-            connectSrc: ["'self'", "https://smartearning-api.onrender.com", "http://localhost:5000"],
-            frameSrc: ["'self'", "https://www.youtube.com"],
-            objectSrc: ["'none'"],
-            upgradeInsecureRequests: [],
-        },
-    },
-    hidePoweredBy: true,
-    xssFilter: true,
-    noSniff: true,
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
-});
+// 2. Helmet for secure headers
+export const secureHeaders = helmet();
 
-// 3. Transparent Always-On CSRF Protection via Origin Verification
+// 3. Transparent CSRF Protection via Origin Verification
 export const csrfCheck = (req, res, next) => {
     const stateChangingMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
     
@@ -45,15 +23,11 @@ export const csrfCheck = (req, res, next) => {
         const referer = req.get('referer');
         const host = req.get('host');
 
-        const allowedFrontend = process.env.FRONTEND_URL;
-
-        if (origin) {
-            const originIsAllowed = allowedFrontend ? origin === allowedFrontend : origin.includes(host);
-            if (!originIsAllowed && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-                return res.status(403).json({ success: false, error: 'CSRF Protection: Invalid request origin' });
-            }
-        } else if (!referer) {
-            return res.status(403).json({ success: false, error: 'CSRF Protection: Missing request identifiers' });
+        // In production, we strictly match origin/referer to the host
+        // We allow empty origin for standard non-browser requests if needed, 
+        // but for browser-based React apps, origin should be present.
+        if (origin && !origin.includes(host) && process.env.NODE_ENV === 'production') {
+            return res.status(403).json({ success: false, error: 'CSRF Protection: Invalid request origin' });
         }
     }
     next();

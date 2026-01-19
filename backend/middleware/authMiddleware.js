@@ -5,43 +5,32 @@ import User from '../models/User.js';
 export const protect = async (req, res, next) => {
     let token;
 
-    // 🔒 AUTH HARDENING: Support both Header (mobile/apps) and Cookie (web)
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies && req.cookies.token) {
-        token = req.cookies.token;
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+            req.user = await User.findById(decoded.id).select('-password');
+            
+            if (!req.user) {
+                return res.status(401).json({ success: false, error: 'User not found' });
+            }
+            
+            next();
+        } catch (error) {
+            console.error(error);
+            res.status(401).json({ success: false, error: 'Not authorized, token failed' });
+        }
     }
 
     if (!token) {
-        return res.status(401).json({ success: false, error: 'Not authorized, session token missing.' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = await User.findById(decoded.id).select('-password');
-        
-        if (!req.user) {
-            return res.status(401).json({ success: false, error: 'Authorization failed: Identity unknown.' });
-        }
-        
-        if (req.user.status === 'Blocked' || req.user.restrictions?.login) {
-            return res.status(403).json({ success: false, error: 'Access Denied: Account restricted.' });
-        }
-        
-        next();
-    } catch (error) {
-        res.status(401).json({ success: false, error: 'Not authorized, session invalid or expired.' });
+        res.status(401).json({ success: false, error: 'Not authorized, no token' });
     }
 };
 
-/**
- * 🛡️ ROLE-BASED ACCESS CONTROL (RBAC)
- * Removed hardcoded magic email. Identity is now strictly tied to the DB 'role' field.
- */
 export const admin = (req, res, next) => {
-    if (req.user && (req.user.role === 'admin' || req.user.role === 'superadmin')) {
+    if (req.user && (req.user.username === 'admin' || req.user.email === 'studio56.pk@gmail.com')) {
         next();
     } else {
-        res.status(403).json({ success: false, error: 'Access Denied: Administrator privileges required.' });
+        res.status(403).json({ success: false, error: 'Not authorized as an admin' });
     }
 };
