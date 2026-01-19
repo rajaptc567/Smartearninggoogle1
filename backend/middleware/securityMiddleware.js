@@ -40,6 +40,7 @@ export const secureHeaders = helmet({
  */
 export const csrfCheck = (req, res, next) => {
     // 🚀 PREFLIGHT BYPASS: Immediately return 204 for OPTIONS
+    // Browsers require a successful preflight response before allowing credentials
     if (req.method === 'OPTIONS') return res.status(204).end();
 
     const stateChangingMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
