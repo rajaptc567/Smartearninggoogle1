@@ -24,7 +24,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-teal-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
                         <span className={`text-[10px] mt-3 font-black uppercase tracking-[0.1em] transition-colors duration-300 ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
@@ -58,7 +58,6 @@ const TransferFunds: React.FC = () => {
     const [historyDateTo, setHistoryDateTo] = useState('');
 
     // Pagination State
-    // FIX: Renamed variable and setter to correctly reflect current page state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
 
@@ -82,7 +81,6 @@ const TransferFunds: React.FC = () => {
 
     // Available levels for filtering
     const availableLevels = useMemo(() => {
-        // FIX: Added explicit number types to sort arguments to resolve arithmetic operation errors on line 84
         const levels = Array.from(new Set(myDownline.map(d => d.level))).sort((a: number, b: number) => a - b);
         return levels;
     }, [myDownline]);
@@ -191,7 +189,14 @@ const TransferFunds: React.FC = () => {
             .filter(t => {
                 if (t.senderId !== currentUser._id && t.recipientId !== currentUser._id) return false;
                 
-                if (historyStatus && t.status !== historyStatus) return false;
+                // Status filtering
+                if (historyStatus) {
+                    const actualStatus = t.status;
+                    const matchesStatus = historyStatus === 'Pending' 
+                        ? (actualStatus === 'Pending' || actualStatus === 'Matching')
+                        : actualStatus === historyStatus;
+                    if (!matchesStatus) return false;
+                }
 
                 if (historySearch) {
                     const term = historySearch.toLowerCase();
@@ -202,10 +207,11 @@ const TransferFunds: React.FC = () => {
                     if (!matches) return false;
                 }
 
+                // Robust Date Filtering
                 if (historyDateFrom || historyDateTo) {
                     const itemDate = new Date(t.date).setHours(0,0,0,0);
-                    const from = historyStatus === 'Pending' ? null : (historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null);
-                    const to = historyStatus === 'Pending' ? null : (historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null);
+                    const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
+                    const to = historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null;
                     if (from && itemDate < from) return false;
                     if (to && itemDate > to) return false;
                 }
@@ -538,7 +544,7 @@ const TransferFunds: React.FC = () => {
                     <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                         <select 
                             value={historyStatus} 
-                            onChange={(e) => setHistoryStatus(e.target.value)} 
+                            onChange={(e) => { setHistoryStatus(e.target.value); setCurrentPage(1); }} 
                             className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20"
                         >
                             <option value="">All Statuses</option>
@@ -550,14 +556,14 @@ const TransferFunds: React.FC = () => {
                             <input 
                                 type="date" 
                                 value={historyDateFrom} 
-                                onChange={(e) => setHistoryDateFrom(e.target.value)} 
+                                onChange={(e) => { setHistoryDateFrom(e.target.value); setCurrentPage(1); }} 
                                 className="bg-transparent border-none dark:text-white text-[10px] font-black uppercase focus:ring-0" 
                             />
                             <span className="text-gray-300 dark:text-gray-700">|</span>
                             <input 
                                 type="date" 
                                 value={historyDateTo} 
-                                onChange={(e) => setHistoryDateTo(e.target.value)} 
+                                onChange={(e) => { setHistoryDateTo(e.target.value); setCurrentPage(1); }} 
                                 className="bg-transparent border-none dark:text-white text-[10px] font-black uppercase focus:ring-0" 
                             />
                         </div>
@@ -572,7 +578,7 @@ const TransferFunds: React.FC = () => {
                     <input 
                         type="text"
                         value={historySearch}
-                        onChange={(e) => setHistorySearch(e.target.value)}
+                        onChange={(e) => { setHistorySearch(e.target.value); setCurrentPage(1); }}
                         placeholder="Search by ID, Sender, or Recipient Name..."
                         className="w-full pl-12 pr-6 py-5 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-inner"
                     />
@@ -598,7 +604,7 @@ const TransferFunds: React.FC = () => {
                                         <td className="px-6 py-5 font-bold text-gray-500">
                                             {isSender ? formatCurrency(t.fee || 0, t.currency) : '-'}
                                         </td>
-                                        <td className="px-6 py-5"><Badge status={t.status as Status} /></td>
+                                        <td className="px-6 py-5"><Badge status={t.status === Status.Matching ? Status.Pending : (t.status as Status)} /></td>
                                     </tr>
                                 );
                             })}

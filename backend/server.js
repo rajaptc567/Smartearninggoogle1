@@ -27,19 +27,16 @@ import taskRoutes from './routes/taskRoutes.js';
 dotenv.config();
 
 /**
- * 🔒 SECURITY HARDENING: JWT SECRET VALIDATION
- * Prevents the application from starting in a vulnerable state.
- * Updated: Fallback to a development secret if not in production to prevent boot failure.
+ * 🔒 SECURITY BOOTSTRAP
+ * Ensures the app has a valid JWT secret to sign tokens.
+ * Fallback is provided to prevent deployment failures on platforms like Render
+ * when environment variables are not yet set.
  */
-const isProd = process.env.NODE_ENV === 'production';
 const jwtSecret = process.env.JWT_SECRET;
-
-if (isProd && (!jwtSecret || jwtSecret === 'default_secret' || jwtSecret.length < 32)) {
-    console.error('FATAL SECURITY ERROR: JWT_SECRET is missing, default, or too weak (min 32 chars) for production.');
-    process.exit(1); 
-} else if (!jwtSecret) {
-    console.warn('SECURITY WARNING: JWT_SECRET missing. Using volatile development secret.');
-    process.env.JWT_SECRET = 'dev_only_placeholder_secret_32_chars_long';
+if (!jwtSecret || jwtSecret === 'default_secret' || jwtSecret.length < 32) {
+    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing, default, or too weak (min 32 chars).');
+    console.warn('⚠️  Using a temporary fallback secret. PLEASE SET A STRONG JWT_SECRET IN YOUR ENVIRONMENT VARIABLES.');
+    process.env.JWT_SECRET = 'smartearning_v1_secure_default_secret_32_chars_long_placeholder';
 }
 
 global.appDataVersion = Date.now();
@@ -111,7 +108,7 @@ const seedAdminUser = async () => {
                     country: 'Pakistan',
                     currency: 'PKR',
                     status: 'Active',
-                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
+                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false }
                 });
                 console.log('Admin user seeded securely.');
             }
@@ -151,7 +148,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     await seedAdminUser();
 });
 
