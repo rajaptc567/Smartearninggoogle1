@@ -4,9 +4,10 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
-import connectDB from './config/db.js';
-import User from './models/User.js'; // Import User model for seeding
+import mongoose from 'mongoose';
+import connectDB, { bucket } from './config/db.js';
+import User from './models/User.js';
+import { secureHeaders, apiLimiter, csrfCheck } from './middleware/securityMiddleware.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -22,50 +23,77 @@ import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
-import taskRoutes from './routes/taskRoutes.js'; // Import new task routes
+import taskRoutes from './routes/taskRoutes.js';
 
-// Load env vars
 dotenv.config();
 
-// --- REAL-TIME SYNC ENGINE ---
-// Initialize a global version timestamp. 
-// Any operation that changes data will update this.
-global.appDataVersion = Date.now();
-// -----------------------------
+// CRITICAL SECURITY CHECK: Enforce JWT_SECRET in production
+if (!process.env.JWT_SECRET) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
+    process.exit(1);
+}
 
-// Connect to database
+global.appDataVersion = Date.now();
+
 connectDB();
 
 const app = express();
 
-// Enable CORS
-app.use(cors());
+// Render/Proxy Support
+app.set('trust proxy', true);
 
-// Body parser middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// SECURITY HARDENING - Restricted CORS
+const allowedOrigins = [
+    process.env.FRONTEND_URL, 
+    'http://localhost:3000',
+    'http://localhost:5173'
+].filter(Boolean);
 
-// Handle ES Modules path resolution
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+app.use(secureHeaders);
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+app.use('/api', apiLimiter);
+app.use(csrfCheck);
 
-// Set static folder for uploads
-app.use('/uploads', express.static(uploadsDir));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Seed Admin User Function
+// GridFS File Serving Route (Persistent Storage)
+app.get('/uploads/:filename', async (req, res) => {
+    try {
+        const files = await bucket.find({ filename: req.params.filename }).toArray();
+        if (!files || files.length === 0) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        res.set('Content-Type', files[0].contentType);
+        const downloadStream = bucket.openDownloadStreamByName(req.params.filename);
+        downloadStream.pipe(res);
+    } catch (err) {
+        res.status(500).json({ error: 'Error retrieving file' });
+    }
+});
+
+// SECURE ADMIN SEEDING
 const seedAdminUser = async () => {
     try {
-        const adminEmail = 'studio56.pk@gmail.com';
-        const adminPassword = 'raja5207901@'; 
+        const adminEmail = process.env.ADMIN_EMAIL || 'studio56.pk@gmail.com';
+        const adminPassword = process.env.ADMIN_PASSWORD; 
         
+        if (!adminPassword) {
+            console.warn('ADMIN_PASSWORD not set in environment. Seeding skipped.');
+            return;
+        }
+
         const existingUser = await User.findOne({ email: adminEmail });
-        
         if (!existingUser) {
             const anyAdmin = await User.findOne({ username: 'admin' });
             if (!anyAdmin) {
@@ -80,6 +108,7 @@ const seedAdminUser = async () => {
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
+                console.log('Admin user seeded securely.');
             }
         } 
     } catch (error) {
@@ -87,12 +116,10 @@ const seedAdminUser = async () => {
     }
 };
 
-// A simple test route
 app.get('/', (req, res) => {
-    res.send('SmartEarning API is running...');
+    res.send('SmartEarning API is running securely...');
 });
 
-// Mount routers
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/deposits', depositRoutes);
 app.use('/api/v1/withdrawals', withdrawalRoutes);
@@ -106,17 +133,16 @@ app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
-app.use('/api/v1/tasks', taskRoutes); // Mount task routes
+app.use('/api/v1/tasks', taskRoutes);
 
-// Custom Error Handler
-const errorHandler = (err, req, res, next) => {
+app.use((err, req, res, next) => {
     console.error(err.stack);
-    if (err.type === 'entity.too.large') {
-        return res.status(413).json({ success: false, error: 'Payload too large.' });
-    }
-    res.status(500).json({ success: false, error: 'Internal Server Error' });
-};
-app.use(errorHandler);
+    const statusCode = err.statusCode || 500;
+    res.status(statusCode).json({
+        success: false,
+        error: err.message || 'Internal Server Error'
+    });
+});
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
