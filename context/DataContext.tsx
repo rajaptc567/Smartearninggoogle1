@@ -372,7 +372,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     } 
                 });
             } catch (error) {
-                console.error("Guarded initial fetch failed:", error.message);
+                const isFetchFailure = error.message.includes('Failed to fetch') || error.message.includes('Technical Error');
+                
+                if (isFetchFailure) {
+                    console.warn("Guarded initial fetch failed: Server offline. Continuing with local data.");
+                } else {
+                    console.error("Guarded initial fetch failed:", error.message);
+                }
+
                 // IF 401: Logout
                 if (error.message.includes('401') || error.message.includes('authorized')) {
                     dispatch({ type: 'SET_CURRENT_USER', payload: null });

@@ -12,7 +12,6 @@ export const apiLimiter = rateLimit({
 
 /**
  * 🛡️ SECURITY HARDENING: SECURE HEADERS & CSP
- * Blocks unauthorized script execution and cross-site leaks.
  */
 export const secureHeaders = helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -34,7 +33,7 @@ export const secureHeaders = helmet({
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
-// 3. Resilient CSRF Protection via Origin & Referer Verification
+// 3. Resilient CSRF Protection via Allowlist & Fallback
 export const csrfCheck = (req, res, next) => {
     const stateChangingMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
     
@@ -43,39 +42,33 @@ export const csrfCheck = (req, res, next) => {
         const referer = req.get('referer');
         const allowedFrontend = process.env.FRONTEND_URL;
 
-        // ✅ Accept if origin matches exactly
+        // ✅ 1. Always allow Login and Registration (User doesn't have a session yet)
+        if (req.path.includes('/login') || req.path.includes('/register')) return next();
+
+        // ✅ 2. Match exact origin
         if (origin === allowedFrontend) return next();
 
-        // ✅ Accept localhost/dev environments
+        // ✅ 3. Local Development bypass
         if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) return next();
 
-        // ✅ Fallback for Preview URLs / Subdomains / Proxies
-        // Extract root domain from allowedFrontend if it exists
+        // ✅ 4. Trusted Subdomain/Preview Check
         if (allowedFrontend && origin) {
             try {
                 const allowedHost = new URL(allowedFrontend).hostname;
                 const originHost = new URL(origin).hostname;
-                
-                // Allow subdomains of the allowed frontend
                 if (originHost.endsWith(allowedHost)) return next();
-                
-                // Allow requests from vercel or render subdomains if current site is there
                 if (originHost.includes('vercel.app') && allowedHost.includes('vercel.app')) return next();
-                if (originHost.includes('onrender.com') && allowedHost.includes('onrender.com')) return next();
-            } catch (e) {
-                // Invalid URL format, skip subdomain check
-            }
+            } catch (e) {}
         }
 
-        // ✅ Accept if referer is valid (Handles browsers that hide Origin)
+        // ✅ 5. Referer Fallback (Handles privacy browsers/proxies)
         if (!origin && referer && allowedFrontend && referer.startsWith(allowedFrontend)) return next();
 
-        // ✅ Accept if request has a valid session token in cookies (Browser-side trust)
-        // Since login doesn't have a cookie yet, we allow it if it's the login route
-        if (req.path === '/api/v1/users/login' || req.path === '/api/v1/users/register') return next();
+        // ✅ 6. Safe Cookie verification (If they have the HttpOnly cookie, we trust the source for CSRF)
+        if (req.cookies && req.cookies.token) return next();
 
-        // ❌ Fail only if we have an origin and it definitely doesn't belong to us
-        if (origin && allowedFrontend && !origin.includes(allowedFrontend.split('//')[1])) {
+        // ❌ Block only if we have an Origin that is definitively not ours
+        if (origin && allowedFrontend && !origin.includes(allowedFrontend.replace(/^https?:\/\//, ''))) {
             return res.status(403).json({ 
                 success: false, 
                 error: `CSRF Protection: Invalid request source. Access from ${origin} is blocked.` 

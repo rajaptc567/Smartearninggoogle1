@@ -19,6 +19,14 @@ export function getUploadsBaseUrl() {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// 🛡️ SHARED NETWORK ERROR HANDLER
+const isNetworkError = (error: any) => 
+    error instanceof Error && (
+        error.name === 'TimeoutError' || 
+        error.message === 'Failed to fetch' || 
+        error.message.includes('Technical Error')
+    );
+
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -49,19 +57,30 @@ export const getDataVersion = async (): Promise<number> => {
 
 export const getUsers = async (): Promise<User[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/users`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/users`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) {
-        console.warn("API unreachable, using mock user directory.");
+        if (isNetworkError(e)) {
+            console.warn("User directory fetch failed (Server offline). Using local cache.");
+        }
         return mockUsers;
     }
 };
 
 export const getMe = async (): Promise<User> => {
-    const response = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include' });
-    const result = await handleResponse(response);
-    return result.data;
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
+        const result = await handleResponse(response);
+        return result.data;
+    } catch (error) {
+        if (isNetworkError(error)) {
+            console.warn("Secure server unreachable. Validating session via local identity...");
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) return JSON.parse(savedUser) as User;
+        }
+        throw error;
+    }
 };
 
 export const createUser = async (userData: Partial<User>): Promise<User> => {
@@ -137,13 +156,7 @@ export const login = async (email: string, password: string): Promise<User> => {
         const result = await handleResponse(response);
         return result.data;
     } catch (error) {
-        const isNetworkError = error instanceof Error && (
-            error.name === 'TimeoutError' || 
-            error.message === 'Failed to fetch' || 
-            error.message.includes('Technical Error')
-        );
-
-        if (isNetworkError) {
+        if (isNetworkError(error)) {
             console.warn("Secure server unreachable. Authenticating via local Demo Mode...");
             const mockUser = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
             if (mockUser) return { ...mockUser, isDemo: true } as any;
@@ -231,7 +244,7 @@ export const resetPasswordWithToken = async (token: string, password: string): P
 
 export const getDeposits = async (): Promise<Deposit[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/deposits`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/deposits`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockDeposits; }
@@ -256,7 +269,7 @@ export const updateDeposit = async (id: string, updateData: any): Promise<{ depo
 
 export const getWithdrawals = async (): Promise<Withdrawal[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/withdrawals`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/withdrawals`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockWithdrawals; }
@@ -286,7 +299,7 @@ export const updateWithdrawal = async (id: string, updateData: any): Promise<{ w
 
 export const getTransactions = async (): Promise<Transaction[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/transactions`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/transactions`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockTransactions; }
@@ -294,7 +307,7 @@ export const getTransactions = async (): Promise<Transaction[]> => {
 
 export const getNotifications = async (): Promise<Notification[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/notifications`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/notifications`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockNotifications; }
@@ -343,7 +356,7 @@ export const markNotificationPopupAsShown = async (id: string): Promise<Notifica
 
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/payment-methods`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/payment-methods`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockPaymentMethods; }
@@ -369,7 +382,7 @@ export const deletePaymentMethod = async (id: string): Promise<{}> => {
 
 export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/investment-plans`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/investment-plans`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockInvestmentPlans; }
@@ -405,7 +418,7 @@ export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
 
 export const getRules = async (): Promise<Rule[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/rules`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/rules`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockRules; }
@@ -441,7 +454,7 @@ export const deleteRule = async (id: string): Promise<{}> => {
 
 export const getSettings = async (): Promise<Settings> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/settings`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/settings`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockSettings; }
@@ -460,7 +473,7 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
 
 export const getTransfers = async (): Promise<Transfer[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/transfers`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/transfers`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockTransfers; }
@@ -490,7 +503,7 @@ export const updateTransfer = async (id: string, updateData: any): Promise<{ tra
 
 export const getLogs = async (): Promise<Log[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/logs`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/logs`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockLogs; }
@@ -504,7 +517,7 @@ export const clearLogs = async (): Promise<{}> => {
 
 export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/password-reset-requests`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/password-reset-requests`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockPasswordResets; }
@@ -518,7 +531,7 @@ export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
 
 export const getDisputes = async (): Promise<Dispute[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/disputes`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/disputes`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return mockDisputes; }
@@ -555,7 +568,7 @@ export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Pro
 
 export const getTasks = async (): Promise<Task[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/tasks`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/tasks`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return []; }
@@ -601,7 +614,7 @@ export const completeTask = async (taskId: string, userId: string, proof?: File)
 
 export const getPendingTaskVerifications = async (): Promise<any[]> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
         const result = await handleResponse(response);
         return result.data;
     } catch (e) { return []; }

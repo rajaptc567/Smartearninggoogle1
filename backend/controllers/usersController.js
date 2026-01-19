@@ -112,15 +112,12 @@ export const loginUser = async (req, res) => {
         const userData = user.toObject();
         delete userData.password;
         
-        // 🔐 SET SECURE HTTP-ONLY COOKIE
-        const cookieOptions = {
-            expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        res.cookie('token', token, {
+            expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             httpOnly: true,
             secure: true,
             sameSite: 'none'
-        };
-
-        res.cookie('token', token, cookieOptions);
+        });
         res.status(200).json({ success: true, data: userData });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -168,9 +165,6 @@ export const updateUser = async (req, res) => {
         
         /**
          * 🛡️ PREVENT MASS ASSIGNMENT
-         * Users can only update their own profile fields.
-         * Admins can update status and restrictions.
-         * NO ONE can update balance via this route.
          */
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'superadmin');
         const isSelf = String(req.user.id) === String(userToUpdate._id);
@@ -179,30 +173,26 @@ export const updateUser = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Unauthorized profile update' });
         }
 
-        // 1. Basic Allowlist (Self & Admin)
-        const profileFields = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
-        profileFields.forEach(field => {
-            if (req.body[field] !== undefined) {
-                userToUpdate[field] = req.body[field];
-            }
+        // 1. User/Self Allowlist
+        const allowedProfileFields = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
+        allowedProfileFields.forEach(field => {
+            if (req.body[field] !== undefined) userToUpdate[field] = req.body[field];
         });
 
-        // 2. Admin Only Allowlist
+        // 2. Admin Only Overrides
         if (isAdmin) {
             if (req.body.status) userToUpdate.status = req.body.status;
             if (req.body.restrictions) userToUpdate.restrictions = req.body.restrictions;
             if (req.body.role && req.user.role === 'superadmin') userToUpdate.role = req.body.role;
             if (req.body.sponsor) userToUpdate.sponsor = req.body.sponsor;
+            if (req.body.activePlans) userToUpdate.activePlans = req.body.activePlans;
         }
 
-        // 3. Password handling
-        if (req.body.password) {
-            userToUpdate.password = req.body.password;
-        }
+        if (req.body.password) userToUpdate.password = req.body.password;
 
         let updatedUser = await userToUpdate.save();
 
-        // 4. Post-update logic (Commission release)
+        // Commission Release Logic
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
@@ -228,6 +218,17 @@ export const updateUser = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
+export const createBulkDummyUsers = async (req, res) => {
+    try {
+        res.status(200).json({
+            success: false,
+            message: "Bulk dummy user creation is currently disabled for security reasons."
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
 export const adminActivatePlan = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -238,11 +239,6 @@ export const adminActivatePlan = async (req, res) => {
         
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         const updatedUser = await user.save({ session });
-        
-        const settings = await Setting.getSettings();
-        const allPlans = await InvestmentPlan.find().session(session);
-        // distributeCommissions should be updated to accept session if implemented with multi-doc writes
-        
         await session.commitTransaction();
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
@@ -303,14 +299,10 @@ export const bulkUpdateRestrictions = async (req, res) => {
     try {
         const { targetType, targetIds, restrictions, action } = req.body;
         if (!Array.isArray(targetIds)) return res.status(400).json({ success: false, error: 'IDs must be an array.' });
-        
         const safeIds = targetIds.filter(id => mongoose.Types.ObjectId.isValid(id));
-        
         let query = {};
         if (targetType === 'plan') query = { 'activePlans.planId': { $in: safeIds } };
         else if (targetType === 'single') query = { _id: { $in: safeIds } };
-        else if (targetType === 'all') query = {};
-        
         const usersToUpdate = await User.find(query);
         for (const user of usersToUpdate) {
             let cur = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
@@ -397,21 +389,4 @@ export const resetPasswordWithToken = async (req, res) => {
         await user.save();
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
-};
-
-/**
- * @desc    Create bulk dummy users for testing or population
- * @route   POST /api/v1/users/bulk-dummy
- * @access  Private/Admin
- */
-export const createBulkDummyUsers = async (req, res) => {
-    try {
-        // Safe placeholder to prevent crashes and allow server startup
-        res.status(200).json({
-            success: false,
-            message: "Bulk dummy user creation is currently disabled for security reasons."
-        });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
 };

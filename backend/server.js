@@ -29,11 +29,11 @@ dotenv.config();
 /**
  * 🔒 SECURITY BOOTSTRAP
  * Provides a fallback to ensure the server stays online even if the 
- * JWT_SECRET is not yet configured in the environment.
+ * JWT_SECRET is not yet configured in the hosting environment.
  */
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret' || process.env.JWT_SECRET.length < 32) {
-    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing or too weak (min 32 chars).');
-    console.warn('⚠️  Using a temporary secure fallback to prevent application blackout.');
+    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing or insecure (min 32 chars recommended).');
+    console.warn('⚠️  Using an internal fallback secret to prevent application blackout.');
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'smartearning_v1_secure_default_fallback_secret_32_chars_long';
 }
 
