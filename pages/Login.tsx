@@ -13,14 +13,16 @@ const Login: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // Secret interaction state for admin backdoor
+    /**
+     * 🤫 SECRET BACKDOOR (CLIENT-SIDE)
+     * Hardened by server-side verification in AdminLogin.tsx
+     */
     const [secretClicks, setSecretClicks] = useState(0);
 
     const handleSecretClick = () => {
         setSecretClicks(prev => {
             const newCount = prev + 1;
             if (newCount >= 5) {
-                // Redirect to secure admin login after 5 clicks
                 navigate('/secure-admin-login56');
                 return 0;
             }
@@ -38,7 +40,11 @@ const Login: React.FC = () => {
             dispatch({ type: 'SET_CURRENT_USER', payload: loggedInUser });
             navigate('/member');
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+            /**
+             * 📢 IMPROVED ERROR FEEDBACK
+             * Extracts clean message from API response handler.
+             */
+            const errorMessage = err instanceof Error ? err.message : 'Login failed. Please check your credentials and try again.';
             setError(errorMessage);
         } finally {
             setIsLoading(false);
@@ -52,7 +58,7 @@ const Login: React.FC = () => {
                     <h1 
                         className="text-3xl font-bold text-blue-600 dark:text-blue-400 cursor-default active:scale-95 transition-transform"
                         onClick={handleSecretClick}
-                        title="Member Login"
+                        title="SmartEarning"
                     >
                         SmartEarning
                     </h1>
@@ -62,7 +68,7 @@ const Login: React.FC = () => {
 
                 {error && (
                     <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-300" role="alert">
-                        <span className="font-medium">Login failed:</span> {error}
+                        <span className="font-medium">Authentication failed:</span> {error}
                     </div>
                 )}
 
@@ -104,7 +110,7 @@ const Login: React.FC = () => {
                     
                     <div>
                         <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-                            {isLoading ? 'Signing In...' : 'Sign In'}
+                            {isLoading ? 'Verifying...' : 'Sign In'}
                         </Button>
                     </div>
                 </form>
@@ -112,7 +118,7 @@ const Login: React.FC = () => {
                     <p>
                         Don't have an account?{' '}
                         <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
-                            Sign up
+                            Create Account
                         </Link>
                     </p>
                 </div>

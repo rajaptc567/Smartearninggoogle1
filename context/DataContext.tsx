@@ -7,6 +7,8 @@ import {
     getDataVersion
 } from '../services/api';
 
+// ... (existing AppState and defaultHomepageContent definitions) ...
+
 interface AppState {
     users: User[];
     deposits: Deposit[];
@@ -167,6 +169,7 @@ type Action =
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
+    // (Reducer logic remains identical to preserve functionality)
     const sanitizeSettings = (settings: Settings) => {
         const newSettings = { ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
@@ -287,7 +290,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return state;
     }
 
-    // --- CACHE PERSISTENCE ---
     try {
         localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
@@ -299,6 +301,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     return newState;
 };
+
+// ... (existing Context/Initializer logic remains identical) ...
 
 export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
     state: initialState,
@@ -371,11 +375,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         fetchData();
     }, []);
 
-    // --- REAL-TIME SYNC POLLING ---
-    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
+    // --- REAL-TIME SYNC POLLING (OPTIMIZED) ---
+    // Reduced from 5s to 30s. Only active when tab is visible and user is logged in.
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; // Only poll if logged in
+            // Optimization: Stop polling if tab is hidden or user not logged in
+            if (!state.currentUser || document.visibilityState !== 'visible') return;
 
             try {
                 const serverVersion = await getDataVersion();
@@ -386,13 +391,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    console.log("Remote changes detected by admin. Synchronizing app state...");
-                    
-                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
+                    // IF ADMIN: Update locally
                     if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
                         lastVersionRef.current = serverVersion;
-                        // Just trigger data fetch instead of refresh for admin
-                        // This keeps their modal/forms open but refreshes background data
                         const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
                             getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                             getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
@@ -405,14 +406,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             } 
                         });
                     } else {
-                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
+                        // IF MEMBER: Auto-refresh
                         window.location.reload();
                     }
                 }
             } catch (err) {
                 // Silently ignore polling errors
             }
-        }, 5000); // Check every 5 seconds
+        }, 30000); // 30 seconds interval (Scaling Fix)
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);

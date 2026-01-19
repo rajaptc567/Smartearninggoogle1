@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
-import connectDB from './config/db.js';
+import mongoose from 'mongoose';
+import connectDB, { bucket } from './config/db.js';
 import User from './models/User.js';
 import { secureHeaders, apiLimiter, csrfCheck } from './middleware/securityMiddleware.js';
 
@@ -27,38 +27,72 @@ import taskRoutes from './routes/taskRoutes.js';
 
 dotenv.config();
 
+/**
+ * 🔒 SECURITY HARDENING: JWT SECRET VALIDATION
+ * Prevents the application from starting in a vulnerable state.
+ */
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret' || process.env.JWT_SECRET.length < 32) {
+    console.error('FATAL SECURITY ERROR: JWT_SECRET is missing, default, or too weak (min 32 chars).');
+    process.exit(1); 
+}
+
 global.appDataVersion = Date.now();
 
 connectDB();
 
 const app = express();
 
-// SECURITY HARDENING
+app.set('trust proxy', true);
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL, 
+    'http://localhost:3000',
+    'http://localhost:5173'
+].filter(Boolean);
+
 app.use(secureHeaders);
-app.use(cors());
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
+
 app.use('/api', apiLimiter);
 app.use(csrfCheck);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-app.use('/uploads', express.static(uploadsDir));
+app.get('/uploads/:filename', async (req, res) => {
+    try {
+        const files = await bucket.find({ filename: req.params.filename }).toArray();
+        if (!files || files.length === 0) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        res.set('Content-Type', files[0].contentType);
+        const downloadStream = bucket.openDownloadStreamByName(req.params.filename);
+        downloadStream.pipe(res);
+    } catch (err) {
+        res.status(500).json({ error: 'Error retrieving file' });
+    }
+});
 
 const seedAdminUser = async () => {
     try {
-        const adminEmail = 'studio56.pk@gmail.com';
-        const adminPassword = 'raja5207901@'; 
+        const adminEmail = process.env.ADMIN_EMAIL || 'studio56.pk@gmail.com';
+        const adminPassword = process.env.ADMIN_PASSWORD; 
         
+        if (!adminPassword) {
+            console.warn('ADMIN_PASSWORD not set in environment. Seeding skipped.');
+            return;
+        }
+
         const existingUser = await User.findOne({ email: adminEmail });
-        
         if (!existingUser) {
             const anyAdmin = await User.findOne({ username: 'admin' });
             if (!anyAdmin) {
@@ -73,6 +107,7 @@ const seedAdminUser = async () => {
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
+                console.log('Admin user seeded securely.');
             }
         } 
     } catch (error) {
@@ -99,7 +134,6 @@ app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes);
 
-// Centralized Error Handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
     const statusCode = err.statusCode || 500;
