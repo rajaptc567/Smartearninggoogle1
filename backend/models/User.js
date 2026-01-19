@@ -1,4 +1,3 @@
-
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -61,7 +60,7 @@ const UserSchema = new mongoose.Schema({
     },
     walletBalance: {
         type: Number,
-        default: 0, // Stored as scaled number (rounded to 2 decimals)
+        default: 0, 
     },
     activePlans: [{
         planId: { type: mongoose.Schema.ObjectId, ref: 'InvestmentPlan' },
@@ -84,6 +83,10 @@ const UserSchema = new mongoose.Schema({
         login: { type: Boolean, default: false },
         purchase: { type: Boolean, default: false },
     },
+    startedTasks: [{
+        taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
+        startedAt: { type: Date, default: Date.now }
+    }],
     completedTasks: [{
         taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
         proofUrl: String,
@@ -98,7 +101,6 @@ const UserSchema = new mongoose.Schema({
 });
 
 UserSchema.pre('save', async function(next) {
-    // 🛡️ CURRENCY LOGIC HARDENING
     if (this.isModified('country') || !this.currency) {
         const normalizedCountry = (this.country || 'Pakistan').trim().toLowerCase();
         this.currency = CURRENCY_MAP[normalizedCountry] || 'USD';

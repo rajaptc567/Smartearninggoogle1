@@ -28,15 +28,13 @@ dotenv.config();
 
 /**
  * 🔒 SECURITY BOOTSTRAP
- * Ensures the app has a valid JWT secret to sign tokens.
- * Fallback is provided to prevent deployment failures on platforms like Render
- * when environment variables are not yet set.
+ * Ensures the app has a valid JWT secret. 
+ * Fallback provided to prevent deployment failures before environment variables are configured.
  */
-const jwtSecret = process.env.JWT_SECRET;
-if (!jwtSecret || jwtSecret === 'default_secret' || jwtSecret.length < 32) {
-    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing, default, or too weak (min 32 chars).');
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing or insecure (min 32 chars).');
     console.warn('⚠️  Using a temporary fallback secret. PLEASE SET A STRONG JWT_SECRET IN YOUR ENVIRONMENT VARIABLES.');
-    process.env.JWT_SECRET = 'smartearning_v1_secure_default_secret_32_chars_long_placeholder';
+    process.env.JWT_SECRET = 'smartearning_v1_secure_default_fallback_secret_32_chars_long';
 }
 
 global.appDataVersion = Date.now();
@@ -56,7 +54,9 @@ const allowedOrigins = [
 app.use(secureHeaders);
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Allow requests with no origin (like mobile apps or curl) or matching origins
+        // Also allow all origins if FRONTEND_URL is not set to facilitate preview environments
+        if (!origin || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
@@ -108,7 +108,8 @@ const seedAdminUser = async () => {
                     country: 'Pakistan',
                     currency: 'PKR',
                     status: 'Active',
-                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false }
+                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false },
+                    role: 'admin'
                 });
                 console.log('Admin user seeded securely.');
             }
