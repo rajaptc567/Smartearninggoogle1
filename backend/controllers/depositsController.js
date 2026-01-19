@@ -1,27 +1,25 @@
-
 import Deposit from '../models/Deposit.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
-import Withdrawal from '../models/Withdrawal.js';
-import PaymentMethod from '../models/PaymentMethod.js';
 import { bucket } from '../config/db.js';
 import { Readable } from 'stream';
 import path from 'path';
 
-// @desc    Get all deposits (Conditional Pagination)
+// @desc    Get deposits (Role-Aware)
 // @route   GET /api/v1/deposits
 export const getDeposits = async (req, res) => {
     try {
-        /**
-         * CONDITIONAL PAGINATION:
-         * If 'page' is provided, we use skip/limit.
-         * If 'page' is missing, we return ALL records to avoid hiding data from a UI that lacks pagination controls.
-         */
         const page = req.query.page ? parseInt(req.query.page, 10) : null;
         const limit = parseInt(req.query.limit, 10) || 100;
         
-        let query = Deposit.find().sort({ date: -1 });
+        // 🛡️ ROLE-BASED FILTERING
+        let filter = {};
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+            filter = { userId: req.user.id };
+        }
+
+        let query = Deposit.find(filter).sort({ date: -1 });
 
         if (page !== null) {
             const skip = (page - 1) * limit;
@@ -39,6 +37,12 @@ export const getDeposit = async (req, res) => {
     try {
         const deposit = await Deposit.findById(req.params.id);
         if (!deposit) return res.status(404).json({ success: false, error: 'Deposit not found' });
+        
+        // Security: Check ownership if not admin
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin' && String(deposit.userId) !== String(req.user.id)) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
         res.status(200).json({ success: true, data: deposit });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -57,29 +61,19 @@ export const createDeposit = async (req, res) => {
         
         depositData.currency = user.currency;
 
-        // GRIDFS PERSISTENT UPLOAD
         if (req.file) {
             const filename = `receipt_${Date.now()}_${Math.round(Math.random() * 1E9)}${path.extname(req.file.originalname)}`;
-            
             const readableStream = new Readable();
             readableStream.push(req.file.buffer);
             readableStream.push(null);
-
-            const uploadStream = bucket.openUploadStream(filename, {
-                contentType: req.file.mimetype
-            });
-
+            const uploadStream = bucket.openUploadStream(filename, { contentType: req.file.mimetype });
             await new Promise((resolve, reject) => {
-                readableStream.pipe(uploadStream)
-                    .on('error', reject)
-                    .on('finish', resolve);
+                readableStream.pipe(uploadStream).on('error', reject).on('finish', resolve);
             });
-
             depositData.receiptUrl = `/uploads/${filename}`;
         }
 
         const deposit = await Deposit.create(depositData);
-        
         const transaction = await Transaction.create({
             userId: user._id,
             userName: user.username,

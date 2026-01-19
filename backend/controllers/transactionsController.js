@@ -1,19 +1,19 @@
-
 import Transaction from '../models/Transaction.js';
 
-// @desc    Get all transactions (Conditional Pagination)
+// @desc    Get all transactions (Role-Aware)
 // @route   GET /api/v1/transactions
 export const getTransactions = async (req, res) => {
     try {
-        /**
-         * CONDITIONAL PAGINATION:
-         * We check for 'page' query param. If missing, we return the whole history.
-         * This prevents a 'Pagination Wall' on the current UI.
-         */
         const page = req.query.page ? parseInt(req.query.page, 10) : null;
         const limit = parseInt(req.query.limit, 10) || 200;
         
-        let query = Transaction.find().sort({ date: -1 });
+        // 🛡️ ROLE-BASED FILTERING
+        let filter = {};
+        if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+            filter = { userId: req.user.id };
+        }
+
+        let query = Transaction.find(filter).sort({ date: -1 });
 
         if (page !== null) {
             const skip = (page - 1) * limit;

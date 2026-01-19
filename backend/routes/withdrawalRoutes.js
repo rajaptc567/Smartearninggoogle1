@@ -12,7 +12,7 @@ const router = express.Router();
 
 router
     .route('/')
-    .get(protect, admin, getWithdrawals)
+    .get(protect, getWithdrawals) // Removed strict 'admin' for GET
     .post(protect, createWithdrawal);
 
 router

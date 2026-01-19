@@ -9,7 +9,7 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 const router = express.Router();
 
 router.route('/')
-    .get(protect, admin, getTransfers)
+    .get(protect, getTransfers) // Removed strict 'admin' for GET
     .post(protect, createTransfer);
 
 router.route('/:id')

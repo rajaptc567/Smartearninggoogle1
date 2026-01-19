@@ -330,18 +330,27 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
             const isAdmin = freshUser.role === 'admin' || freshUser.role === 'superadmin';
 
-            // 🛡️ ROLE-BASED CONDITIONAL FETCHING
-            // Regular members cannot access: users, all deposits, all withdrawals, all transfers, logs, reset requests.
+            // 🛡️ DATA FETCHING: Transactions, Deposits, Withdrawals, Transfers are now Role-Aware on Backend.
+            // Everyone can fetch them, but users only get their OWN records.
             const commonDataPromise = Promise.all([
-                getTransactions(), getNotifications(), getPaymentMethods(),
-                getInvestmentPlans(), getRules(), getSettings(), getDisputes(), getTasks(),
+                getTransactions(), 
+                getNotifications(), 
+                getPaymentMethods(),
+                getInvestmentPlans(), 
+                getRules(), 
+                getSettings(), 
+                getDisputes(), 
+                getTasks(),
+                getDeposits(),    // Fetching owned/all
+                getWithdrawals(),  // Fetching owned/all
+                getTransfers(),    // Fetching owned/all
                 getDataVersion()
             ]);
 
-            let adminDataPromise = Promise.resolve([[], [], [], [], [], []]);
+            let adminDataPromise = Promise.resolve([[], [], []]);
             if (isAdmin) {
                 adminDataPromise = Promise.all([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransfers(), getLogs(), getPasswordResetRequests()
+                    getUsers(), getLogs(), getPasswordResetRequests()
                 ]);
             }
 
@@ -350,11 +359,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const [
                 transactions, notifications, paymentMethods, 
                 investmentPlans, rules, settings, disputes, tasks,
+                deposits, withdrawals, transfers,
                 currentVersion
             ] = commonData;
 
             const [
-                users, deposits, withdrawals, transfers, logs, passwordResetRequests
+                users, logs, passwordResetRequests
             ] = adminData;
             
             lastVersionRef.current = currentVersion;
@@ -364,7 +374,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 payload: { 
                     transactions, notifications, paymentMethods, 
                     investmentPlans, rules, settings, disputes, tasks,
-                    users, deposits, withdrawals, transfers, logs, passwordResetRequests
+                    deposits, withdrawals, transfers,
+                    users, logs, passwordResetRequests
                 } 
             });
             dispatch({ type: 'SET_OFFLINE_STATE', payload: false });

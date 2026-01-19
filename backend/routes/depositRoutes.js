@@ -1,4 +1,3 @@
-
 import express from 'express';
 import multer from 'multer';
 import {
@@ -29,7 +28,7 @@ const router = express.Router();
 
 router
     .route('/')
-    .get(protect, admin, getDeposits)
+    .get(protect, getDeposits) // Removed strict 'admin' for GET
     .post(protect, upload.single('receipt'), validate('deposit'), createDeposit);
 
 router
