@@ -1,3 +1,4 @@
+
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -61,6 +62,8 @@ export interface User {
     sponsor?: string;
     completedTasks?: CompletedTask[];
     isVerified?: boolean;
+    // FIX: Added role to User interface to support role-based logic in DataContext and layouts
+    role?: 'user' | 'admin' | 'superadmin';
 }
 
 export interface PageStyling {

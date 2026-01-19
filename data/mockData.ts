@@ -15,7 +15,9 @@ export const mockUsers: User[] = [
         activePlans: [],
         status: Status.Active,
         registrationDate: new Date('2023-01-01').toISOString(),
-        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false }
+        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false },
+        // FIX: Added role to mock data
+        role: 'admin'
     },
     {
         _id: 'u_raian',
@@ -32,7 +34,9 @@ export const mockUsers: User[] = [
         ],
         status: Status.Active,
         registrationDate: new Date().toISOString(),
-        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false }
+        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false },
+        // FIX: Added role to mock data
+        role: 'user'
     },
     {
         _id: 'u2',
@@ -49,7 +53,9 @@ export const mockUsers: User[] = [
         ],
         status: Status.Active,
         registrationDate: new Date('2023-06-10').toISOString(),
-        sponsor: 'admin'
+        sponsor: 'admin',
+        // FIX: Added role to mock data
+        role: 'user'
     }
 ];
 

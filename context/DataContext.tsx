@@ -300,11 +300,6 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
     dispatch: () => null,
 });
 
-/**
- * 🛡️ IDENTITY VERIFICATION HARDENING
- * We no longer immediately trust localStorage. The fetchData loop will 
- * clear the user if the server rejects the session token.
- */
 const initializer = (initialState: AppState) => {
     try {
         const savedUser = localStorage.getItem('currentUser');
@@ -333,23 +328,43 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const freshUser = await getMe();
             dispatch({ type: 'SET_CURRENT_USER', payload: freshUser });
 
-            const [
-                users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
-                currentVersion
-            ] = await Promise.all([
-                getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+            const isAdmin = freshUser.role === 'admin' || freshUser.role === 'superadmin';
+
+            // 🛡️ ROLE-BASED CONDITIONAL FETCHING
+            // Regular members cannot access: users, all deposits, all withdrawals, all transfers, logs, reset requests.
+            const commonDataPromise = Promise.all([
+                getTransactions(), getNotifications(), getPaymentMethods(),
+                getInvestmentPlans(), getRules(), getSettings(), getDisputes(), getTasks(),
                 getDataVersion()
             ]);
+
+            let adminDataPromise = Promise.resolve([[], [], [], [], [], []]);
+            if (isAdmin) {
+                adminDataPromise = Promise.all([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransfers(), getLogs(), getPasswordResetRequests()
+                ]);
+            }
+
+            const [commonData, adminData] = await Promise.all([commonDataPromise, adminDataPromise]);
+            
+            const [
+                transactions, notifications, paymentMethods, 
+                investmentPlans, rules, settings, disputes, tasks,
+                currentVersion
+            ] = commonData;
+
+            const [
+                users, deposits, withdrawals, transfers, logs, passwordResetRequests
+            ] = adminData;
             
             lastVersionRef.current = currentVersion;
 
             dispatch({ 
                 type: 'SET_ALL_DATA', 
                 payload: { 
-                    users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                    transactions, notifications, paymentMethods, 
+                    investmentPlans, rules, settings, disputes, tasks,
+                    users, deposits, withdrawals, transfers, logs, passwordResetRequests
                 } 
             });
             dispatch({ type: 'SET_OFFLINE_STATE', payload: false });
@@ -357,8 +372,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.error("Data fetch failed:", error.message);
             dispatch({ type: 'SET_OFFLINE_STATE', payload: true });
 
-            // 🛡️ SESSION INVALIDATION
-            // If the server explicitly rejects the token, clear local state immediately.
             if (error.message.includes('401') || error.message.includes('authorized') || error.message.includes('identity unknown')) {
                 dispatch({ type: 'SET_CURRENT_USER', payload: null });
             }
@@ -369,7 +382,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         fetchData();
     }, [state.currentUser?._id]); 
 
-    // REAL-TIME SYNC POLLING
     useEffect(() => {
         const pollInterval = setInterval(async () => {
             if (!state.currentUser) return;

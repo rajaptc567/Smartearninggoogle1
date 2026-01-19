@@ -6,18 +6,19 @@ import {
     updateWithdrawal,
     deleteWithdrawal
 } from '../controllers/withdrawalsController.js';
+import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router
     .route('/')
-    .get(getWithdrawals)
-    .post(createWithdrawal);
+    .get(protect, admin, getWithdrawals)
+    .post(protect, createWithdrawal);
 
 router
     .route('/:id')
-    .get(getWithdrawal)
-    .put(updateWithdrawal)
-    .delete(deleteWithdrawal);
+    .get(protect, getWithdrawal)
+    .put(protect, admin, updateWithdrawal)
+    .delete(protect, admin, deleteWithdrawal);
 
 export default router;
