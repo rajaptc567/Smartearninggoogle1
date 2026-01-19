@@ -1,13 +1,14 @@
-
 import express from 'express';
 import {
     getUsers,
     getUser,
+    getMe,
     createUser,
     updateUser,
     deleteUser,
     bulkDeleteUsers,
     loginUser,
+    logoutUser,
     adjustWallet,
     purchasePlan,
     adminActivatePlan,
@@ -28,6 +29,9 @@ router.route('/')
     .post(validate('register'), createUser);
 
 router.post('/login', validate('login'), loginUser);
+router.post('/logout', logoutUser);
+router.get('/me', protect, getMe);
+
 router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);

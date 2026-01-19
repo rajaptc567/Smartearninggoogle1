@@ -1,13 +1,10 @@
-
 import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
-    getDataVersion
+    getDataVersion, getMe
 } from '../services/api';
-
-// ... (existing AppState and defaultHomepageContent definitions) ...
 
 interface AppState {
     users: User[];
@@ -169,7 +166,6 @@ type Action =
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
-    // (Reducer logic remains identical to preserve functionality)
     const sanitizeSettings = (settings: Settings) => {
         const newSettings = { ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
@@ -201,6 +197,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                     localStorage.setItem('currentUser', JSON.stringify(action.payload));
                 } else {
                     localStorage.removeItem('currentUser');
+                    localStorage.removeItem('app_cache');
                 }
             } catch (error) {
                 console.error("Could not access localStorage:", error);
@@ -290,19 +287,19 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return state;
     }
 
-    try {
-        localStorage.setItem('app_cache', JSON.stringify({
-            ...newState,
-            currentUser: state.currentUser 
-        }));
-    } catch (e) {
-        console.warn("Failed to update app cache", e);
+    if (newState.currentUser) {
+        try {
+            localStorage.setItem('app_cache', JSON.stringify({
+                ...newState,
+                currentUser: state.currentUser 
+            }));
+        } catch (e) {
+            console.warn("Failed to update app cache", e);
+        }
     }
 
     return newState;
 };
-
-// ... (existing Context/Initializer logic remains identical) ...
 
 export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
     state: initialState,
@@ -344,10 +341,17 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
 
-    // Initial Data Fetch
+    // Initial Guarded Fetch
     useEffect(() => {
         const fetchData = async () => {
+            if (!state.currentUser) return;
+
             try {
+                // 1. Sync User Session First
+                const freshUser = await getMe();
+                dispatch({ type: 'SET_CURRENT_USER', payload: freshUser });
+
+                // 2. Fetch Dependent Data
                 const [
                     users, deposits, withdrawals, transactions, notifications, paymentMethods, 
                     investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
@@ -368,19 +372,21 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     } 
                 });
             } catch (error) {
-                console.error("Failed to fetch initial data:", error);
+                console.error("Guarded initial fetch failed:", error.message);
+                // IF 401: Logout
+                if (error.message.includes('401') || error.message.includes('authorized')) {
+                    dispatch({ type: 'SET_CURRENT_USER', payload: null });
+                }
             }
         };
 
         fetchData();
-    }, []);
+    }, [state.currentUser?._id]); 
 
-    // --- REAL-TIME SYNC POLLING (OPTIMIZED) ---
-    // Reduced from 5s to 30s. Only active when tab is visible and user is logged in.
+    // REAL-TIME SYNC POLLING
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            // Optimization: Stop polling if tab is hidden or user not logged in
-            if (!state.currentUser || document.visibilityState !== 'visible') return;
+            if (!state.currentUser) return;
 
             try {
                 const serverVersion = await getDataVersion();
@@ -391,29 +397,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    // IF ADMIN: Update locally
-                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
-                        lastVersionRef.current = serverVersion;
-                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
-                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                        ]);
-                        dispatch({ 
-                            type: 'SET_ALL_DATA', 
-                            payload: { 
-                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
-                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
-                            } 
-                        });
-                    } else {
-                        // IF MEMBER: Auto-refresh
-                        window.location.reload();
-                    }
+                    lastVersionRef.current = serverVersion;
+                    const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                    ]);
+                    dispatch({ 
+                        type: 'SET_ALL_DATA', 
+                        payload: { 
+                            users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                            investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                        } 
+                    });
                 }
             } catch (err) {
-                // Silently ignore polling errors
+                if (err.message.includes('401')) {
+                    dispatch({ type: 'SET_CURRENT_USER', payload: null });
+                }
             }
-        }, 30000); // 30 seconds interval (Scaling Fix)
+        }, 30000); 
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);
