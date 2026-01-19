@@ -22,14 +22,15 @@ import {
 } from '../controllers/usersController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import { validate } from '../middleware/validationMiddleware.js';
+import { authLimiter } from '../middleware/securityMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
     .get(protect, admin, getUsers)
-    .post(validate('register'), createUser);
+    .post(authLimiter, validate('register'), createUser); // 🔐 Applied authLimiter
 
-router.post('/login', validate('login'), loginUser);
+router.post('/login', authLimiter, validate('login'), loginUser); // 🔐 Applied authLimiter
 router.post('/logout', logoutUser);
 router.get('/me', protect, getMe);
 

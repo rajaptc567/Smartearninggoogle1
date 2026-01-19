@@ -1,15 +1,27 @@
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
-// 1. Basic Rate Limiting
+// 1. General API Rate Limiting
 export const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    max: 10000, // 🚀 Significantly increased to prevent 429 on busy systems or shared IPs
     message: { success: false, error: 'Too many requests from this IP, please try again after 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false,
-    // 🚀 PREFLIGHT BYPASS: Never block OPTIONS requests
-    skip: (req) => req.method === 'OPTIONS', 
+    // 🚀 BYPASS: Never block OPTIONS (preflight) or background heartbeat (version check)
+    skip: (req) => {
+        return req.method === 'OPTIONS' || req.originalUrl.includes('/version');
+    }, 
+});
+
+// 2. 🔐 DEDICATED AUTH LIMITER (Brute-force protection)
+export const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // Slightly more generous for auth specifically to prevent lockouts
+    message: { success: false, error: 'Too many authentication attempts. Please try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
 });
 
 /**
