@@ -1,7 +1,7 @@
+
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useData } from '../hooks/useData';
-import { logout as apiLogout } from '../services/api';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -47,10 +47,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
     const inactiveLinkClass = "text-gray-400 hover:bg-gray-700/50 hover:text-white";
     const activeLinkClass = "bg-blue-600 text-white shadow-lg shadow-blue-600/20";
 
-    const handleLogout = async () => {
-        // 1. Clear session on server (Invalidates cookie)
-        await apiLogout();
-        // 2. Clear local state
+    const handleLogout = () => {
         dispatch({ type: 'SET_CURRENT_USER', payload: null });
         setSidebarOpen(false);
     };
@@ -66,6 +63,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                     <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Member Area</h1>
                 </div>
                 
+                {/* Scrollable navigation area */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar pt-6 flex flex-col">
                     <nav className="flex-1 px-2">
                         {userNavLinks.map(({ to, label, icon, condition, badge }) => {
@@ -92,6 +90,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
                         })}
                     </nav>
                     
+                    {/* Fixed-at-bottom-of-content area */}
                     <div className="px-2 pb-8 mt-4 pt-4 border-t border-gray-800">
                          <button
                             onClick={handleLogout}

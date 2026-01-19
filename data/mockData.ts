@@ -15,28 +15,8 @@ export const mockUsers: User[] = [
         activePlans: [],
         status: Status.Active,
         registrationDate: new Date('2023-01-01').toISOString(),
-        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false },
-        // FIX: Added role to mock data
-        role: 'admin'
-    },
-    {
-        _id: 'u_raian',
-        username: 'raian_tc',
-        fullName: 'Raian TC',
-        email: 'raiantc567@gmail.com',
-        phone: '03001234567',
-        country: 'Pakistan',
-        currency: 'PKR',
-        walletBalance: 25000,
-        activePlan: 'Pro PKR',
-        activePlans: [
-            { planId: 'p2', planName: 'Pro PKR', price: 15000, purchaseDate: new Date().toISOString() }
-        ],
-        status: Status.Active,
-        registrationDate: new Date().toISOString(),
-        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false },
-        // FIX: Added role to mock data
-        role: 'user'
+        // Added missing login and purchase properties to match UserRestrictions type
+        restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false }
     },
     {
         _id: 'u2',
@@ -53,9 +33,7 @@ export const mockUsers: User[] = [
         ],
         status: Status.Active,
         registrationDate: new Date('2023-06-10').toISOString(),
-        sponsor: 'admin',
-        // FIX: Added role to mock data
-        role: 'user'
+        sponsor: 'admin'
     }
 ];
 
@@ -73,6 +51,7 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         directCommissions: [{ type: 'percentage', value: 7 }],
         indirectCommissions: [{ type: 'percentage', value: 2 }, { type: 'percentage', value: 1 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
+        // FIX: Removed holdPosition as it doesn't exist in type InvestmentPlan
         autoUpgrade: { enabled: false }
     },
     {
@@ -88,6 +67,7 @@ export const mockInvestmentPlans: InvestmentPlan[] = [
         directCommissions: [{ type: 'percentage', value: 10 }],
         indirectCommissions: [{ type: 'percentage', value: 3 }, { type: 'percentage', value: 2 }],
         commissionDeductions: { afterMaxPayout: {type: 'fixed', value: 0}, afterMaxEarning: {type: 'fixed', value: 0}, afterMaxDirect: {type: 'fixed', value: 0} },
+        // FIX: Removed holdPosition as it doesn't exist in type InvestmentPlan
         autoUpgrade: { enabled: false }
     }
 ];
@@ -123,6 +103,7 @@ export const mockPaymentMethods: PaymentMethod[] = [
 
 export const mockSettings: Settings = {
     isUserTransferEnabled: true,
+    // FIX: Added required property isTasksEnabled
     isTasksEnabled: true,
     transferConfig: {
         enabled: true,
@@ -133,12 +114,15 @@ export const mockSettings: Settings = {
     },
     exchangeRates: { EUR: 300.00, PKR: 1, USD: 280.00 },
     restrictWithdrawalAmount: false,
+    // FIX: Added missing required property restrictDepositAmount
     restrictDepositAmount: false,
     requirePlanMatchForCommission: false,
     requireActivePlanForCommission: false,
     oneTimeCommissionPerGroup: false,
+    // Added missing properties showRejectedCommissionTransaction and notifySponsorOnCommissionLimit
     showRejectedCommissionTransaction: true,
     notifySponsorOnCommissionLimit: true,
+    // Added missing required property recurringCommissionConfigs
     recurringCommissionConfigs: [],
     requireUplineEligibility: false,
     withdrawalFrequency: { enabled: false, value: 1, unit: 'days' },
@@ -156,6 +140,7 @@ export const mockSettings: Settings = {
     ],
     homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
     homepageContent: {
+        // Added missing visibility booleans
         showHero: true,
         showFeatures: true,
         showMultiCurrency: true,
@@ -173,6 +158,7 @@ export const mockSettings: Settings = {
         videoTitle: "Watch Intro", videoDesc: "See how it works.",
         multiCurrencyTitle: "Multi-Currency", multiCurrencyDesc: "EUR, PKR support.",
         mlmTitle: "Earn More", mlmDesc: "Referral bonuses.",
+        // Added missing payment methods display properties
         paymentMethodsTitle: "Secure Payments",
         paymentMethodsDesc: "We support multiple gateways.",
         paymentMethodsDisplayType: 'static',

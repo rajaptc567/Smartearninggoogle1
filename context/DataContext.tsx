@@ -1,9 +1,10 @@
-import React, { createContext, useReducer, ReactNode, useEffect, useRef, useState } from 'react';
+
+import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
-    getDataVersion, getMe, getDownline
+    getDataVersion
 } from '../services/api';
 
 interface AppState {
@@ -22,7 +23,6 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
-    isOffline?: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -114,12 +114,10 @@ const initialState: AppState = {
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
-    isOffline: false
 };
 
 type Action =
     | { type: 'SET_ALL_DATA'; payload: Partial<AppState> }
-    | { type: 'SET_OFFLINE_STATE'; payload: boolean }
     | { type: 'SET_USERS'; payload: User[] }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
@@ -186,15 +184,12 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     let newState: AppState;
 
     switch (action.type) {
-        case 'SET_OFFLINE_STATE':
-            return { ...state, isOffline: action.payload };
-
         case 'SET_ALL_DATA':
             const sanitizedPayload = { ...action.payload };
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
             }
-            newState = { ...state, ...sanitizedPayload, isOffline: false };
+            newState = { ...state, ...sanitizedPayload };
             break;
 
         case 'SET_CURRENT_USER':
@@ -292,6 +287,16 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return state;
     }
 
+    // --- CACHE PERSISTENCE ---
+    try {
+        localStorage.setItem('app_cache', JSON.stringify({
+            ...newState,
+            currentUser: state.currentUser 
+        }));
+    } catch (e) {
+        console.warn("Failed to update app cache", e);
+    }
+
     return newState;
 };
 
@@ -303,9 +308,24 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
 const initializer = (initialState: AppState) => {
     try {
         const savedUser = localStorage.getItem('currentUser');
-        if (savedUser) {
-            return { ...initialState, currentUser: JSON.parse(savedUser) as User };
+        const appCache = localStorage.getItem('app_cache');
+        
+        let initialData = initialState;
+        
+        if (appCache) {
+            try {
+                const parsedCache = JSON.parse(appCache);
+                initialData = { ...initialData, ...parsedCache };
+            } catch (e) {
+                console.warn("Invalid app cache");
+            }
         }
+
+        if (savedUser) {
+            initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
+        }
+        
+        return initialData;
     } catch (error) {
         console.error("Could not parse user from localStorage", error);
     }
@@ -320,90 +340,42 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
 
-    const fetchData = async () => {
-        if (!state.currentUser) return;
-
-        try {
-            // 🛡️ SYNC USER IDENTITY (Mandatory Server Check)
-            const freshUser = await getMe();
-            dispatch({ type: 'SET_CURRENT_USER', payload: freshUser });
-
-            const isAdmin = freshUser.role === 'admin' || freshUser.role === 'superadmin';
-
-            // 🛡️ DATA FETCHING: Transactions, Deposits, Withdrawals, Transfers are Role-Aware on Backend.
-            // Everyone can fetch them, but users only get their OWN records.
-            const commonDataPromise = Promise.all([
-                getTransactions(), 
-                getNotifications(), 
-                getPaymentMethods(),
-                getInvestmentPlans(), 
-                getRules(), 
-                getSettings(), 
-                getDisputes(), 
-                getTasks(),
-                getDeposits(),    // Fetching owned/all
-                getWithdrawals(),  // Fetching owned/all
-                getTransfers(),    // Fetching owned/all
-                getDataVersion()
-            ]);
-
-            // 🛡️ USER NETWORK: Members need their downline for Dashboard stats and Tree view.
-            // Admins fetch ALL users.
-            let userDataPromise = isAdmin ? getUsers() : getDownline(freshUser.username);
-
-            let adminMetaPromise = Promise.resolve([[], []]);
-            if (isAdmin) {
-                adminMetaPromise = Promise.all([
-                    getLogs(), getPasswordResetRequests()
-                ]);
-            }
-
-            const [commonData, users, adminMeta] = await Promise.all([
-                commonDataPromise, 
-                userDataPromise, 
-                adminMetaPromise
-            ]);
-            
-            const [
-                transactions, notifications, paymentMethods, 
-                investmentPlans, rules, settings, disputes, tasks,
-                deposits, withdrawals, transfers,
-                currentVersion
-            ] = commonData;
-
-            const [
-                logs, passwordResetRequests
-            ] = adminMeta;
-            
-            lastVersionRef.current = currentVersion;
-
-            dispatch({ 
-                type: 'SET_ALL_DATA', 
-                payload: { 
-                    transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, disputes, tasks,
-                    deposits, withdrawals, transfers,
-                    users, logs, passwordResetRequests
-                } 
-            });
-            dispatch({ type: 'SET_OFFLINE_STATE', payload: false });
-        } catch (error) {
-            console.error("Data fetch failed:", error.message);
-            dispatch({ type: 'SET_OFFLINE_STATE', payload: true });
-
-            if (error.message.includes('401') || error.message.includes('authorized') || error.message.includes('identity unknown')) {
-                dispatch({ type: 'SET_CURRENT_USER', payload: null });
-            }
-        }
-    };
-
+    // Initial Data Fetch
     useEffect(() => {
-        fetchData();
-    }, [state.currentUser?._id]); 
+        const fetchData = async () => {
+            try {
+                const [
+                    users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                    currentVersion
+                ] = await Promise.all([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                    getDataVersion()
+                ]);
+                
+                lastVersionRef.current = currentVersion;
 
+                dispatch({ 
+                    type: 'SET_ALL_DATA', 
+                    payload: { 
+                        users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                    } 
+                });
+            } catch (error) {
+                console.error("Failed to fetch initial data:", error);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    // --- REAL-TIME SYNC POLLING ---
+    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return;
+            if (!state.currentUser) return; // Only poll if logged in
 
             try {
                 const serverVersion = await getDataVersion();
@@ -414,16 +386,33 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    fetchData();
+                    console.log("Remote changes detected by admin. Synchronizing app state...");
+                    
+                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
+                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
+                        lastVersionRef.current = serverVersion;
+                        // Just trigger data fetch instead of refresh for admin
+                        // This keeps their modal/forms open but refreshes background data
+                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        ]);
+                        dispatch({ 
+                            type: 'SET_ALL_DATA', 
+                            payload: { 
+                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                            } 
+                        });
+                    } else {
+                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
+                        window.location.reload();
+                    }
                 }
-                dispatch({ type: 'SET_OFFLINE_STATE', payload: false });
             } catch (err) {
-                dispatch({ type: 'SET_OFFLINE_STATE', payload: true });
-                if (err.message.includes('401')) {
-                    dispatch({ type: 'SET_CURRENT_USER', payload: null });
-                }
+                // Silently ignore polling errors
             }
-        }, 15000); 
+        }, 5000); // Check every 5 seconds
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);

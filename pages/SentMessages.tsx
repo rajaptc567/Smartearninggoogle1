@@ -5,23 +5,17 @@ import { Notification, User } from '../types';
 import Button from '../components/ui/Button';
 
 // Icons
-// FIX: Removed invalid 'title' prop from SVG element and wrapped in span for tooltips
 const ReadIcon = () => (
-    <span title="Read by user">
-        <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" transform="translate(3,0)" className="opacity-50" />
-        </svg>
-    </span>
+    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Read by user">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" transform="translate(3,0)" className="opacity-50" />
+    </svg>
 );
 
-// FIX: Removed invalid 'title' prop from SVG element and wrapped in span for tooltips
 const UnreadIcon = () => (
-    <span title="Unread">
-        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-    </span>
+    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" title="Unread">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>
 );
 
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
@@ -266,7 +260,7 @@ const SentMessages: React.FC = () => {
                                         <span className="font-semibold">Recipient:</span> {findUser(selectedMessage.userId)?.username || 'Unknown'} <span className="text-xs">({findUser(selectedMessage.userId)?.email})</span>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        <span className="flex items-center gap-1">
+                                        <span className="flex items-center gap-1" title={selectedMessage.read ? "Read by user" : "Not yet read"}>
                                             Status: 
                                             <span className={`font-bold ${selectedMessage.read ? 'text-green-600' : 'text-gray-500'}`}>
                                                 {selectedMessage.read ? 'Read' : 'Unread'}

@@ -26,7 +26,6 @@ const SponsorCommissionRules: React.FC = () => {
     };
     
     const handleRecurringPlanChange = (planId: string) => {
-        // FIX: Referenced correct property name recurringCommissionPlanIds which now exists in types.ts
         const currentIds = localSettings.recurringCommissionPlanIds || [];
         let newIds;
         if (currentIds.includes(planId)) {
@@ -70,7 +69,7 @@ const SponsorCommissionRules: React.FC = () => {
                         checked={checked}
                         onChange={onChange}
                     />
-                    <label htmlFor={name} className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${checked ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                    <label htmlFor={name} className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${checked ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
                 </div>
             </div>
         </div>
@@ -163,7 +162,6 @@ const SponsorCommissionRules: React.FC = () => {
                                                                     <input
                                                                         type="checkbox"
                                                                         className="rounded text-blue-500 focus:ring-blue-500 dark:bg-gray-600 dark:border-gray-500"
-                                                                        // FIX: Corrected access to recurringCommissionPlanIds
                                                                         checked={(localSettings.recurringCommissionPlanIds || []).includes(plan._id)}
                                                                         onChange={() => handleRecurringPlanChange(plan._id)}
                                                                     />

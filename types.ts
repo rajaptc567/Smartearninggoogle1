@@ -1,4 +1,3 @@
-
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -56,15 +55,12 @@ export interface User {
     walletBalance: number;
     activePlan?: string;
     activePlans?: ActivePlan[];
-    // FIX: Simplified status type to use Status enum directly as it covers all string literals
-    status: Status;
+    status: Status | 'Active' | 'Blocked' | 'Pending' | 'Paused';
     registrationDate: string;
     restrictions?: UserRestrictions;
     sponsor?: string;
     completedTasks?: CompletedTask[];
     isVerified?: boolean;
-    // FIX: Added role to User interface to support role-based logic in DataContext and layouts
-    role?: 'user' | 'admin' | 'superadmin';
 }
 
 export interface PageStyling {
@@ -151,8 +147,6 @@ export interface Settings {
     oneTimeCommissionPerGroup: boolean;
     showRejectedCommissionTransaction: boolean;
     notifySponsorOnCommissionLimit: boolean;
-    // FIX: Added recurringCommissionPlanIds to match usage in component logic and backend model
-    recurringCommissionPlanIds?: string[];
     recurringCommissionConfigs: RecurringPlanConfig[];
     requireUplineEligibility: boolean;
     withdrawalFrequency: {
@@ -206,7 +200,6 @@ export interface Settings {
     homepageVideoUrl?: string;
     homepageContent?: HomepageContent;
     homepageVideoId?: string;
-    homepageVideoUrl?: string;
     homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
 }

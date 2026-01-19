@@ -1,13 +1,12 @@
+
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import mongoose from 'mongoose';
-import connectDB, { bucket } from './config/db.js';
-import User from './models/User.js';
-import { secureHeaders, apiLimiter, csrfCheck } from './middleware/securityMiddleware.js';
-import { protect } from './middleware/authMiddleware.js';
+import fs from 'fs';
+import connectDB from './config/db.js';
+import User from './models/User.js'; // Import User model for seeding
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -23,114 +22,77 @@ import settingRoutes from './routes/settingRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
-import taskRoutes from './routes/taskRoutes.js';
+import taskRoutes from './routes/taskRoutes.js'; // Import new task routes
 
+// Load env vars
 dotenv.config();
 
-/**
- * 🔒 SECURITY ENFORCEMENT & RESILIENCE
- * We check for JWT_SECRET. If missing, we inject a temporary one to prevent 
- * the server from crashing during cold starts or initial deployment.
- */
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret') {
-    console.warn('⚠️ WARNING: JWT_SECRET is missing or using default. Injecting emergency secret to prevent crash.');
-    process.env.JWT_SECRET = 'smartearning_emergency_recovery_secret_78656';
-}
-
+// --- REAL-TIME SYNC ENGINE ---
+// Initialize a global version timestamp. 
+// Any operation that changes data will update this.
 global.appDataVersion = Date.now();
+// -----------------------------
 
+// Connect to database
 connectDB();
 
 const app = express();
 
-app.set('trust proxy', true);
+// Enable CORS
+app.use(cors());
 
-// 🍪 LIGHTWEIGHT COOKIE PARSER
-app.use((req, res, next) => {
-    req.cookies = {};
-    const cookieHeader = req.headers.cookie;
-    if (cookieHeader) {
-        cookieHeader.split(';').forEach(cookie => {
-            const [name, ...rest] = cookie.split('=');
-            req.cookies[name.trim()] = rest.join('=').trim();
-        });
-    }
-    next();
-});
+// Body parser middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// 🔓 ROBUST CORS CONFIGURATION
-// Requirement: Echo origin exactly to allow 'credentials: true'
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        // Safely echo the origin to satisfy browser preflights for credentialed requests
-        callback(null, origin);
-    },
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-smartearning-request'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    preflightContinue: false,
-    optionsSuccessStatus: 204
-}));
+// Handle ES Modules path resolution
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-app.use(secureHeaders);
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
-// 🛡️ APPLY LIMITER & CSRF (OPTIONS requests are handled early in middleware)
-app.use('/api', apiLimiter);
-app.use(csrfCheck);
+// Set static folder for uploads
+app.use('/uploads', express.static(uploadsDir));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-/**
- * 🛡️ PROTECTED ASSETS
- */
-app.get('/uploads/:filename', protect, async (req, res) => {
-    try {
-        const files = await bucket.find({ filename: req.params.filename }).toArray();
-        if (!files || files.length === 0) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-        res.set('Content-Type', files[0].contentType);
-        const downloadStream = bucket.openDownloadStreamByName(req.params.filename);
-        downloadStream.pipe(res);
-    } catch (err) {
-        res.status(500).json({ error: 'Error retrieving file' });
-    }
-});
-
+// Seed Admin User Function
 const seedAdminUser = async () => {
     try {
-        const adminEmail = process.env.ADMIN_EMAIL || 'studio56.pk@gmail.com';
-        const adminPassword = process.env.ADMIN_PASSWORD; 
+        const adminEmail = 'studio56.pk@gmail.com';
+        const adminPassword = 'raja5207901@'; 
         
-        if (!adminPassword) return;
-
         const existingUser = await User.findOne({ email: adminEmail });
+        
         if (!existingUser) {
-            await User.create({
-                username: 'admin',
-                fullName: 'System Admin',
-                email: adminEmail,
-                password: adminPassword,
-                phone: '0000000000',
-                country: 'Pakistan',
-                currency: 'PKR',
-                status: 'Active',
-                restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true, login: false, purchase: false },
-                role: 'admin'
-            });
-            console.log('✅ Admin user seeded.');
+            const anyAdmin = await User.findOne({ username: 'admin' });
+            if (!anyAdmin) {
+                await User.create({
+                    username: 'admin',
+                    fullName: 'System Admin',
+                    email: adminEmail,
+                    password: adminPassword,
+                    phone: '0000000000',
+                    country: 'Pakistan',
+                    currency: 'PKR',
+                    status: 'Active',
+                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
+                });
+            }
         } 
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
 };
 
+// A simple test route
 app.get('/', (req, res) => {
-    res.send('SmartEarning API is running securely...');
+    res.send('SmartEarning API is running...');
 });
 
+// Mount routers
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/deposits', depositRoutes);
 app.use('/api/v1/withdrawals', withdrawalRoutes);
@@ -144,23 +106,25 @@ app.use('/api/v1/settings', settingRoutes);
 app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
-app.use('/api/v1/tasks', taskRoutes);
+app.use('/api/v1/tasks', taskRoutes); // Mount task routes
 
-app.use((err, req, res, next) => {
+// Custom Error Handler
+const errorHandler = (err, req, res, next) => {
     console.error(err.stack);
-    const statusCode = err.statusCode || 500;
-    res.status(statusCode).json({
-        success: false,
-        error: err.message || 'Internal Server Error'
-    });
-});
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ success: false, error: 'Payload too large.' });
+    }
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
+};
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     await seedAdminUser();
 });
 
-process.on('unhandledRejection', (err) => {
+process.on('unhandledRejection', (err, promise) => {
     console.log(`Error: ${err.message}`);
+    server.close(() => process.exit(1));
 });
