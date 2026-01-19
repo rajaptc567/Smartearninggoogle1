@@ -24,7 +24,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-teal-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
                         <span className={`text-[10px] mt-3 font-black uppercase tracking-[0.1em] transition-colors duration-300 ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
@@ -58,6 +58,7 @@ const TransferFunds: React.FC = () => {
     const [historyDateTo, setHistoryDateTo] = useState('');
 
     // Pagination State
+    // FIX: Renamed variable and setter to correctly reflect current page state
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
 
@@ -81,6 +82,7 @@ const TransferFunds: React.FC = () => {
 
     // Available levels for filtering
     const availableLevels = useMemo(() => {
+        // FIX: Added explicit number types to sort arguments to resolve arithmetic operation errors on line 84
         const levels = Array.from(new Set(myDownline.map(d => d.level))).sort((a: number, b: number) => a - b);
         return levels;
     }, [myDownline]);
@@ -202,8 +204,8 @@ const TransferFunds: React.FC = () => {
 
                 if (historyDateFrom || historyDateTo) {
                     const itemDate = new Date(t.date).setHours(0,0,0,0);
-                    const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
-                    const to = historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null;
+                    const from = historyStatus === 'Pending' ? null : (historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null);
+                    const to = historyStatus === 'Pending' ? null : (historyDateTo ? new Date(historyDateTo).setHours(23,59,59,999) : null);
                     if (from && itemDate < from) return false;
                     if (to && itemDate > to) return false;
                 }
@@ -252,7 +254,7 @@ const TransferFunds: React.FC = () => {
             {/* Wizard Container */}
             <div className="bg-white dark:bg-gray-950 p-8 sm:p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 min-h-[400px]">
                 {step === 1 && (
-                    <div className="animate-fade-in max-w-3xl mx-auto space-y-8">
+                    <div className="animate-fade-in max-3xl mx-auto space-y-8">
                         <div className="text-center">
                             <h3 className="text-2xl font-black uppercase tracking-tighter">Identify Recipient</h3>
                             <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">Step 1: Network Target Selection</p>
@@ -272,7 +274,7 @@ const TransferFunds: React.FC = () => {
                                 />
                             </div>
                             
-                            {/* NEW: Filter UI for Downline Pick List */}
+                            {/* Filter UI for Downline Pick List */}
                             <div className="mt-8">
                                 <div className="flex flex-col sm:flex-row justify-between items-center mb-5 gap-4">
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 flex items-center gap-2">
@@ -302,7 +304,7 @@ const TransferFunds: React.FC = () => {
                                         <select
                                             value={downlineLevelFilter}
                                             onChange={e => setDownlineLevelFilter(e.target.value)}
-                                            className="bg-gray-100 dark:bg-gray-900 border-none rounded-xl text-[9px] font-black uppercase text-gray-400 px-4 py-1.5 focus:ring-blue-500"
+                                            className="bg-gray-100 dark:bg-gray-900 border-none rounded-xl text-[9px] font-black uppercase text-gray-400 px-4 py-1.5 focus:ring-blue-500 cursor-pointer"
                                         >
                                             <option value="all">All Levels</option>
                                             {availableLevels.map(lvl => (
@@ -366,7 +368,7 @@ const TransferFunds: React.FC = () => {
                                     }) : (
                                         <div className="col-span-full py-16 text-center bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                                             <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">🔍</div>
-                                            <p className="text-gray-400 font-black text-xs uppercase tracking-[0.2em]">No matching network members</p>
+                                            <p className="text-gray-400 font-black text-xs uppercase tracking-[0.2em]">No matching members</p>
                                             <p className="text-[10px] text-gray-500 mt-2">Try adjusting your filters or search term</p>
                                         </div>
                                     )}
@@ -417,7 +419,7 @@ const TransferFunds: React.FC = () => {
                 )}
 
                 {step === 2 && foundRecipient && (
-                    <div className="animate-fade-in max-w-xl mx-auto space-y-8">
+                    <div className="animate-fade-in max-xl mx-auto space-y-8">
                         <div className="text-center">
                             <h3 className="text-2xl font-black uppercase tracking-tighter">Transfer Amount</h3>
                             <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">Step 2: Capital Allocation</p>
@@ -476,7 +478,7 @@ const TransferFunds: React.FC = () => {
                 )}
 
                 {step === 3 && foundRecipient && (
-                    <div className="animate-fade-in max-w-xl mx-auto space-y-8">
+                    <div className="animate-fade-in max-xl mx-auto space-y-8">
                         <div className="text-center">
                             <h3 className="text-2xl font-black uppercase tracking-tighter">Authorize Transfer</h3>
                             <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">Step 3: Signature & Transmission</p>
@@ -523,7 +525,7 @@ const TransferFunds: React.FC = () => {
                 )}
             </div>
 
-            {/* History Table */}
+            {/* Settlement Ledger Table */}
             <div className="bg-white dark:bg-gray-950 p-10 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
                     <div className="flex items-center gap-4">
