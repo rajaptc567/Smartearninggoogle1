@@ -73,6 +73,7 @@ const WithdrawFunds: React.FC = () => {
     const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
 
     // History Filter State
+    const [historySearch, setHistorySearch] = useState('');
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
@@ -174,7 +175,24 @@ const WithdrawFunds: React.FC = () => {
         return withdrawals
             .filter(w => {
                 if (w.userId !== currentUser._id) return false;
-                if (historyStatus && w.status !== historyStatus) return false;
+                
+                // MASKING: Show 'Matching' as 'Pending'
+                const actualStatus = w.status;
+                const matchesStatus = historyStatus ? 
+                    (historyStatus === 'Pending' ? (actualStatus === 'Pending' || actualStatus === 'Matching') : actualStatus === historyStatus)
+                    : true;
+                if (!matchesStatus) return false;
+
+                if (historySearch) {
+                    const term = historySearch.toLowerCase();
+                    const matches = 
+                        w._id.toLowerCase().includes(term) ||
+                        w.method.toLowerCase().includes(term) ||
+                        w.accountNumber.toLowerCase().includes(term) ||
+                        w.accountTitle.toLowerCase().includes(term);
+                    if (!matches) return false;
+                }
+
                 if (historyDateFrom || historyDateTo) {
                     const itemDate = new Date(w.date).setHours(0,0,0,0);
                     const from = historyDateFrom ? new Date(historyDateFrom).setHours(0,0,0,0) : null;
@@ -185,7 +203,7 @@ const WithdrawFunds: React.FC = () => {
                 return true;
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [withdrawals, currentUser, historyStatus, historyDateFrom, historyDateTo]);
+    }, [withdrawals, currentUser, historyStatus, historyDateFrom, historyDateTo, historySearch]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -341,7 +359,7 @@ const WithdrawFunds: React.FC = () => {
 
             {cooldownMessage && (
                 <div className="mb-10 p-6 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 rounded-3xl text-yellow-800 dark:text-yellow-200 flex items-center shadow-xl animate-fade-in">
-                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl mr-5 shrink-0"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl mr-5 shrink-0"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
                     <div>
                         <p className="font-black text-xs uppercase tracking-widest mb-1">Temporal Frequency Limit</p>
                         <p className="text-sm font-bold opacity-80">{cooldownMessage}</p>
@@ -606,10 +624,10 @@ const WithdrawFunds: React.FC = () => {
 
             {/* WITHDRAWAL HISTORY SECTION */}
             <div className="bg-white dark:bg-gray-950 p-10 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 mt-12">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 rounded-xl flex items-center justify-center text-gray-400">
-                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
+                             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
                         </div>
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Log</h3>
                     </div>
@@ -644,6 +662,20 @@ const WithdrawFunds: React.FC = () => {
                     </div>
                 </div>
 
+                {/* NEW: Search Bar implementation */}
+                <div className="mb-8 relative group">
+                    <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-gray-400 group-focus-within:text-teal-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
+                    <input 
+                        type="text"
+                        value={historySearch}
+                        onChange={(e) => setHistorySearch(e.target.value)}
+                        placeholder="Search ID, Payout Network, Account Title or No..."
+                        className="w-full pl-12 pr-6 py-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-teal-500/20 outline-none transition-all shadow-inner"
+                    />
+                </div>
+
                 {filteredWithdrawals.length > 0 ? (
                     <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
                         <Table headers={['Date', 'Network', 'Gross', 'Processing', 'Net Credit', 'State']}>
@@ -663,7 +695,7 @@ const WithdrawFunds: React.FC = () => {
                     </div>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
-                        <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No settlement history found</p>
+                        <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No matching settlement entries found</p>
                     </div>
                 )}
             </div>

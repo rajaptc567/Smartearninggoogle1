@@ -75,10 +75,14 @@ const StarIcon = ({ filled = false, className = "" }) => (
     </svg>
 );
 
-// Reusable Payment Method Card Component - MAXIMIZED VISIBILITY & FIXED SPACING
+/**
+ * 📱 RESPONSIVE UI HARDENING
+ * Replaced fixed height 'h-40' with adaptive 'min-h-[10rem] h-auto'
+ * to prevent text clipping for providers with long names while 
+ * preserving the visual grid aesthetic.
+ */
 const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
-    <div className="bg-white dark:bg-gray-800 p-0 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col items-center w-36 h-40 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl group overflow-hidden">
-        {/* Logo container - Takes remaining space */}
+    <div className="bg-white dark:bg-gray-800 p-0 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col items-center w-36 min-h-[10rem] md:w-44 md:min-h-[12rem] h-auto transition-all duration-300 transform hover:scale-105 hover:shadow-2xl group overflow-hidden">
         <div className={`w-full flex-grow flex items-center justify-center p-3 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
             {pm.logoUrl ? (
                 <img src={pm.logoUrl} alt={pm.name} className="max-w-[85%] max-h-[85%] object-contain drop-shadow-md" title={pm.name} />
@@ -87,8 +91,7 @@ const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colo
             )}
         </div>
         
-        {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
-        <div className="w-full min-h-[44px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-2 border-t border-blue-500/50">
+        <div className="w-full min-h-[44px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-2 border-t border-blue-500/50 py-2">
             <span className="text-[11px] md:text-xs font-black uppercase tracking-widest text-white text-center leading-tight break-words w-full flex items-center justify-center">
                 {pm.name}
             </span>
@@ -588,7 +591,7 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
-                {/* REDESIGNED: Payment Methods Section (Optimized for space & fixed clipping) */}
+                {/* Payment Methods Section */}
                 {(showPaymentMethods || editMode) && (
                     <section className={`py-20 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden ${!showPaymentMethods && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showPaymentMethods && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
@@ -699,14 +702,14 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
-                {/* FAQ Section - SMART DISPLAY (Accordion Style) */}
+                {/* FAQ Section */}
                 {(showFAQ || editMode) && (
                     <section className={`py-24 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
                             <div className="text-center mb-16">
                                 <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter mb-4 uppercase">Featured Support Queries</h2>
-                                <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
+                                <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and advanced network mechanics.</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">

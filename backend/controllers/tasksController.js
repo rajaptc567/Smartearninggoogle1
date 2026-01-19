@@ -2,10 +2,85 @@
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
-import Notification from '../models/Notification.js';
-import { bucket } from '../config/db.js';
-import { Readable } from 'stream';
-import path from 'path';
+import mongoose from 'mongoose';
+
+// Utility for financial precision (Software-level integer handling)
+const scaleAmount = (val) => Math.round(val * 100);
+const descaleAmount = (val) => val / 100;
+
+export const completeTask = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { userId } = req.body;
+        const taskId = req.params.id;
+
+        // 1. Atomic Check & Increment for Global Limit
+        const task = await Task.findOneAndUpdate(
+            { 
+                _id: taskId,
+                status: 'Active',
+                $or: [
+                    { maxGlobalCompletions: 0 },
+                    { currentGlobalCompletions: { $lt: "$maxGlobalCompletions" } }
+                ]
+            },
+            { $inc: { currentGlobalCompletions: 1 } },
+            { session, new: true }
+        ).lean();
+
+        if (!task) {
+            throw new Error('Task limit reached. Reward no longer available.');
+        }
+
+        const user = await User.findById(userId).session(session);
+        if (!user) throw new Error('User not found');
+
+        // Check if user already did this task
+        const alreadyDone = user.completedTasks.some(t => t.taskId.toString() === taskId);
+        if (alreadyDone && task.frequency === 'Once') {
+            throw new Error('Task already completed.');
+        }
+
+        // 2. Precise Financial Calculation
+        const rewardAmount = task.rewardAmount || 0;
+        if (rewardAmount > 0) {
+            // Using precise integer math (Cents)
+            const balanceInCents = scaleAmount(user.walletBalance);
+            const rewardInCents = scaleAmount(rewardAmount);
+            const newBalance = descaleAmount(balanceInCents + rewardInCents);
+
+            user.walletBalance = newBalance;
+
+            await Transaction.create([{
+                userId: user._id,
+                userName: user.username,
+                type: 'Manual Credit',
+                amount: rewardAmount,
+                currency: user.currency,
+                description: `Reward: ${task.title}`,
+                status: 'Approved'
+            }], { session });
+        }
+
+        user.completedTasks.push({
+            taskId: task._id,
+            status: task.requireProof ? 'Pending' : 'Approved',
+            completedAt: new Date()
+        });
+
+        await user.save({ session });
+        await session.commitTransaction();
+
+        res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(400).json({ success: false, error: err.message });
+    } finally {
+        session.endSession();
+    }
+};
 
 export const getTasks = async (req, res) => {
     try {
@@ -48,160 +123,21 @@ export const deleteTask = async (req, res) => {
     }
 };
 
-// @desc    User submits task completion (Atomic Guard)
-export const completeTask = async (req, res) => {
-    try {
-        const { userId } = req.body;
-        const task = await Task.findById(req.params.id);
-        const user = await User.findById(userId);
-
-        if (!task || !user) return res.status(404).json({ success: false, error: 'User or Task not found' });
-
-        // INITIAL CHECK: Prevent processing if limit is obviously reached
-        if (task.maxGlobalCompletions > 0 && task.currentGlobalCompletions >= task.maxGlobalCompletions) {
-            return res.status(400).json({ success: false, error: 'Task limit has been reached.' });
-        }
-
-        const completionData = {
-            taskId: task._id,
-            completedAt: new Date(),
-            status: task.requireProof ? 'Pending' : 'Approved'
-        };
-
-        /**
-         * CASE 1: Instant Approval (No Proof Required)
-         * We must increment counter ATOMICALLY before paying.
-         */
-        if (!task.requireProof) {
-            const atomicUpdate = await Task.findOneAndUpdate(
-                { 
-                    _id: task._id, 
-                    $or: [
-                        { maxGlobalCompletions: 0 }, 
-                        { currentGlobalCompletions: { $lt: task.maxGlobalCompletions } }
-                    ]
-                },
-                { $inc: { currentGlobalCompletions: 1 } },
-                { new: true }
-            );
-
-            if (!atomicUpdate) {
-                return res.status(400).json({ success: false, error: 'Task limit reached just now.' });
-            }
-
-            // Limit successfully claimed, proceed with payment
-            if (task.rewardAmount > 0) {
-                await User.updateOne({ _id: user._id }, { $inc: { walletBalance: Number(task.rewardAmount.toFixed(2)) } });
-                await Transaction.create({
-                    userId: user._id, userName: user.username, currency: user.currency,
-                    type: 'Manual Credit', amount: task.rewardAmount,
-                    description: `Reward: ${task.title}`, status: 'Approved'
-                });
-            }
-        } 
-        /**
-         * CASE 2: Proof Submission (Requires Review)
-         * We don't increment the limit yet. The limit is claimed on Admin Approval.
-         */
-        else {
-            if (!req.file) return res.status(400).json({ success: false, error: 'Proof screenshot required.' });
-            
-            const filename = `proof_${Date.now()}_${Math.round(Math.random() * 1E9)}${path.extname(req.file.originalname)}`;
-            const readableStream = new Readable();
-            readableStream.push(req.file.buffer);
-            readableStream.push(null);
-
-            const uploadStream = bucket.openUploadStream(filename, { contentType: req.file.mimetype });
-            await new Promise((resolve, reject) => {
-                readableStream.pipe(uploadStream).on('error', reject).on('finish', resolve);
-            });
-
-            completionData.proofUrl = `/uploads/${filename}`;
-        }
-
-        user.completedTasks.push(completionData);
-        await user.save();
-        
-        global.appDataVersion = Date.now();
-        const updatedUser = await User.findById(userId);
-        res.status(200).json({ success: true, data: updatedUser });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
-};
-
-// @desc    Admin verifies submission (Atomic Guard)
-export const verifyTaskSubmission = async (req, res) => {
-    try {
-        const { userId, taskId } = req.params;
-        const { status, adminNotes } = req.body; 
-        const user = await User.findById(userId);
-        const task = await Task.findById(taskId);
-
-        const subIdx = user.completedTasks.findIndex(ct => ct.taskId.toString() === taskId && ct.status === 'Pending');
-        if (subIdx === -1) return res.status(400).json({ success: false, error: 'No pending submission found.' });
-
-        if (status === 'Approved') {
-            /**
-             * CRITICAL ATOMIC CHECK: 
-             * Ensure we don't exceed global limit during verification.
-             */
-            const atomicUpdate = await Task.findOneAndUpdate(
-                { 
-                    _id: task._id, 
-                    $or: [
-                        { maxGlobalCompletions: 0 }, 
-                        { currentGlobalCompletions: { $lt: task.maxGlobalCompletions } }
-                    ]
-                },
-                { $inc: { currentGlobalCompletions: 1 } },
-                { new: true }
-            );
-
-            if (!atomicUpdate) {
-                return res.status(400).json({ success: false, error: 'Cannot approve: Task global limit reached.' });
-            }
-
-            // Reward Payment
-            if (task.rewardAmount > 0) {
-                await User.updateOne({ _id: user._id }, { $inc: { walletBalance: Number(task.rewardAmount.toFixed(2)) } });
-                await Transaction.create({ 
-                    userId: user._id, userName: user.username, currency: user.currency, 
-                    type: 'Manual Credit', amount: task.rewardAmount, 
-                    description: `Verified Reward: ${task.title}`, status: 'Approved' 
-                });
-            }
-        }
-
-        user.completedTasks[subIdx].status = status;
-        user.completedTasks[subIdx].adminNotes = adminNotes;
-
-        await user.save();
-        global.appDataVersion = Date.now();
-        const updatedUser = await User.findById(userId);
-        res.status(200).json({ success: true, data: updatedUser });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
-};
-
 export const getPendingVerifications = async (req, res) => {
     try {
         const usersWithPending = await User.find({ 'completedTasks.status': 'Pending' }).select('username fullName currency completedTasks');
         const queue = [];
         
-        const host = req.get('host');
-        const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
-        const baseUrl = `${protocol}://${host}`;
-
         usersWithPending.forEach(u => {
             u.completedTasks.forEach(ct => {
                 if (ct.status === 'Pending') {
-                    const fullProofUrl = ct.proofUrl ? (ct.proofUrl.startsWith('http') ? ct.proofUrl : `${baseUrl}${ct.proofUrl}`) : null;
-                    
                     queue.push({
-                        userId: u._id, username: u.username, fullName: u.fullName, currency: u.currency,
-                        taskId: ct.taskId, proofUrl: fullProofUrl, completedAt: ct.completedAt, retryCount: ct.retryCount || 0
+                        userId: u._id,
+                        username: u.username,
+                        fullName: u.fullName,
+                        taskId: ct.taskId,
+                        proofUrl: ct.proofUrl,
+                        completedAt: ct.completedAt
                     });
                 }
             });
@@ -209,5 +145,46 @@ export const getPendingVerifications = async (req, res) => {
         res.status(200).json({ success: true, data: queue });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const verifyTaskSubmission = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { userId, taskId } = req.params;
+        const { status, adminNotes } = req.body;
+        
+        const user = await User.findById(userId).session(session);
+        const task = await Task.findById(taskId).session(session);
+
+        const idx = user.completedTasks.findIndex(ct => ct.taskId.toString() === taskId && ct.status === 'Pending');
+        if (idx === -1) throw new Error('Submission not found');
+
+        if (status === 'Approved' && task.rewardAmount > 0) {
+            const rewardInCents = scaleAmount(task.rewardAmount);
+            const balanceInCents = scaleAmount(user.walletBalance);
+            user.walletBalance = descaleAmount(balanceInCents + rewardInCents);
+
+            await Transaction.create([{
+                userId: user._id,
+                userName: user.username,
+                type: 'Manual Credit',
+                amount: task.rewardAmount,
+                currency: user.currency,
+                description: `Mission Verified: ${task.title}`,
+                status: 'Approved'
+            }], { session });
+        }
+
+        user.completedTasks[idx].status = status;
+        await user.save({ session });
+        await session.commitTransaction();
+        res.status(200).json({ success: true, data: user });
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(400).json({ success: false, error: err.message });
+    } finally {
+        session.endSession();
     }
 };

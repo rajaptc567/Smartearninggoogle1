@@ -1,8 +1,6 @@
 
-// ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
-// The base URL of your backend API is determined at runtime.
 function getApiBaseUrl() {
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -21,19 +19,24 @@ export function getUploadsBaseUrl() {
 
 const API_BASE_URL = getApiBaseUrl();
 
-
+/**
+ * 🛡️ SECURITY & STABILITY HARDENING
+ * Sanitize API responses and extract meaningful error messages.
+ */
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         if (!response.ok) {
+            // Priority 1: Error from server logic (e.g. balance low)
+            // Priority 2: Standard status text
             const error = (data && data.error) || response.statusText;
             throw new Error(error);
         }
         return data; 
     } else {
          const text = await response.text();
-         throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
+         throw new Error(`Technical Failure: ${response.status} ${response.statusText}. Please try again later.`);
     }
 };
 
@@ -44,7 +47,7 @@ export const getDataVersion = async (): Promise<number> => {
         const result = await handleResponse(response);
         return result.version;
     } catch (e) {
-        return 0; // Fallback to avoid error loops
+        return 0;
     }
 };
 

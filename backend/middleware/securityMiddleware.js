@@ -11,9 +11,29 @@ export const apiLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// 2. Helmet for secure headers
+/**
+ * 🛡️ SECURITY HARDENING: SECURE HEADERS & CSP
+ * Blocks unauthorized script execution and cross-site leaks.
+ * REMOVED: 'unsafe-inline' to prevent XSS.
+ */
 export const secureHeaders = helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://cdn.tailwindcss.com"],
+            styleSrc: ["'self'", "https://fonts.googleapis.com"],
+            imgSrc: ["'self'", "data:", "https:", "http:"],
+            connectSrc: ["'self'", "https://smartearning-api.onrender.com", "http://localhost:5000"],
+            frameSrc: ["'self'", "https://www.youtube.com"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: [],
+        },
+    },
+    hidePoweredBy: true,
+    xssFilter: true,
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
 // 3. Transparent Always-On CSRF Protection via Origin Verification
@@ -25,8 +45,6 @@ export const csrfCheck = (req, res, next) => {
         const referer = req.get('referer');
         const host = req.get('host');
 
-        // Logic: State changing requests MUST have a valid origin matching our frontend
-        // We use the env variable FRONTEND_URL or fallback to matching the current host if same-domain
         const allowedFrontend = process.env.FRONTEND_URL;
 
         if (origin) {
@@ -35,7 +53,6 @@ export const csrfCheck = (req, res, next) => {
                 return res.status(403).json({ success: false, error: 'CSRF Protection: Invalid request origin' });
             }
         } else if (!referer) {
-            // Block state-changing requests with NO origin AND NO referer
             return res.status(403).json({ success: false, error: 'CSRF Protection: Missing request identifiers' });
         }
     }

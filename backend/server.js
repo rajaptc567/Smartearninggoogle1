@@ -27,10 +27,13 @@ import taskRoutes from './routes/taskRoutes.js';
 
 dotenv.config();
 
-// CRITICAL SECURITY CHECK: Enforce JWT_SECRET in production
-if (!process.env.JWT_SECRET) {
-    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
-    process.exit(1);
+/**
+ * 🔒 SECURITY HARDENING: JWT SECRET VALIDATION
+ * Prevents the application from starting in a vulnerable state.
+ */
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret' || process.env.JWT_SECRET.length < 32) {
+    console.error('FATAL SECURITY ERROR: JWT_SECRET is missing, default, or too weak (min 32 chars).');
+    process.exit(1); 
 }
 
 global.appDataVersion = Date.now();
@@ -39,10 +42,8 @@ connectDB();
 
 const app = express();
 
-// Render/Proxy Support
 app.set('trust proxy', true);
 
-// SECURITY HARDENING - Restricted CORS
 const allowedOrigins = [
     process.env.FRONTEND_URL, 
     'http://localhost:3000',
@@ -67,7 +68,6 @@ app.use(csrfCheck);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// GridFS File Serving Route (Persistent Storage)
 app.get('/uploads/:filename', async (req, res) => {
     try {
         const files = await bucket.find({ filename: req.params.filename }).toArray();
@@ -82,7 +82,6 @@ app.get('/uploads/:filename', async (req, res) => {
     }
 });
 
-// SECURE ADMIN SEEDING
 const seedAdminUser = async () => {
     try {
         const adminEmail = process.env.ADMIN_EMAIL || 'studio56.pk@gmail.com';
