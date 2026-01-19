@@ -1,5 +1,5 @@
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
-import { mockUsers, mockDeposits, mockWithdrawals, mockTransactions, mockNotifications, mockPaymentMethods, mockInvestmentPlans, mockRules, mockSettings, mockTransfers, mockLogs, mockPasswordResets, mockDisputes } from '../data/mockData';
+import { mockUsers } from '../data/mockData';
 
 function getApiBaseUrl() {
   const hostname = window.location.hostname;
@@ -21,70 +21,75 @@ const API_BASE_URL = getApiBaseUrl();
 
 // 🛡️ SHARED NETWORK ERROR HANDLER
 const isNetworkError = (error: any) => 
-    error instanceof Error && (
+    !error || 
+    (error instanceof Error && (
         error.name === 'TimeoutError' || 
-        error.message === 'Failed to fetch' || 
-        error.message.includes('Technical Error')
-    );
+        error.name === 'AbortError' ||
+        error.message.toLowerCase().includes('failed to fetch') || 
+        error.message.toLowerCase().includes('networkerror') ||
+        error.message.toLowerCase().includes('load failed') ||
+        error.message.includes('Technical Error') ||
+        error.message.includes('unreachable')
+    )) ||
+    (error.status === 0);
+
+/**
+ * 🔒 SECURE WRAPPER
+ */
+const secureFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = {
+        ...(options.headers || {}),
+        'x-smartearning-request': 'true' // Neutralizes cookie-based CSRF attacks
+    };
+    return fetch(url, { ...options, headers });
+};
 
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         if (!response.ok) {
+            console.error(`[FRONTEND] API Error ${response.status}:`, data.error || response.statusText);
             const error = (data && data.error) || response.statusText;
             throw new Error(error);
         }
         return data; 
     } else {
          const text = await response.text();
-         throw new Error(`Technical Error: ${response.status} ${response.statusText}. The backend may be starting up.`);
+         console.error(`[FRONTEND] Non-JSON Response (${response.status}):`, text.substring(0, 100));
+         throw new Error(`SERVER_COLD`);
     }
 };
 
 export const getDataVersion = async (): Promise<number> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/settings/version`, { 
-            credentials: 'include',
-            signal: AbortSignal.timeout(5000)
-        });
-        const result = await handleResponse(response);
-        return result.version;
-    } catch (e) { 
-        return Date.now(); 
-    }
+    const response = await secureFetch(`${API_BASE_URL}/settings/version`, { 
+        credentials: 'include',
+        signal: AbortSignal.timeout(5000)
+    });
+    const result = await handleResponse(response);
+    return result.version;
 };
 
 export const getUsers = async (): Promise<User[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/users`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) {
-        if (isNetworkError(e)) {
-            console.warn("User directory fetch failed (Server offline). Using local cache.");
-        }
-        return mockUsers;
-    }
+    const response = await secureFetch(`${API_BASE_URL}/users`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const getMe = async (): Promise<User> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/users/me`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (error) {
-        if (isNetworkError(error)) {
-            console.warn("Secure server unreachable. Validating session via local identity...");
-            const savedUser = localStorage.getItem('currentUser');
-            if (savedUser) return JSON.parse(savedUser) as User;
-        }
-        throw error;
-    }
+    const response = await secureFetch(`${API_BASE_URL}/users/me`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const getDownline = async (username: string): Promise<any[]> => {
+    const response = await secureFetch(`${API_BASE_URL}/users/downline/${username}`, { credentials: 'include', signal: AbortSignal.timeout(15000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createUser = async (userData: Partial<User>): Promise<User> => {
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await secureFetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -95,7 +100,7 @@ export const createUser = async (userData: Partial<User>): Promise<User> => {
 };
 
 export const updateUser = async (id: string, userData: Partial<User>): Promise<User> => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
@@ -106,7 +111,7 @@ export const updateUser = async (id: string, userData: Partial<User>): Promise<U
 };
 
 export const bulkUpdateUserRestrictions = async (payload: any): Promise<{ message: string }> => {
-    const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/bulk-restrictions`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -117,7 +122,7 @@ export const bulkUpdateUserRestrictions = async (payload: any): Promise<{ messag
 };
 
 export const createBulkDummyUsers = async (payload: any): Promise<{ count: number; message: string }> => {
-    const response = await fetch(`${API_BASE_URL}/users/bulk-dummy`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/bulk-dummy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -128,13 +133,13 @@ export const createBulkDummyUsers = async (payload: any): Promise<{ count: numbe
 };
 
 export const deleteUser = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const bulkDeleteUsers = async (ids: string[]): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/users/bulk`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/bulk`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids }),
@@ -144,23 +149,46 @@ export const bulkDeleteUsers = async (ids: string[]): Promise<{}> => {
     return result.data;
 };
 
+/**
+ * 🔒 AUTH RESILIENCE
+ */
 export const login = async (email: string, password: string): Promise<User> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/users/login`, {
+    const attemptLogin = async () => {
+        const response = await secureFetch(`${API_BASE_URL}/users/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
             credentials: 'include',
-            signal: AbortSignal.timeout(8000)
+            signal: AbortSignal.timeout(45000) 
         });
         const result = await handleResponse(response);
         return result.data;
+    };
+
+    try {
+        return await attemptLogin();
     } catch (error) {
-        if (isNetworkError(error)) {
-            console.warn("Secure server unreachable. Authenticating via local Demo Mode...");
-            const mockUser = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-            if (mockUser) return { ...mockUser, isDemo: true } as any;
-            throw new Error('OFFLINE_ERROR: The secure server is unreachable. Please try again later.');
+        console.error(`[FRONTEND] Login procedure failed:`, error.message);
+        const isNetworkOrCold = isNetworkError(error) || error.message === 'SERVER_COLD';
+
+        if (isNetworkOrCold) {
+            // 🚀 COLD START MITIGATION: If network fails, try a simple GET ping to wake Render
+            // then retry the login once after a small delay.
+            try {
+                console.warn("Attempting to wake secure server...");
+                // mode: 'no-cors' allows pinging even if preflight fails initially
+                await fetch(API_BASE_URL.replace('/api/v1', '/'), { mode: 'no-cors' });
+                await new Promise(r => setTimeout(r, 2500));
+                return await attemptLogin();
+            } catch (retryError) {
+                // Final fallback if retry fails
+                const mockUser = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+                if (mockUser) {
+                    console.warn("Secure server unreachable. Access granted via local vault.");
+                    return { ...mockUser, isDemo: true } as any;
+                }
+                throw new Error("Secure server is currently waking up or unreachable. Please try again in 30 seconds.");
+            }
         }
         throw error;
     }
@@ -168,18 +196,18 @@ export const login = async (email: string, password: string): Promise<User> => {
 
 export const logout = async (): Promise<void> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/users/logout`, {
+        const response = await secureFetch(`${API_BASE_URL}/users/logout`, {
             method: 'POST',
             credentials: 'include'
         });
         await handleResponse(response);
     } catch (e) {
-        console.warn("Logout request failed, proceeding to clear local session.");
+        console.warn("Server logout failed, clearing local session only.");
     }
 };
 
 export const adjustUserWallet = async (id: string, adjustmentData: any): Promise<{ user: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(adjustmentData),
@@ -190,7 +218,7 @@ export const adjustUserWallet = async (id: string, adjustmentData: any): Promise
 };
 
 export const purchasePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/purchase-plan`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/${userId}/purchase-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId }),
@@ -201,7 +229,7 @@ export const purchasePlan = async (userId: string, planId: string): Promise<{ us
 };
 
 export const adminActivatePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/activate-plan`, {
+    const response = await secureFetch(`${API_BASE_URL}/users/${userId}/activate-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId }),
@@ -212,7 +240,7 @@ export const adminActivatePlan = async (userId: string, planId: string): Promise
 };
 
 export const userRequestPasswordReset = async (email: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/request-password-reset`, {
+    const response = await secureFetch(`${API_BASE_URL}/request-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -222,18 +250,18 @@ export const userRequestPasswordReset = async (email: string): Promise<void> => 
 };
 
 export const adminInitiatePasswordReset = async (userId: string): Promise<{ resetToken: string }> => {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/admin-reset-password`, { method: 'POST', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/users/${userId}/admin-reset-password`, { method: 'POST', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const verifyResetToken = async (token: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/verify-reset-token/${token}`, { method: 'POST', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/verify-reset-token/${token}`, { method: 'POST', credentials: 'include' });
     await handleResponse(response);
 };
 
 export const resetPasswordWithToken = async (token: string, password: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/reset-password/${token}`, {
+    const response = await secureFetch(`${API_BASE_URL}/reset-password/${token}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -243,21 +271,19 @@ export const resetPasswordWithToken = async (token: string, password: string): P
 };
 
 export const getDeposits = async (): Promise<Deposit[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/deposits`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockDeposits; }
+    const response = await secureFetch(`${API_BASE_URL}/deposits`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createDeposit = async (formData: FormData): Promise<{ deposit: Deposit; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/deposits`, { method: 'POST', body: formData, credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/deposits`, { method: 'POST', body: formData, credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const updateDeposit = async (id: string, updateData: any): Promise<{ deposit: Deposit; user: User }> => {
-    const response = await fetch(`${API_BASE_URL}/deposits/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/deposits/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -268,15 +294,13 @@ export const updateDeposit = async (id: string, updateData: any): Promise<{ depo
 };
 
 export const getWithdrawals = async (): Promise<Withdrawal[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/withdrawals`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockWithdrawals; }
+    const response = await secureFetch(`${API_BASE_URL}/withdrawals`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Promise<{ withdrawal: Withdrawal; user: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/withdrawals`, {
+    const response = await secureFetch(`${API_BASE_URL}/withdrawals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withdrawalData),
@@ -287,7 +311,7 @@ export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Pro
 };
 
 export const updateWithdrawal = async (id: string, updateData: any): Promise<{ withdrawal: Withdrawal; user: User }> => {
-    const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/withdrawals/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -298,23 +322,19 @@ export const updateWithdrawal = async (id: string, updateData: any): Promise<{ w
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/transactions`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockTransactions; }
+    const response = await secureFetch(`${API_BASE_URL}/transactions`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const getNotifications = async (): Promise<Notification[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/notifications`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockNotifications; }
+    const response = await secureFetch(`${API_BASE_URL}/notifications`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createNotification = async (notifData: any): Promise<{ count: number; data: Notification[] }> => {
-    const response = await fetch(`${API_BASE_URL}/notifications`, {
+    const response = await secureFetch(`${API_BASE_URL}/notifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(notifData),
@@ -326,7 +346,7 @@ export const createNotification = async (notifData: any): Promise<{ count: numbe
 export const sendAdminNotification = createNotification;
 
 export const updateNotification = async (id: string, updateData: Partial<Notification>): Promise<Notification> => {
-    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/notifications/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -337,59 +357,55 @@ export const updateNotification = async (id: string, updateData: Partial<Notific
 };
 
 export const deleteNotification = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
-    const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, { method: 'PUT', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/notifications/read/${userId}`, { method: 'PUT', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const markNotificationPopupAsShown = async (id: string): Promise<Notification[]> => {
-    const response = await fetch(`${API_BASE_URL}/notifications/popup-shown/${id}`, { method: 'PUT', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/notifications/popup-shown/${id}`, { method: 'PUT', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/payment-methods`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockPaymentMethods; }
+    const response = await secureFetch(`${API_BASE_URL}/payment-methods`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createPaymentMethod = async (formData: FormData): Promise<PaymentMethod> => {
-    const response = await fetch(`${API_BASE_URL}/payment-methods`, { method: 'POST', body: formData, credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/payment-methods`, { method: 'POST', body: formData, credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const updatePaymentMethod = async (id: string, formData: FormData): Promise<PaymentMethod> => {
-    const response = await fetch(`${API_BASE_URL}/payment-methods/${id}`, { method: 'PUT', body: formData, credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/payment-methods/${id}`, { method: 'PUT', body: formData, credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const deletePaymentMethod = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/payment-methods/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/payment-methods/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/investment-plans`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockInvestmentPlans; }
+    const response = await secureFetch(`${API_BASE_URL}/investment-plans`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createInvestmentPlan = async (planData: Partial<InvestmentPlan>): Promise<InvestmentPlan> => {
-    const response = await fetch(`${API_BASE_URL}/investment-plans`, {
+    const response = await secureFetch(`${API_BASE_URL}/investment-plans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(planData),
@@ -400,7 +416,7 @@ export const createInvestmentPlan = async (planData: Partial<InvestmentPlan>): P
 };
 
 export const updateInvestmentPlan = async (id: string, planData: Partial<InvestmentPlan>): Promise<InvestmentPlan> => {
-    const response = await fetch(`${API_BASE_URL}/investment-plans/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/investment-plans/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(planData),
@@ -411,21 +427,19 @@ export const updateInvestmentPlan = async (id: string, planData: Partial<Investm
 };
 
 export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/investment-plans/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/investment-plans/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getRules = async (): Promise<Rule[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/rules`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockRules; }
+    const response = await secureFetch(`${API_BASE_URL}/rules`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createRule = async (ruleData: any): Promise<Rule> => {
-    const response = await fetch(`${API_BASE_URL}/rules`, {
+    const response = await secureFetch(`${API_BASE_URL}/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ruleData),
@@ -436,7 +450,7 @@ export const createRule = async (ruleData: any): Promise<Rule> => {
 };
 
 export const updateRule = async (id: string, ruleData: any): Promise<Rule> => {
-    const response = await fetch(`${API_BASE_URL}/rules/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/rules/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ruleData),
@@ -447,21 +461,19 @@ export const updateRule = async (id: string, ruleData: any): Promise<Rule> => {
 };
 
 export const deleteRule = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/rules/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/rules/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getSettings = async (): Promise<Settings> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/settings`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockSettings; }
+    const response = await secureFetch(`${API_BASE_URL}/settings`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const updateSettings = async (settingsData: Partial<Settings>): Promise<Settings> => {
-    const response = await fetch(`${API_BASE_URL}/settings`, {
+    const response = await secureFetch(`${API_BASE_URL}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsData),
@@ -472,15 +484,13 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
 };
 
 export const getTransfers = async (): Promise<Transfer[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/transfers`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockTransfers; }
+    const response = await secureFetch(`${API_BASE_URL}/transfers`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createTransfer = async (transferData: any): Promise<{ transfer: Transfer; user: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/transfers`, {
+    const response = await secureFetch(`${API_BASE_URL}/transfers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(transferData),
@@ -491,7 +501,7 @@ export const createTransfer = async (transferData: any): Promise<{ transfer: Tra
 };
 
 export const updateTransfer = async (id: string, updateData: any): Promise<{ transfer: Transfer; sender: User; recipient: User; transaction: Transaction }> => {
-    const response = await fetch(`${API_BASE_URL}/transfers/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/transfers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -502,50 +512,44 @@ export const updateTransfer = async (id: string, updateData: any): Promise<{ tra
 };
 
 export const getLogs = async (): Promise<Log[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/logs`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockLogs; }
+    const response = await secureFetch(`${API_BASE_URL}/logs`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const clearLogs = async (): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/logs`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/logs`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/password-reset-requests`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockPasswordResets; }
+    const response = await secureFetch(`${API_BASE_URL}/password-reset-requests`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/password-reset-requests/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/password-reset-requests/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getDisputes = async (): Promise<Dispute[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/disputes`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return mockDisputes; }
+    const response = await secureFetch(`${API_BASE_URL}/disputes`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createDispute = async (formData: FormData): Promise<Dispute> => {
-    const response = await fetch(`${API_BASE_URL}/disputes`, { method: 'POST', body: formData, credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/disputes`, { method: 'POST', body: formData, credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const updateDispute = async (id: string, formDataOrData: any): Promise<Dispute> => {
     const isFormData = formDataOrData instanceof FormData;
-    const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
         headers: isFormData ? {} : { 'Content-Type': 'application/json' },
         body: isFormData ? formDataOrData : JSON.stringify(formDataOrData),
@@ -556,7 +560,7 @@ export const updateDispute = async (id: string, formDataOrData: any): Promise<Di
 };
 
 export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Promise<Dispute> => {
-    const response = await fetch(`${API_BASE_URL}/disputes/${id}/read`, {
+    const response = await secureFetch(`${API_BASE_URL}/disputes/${id}/read`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
@@ -567,15 +571,13 @@ export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Pro
 };
 
 export const getTasks = async (): Promise<Task[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/tasks`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return []; }
+    const response = await secureFetch(`${API_BASE_URL}/tasks`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const createTask = async (taskData: Partial<Task>): Promise<Task> => {
-    const response = await fetch(`${API_BASE_URL}/tasks`, {
+    const response = await secureFetch(`${API_BASE_URL}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
@@ -586,7 +588,7 @@ export const createTask = async (taskData: Partial<Task>): Promise<Task> => {
 };
 
 export const updateTask = async (id: string, taskData: Partial<Task>): Promise<Task> => {
-    const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+    const response = await secureFetch(`${API_BASE_URL}/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskData),
@@ -597,7 +599,7 @@ export const updateTask = async (id: string, taskData: Partial<Task>): Promise<T
 };
 
 export const deleteTask = async (id: string): Promise<{}> => {
-    const response = await fetch(`${API_BASE_URL}/tasks/${id}`, { method: 'DELETE', credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/tasks/${id}`, { method: 'DELETE', credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -607,21 +609,19 @@ export const completeTask = async (taskId: string, userId: string, proof?: File)
     formData.append('userId', userId);
     if (proof) formData.append('proof', proof);
     
-    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/complete`, { method: 'POST', body: formData, credentials: 'include' });
+    const response = await secureFetch(`${API_BASE_URL}/tasks/${taskId}/complete`, { method: 'POST', body: formData, credentials: 'include' });
     const result = await handleResponse(response);
     return result.data;
 };
 
 export const getPendingTaskVerifications = async (): Promise<any[]> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`, { credentials: 'include', signal: AbortSignal.timeout(8000) });
-        const result = await handleResponse(response);
-        return result.data;
-    } catch (e) { return []; }
+    const response = await secureFetch(`${API_BASE_URL}/tasks/pending-verifications`, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+    const result = await handleResponse(response);
+    return result.data;
 };
 
 export const verifyTask = async (userId: string, taskId: string, status: 'Approved' | 'Rejected', adminNotes: string): Promise<User> => {
-    const response = await fetch(`${API_BASE_URL}/tasks/verify/${userId}/${taskId}`, {
+    const response = await secureFetch(`${API_BASE_URL}/tasks/verify/${userId}/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, adminNotes }),

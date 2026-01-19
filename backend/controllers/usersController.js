@@ -20,113 +20,96 @@ const generateToken = (id) => {
 
 const safeRound = (val) => Number(Number(val).toFixed(2));
 
-const canReleaseCommission = async (commission, user, settings, allPlans) => {
-    if (commission.status !== 'Pending') return false;
-    let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
-    if (!targetPlanId) return false;
-    
-    if (settings.oneTimeCommissionPerGroup) {
-        const recurringPlanIds = settings.recurringCommissionPlanIds || [];
-        const hasRecurringPlan = (user.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
-        if (!hasRecurringPlan) {
-            const alreadyReceived = await Transaction.findOne({
-                userId: user._id, sourceUserId: commission.sourceUserId, type: 'Commission', status: 'Approved', _id: { $ne: commission._id }
-            });
-            if (alreadyReceived) {
-                commission.status = 'Rejected';
-                commission.description = `[Limit] One-time commission already received from @${commission.userName || 'referral'}.`;
-                await commission.save();
-                return false;
-            }
-        }
-    }
-    
-    let equivIds = [targetPlanId];
-    if (settings.planEquivalencyGroups) {
-        const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === targetPlanId || String(g.pkrPlanId) === targetPlanId || String(g.eurPlanId) === targetPlanId);
-        if (group) equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
-    }
-    
-    const qualifyingActivePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
-    if (settings.requirePlanMatchForCommission) {
-        if (!qualifyingActivePlan) return false;
-    } else if (settings.requireActivePlanForCommission) {
-        if ((user.activePlans || []).length === 0) return false;
-    }
-    
-    const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan?.planId));
-    if (commission.level === 1 && qualifyingActivePlan && planConfig) {
-        const limit = planConfig.directReferralLimit || 0;
-        if (limit > 0) {
-            const approvedCount = await Transaction.countDocuments({ userId: user._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
-            if (approvedCount >= limit) {
-                commission.status = 'Rejected';
-                commission.description = `[Overflow] Slot Limit reached for ${planConfig.name}.`;
-                await commission.save();
-                return false;
-            }
-        }
-    }
-    return true;
-};
-
-export const createUser = async (req, res) => {
+export const getDownline = async (req, res) => {
     try {
-        const { fullName, username, email, password, phone, sponsor, country } = req.body;
-        if (!country) return res.status(400).json({ success: false, error: 'Country is required.' });
-        
-        let sponsorUser = null;
-        if (sponsor) {
-            sponsorUser = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
-            if (!sponsorUser) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
-            req.body.sponsor = sponsorUser.username;
-        }
-        
-        req.body.activePlans = [];
-        req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
-        
-        const user = await User.create(req.body);
-        
-        if (sponsorUser) {
-            await Notification.create({
-                userId: sponsorUser._id,
-                subject: 'New Team Member!',
-                message: `Great news! @${user.username} has joined your network.`
-            });
-        }
-
-        await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
-        global.appDataVersion = Date.now();
-        res.status(201).json({ success: true, data: user });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+        const { username } = req.params;
+        const results = await User.aggregate([
+            { $match: { username: username } },
+            {
+                $graphLookup: {
+                    from: 'users',
+                    startWith: '$username',
+                    connectFromField: 'username',
+                    connectToField: 'sponsor',
+                    as: 'network',
+                    maxDepth: 10,
+                    depthField: 'level'
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    network: {
+                        _id: 1,
+                        username: 1,
+                        fullName: 1,
+                        status: 1,
+                        activePlans: 1,
+                        sponsor: 1,
+                        level: 1
+                    }
+                }
+            }
+        ]);
+        const network = results.length > 0 ? results[0].network : [];
+        res.status(200).json({ success: true, data: network });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
 };
 
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
+        console.log(`[LOGIN] Attempt for email: ${email}`);
+
         const user = await User.findOne({ email }).select('+password');
-        if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
-        if (user.status === 'Blocked' || user.restrictions?.login) return res.status(403).json({ success: false, error: 'Account restricted.' });
+        
+        if (!user) {
+            console.log(`[LOGIN] User not found: ${email}`);
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
+
+        console.log(`[LOGIN] User status: ${user.status}, Restricted: ${user.restrictions?.login}`);
+
+        if (user.status === 'Blocked' || user.restrictions?.login) {
+            console.log(`[LOGIN] Access denied for blocked user: ${email}`);
+            return res.status(403).json({ success: false, error: 'Account restricted.' });
+        }
+
+        const isMatch = await user.matchPassword(password);
+        console.log(`[LOGIN] Password match result: ${isMatch}`);
+
+        if (!isMatch) {
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
+        }
         
         const token = generateToken(user._id);
         const userData = user.toObject();
         delete userData.password;
         
+        const isProd = process.env.NODE_ENV === 'production';
+        
         res.cookie('token', token, {
             expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             httpOnly: true,
-            secure: true,
-            sameSite: 'none'
+            secure: isProd, // Hardening: Only secure in production to allow local testing
+            sameSite: isProd ? 'none' : 'lax'
         });
+
+        console.log(`[LOGIN] Successful for: ${user.username}, Session cookie set.`);
         res.status(200).json({ success: true, data: userData });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+    } catch (err) { 
+        console.error(`[LOGIN] Internal Error: ${err.message}`);
+        res.status(400).json({ success: false, error: err.message }); 
+    }
 };
 
 export const logoutUser = async (req, res) => {
     res.clearCookie('token', {
         httpOnly: true,
-        secure: true,
-        sameSite: 'none'
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
     });
     res.status(200).json({ success: true, message: 'Logged out successfully' });
 };
@@ -163,9 +146,6 @@ export const updateUser = async (req, res) => {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
         
-        /**
-         * 🛡️ PREVENT MASS ASSIGNMENT
-         */
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'superadmin');
         const isSelf = String(req.user.id) === String(userToUpdate._id);
 
@@ -173,13 +153,11 @@ export const updateUser = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Unauthorized profile update' });
         }
 
-        // 1. User/Self Allowlist
         const allowedProfileFields = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
         allowedProfileFields.forEach(field => {
             if (req.body[field] !== undefined) userToUpdate[field] = req.body[field];
         });
 
-        // 2. Admin Only Overrides
         if (isAdmin) {
             if (req.body.status) userToUpdate.status = req.body.status;
             if (req.body.restrictions) userToUpdate.restrictions = req.body.restrictions;
@@ -188,15 +166,72 @@ export const updateUser = async (req, res) => {
             if (req.body.activePlans) userToUpdate.activePlans = req.body.activePlans;
         }
 
-        if (req.body.password) userToUpdate.password = req.body.password;
+        /**
+         * 🔒 PASSWORD HARDENING
+         * Prevents blanking out passwords or re-hashing existing hashes 
+         * during standard profile updates.
+         */
+        if (req.body.password && req.body.password.trim().length >= 6) {
+            userToUpdate.password = req.body.password;
+        }
 
         let updatedUser = await userToUpdate.save();
 
-        // Commission Release Logic
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
         let releasedAmount = 0;
+        
+        const canReleaseCommission = async (commission, user, settings, allPlans) => {
+            if (commission.status !== 'Pending') return false;
+            let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
+            if (!targetPlanId) return false;
+            
+            if (settings.oneTimeCommissionPerGroup) {
+                const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+                const hasRecurringPlan = (user.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
+                if (!hasRecurringPlan) {
+                    const alreadyReceived = await Transaction.findOne({
+                        userId: user._id, sourceUserId: commission.sourceUserId, type: 'Commission', status: 'Approved', _id: { $ne: commission._id }
+                    });
+                    if (alreadyReceived) {
+                        commission.status = 'Rejected';
+                        commission.description = `[Limit] One-time commission already received from @${commission.userName || 'referral'}.`;
+                        await commission.save();
+                        return false;
+                    }
+                }
+            }
+            
+            let equivIds = [targetPlanId];
+            if (settings.planEquivalencyGroups) {
+                const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === targetPlanId || String(g.pkrPlanId) === targetPlanId || String(g.eurPlanId) === targetPlanId);
+                if (group) equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+            }
+            
+            const qualifyingActivePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+            if (settings.requirePlanMatchForCommission) {
+                if (!qualifyingActivePlan) return false;
+            } else if (settings.requireActivePlanForCommission) {
+                if ((user.activePlans || []).length === 0) return false;
+            }
+            
+            const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan?.planId));
+            if (commission.level === 1 && qualifyingActivePlan && planConfig) {
+                const limit = planConfig.directReferralLimit || 0;
+                if (limit > 0) {
+                    const approvedCount = await Transaction.countDocuments({ userId: user._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+                    if (approvedCount >= limit) {
+                        commission.status = 'Rejected';
+                        commission.description = `[Overflow] Slot Limit reached for ${planConfig.name}.`;
+                        await commission.save();
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
+
         for (const comm of pendingCommissions) {
             if (await canReleaseCommission(comm, updatedUser, settings, allPlans)) {
                 comm.status = 'Approved'; 
@@ -205,6 +240,7 @@ export const updateUser = async (req, res) => {
                 releasedAmount = safeRound(releasedAmount + comm.amount);
             }
         }
+
         if (releasedAmount > 0) {
             updatedUser = await User.findByIdAndUpdate(updatedUser._id, { $inc: { walletBalance: releasedAmount } }, { new: true });
             await Notification.create({ 
@@ -218,16 +254,68 @@ export const updateUser = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-export const createBulkDummyUsers = async (req, res) => {
+export const createUser = async (req, res) => {
     try {
-        res.status(200).json({
-            success: false,
-            message: "Bulk dummy user creation is currently disabled for security reasons."
-        });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
+        const { fullName, username, email, password, phone, sponsor, country } = req.body;
+        if (!country) return res.status(400).json({ success: false, error: 'Country is required.' });
+        
+        let sponsorUser = null;
+        if (sponsor) {
+            sponsorUser = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
+            if (!sponsorUser) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
+            req.body.sponsor = sponsorUser.username;
+        }
+        
+        req.body.activePlans = [];
+        req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
+        
+        const user = await User.create(req.body);
+        
+        if (sponsorUser) {
+            await Notification.create({
+                userId: sponsorUser._id,
+                subject: 'New Team Member!',
+                message: `Great news! @${user.username} has joined your network.`
+            });
+        }
+
+        await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
+        global.appDataVersion = Date.now();
+        res.status(201).json({ success: true, data: user });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
+
+export const adjustWallet = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { amount, description } = req.body;
+        const safeAmt = safeRound(amount);
+        
+        const user = await User.findByIdAndUpdate(req.params.id, { $inc: { walletBalance: safeAmt } }, { session, new: true });
+        if (!user) throw new Error('User not found');
+        
+        await Notification.create([{
+            userId: user._id,
+            subject: 'Wallet Adjusted',
+            message: `Admin has ${safeAmt > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(safeAmt)}. Reason: ${description || 'Manual adjustment'}`
+        }], { session });
+
+        const transaction = await Transaction.create([{ 
+            userId: user._id, userName: user.username, currency: user.currency, type: safeAmt > 0 ? 'Manual Credit' : 'Manual Debit', 
+            amount: safeAmt, description: description || 'Admin manual adjustment', status: 'Approved' 
+        }], { session });
+        
+        await session.commitTransaction();
+        global.appDataVersion = Date.now();
+        res.status(200).json({ success: true, data: { user, transaction: transaction[0] }});
+    } catch (err) {
+        await session.abortTransaction();
+        res.status(400).json({ success: false, error: err.message });
+    } finally {
+        session.endSession();
+    }
+}
 
 export const adminActivatePlan = async (req, res) => {
     const session = await mongoose.startSession();
@@ -275,25 +363,6 @@ export const purchasePlan = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     } finally { session.endSession(); }
 };
-
-export const adjustWallet = async (req, res) => {
-    try {
-        const { amount, description } = req.body;
-        const safeAmt = safeRound(amount);
-        const user = await User.findByIdAndUpdate(req.params.id, { $inc: { walletBalance: safeAmt } }, { new: true });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        
-        await Notification.create({
-            userId: user._id,
-            subject: 'Wallet Adjusted',
-            message: `Admin has ${safeAmt > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(safeAmt)}. Reason: ${description || 'Manual adjustment'}`
-        });
-
-        const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: safeAmt > 0 ? 'Manual Credit' : 'Manual Debit', amount: safeAmt, description: description || 'Admin manual adjustment', status: 'Approved' });
-        global.appDataVersion = Date.now();
-        res.status(200).json({ success: true, data: { user, transaction }});
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
-}
 
 export const bulkUpdateRestrictions = async (req, res) => {
     try {
@@ -389,4 +458,15 @@ export const resetPasswordWithToken = async (req, res) => {
         await user.save();
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
+};
+
+export const createBulkDummyUsers = async (req, res) => {
+    try {
+        res.status(200).json({
+            success: false,
+            message: "Bulk dummy user creation is currently disabled for security reasons."
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
 };

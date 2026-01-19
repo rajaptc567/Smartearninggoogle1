@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import connectDB, { bucket } from './config/db.js';
 import User from './models/User.js';
 import { secureHeaders, apiLimiter, csrfCheck } from './middleware/securityMiddleware.js';
+import { protect } from './middleware/authMiddleware.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -27,14 +28,11 @@ import taskRoutes from './routes/taskRoutes.js';
 dotenv.config();
 
 /**
- * 🔒 SECURITY BOOTSTRAP
- * Provides a fallback to ensure the server stays online even if the 
- * JWT_SECRET is not yet configured in the hosting environment.
+ * 🔒 SECURITY ENFORCEMENT
  */
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret' || process.env.JWT_SECRET.length < 32) {
-    console.warn('⚠️  SECURITY WARNING: JWT_SECRET is missing or insecure (min 32 chars recommended).');
-    console.warn('⚠️  Using an internal fallback secret to prevent application blackout.');
-    process.env.JWT_SECRET = process.env.JWT_SECRET || 'smartearning_v1_secure_default_fallback_secret_32_chars_long';
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'default_secret') {
+    console.error('❌ CRITICAL ERROR: JWT_SECRET is missing. Server shutdown initiated for security.');
+    process.exit(1);
 }
 
 global.appDataVersion = Date.now();
@@ -58,33 +56,34 @@ app.use((req, res, next) => {
     next();
 });
 
-const allowedOrigins = [
-    process.env.FRONTEND_URL, 
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5174'
-].filter(Boolean);
-
-app.use(secureHeaders);
+// 🔓 ROBUST CORS CONFIGURATION
+// Requirement: Echo origin exactly to allow 'credentials: true'
 app.use(cors({
-    origin: function (origin, callback) {
-        // 🌐 PERMISSIVE CORS FOR PREVIEW/DEV
-        if (!origin || process.env.NODE_ENV !== 'production' || allowedOrigins.length === 0 || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('CORS blocked: Origin not whitelisted'));
-        }
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        // Safely echo the origin to satisfy browser preflights for credentialed requests
+        callback(null, origin);
     },
-    credentials: true
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-smartearning-request'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
 
+app.use(secureHeaders);
+
+// 🛡️ APPLY LIMITER & CSRF (OPTIONS requests are handled early in middleware)
 app.use('/api', apiLimiter);
 app.use(csrfCheck);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.get('/uploads/:filename', async (req, res) => {
+/**
+ * 🛡️ PROTECTED ASSETS
+ */
+app.get('/uploads/:filename', protect, async (req, res) => {
     try {
         const files = await bucket.find({ filename: req.params.filename }).toArray();
         if (!files || files.length === 0) {

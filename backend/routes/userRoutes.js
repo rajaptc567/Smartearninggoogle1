@@ -17,7 +17,8 @@ import {
     userRequestPasswordReset,
     verifyAndStartResetTimer,
     bulkUpdateRestrictions,
-    createBulkDummyUsers
+    createBulkDummyUsers,
+    getDownline
 } from '../controllers/usersController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import { validate } from '../middleware/validationMiddleware.js';
@@ -31,6 +32,8 @@ router.route('/')
 router.post('/login', validate('login'), loginUser);
 router.post('/logout', logoutUser);
 router.get('/me', protect, getMe);
+
+router.get('/downline/:username', protect, getDownline);
 
 router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);

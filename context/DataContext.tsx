@@ -1,4 +1,4 @@
-import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect, useRef, useState } from 'react';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
@@ -22,6 +22,7 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
+    isOffline?: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -113,10 +114,12 @@ const initialState: AppState = {
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
+    isOffline: false
 };
 
 type Action =
     | { type: 'SET_ALL_DATA'; payload: Partial<AppState> }
+    | { type: 'SET_OFFLINE_STATE'; payload: boolean }
     | { type: 'SET_USERS'; payload: User[] }
     | { type: 'ADD_USER'; payload: User }
     | { type: 'UPDATE_USER'; payload: User }
@@ -183,12 +186,15 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     let newState: AppState;
 
     switch (action.type) {
+        case 'SET_OFFLINE_STATE':
+            return { ...state, isOffline: action.payload };
+
         case 'SET_ALL_DATA':
             const sanitizedPayload = { ...action.payload };
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
             }
-            newState = { ...state, ...sanitizedPayload };
+            newState = { ...state, ...sanitizedPayload, isOffline: false };
             break;
 
         case 'SET_CURRENT_USER':
@@ -197,7 +203,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                     localStorage.setItem('currentUser', JSON.stringify(action.payload));
                 } else {
                     localStorage.removeItem('currentUser');
-                    localStorage.removeItem('app_cache');
                 }
             } catch (error) {
                 console.error("Could not access localStorage:", error);
@@ -287,17 +292,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return state;
     }
 
-    if (newState.currentUser) {
-        try {
-            localStorage.setItem('app_cache', JSON.stringify({
-                ...newState,
-                currentUser: state.currentUser 
-            }));
-        } catch (e) {
-            console.warn("Failed to update app cache", e);
-        }
-    }
-
     return newState;
 };
 
@@ -306,27 +300,17 @@ export const DataContext = createContext<{ state: AppState; dispatch: React.Disp
     dispatch: () => null,
 });
 
+/**
+ * 🛡️ IDENTITY VERIFICATION HARDENING
+ * We no longer immediately trust localStorage. The fetchData loop will 
+ * clear the user if the server rejects the session token.
+ */
 const initializer = (initialState: AppState) => {
     try {
         const savedUser = localStorage.getItem('currentUser');
-        const appCache = localStorage.getItem('app_cache');
-        
-        let initialData = initialState;
-        
-        if (appCache) {
-            try {
-                const parsedCache = JSON.parse(appCache);
-                initialData = { ...initialData, ...parsedCache };
-            } catch (e) {
-                console.warn("Invalid app cache");
-            }
-        }
-
         if (savedUser) {
-            initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
+            return { ...initialState, currentUser: JSON.parse(savedUser) as User };
         }
-        
-        return initialData;
     } catch (error) {
         console.error("Could not parse user from localStorage", error);
     }
@@ -341,52 +325,47 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
 
-    // Initial Guarded Fetch
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!state.currentUser) return;
+    const fetchData = async () => {
+        if (!state.currentUser) return;
 
-            try {
-                // 1. Sync User Session First
-                const freshUser = await getMe();
-                dispatch({ type: 'SET_CURRENT_USER', payload: freshUser });
+        try {
+            // 🛡️ SYNC USER IDENTITY (Mandatory Server Check)
+            const freshUser = await getMe();
+            dispatch({ type: 'SET_CURRENT_USER', payload: freshUser });
 
-                // 2. Fetch Dependent Data
-                const [
+            const [
+                users, deposits, withdrawals, transactions, notifications, paymentMethods, 
+                investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                currentVersion
+            ] = await Promise.all([
+                getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                getDataVersion()
+            ]);
+            
+            lastVersionRef.current = currentVersion;
+
+            dispatch({ 
+                type: 'SET_ALL_DATA', 
+                payload: { 
                     users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
-                    currentVersion
-                ] = await Promise.all([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
-                    getDataVersion()
-                ]);
-                
-                lastVersionRef.current = currentVersion;
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                } 
+            });
+            dispatch({ type: 'SET_OFFLINE_STATE', payload: false });
+        } catch (error) {
+            console.error("Data fetch failed:", error.message);
+            dispatch({ type: 'SET_OFFLINE_STATE', payload: true });
 
-                dispatch({ 
-                    type: 'SET_ALL_DATA', 
-                    payload: { 
-                        users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
-                    } 
-                });
-            } catch (error) {
-                const isFetchFailure = error.message.includes('Failed to fetch') || error.message.includes('Technical Error');
-                
-                if (isFetchFailure) {
-                    console.warn("Guarded initial fetch failed: Server offline. Continuing with local data.");
-                } else {
-                    console.error("Guarded initial fetch failed:", error.message);
-                }
-
-                // IF 401: Logout
-                if (error.message.includes('401') || error.message.includes('authorized')) {
-                    dispatch({ type: 'SET_CURRENT_USER', payload: null });
-                }
+            // 🛡️ SESSION INVALIDATION
+            // If the server explicitly rejects the token, clear local state immediately.
+            if (error.message.includes('401') || error.message.includes('authorized') || error.message.includes('identity unknown')) {
+                dispatch({ type: 'SET_CURRENT_USER', payload: null });
             }
-        };
+        }
+    };
 
+    useEffect(() => {
         fetchData();
     }, [state.currentUser?._id]); 
 
@@ -404,25 +383,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    lastVersionRef.current = serverVersion;
-                    const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                    ]);
-                    dispatch({ 
-                        type: 'SET_ALL_DATA', 
-                        payload: { 
-                            users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
-                            investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
-                        } 
-                    });
+                    fetchData();
                 }
+                dispatch({ type: 'SET_OFFLINE_STATE', payload: false });
             } catch (err) {
+                dispatch({ type: 'SET_OFFLINE_STATE', payload: true });
                 if (err.message.includes('401')) {
                     dispatch({ type: 'SET_CURRENT_USER', payload: null });
                 }
             }
-        }, 30000); 
+        }, 15000); 
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);

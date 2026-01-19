@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -12,7 +11,6 @@ const Layout: React.FC = () => {
 
   useEffect(() => {
     // SECURITY CHECK: Ensure user is logged in AND is authorized.
-    // Allow if username is 'admin' OR if email is the master admin email.
     const isAdmin = state.currentUser && (
       state.currentUser.username === 'admin' || 
       state.currentUser.email === 'studio56.pk@gmail.com'
@@ -23,7 +21,6 @@ const Layout: React.FC = () => {
     }
   }, [state.currentUser, navigate]);
 
-  // Prevent rendering if not authorized (avoid flash of content)
   const isAdmin = state.currentUser && (
     state.currentUser.username === 'admin' || 
     state.currentUser.email === 'studio56.pk@gmail.com'
@@ -37,6 +34,14 @@ const Layout: React.FC = () => {
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
       <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
+        
+        {state.isOffline && (
+            <div className="bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.2em] py-1.5 px-4 text-center animate-pulse z-[60]">
+                ⚠️ Secure Database Unreachable - Showing Cached System State
+                <button onClick={() => window.location.reload()} className="ml-4 underline hover:text-red-200">Retry Connection</button>
+            </div>
+        )}
+
         <Header setSidebarOpen={setSidebarOpen} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           <Outlet />
