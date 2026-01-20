@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { User, Status, UserRestrictions, InvestmentPlan, formatCurrency, countries, Currency, Deposit, Withdrawal, Transfer, Transaction, Log, ActivePlan, currencySymbols } from '../types';
 import Table from '../components/ui/Table';
@@ -35,6 +34,10 @@ const Users: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState('');
     const [planFilter, setPlanFilter] = useState('');
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
 
     // Selection State
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -205,6 +208,19 @@ const Users: React.FC = () => {
         });
     }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
 
+    // Reset pagination on filter change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, planFilter, currencyFilter, itemsPerPage]);
+
+    // Pagination Calculation
+    const totalItems = filteredUsers.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedUsers = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredUsers.slice(start, start + itemsPerPage);
+    }, [filteredUsers, currentPage, itemsPerPage]);
+
     // Check if any plan for a user has reached its limit
     const getLimitStatus = useCallback((user: User) => {
         if (!user.activePlans || user.activePlans.length === 0) return null;
@@ -252,26 +268,39 @@ const Users: React.FC = () => {
         });
     };
 
-    const handleSelectAll = () => {
-        const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
-        if (areAllFilteredSelected) {
-            const filteredIds = new Set(filteredUsers.map(u => u._id));
-            setSelectedUserIds(prev => prev.filter(id => !filteredIds.has(id)));
+    const handleSelectAllOnPage = () => {
+        const areAllOnPageSelected = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUserIds.includes(u._id));
+        if (areAllOnPageSelected) {
+            const pageIds = new Set(paginatedUsers.map(u => u._id));
+            setSelectedUserIds(prev => prev.filter(id => !pageIds.has(id)));
         } else {
             const currentSelectedSet = new Set(selectedUserIds);
-            filteredUsers.forEach(u => currentSelectedSet.add(u._id));
+            paginatedUsers.forEach(u => currentSelectedSet.add(u._id));
             setSelectedUserIds(Array.from(currentSelectedSet));
         }
     };
 
     const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
-    const areAllFilteredSelected = filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u._id));
+    const areAllOnPageSelected = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUserIds.includes(u._id));
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management ({filteredUsers.length})</h2>
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
+                     <div className="flex items-center gap-2 mr-2">
+                        <label className="text-xs font-bold uppercase text-gray-400 whitespace-nowrap">Show:</label>
+                        <select 
+                            value={itemsPerPage} 
+                            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm py-1 shadow-sm focus:ring-blue-500"
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
                      <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -349,8 +378,8 @@ const Users: React.FC = () => {
                                     <th className="px-4 py-3 w-10">
                                         <input
                                             type="checkbox"
-                                            checked={areAllFilteredSelected && filteredUsers.length > 0}
-                                            onChange={handleSelectAll}
+                                            checked={areAllOnPageSelected && paginatedUsers.length > 0}
+                                            onChange={handleSelectAllOnPage}
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </th>
@@ -360,7 +389,7 @@ const Users: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y dark:divide-gray-700 dark:bg-gray-800">
-                                {filteredUsers.map((user: User) => {
+                                {paginatedUsers.map((user: User) => {
                                     const limitStatus = getLimitStatus(user);
                                     return (
                                     <tr key={user._id} className={`text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${selectedUserIds.includes(user._id) ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
@@ -428,6 +457,57 @@ const Users: React.FC = () => {
                     </div>
                 </div>
              )}
+
+            {/* Pagination Footer */}
+            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4 border-t dark:border-gray-700 pt-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                    Showing <span className="font-bold text-gray-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold text-gray-900 dark:text-white">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of <span className="font-bold text-gray-900 dark:text-white">{totalItems}</span> members
+                </div>
+                <div className="flex gap-2">
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        className="rounded-xl px-4"
+                    >
+                        &larr; Prev
+                    </Button>
+                    <div className="flex gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum = i + 1;
+                            if (totalPages > 5 && currentPage > 3) {
+                                pageNum = currentPage - 3 + i + 1;
+                                if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                            }
+                            if (pageNum <= 0) return null;
+                            return (
+                                <button
+                                    key={pageNum}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                        currentPage === pageNum 
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                    }`}
+                                >
+                                    {pageNum}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        disabled={currentPage === totalPages || totalPages === 0}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        className="rounded-xl px-4"
+                    >
+                        Next &rarr;
+                    </Button>
+                </div>
+            </div>
+
             {isUserManagementModalOpen && (
                 <UserManagementModal 
                     user={managingUser}
