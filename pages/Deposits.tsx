@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Deposit, Status, formatCurrency, Currency } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
@@ -29,6 +28,10 @@ const Deposits: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState('');
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
+
     const UPLOADS_URL = getUploadsBaseUrl();
 
     useEffect(() => {
@@ -39,19 +42,33 @@ const Deposits: React.FC = () => {
     }, [selectedDeposit]);
 
     // Filter Logic
-    const filteredDeposits = deposits.filter(deposit => {
-        const matchesSearch = 
-            deposit._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            deposit.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            deposit.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            deposit.amount.toString().includes(searchTerm);
-        
-        const matchesStatus = statusFilter ? deposit.status === statusFilter : true;
+    const filteredDeposits = useMemo(() => {
+        return deposits.filter(deposit => {
+            const matchesSearch = 
+                deposit._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                deposit.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                deposit.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                deposit.amount.toString().includes(searchTerm);
+            
+            const matchesStatus = statusFilter ? deposit.status === statusFilter : true;
+            const matchesCurrency = currencyFilter ? deposit.currency?.toUpperCase() === currencyFilter : true;
 
-        const matchesCurrency = currencyFilter ? deposit.currency?.toUpperCase() === currencyFilter : true;
+            return matchesSearch && matchesStatus && matchesCurrency;
+        });
+    }, [deposits, searchTerm, statusFilter, currencyFilter]);
 
-        return matchesSearch && matchesStatus && matchesCurrency;
-    });
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, currencyFilter, itemsPerPage]);
+
+    // Pagination Calculation
+    const totalItems = filteredDeposits.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedDeposits = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredDeposits.slice(start, start + itemsPerPage);
+    }, [filteredDeposits, currentPage, itemsPerPage]);
 
     const handleSaveChanges = async () => {
         if (selectedDeposit) {
@@ -61,12 +78,8 @@ const Deposits: React.FC = () => {
                     status: currentStatus,
                     adminNotes: adminNotes,
                 });
-                // The API now returns the updated deposit and user
-                // FIX: The API returns a complex object. Dispatch separate actions to update deposit and user state.
                 dispatch({ type: 'UPDATE_DEPOSIT', payload: result.deposit });
                 dispatch({ type: 'UPDATE_USER', payload: result.user });
-                // We should also refetch transactions and notifications to see changes
-                // For simplicity, we can let the user refresh or build a refetch mechanism
                 handleCloseDetailModal();
             } catch (error) {
                 console.error("Failed to update deposit:", error);
@@ -77,7 +90,6 @@ const Deposits: React.FC = () => {
         }
     };
 
-    // Helper to determine correct image source (Base64 vs File Path)
     const getReceiptSrc = (url: string) => {
         if (url.startsWith('data:')) return url;
         return `${UPLOADS_URL}${url}`;
@@ -109,7 +121,20 @@ const Deposits: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Deposit Requests</h2>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-center">
+                    <div className="flex items-center gap-2 mr-2">
+                        <label className="text-xs font-bold uppercase text-gray-400 whitespace-nowrap">Show:</label>
+                        <select 
+                            value={itemsPerPage} 
+                            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm py-1 shadow-sm focus:ring-blue-500"
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
                     <select 
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -139,32 +164,85 @@ const Deposits: React.FC = () => {
                     />
                 </div>
             </div>
-            <Table headers={tableHeaders}>
-                {filteredDeposits.map((deposit: Deposit) => (
-                    <tr 
-                      key={deposit._id} 
-                      className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
-                      onClick={() => handleRowClick(deposit)}
-                    >
-                        <td className="px-4 py-3 text-xs font-mono">{deposit._id.substring(0, 8)}...</td>
-                        <td className="px-4 py-3">{deposit.userName}</td>
-                        <td className="px-4 py-3">{formatCurrency(deposit.amount, deposit.currency)}</td>
-                        <td className="px-4 py-3">{deposit.method}</td>
-                        <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
-                        <td className="px-4 py-3">
-                            {deposit.receiptUrl ? (
-                                <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    <img src={getReceiptSrc(deposit.receiptUrl)} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
-                                </button>
-                            ) : (
-                                'N/A'
-                            )}
-                        </td>
-                        <td className="px-4 py-3"><Badge status={deposit.status} /></td>
-                        <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
-                    </tr>
-                ))}
-            </Table>
+
+            <div className="space-y-4">
+                <Table headers={tableHeaders}>
+                    {paginatedDeposits.map((deposit: Deposit) => (
+                        <tr 
+                        key={deposit._id} 
+                        className="text-gray-700 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150"
+                        onClick={() => handleRowClick(deposit)}
+                        >
+                            <td className="px-4 py-3 text-xs font-mono">{deposit._id.substring(0, 8)}...</td>
+                            <td className="px-4 py-3">{deposit.userName}</td>
+                            <td className="px-4 py-3">{formatCurrency(deposit.amount, deposit.currency)}</td>
+                            <td className="px-4 py-3">{deposit.method}</td>
+                            <td className="px-4 py-3 text-xs font-mono">{deposit.transactionId}</td>
+                            <td className="px-4 py-3">
+                                {deposit.receiptUrl ? (
+                                    <button onClick={(e) => handleViewReceipt(e, deposit.receiptUrl!)} className="focus:outline-none rounded-md focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                        <img src={getReceiptSrc(deposit.receiptUrl)} alt="Receipt thumbnail" className="h-10 w-16 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity" />
+                                    </button>
+                                ) : (
+                                    'N/A'
+                                )}
+                            </td>
+                            <td className="px-4 py-3"><Badge status={deposit.status} /></td>
+                            <td className="px-4 py-3 text-sm">{new Date(deposit.date).toLocaleDateString()}</td>
+                        </tr>
+                    ))}
+                </Table>
+
+                {/* Pagination Footer */}
+                <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4 border-t dark:border-gray-700 pt-4">
+                    <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                        Showing <span className="font-bold text-gray-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold text-gray-900 dark:text-white">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of <span className="font-bold text-gray-900 dark:text-white">{totalItems}</span> deposits
+                    </div>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            className="rounded-xl px-4"
+                        >
+                            &larr; Prev
+                        </Button>
+                        <div className="flex gap-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum = i + 1;
+                                if (totalPages > 5 && currentPage > 3) {
+                                    pageNum = currentPage - 3 + i + 1;
+                                    if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                }
+                                if (pageNum <= 0) return null;
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                            currentPage === pageNum 
+                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                        }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            className="rounded-xl px-4"
+                        >
+                            Next &rarr;
+                        </Button>
+                    </div>
+                </div>
+            </div>
 
             <Modal isOpen={isImageModalOpen} onClose={handleCloseImageModal}>
                 {selectedReceipt && (

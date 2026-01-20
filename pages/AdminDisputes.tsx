@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../hooks/useData';
 import { Dispute, Status, User } from '../types';
@@ -23,6 +22,10 @@ const AdminDisputes: React.FC = () => {
     // Search & Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
     
     // Selection State
     const [selectedDisputeIds, setSelectedDisputeIds] = useState<string[]>([]);
@@ -68,6 +71,19 @@ const AdminDisputes: React.FC = () => {
         return matchesSearch && matchesStatus;
     }), [disputes, searchTerm, statusFilter]);
 
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, itemsPerPage]);
+
+    // Pagination Calculation
+    const totalItems = filteredDisputes.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedDisputes = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredDisputes.slice(start, start + itemsPerPage);
+    }, [filteredDisputes, currentPage, itemsPerPage]);
+
     // Selection Logic
     const handleToggleSelect = (id: string) => {
         setSelectedDisputeIds(prev => {
@@ -78,15 +94,15 @@ const AdminDisputes: React.FC = () => {
         });
     };
 
-    const areAllFilteredSelected = useMemo(() => {
-        return filteredDisputes.length > 0 && filteredDisputes.every(d => selectedDisputeIds.includes(d._id));
-    }, [filteredDisputes, selectedDisputeIds]);
+    const areAllVisibleSelected = useMemo(() => {
+        return paginatedDisputes.length > 0 && paginatedDisputes.every(d => selectedDisputeIds.includes(d._id));
+    }, [paginatedDisputes, selectedDisputeIds]);
 
-    const handleSelectAllFiltered = () => {
-        if (areAllFilteredSelected) {
-            setSelectedDisputeIds(prev => prev.filter(id => !filteredDisputes.some(d => d._id === id)));
+    const handleSelectAllVisible = () => {
+        if (areAllVisibleSelected) {
+            setSelectedDisputeIds(prev => prev.filter(id => !paginatedDisputes.some(d => d._id === id)));
         } else {
-            setSelectedDisputeIds(prev => Array.from(new Set([...prev, ...filteredDisputes.map(d => d._id)])));
+            setSelectedDisputeIds(prev => Array.from(new Set([...prev, ...paginatedDisputes.map(d => d._id)])));
         }
     };
     
@@ -220,7 +236,20 @@ const AdminDisputes: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Manage Disputes</h2>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-center">
+                    <div className="flex items-center gap-2 mr-2">
+                        <label className="text-xs font-bold uppercase text-gray-400 whitespace-nowrap">Show:</label>
+                        <select 
+                            value={itemsPerPage} 
+                            onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm py-1 shadow-sm focus:ring-blue-500"
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
                     <select 
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -251,32 +280,86 @@ const AdminDisputes: React.FC = () => {
                 </div>
             )}
             
-            {filteredDisputes.length > 0 ? (
-                <Table headers={['', 'User', 'Type', 'Ref ID', 'Date', 'Status', 'Action']}>
-                    {filteredDisputes.map(dispute => (
-                        <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3">
-                                <input type="checkbox" className="rounded" checked={selectedDisputeIds.includes(dispute._id)} onChange={() => handleToggleSelect(dispute._id)} />
-                            </td>
-                            <td className="px-4 py-3">{dispute.userName}</td>
-                            <td className="px-4 py-3">{dispute.type}</td>
-                            <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
-                            <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
-                            <td className="px-4 py-3">
-                                <div className="flex items-center space-x-2">
-                                    <Badge status={dispute.status as Status} />
-                                    {dispute.adminUnread && <span className="px-2 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full">New Reply</span>}
+            <div className="space-y-4">
+                {paginatedDisputes.length > 0 ? (
+                    <>
+                        <Table headers={['', 'User', 'Type', 'Ref ID', 'Date', 'Status', 'Action']}>
+                            {paginatedDisputes.map(dispute => (
+                                <tr key={dispute._id} className="text-gray-700 dark:text-gray-400">
+                                    <td className="px-4 py-3">
+                                        <input type="checkbox" className="rounded" checked={selectedDisputeIds.includes(dispute._id)} onChange={() => handleToggleSelect(dispute._id)} />
+                                    </td>
+                                    <td className="px-4 py-3">{dispute.userName}</td>
+                                    <td className="px-4 py-3">{dispute.type}</td>
+                                    <td className="px-4 py-3 text-xs font-mono">{dispute.referenceId}</td>
+                                    <td className="px-4 py-3 text-sm">{new Date(dispute.date).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center space-x-2">
+                                            <Badge status={dispute.status as Status} />
+                                            {dispute.adminUnread && <span className="px-2 py-0.5 text-xs font-bold text-white bg-blue-500 rounded-full">New Reply</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <Button size="sm" onClick={() => handleView(dispute)}>View</Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </Table>
+
+                        {/* Pagination Footer */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4 border-t dark:border-gray-700 pt-4">
+                            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                Showing <span className="font-bold text-gray-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold text-gray-900 dark:text-white">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of <span className="font-bold text-gray-900 dark:text-white">{totalItems}</span> disputes
+                            </div>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className="rounded-xl px-4"
+                                >
+                                    &larr; Prev
+                                </Button>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum = i + 1;
+                                        if (totalPages > 5 && currentPage > 3) {
+                                            pageNum = currentPage - 3 + i + 1;
+                                            if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                        }
+                                        if (pageNum <= 0) return null;
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                                    currentPage === pageNum 
+                                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                            </td>
-                            <td className="px-4 py-3">
-                                <Button size="sm" onClick={() => handleView(dispute)}>View</Button>
-                            </td>
-                        </tr>
-                    ))}
-                </Table>
-            ) : (
-                <p className="text-gray-500 text-center py-4">No disputes found.</p>
-            )}
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className="rounded-xl px-4"
+                                >
+                                    Next &rarr;
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">No disputes found.</p>
+                )}
+            </div>
 
             {isModalOpen && selectedDispute && (
                 <Modal isOpen={isModalOpen} onClose={handleClose}>
