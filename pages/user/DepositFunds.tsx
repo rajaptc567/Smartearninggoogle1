@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PaymentMethod, Status, formatCurrency, currencySymbols, Deposit } from '../../types';
 import Button from '../../components/ui/Button';
@@ -112,6 +113,10 @@ const DepositFunds: React.FC = () => {
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
+    
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const planPrices = useMemo(() => {
         if (!currentUser) return [];
@@ -155,6 +160,19 @@ const DepositFunds: React.FC = () => {
             return true;
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [deposits, currentUser, historyStatus, historyDateFrom, historyDateTo]);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [historyStatus, historyDateFrom, historyDateTo, itemsPerPage]);
+
+    // Pagination Logic
+    const totalItems = filteredDeposits.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedDeposits = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredDeposits.slice(start, start + itemsPerPage);
+    }, [filteredDeposits, currentPage, itemsPerPage]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const target = e.currentTarget;
@@ -422,7 +440,20 @@ const DepositFunds: React.FC = () => {
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">History Log</h3>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center">
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Show:</label>
+                            <select 
+                                value={itemsPerPage} 
+                                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
                         <select 
                             value={historyStatus} 
                             onChange={(e) => setHistoryStatus(e.target.value)} 
@@ -451,22 +482,74 @@ const DepositFunds: React.FC = () => {
                     </div>
                 </div>
 
-                {filteredDeposits.length > 0 ? (
-                    <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
-                        <Table headers={['Date', 'Provider', 'Amount', 'Trx ID', 'Status']}>
-                            {filteredDeposits.map(deposit => (
-                                <tr key={deposit._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
-                                    <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(deposit.date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{deposit.method}</td>
-                                    <td className="px-6 py-5 font-black text-gray-900 dark:text-white">{formatCurrency(deposit.amount, deposit.currency)}</td>
-                                    <td className="px-6 py-5 text-[11px] font-mono text-gray-400 select-all">{deposit.transactionId}</td>
-                                    <td className="px-6 py-5">
-                                        <Badge status={deposit.status as Status} />
-                                    </td>
-                                </tr>
-                            ))}
-                        </Table>
-                    </div>
+                {paginatedDeposits.length > 0 ? (
+                    <>
+                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                            <Table headers={['Date', 'Provider', 'Amount', 'Trx ID', 'Status']}>
+                                {paginatedDeposits.map(deposit => (
+                                    <tr key={deposit._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
+                                        <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(deposit.date).toLocaleDateString()}</td>
+                                        <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{deposit.method}</td>
+                                        <td className="px-6 py-5 font-black text-gray-900 dark:text-white">{formatCurrency(deposit.amount, deposit.currency)}</td>
+                                        <td className="px-6 py-5 text-[11px] font-mono text-gray-400 select-all">{deposit.transactionId}</td>
+                                        <td className="px-6 py-5">
+                                            <Badge status={deposit.status as Status} />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </Table>
+                        </div>
+                        {/* Pagination Controls */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">
+                            <div className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                                Page {currentPage} of {totalPages || 1} ({totalItems} records)
+                            </div>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    &larr; Prev
+                                </Button>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum = i + 1;
+                                        if (totalPages > 5 && currentPage > 3) {
+                                            pageNum = currentPage - 3 + i + 1;
+                                            if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                        }
+                                        if (pageNum <= 0) return null;
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${
+                                                    currentPage === pageNum 
+                                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    Next &rarr;
+                                </Button>
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                         <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No deposit entries found in ledger</p>

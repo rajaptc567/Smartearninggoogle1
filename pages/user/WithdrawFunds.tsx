@@ -76,6 +76,10 @@ const WithdrawFunds: React.FC = () => {
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
+    
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     // --- ELIGIBILITY CHECK: UNCOMPLETED REQUIRED TASKS ---
     const pendingRequiredTasks = useMemo(() => {
@@ -186,6 +190,19 @@ const WithdrawFunds: React.FC = () => {
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [withdrawals, currentUser, historyStatus, historyDateFrom, historyDateTo]);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [historyStatus, historyDateFrom, historyDateTo, itemsPerPage]);
+
+    // Pagination Logic
+    const totalItems = filteredWithdrawals.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedWithdrawals = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredWithdrawals.slice(start, start + itemsPerPage);
+    }, [filteredWithdrawals, currentPage, itemsPerPage]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -614,7 +631,20 @@ const WithdrawFunds: React.FC = () => {
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Log</h3>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center">
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Show:</label>
+                            <select 
+                                value={itemsPerPage} 
+                                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
                         <select 
                             value={historyStatus} 
                             onChange={(e) => setHistoryStatus(e.target.value)} 
@@ -644,23 +674,75 @@ const WithdrawFunds: React.FC = () => {
                     </div>
                 </div>
 
-                {filteredWithdrawals.length > 0 ? (
-                    <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
-                        <Table headers={['Date', 'Network', 'Gross', 'Processing', 'Net Credit', 'State']}>
-                            {filteredWithdrawals.map(withdrawal => (
-                                <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-teal-900/5 transition-colors group">
-                                    <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(withdrawal.date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{withdrawal.method}</td>
-                                    <td className="px-6 py-5 font-bold text-gray-500">{formatCurrency(withdrawal.amount, withdrawal.currency)}</td>
-                                    <td className="px-6 py-5 text-xs font-black text-red-500/60 uppercase">-{formatCurrency(withdrawal.fee, withdrawal.currency)}</td>
-                                    <td className="px-6 py-5 font-black text-teal-600 dark:text-teal-400 text-base">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</td>
-                                    <td className="px-6 py-5">
-                                        <Badge status={withdrawal.status === Status.Matching ? Status.Pending : withdrawal.status} />
-                                    </td>
-                                </tr>
-                            ))}
-                        </Table>
-                    </div>
+                {paginatedWithdrawals.length > 0 ? (
+                    <>
+                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                            <Table headers={['Date', 'Network', 'Gross', 'Processing', 'Net Credit', 'State']}>
+                                {paginatedWithdrawals.map(withdrawal => (
+                                    <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-teal-900/5 transition-colors group">
+                                        <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(withdrawal.date).toLocaleDateString()}</td>
+                                        <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">{withdrawal.method}</td>
+                                        <td className="px-6 py-5 font-bold text-gray-500">{formatCurrency(withdrawal.amount, withdrawal.currency)}</td>
+                                        <td className="px-6 py-5 text-xs font-black text-red-500/60 uppercase">-{formatCurrency(withdrawal.fee, withdrawal.currency)}</td>
+                                        <td className="px-6 py-5 font-black text-teal-600 dark:text-teal-400 text-base">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</td>
+                                        <td className="px-6 py-5">
+                                            <Badge status={withdrawal.status === Status.Matching ? Status.Pending : withdrawal.status} />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </Table>
+                        </div>
+                        {/* Pagination Controls */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">
+                            <div className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                                Page {currentPage} of {totalPages || 1} ({totalItems} records)
+                            </div>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    &larr; Prev
+                                </Button>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum = i + 1;
+                                        if (totalPages > 5 && currentPage > 3) {
+                                            pageNum = currentPage - 3 + i + 1;
+                                            if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                        }
+                                        if (pageNum <= 0) return null;
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${
+                                                    currentPage === pageNum 
+                                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    Next &rarr;
+                                </Button>
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                         <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No settlement history found</p>

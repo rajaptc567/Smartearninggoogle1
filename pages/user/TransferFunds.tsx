@@ -71,6 +71,10 @@ const TransferFunds: React.FC = () => {
     const [historyStatus, setHistoryStatus] = useState<string>('');
     const [historyDateFrom, setHistoryDateFrom] = useState('');
     const [historyDateTo, setHistoryDateTo] = useState('');
+    
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
@@ -272,6 +276,19 @@ const TransferFunds: React.FC = () => {
             return true;
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transfers, currentUser, historyType, historyStatus, historyDateFrom, historyDateTo]);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [historyType, historyStatus, historyDateFrom, historyDateTo, itemsPerPage]);
+
+    // Pagination Logic
+    const totalItems = filteredHistory.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const paginatedTransfers = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredHistory.slice(start, start + itemsPerPage);
+    }, [filteredHistory, currentPage, itemsPerPage]);
 
     if (!currentUser) return null;
 
@@ -553,7 +570,20 @@ const TransferFunds: React.FC = () => {
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Ledger</h3>
                     </div>
                     
-                    <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-3 w-full sm:w-auto items-center">
+                        <div className="flex items-center gap-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Show:</label>
+                            <select 
+                                value={itemsPerPage} 
+                                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2"
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
                         <select 
                             value={historyType} 
                             onChange={(e) => setHistoryType(e.target.value as any)} 
@@ -576,35 +606,87 @@ const TransferFunds: React.FC = () => {
                     </div>
                 </div>
 
-                {filteredHistory.length > 0 ? (
-                    <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
-                        <Table headers={['Date', 'Type', 'Counterparty', 'Allocation', 'impact', 'Status']}>
-                            {filteredHistory.map(transfer => {
-                                const isSender = transfer.senderId === currentUser._id;
-                                const counterpartyName = isSender ? transfer.recipientName : transfer.senderName;
-                                const directionLabel = isSender ? 'Sent' : 'Received';
-                                const amountColor = isSender ? 'text-red-500' : 'text-green-500';
-                                const amountPrefix = isSender ? '-' : '+';
+                {paginatedTransfers.length > 0 ? (
+                    <>
+                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                            <Table headers={['Date', 'Type', 'Counterparty', 'Allocation', 'impact', 'Status']}>
+                                {paginatedTransfers.map(transfer => {
+                                    const isSender = transfer.senderId === currentUser._id;
+                                    const counterpartyName = isSender ? transfer.recipientName : transfer.senderName;
+                                    const directionLabel = isSender ? 'Sent' : 'Received';
+                                    const amountColor = isSender ? 'text-red-500' : 'text-green-500';
+                                    const amountPrefix = isSender ? '-' : '+';
 
-                                return (
-                                    <tr key={transfer._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
-                                        <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(transfer.date).toLocaleDateString()}</td>
-                                        <td className="px-6 py-5">
-                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${isSender ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-green-50 text-green-600 border border-green-200'}`}>
-                                                {directionLabel}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">@{counterpartyName}</td>
-                                        <td className="px-6 py-5 font-bold text-gray-500">{formatCurrency(transfer.amount, transfer.currency)}</td>
-                                        <td className={`px-6 py-5 font-black ${amountColor} text-base`}>{amountPrefix}{formatCurrency(isSender ? (transfer.totalDeducted || transfer.amount) : transfer.amount, transfer.currency)}</td>
-                                        <td className="px-6 py-5">
-                                            <Badge status={transfer.status as Status} />
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </Table>
-                    </div>
+                                    return (
+                                        <tr key={transfer._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
+                                            <td className="px-6 py-5 text-[11px] font-black uppercase text-gray-400 font-mono tracking-tighter">{new Date(transfer.date).toLocaleDateString()}</td>
+                                            <td className="px-6 py-5">
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${isSender ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-green-50 text-green-600 border border-green-200'}`}>
+                                                    {directionLabel}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5 text-sm font-bold text-gray-900 dark:text-gray-200 uppercase">@{counterpartyName}</td>
+                                            <td className="px-6 py-5 font-bold text-gray-500">{formatCurrency(transfer.amount, transfer.currency)}</td>
+                                            <td className={`px-6 py-5 font-black ${amountColor} text-base`}>{amountPrefix}{formatCurrency(isSender ? (transfer.totalDeducted || transfer.amount) : transfer.amount, transfer.currency)}</td>
+                                            <td className="px-6 py-5">
+                                                <Badge status={transfer.status as Status} />
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </Table>
+                        </div>
+                        {/* Pagination Controls */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">
+                            <div className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                                Page {currentPage} of {totalPages || 1} ({totalItems} records)
+                            </div>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    &larr; Prev
+                                </Button>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum = i + 1;
+                                        if (totalPages > 5 && currentPage > 3) {
+                                            pageNum = currentPage - 3 + i + 1;
+                                            if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                        }
+                                        if (pageNum <= 0) return null;
+                                        
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${
+                                                    currentPage === pageNum 
+                                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm" 
+                                    disabled={currentPage === totalPages || totalPages === 0}
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    className="rounded-xl px-4 py-2 font-black uppercase text-[10px] tracking-widest"
+                                >
+                                    Next &rarr;
+                                </Button>
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800">
                         <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No ledger entries found</p>
