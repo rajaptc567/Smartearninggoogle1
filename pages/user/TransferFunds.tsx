@@ -31,7 +31,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
                 const isCompleted = stepNum < currentStep;
                 return (
                     <div key={label} className="flex flex-col items-center relative z-10">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 scale-110' : isCompleted ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs transition-all duration-500 transform ${isActive ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/40 scale-110' : isCompleted ? 'bg-green-50 text-white' : 'bg-white dark:bg-gray-800 text-gray-400 border border-gray-100 dark:border-gray-700'}`}>
                             {isCompleted ? '✓' : stepNum}
                         </div>
                         <span className={`text-[10px] mt-3 font-black uppercase tracking-[0.1em] transition-colors duration-300 ${isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-500' : 'text-gray-400'}`}>{label}</span>
@@ -180,7 +180,7 @@ const TransferFunds: React.FC = () => {
     
     // Cross-currency calculation
     useEffect(() => {
-        if (recipientUser && currentUser && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && parseFloat(amount) > 0) {
+        if (recipientUser && currentUser && recipientUser.currency && currentUser.currency && recipientUser.currency !== currentUser.currency && settings.transferConfig?.allowCrossCurrency && parseFloat(amount) > 0) {
             const fromCurrency = currentUser.currency.toUpperCase();
             const toCurrency = recipientUser.currency.toUpperCase();
             const defaultRates = { USD: 1, EUR: 0.92, PKR: 278.00 };
