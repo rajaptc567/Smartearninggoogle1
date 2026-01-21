@@ -1,5 +1,4 @@
 
-// ... existing imports ...
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
 // The base URL of your backend API is determined at runtime.
@@ -21,6 +20,18 @@ export function getUploadsBaseUrl() {
 
 const API_BASE_URL = getApiBaseUrl();
 
+// Helper to get auth headers
+const getAuthHeaders = (isFormData = false) => {
+    const token = localStorage.getItem('auth_token');
+    const headers: any = {};
+    if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+};
 
 const handleResponse = async (response: Response) => {
     const contentType = response.headers.get('content-type');
@@ -30,6 +41,12 @@ const handleResponse = async (response: Response) => {
             const error = (data && data.error) || response.statusText;
             throw new Error(error);
         }
+        
+        // If the response contains a token, store it
+        if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+        }
+        
         return data; 
     } else {
          const text = await response.text();
@@ -50,7 +67,9 @@ export const getDataVersion = async (): Promise<number> => {
 
 // --- [User API Functions] ---
 export const getUsers = async (): Promise<User[]> => {
-    const response = await fetch(`${API_BASE_URL}/users`);
+    const response = await fetch(`${API_BASE_URL}/users`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -58,7 +77,7 @@ export const getUsers = async (): Promise<User[]> => {
 export const createUser = async (userData: Partial<User>): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(userData),
     });
     const result = await handleResponse(response);
@@ -68,7 +87,7 @@ export const createUser = async (userData: Partial<User>): Promise<User> => {
 export const updateUser = async (id: string, userData: Partial<User>): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(userData),
     });
     const result = await handleResponse(response);
@@ -78,7 +97,7 @@ export const updateUser = async (id: string, userData: Partial<User>): Promise<U
 export const bulkUpdateUserRestrictions = async (payload: any): Promise<{ message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-restrictions`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
     });
     const result = await handleResponse(response);
@@ -88,7 +107,7 @@ export const bulkUpdateUserRestrictions = async (payload: any): Promise<{ messag
 export const createBulkDummyUsers = async (payload: any): Promise<{ count: number; message: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk-dummy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
     });
     const result = await handleResponse(response);
@@ -98,6 +117,7 @@ export const createBulkDummyUsers = async (payload: any): Promise<{ count: numbe
 export const deleteUser = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -106,7 +126,7 @@ export const deleteUser = async (id: string): Promise<{}> => {
 export const bulkDeleteUsers = async (ids: string[]): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/users/bulk`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ ids }),
     });
     const result = await handleResponse(response);
@@ -126,7 +146,7 @@ export const login = async (email: string, password: string): Promise<User> => {
 export const adjustUserWallet = async (id: string, adjustmentData: any): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(adjustmentData),
     });
     const result = await handleResponse(response);
@@ -136,7 +156,7 @@ export const adjustUserWallet = async (id: string, adjustmentData: any): Promise
 export const purchasePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/purchase-plan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ planId }),
     });
     const result = await handleResponse(response);
@@ -146,7 +166,7 @@ export const purchasePlan = async (userId: string, planId: string): Promise<{ us
 export const adminActivatePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/activate-plan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ planId }),
     });
     const result = await handleResponse(response);
@@ -165,6 +185,7 @@ export const userRequestPasswordReset = async (email: string): Promise<void> => 
 export const adminInitiatePasswordReset = async (userId: string): Promise<{ resetToken: string }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/admin-reset-password`, {
         method: 'POST',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -188,7 +209,9 @@ export const resetPasswordWithToken = async (token: string, password: string): P
 
 // --- [Deposit API Functions] ---
 export const getDeposits = async (): Promise<Deposit[]> => {
-    const response = await fetch(`${API_BASE_URL}/deposits`);
+    const response = await fetch(`${API_BASE_URL}/deposits`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -196,6 +219,7 @@ export const getDeposits = async (): Promise<Deposit[]> => {
 export const createDeposit = async (formData: FormData): Promise<{ deposit: Deposit; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/deposits`, {
         method: 'POST',
+        headers: getAuthHeaders(true),
         body: formData,
     });
     const result = await handleResponse(response);
@@ -205,7 +229,7 @@ export const createDeposit = async (formData: FormData): Promise<{ deposit: Depo
 export const updateDeposit = async (id: string, updateData: any): Promise<{ deposit: Deposit; user: User }> => {
     const response = await fetch(`${API_BASE_URL}/deposits/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updateData),
     });
     const result = await handleResponse(response);
@@ -214,7 +238,9 @@ export const updateDeposit = async (id: string, updateData: any): Promise<{ depo
 
 // --- [Withdrawal API Functions] ---
 export const getWithdrawals = async (): Promise<Withdrawal[]> => {
-    const response = await fetch(`${API_BASE_URL}/withdrawals`);
+    const response = await fetch(`${API_BASE_URL}/withdrawals`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -222,7 +248,7 @@ export const getWithdrawals = async (): Promise<Withdrawal[]> => {
 export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Promise<{ withdrawal: Withdrawal; user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(withdrawalData),
     });
     const result = await handleResponse(response);
@@ -232,7 +258,7 @@ export const createWithdrawal = async (withdrawalData: Partial<Withdrawal>): Pro
 export const updateWithdrawal = async (id: string, updateData: any): Promise<{ withdrawal: Withdrawal; user: User }> => {
     const response = await fetch(`${API_BASE_URL}/withdrawals/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updateData),
     });
     const result = await handleResponse(response);
@@ -241,14 +267,18 @@ export const updateWithdrawal = async (id: string, updateData: any): Promise<{ w
 
 // --- [Transaction API Functions] ---
 export const getTransactions = async (): Promise<Transaction[]> => {
-    const response = await fetch(`${API_BASE_URL}/transactions`);
+    const response = await fetch(`${API_BASE_URL}/transactions`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
 
 // --- [Notification API Functions] ---
 export const getNotifications = async (): Promise<Notification[]> => {
-    const response = await fetch(`${API_BASE_URL}/notifications`);
+    const response = await fetch(`${API_BASE_URL}/notifications`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -256,7 +286,7 @@ export const getNotifications = async (): Promise<Notification[]> => {
 export const createNotification = async (notifData: any): Promise<{ count: number; data: Notification[] }> => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(notifData),
     });
     return await handleResponse(response);
@@ -267,7 +297,7 @@ export const sendAdminNotification = createNotification;
 export const updateNotification = async (id: string, updateData: Partial<Notification>): Promise<Notification> => {
     const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updateData),
     });
     const result = await handleResponse(response);
@@ -277,6 +307,7 @@ export const updateNotification = async (id: string, updateData: Partial<Notific
 export const deleteNotification = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -285,6 +316,7 @@ export const deleteNotification = async (id: string): Promise<{}> => {
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {
         method: 'PUT',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -293,6 +325,7 @@ export const markNotificationsAsRead = async (userId: string): Promise<Notificat
 export const markNotificationPopupAsShown = async (id: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/popup-shown/${id}`, {
         method: 'PUT',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -300,7 +333,9 @@ export const markNotificationPopupAsShown = async (id: string): Promise<Notifica
 
 // --- [Payment Method API Functions] ---
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
-    const response = await fetch(`${API_BASE_URL}/payment-methods`);
+    const response = await fetch(`${API_BASE_URL}/payment-methods`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -308,6 +343,7 @@ export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
 export const createPaymentMethod = async (formData: FormData): Promise<PaymentMethod> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods`, {
         method: 'POST',
+        headers: getAuthHeaders(true),
         body: formData,
     });
     const result = await handleResponse(response);
@@ -317,6 +353,7 @@ export const createPaymentMethod = async (formData: FormData): Promise<PaymentMe
 export const updatePaymentMethod = async (id: string, formData: FormData): Promise<PaymentMethod> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods/${id}`, {
         method: 'PUT',
+        headers: getAuthHeaders(true),
         body: formData,
     });
     const result = await handleResponse(response);
@@ -326,6 +363,7 @@ export const updatePaymentMethod = async (id: string, formData: FormData): Promi
 export const deletePaymentMethod = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -333,7 +371,9 @@ export const deletePaymentMethod = async (id: string): Promise<{}> => {
 
 // --- [Investment Plan API Functions] ---
 export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
-    const response = await fetch(`${API_BASE_URL}/investment-plans`);
+    const response = await fetch(`${API_BASE_URL}/investment-plans`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -341,7 +381,7 @@ export const getInvestmentPlans = async (): Promise<InvestmentPlan[]> => {
 export const createInvestmentPlan = async (planData: Partial<InvestmentPlan>): Promise<InvestmentPlan> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(planData),
     });
     const result = await handleResponse(response);
@@ -351,7 +391,7 @@ export const createInvestmentPlan = async (planData: Partial<InvestmentPlan>): P
 export const updateInvestmentPlan = async (id: string, planData: Partial<InvestmentPlan>): Promise<InvestmentPlan> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(planData),
     });
     const result = await handleResponse(response);
@@ -361,6 +401,7 @@ export const updateInvestmentPlan = async (id: string, planData: Partial<Investm
 export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/investment-plans/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -368,7 +409,9 @@ export const deleteInvestmentPlan = async (id: string): Promise<{}> => {
 
 // --- [Rule API Functions] ---
 export const getRules = async (): Promise<Rule[]> => {
-    const response = await fetch(`${API_BASE_URL}/rules`);
+    const response = await fetch(`${API_BASE_URL}/rules`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -376,7 +419,7 @@ export const getRules = async (): Promise<Rule[]> => {
 export const createRule = async (ruleData: any): Promise<Rule> => {
     const response = await fetch(`${API_BASE_URL}/rules`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(ruleData),
     });
     const result = await handleResponse(response);
@@ -386,7 +429,7 @@ export const createRule = async (ruleData: any): Promise<Rule> => {
 export const updateRule = async (id: string, ruleData: any): Promise<Rule> => {
     const response = await fetch(`${API_BASE_URL}/rules/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(ruleData),
     });
     const result = await handleResponse(response);
@@ -396,6 +439,7 @@ export const updateRule = async (id: string, ruleData: any): Promise<Rule> => {
 export const deleteRule = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/rules/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -403,7 +447,9 @@ export const deleteRule = async (id: string): Promise<{}> => {
 
 // --- [Settings API Functions] ---
 export const getSettings = async (): Promise<Settings> => {
-    const response = await fetch(`${API_BASE_URL}/settings`);
+    const response = await fetch(`${API_BASE_URL}/settings`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -411,7 +457,7 @@ export const getSettings = async (): Promise<Settings> => {
 export const updateSettings = async (settingsData: Partial<Settings>): Promise<Settings> => {
     const response = await fetch(`${API_BASE_URL}/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(settingsData),
     });
     const result = await handleResponse(response);
@@ -420,7 +466,9 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
 
 // --- [Transfer API Functions] ---
 export const getTransfers = async (): Promise<Transfer[]> => {
-    const response = await fetch(`${API_BASE_URL}/transfers`);
+    const response = await fetch(`${API_BASE_URL}/transfers`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -428,7 +476,7 @@ export const getTransfers = async (): Promise<Transfer[]> => {
 export const createTransfer = async (transferData: any): Promise<{ transfer: Transfer; user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/transfers`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(transferData),
     });
     const result = await handleResponse(response);
@@ -438,7 +486,7 @@ export const createTransfer = async (transferData: any): Promise<{ transfer: Tra
 export const updateTransfer = async (id: string, updateData: any): Promise<{ transfer: Transfer; sender: User; recipient: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/transfers/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updateData),
     });
     const result = await handleResponse(response);
@@ -447,7 +495,9 @@ export const updateTransfer = async (id: string, updateData: any): Promise<{ tra
 
 // --- [Log API Functions] ---
 export const getLogs = async (): Promise<Log[]> => {
-    const response = await fetch(`${API_BASE_URL}/logs`);
+    const response = await fetch(`${API_BASE_URL}/logs`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -455,6 +505,7 @@ export const getLogs = async (): Promise<Log[]> => {
 export const clearLogs = async (): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/logs`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -462,7 +513,9 @@ export const clearLogs = async (): Promise<{}> => {
 
 // --- [Password Reset Request API Functions] ---
 export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
-    const response = await fetch(`${API_BASE_URL}/password-reset-requests`);
+    const response = await fetch(`${API_BASE_URL}/password-reset-requests`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -470,6 +523,7 @@ export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]
 export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/password-reset-requests/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -477,7 +531,9 @@ export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
 
 // --- [Dispute API Functions] ---
 export const getDisputes = async (): Promise<Dispute[]> => {
-    const response = await fetch(`${API_BASE_URL}/disputes`);
+    const response = await fetch(`${API_BASE_URL}/disputes`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -485,6 +541,7 @@ export const getDisputes = async (): Promise<Dispute[]> => {
 export const createDispute = async (formData: FormData): Promise<Dispute> => {
     const response = await fetch(`${API_BASE_URL}/disputes`, {
         method: 'POST',
+        headers: getAuthHeaders(true),
         body: formData,
     });
     const result = await handleResponse(response);
@@ -495,7 +552,7 @@ export const updateDispute = async (id: string, formDataOrData: any): Promise<Di
     const isFormData = formDataOrData instanceof FormData;
     const response = await fetch(`${API_BASE_URL}/disputes/${id}`, {
         method: 'PUT',
-        headers: isFormData ? {} : { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(isFormData),
         body: isFormData ? formDataOrData : JSON.stringify(formDataOrData),
     });
     const result = await handleResponse(response);
@@ -505,7 +562,7 @@ export const updateDispute = async (id: string, formDataOrData: any): Promise<Di
 export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Promise<Dispute> => {
     const response = await fetch(`${API_BASE_URL}/disputes/${id}/read`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ role }),
     });
     const result = await handleResponse(response);
@@ -514,7 +571,9 @@ export const markDisputeAsRead = async (id: string, role: 'admin' | 'user'): Pro
 
 // --- [Task API Functions] ---
 export const getTasks = async (): Promise<Task[]> => {
-    const response = await fetch(`${API_BASE_URL}/tasks`);
+    const response = await fetch(`${API_BASE_URL}/tasks`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -522,7 +581,7 @@ export const getTasks = async (): Promise<Task[]> => {
 export const createTask = async (taskData: Partial<Task>): Promise<Task> => {
     const response = await fetch(`${API_BASE_URL}/tasks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(taskData),
     });
     const result = await handleResponse(response);
@@ -532,7 +591,7 @@ export const createTask = async (taskData: Partial<Task>): Promise<Task> => {
 export const updateTask = async (id: string, taskData: Partial<Task>): Promise<Task> => {
     const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(taskData),
     });
     const result = await handleResponse(response);
@@ -542,6 +601,7 @@ export const updateTask = async (id: string, taskData: Partial<Task>): Promise<T
 export const deleteTask = async (id: string): Promise<{}> => {
     const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders()
     });
     const result = await handleResponse(response);
     return result.data;
@@ -556,6 +616,7 @@ export const completeTask = async (taskId: string, userId: string, proof?: File)
     
     const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/complete`, {
         method: 'POST',
+        headers: getAuthHeaders(true),
         body: formData,
     });
     const result = await handleResponse(response);
@@ -563,7 +624,9 @@ export const completeTask = async (taskId: string, userId: string, proof?: File)
 };
 
 export const getPendingTaskVerifications = async (): Promise<any[]> => {
-    const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`);
+    const response = await fetch(`${API_BASE_URL}/tasks/pending-verifications`, {
+        headers: getAuthHeaders()
+    });
     const result = await handleResponse(response);
     return result.data;
 };
@@ -571,7 +634,7 @@ export const getPendingTaskVerifications = async (): Promise<any[]> => {
 export const verifyTask = async (userId: string, taskId: string, status: 'Approved' | 'Rejected', adminNotes: string): Promise<User> => {
     const response = await fetch(`${API_BASE_URL}/tasks/verify/${userId}/${taskId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ status, adminNotes }),
     });
     const result = await handleResponse(response);

@@ -1,3 +1,4 @@
+
 import express from 'express';
 import multer from 'multer';
 import {
@@ -6,14 +7,14 @@ import {
     updatePaymentMethod,
     deletePaymentMethod
 } from '../controllers/paymentMethodsController.js';
+import { protect, authorize } from '../middleware/authMiddleware.js';
 
-// Configure multer for Memory Storage (same as deposits)
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
     limits: { 
-        fileSize: 10 * 1024 * 1024, // 10MB limit for files
-        fieldSize: 10 * 1024 * 1024 // 10MB limit for text fields
+        fileSize: 10 * 1024 * 1024,
+        fieldSize: 10 * 1024 * 1024
     }
 });
 
@@ -26,10 +27,10 @@ const cpUpload = upload.fields([
 
 router.route('/')
     .get(getPaymentMethods)
-    .post(cpUpload, createPaymentMethod);
+    .post(protect, authorize('super_admin', 'admin'), cpUpload, createPaymentMethod);
 
 router.route('/:id')
-    .put(cpUpload, updatePaymentMethod)
-    .delete(deletePaymentMethod);
+    .put(protect, authorize('super_admin', 'admin'), cpUpload, updatePaymentMethod)
+    .delete(protect, authorize('super_admin', 'admin'), deletePaymentMethod);
 
 export default router;

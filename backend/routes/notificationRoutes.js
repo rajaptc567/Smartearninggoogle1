@@ -1,18 +1,19 @@
 
 import express from 'express';
 import { getNotifications, markAsRead, createNotification, markPopupShown, updateNotification, deleteNotification } from '../controllers/notificationsController.js';
+import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-    .get(getNotifications)
-    .post(createNotification); // Admin send message
+    .get(protect, authorize('super_admin', 'admin', 'support'), getNotifications)
+    .post(protect, authorize('super_admin', 'admin'), createNotification); 
 
 router.route('/:id')
-    .put(updateNotification) // For marking single as read
-    .delete(deleteNotification); // Allow user to delete
+    .put(protect, updateNotification) 
+    .delete(protect, deleteNotification); 
 
-router.route('/read/:userId').put(markAsRead);
-router.route('/popup-shown/:id').put(markPopupShown);
+router.route('/read/:userId').put(protect, markAsRead);
+router.route('/popup-shown/:id').put(protect, markPopupShown);
 
 export default router;

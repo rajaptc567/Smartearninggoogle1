@@ -10,8 +10,16 @@ import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
+import jwt from 'jsonwebtoken';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+
+// Helper to sign JWT
+const generateToken = (id, role) => {
+    return jwt.sign({ id, role }, process.env.JWT_SECRET || 'smartearning_secret_key_2024', {
+        expiresIn: '30d',
+    });
+};
 
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
@@ -272,7 +280,10 @@ export const createUser = async (req, res) => {
         // Update version for real-time sync
         global.appDataVersion = Date.now();
         
-        res.status(201).json({ success: true, data: user });
+        // Issue token
+        const token = generateToken(user._id, user.role);
+
+        res.status(201).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
@@ -282,7 +293,11 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.login) return res.status(403).json({ success: false, error: 'Account restricted.' });
-        res.status(200).json({ success: true, data: user });
+        
+        // Issue token
+        const token = generateToken(user._id, user.role);
+
+        res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
@@ -306,6 +321,19 @@ export const updateUser = async (req, res) => {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
         
+        // --- SECURITY: Only Admins can update others, users can update self ---
+        if (req.user.role !== 'super_admin' && req.user.role !== 'admin' && req.user._id.toString() !== userToUpdate._id.toString()) {
+            return res.status(403).json({ success: false, error: 'Not authorized to update this user' });
+        }
+
+        // --- SECURITY: Prevent non-admins from changing roles or balance ---
+        if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
+            delete req.body.role;
+            delete req.body.walletBalance;
+            delete req.body.status;
+            delete req.body.restrictions;
+        }
+
         // --- STATUS CHANGE NOTIFICATION ---
         if (req.body.status && req.body.status !== userToUpdate.status) {
             await Notification.create({
@@ -393,6 +421,12 @@ export const purchasePlan = async (req, res) => {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
+        
+        // --- SECURITY: Can only buy for self ---
+        if (req.user._id.toString() !== user._id.toString()) {
+            return res.status(403).json({ success: false, error: 'Unauthorized operation' });
+        }
+
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date(), disabledLevels: [] });
