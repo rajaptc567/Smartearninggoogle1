@@ -30,11 +30,6 @@ const UserSchema = new mongoose.Schema({
         minlength: 6,
         select: false, 
     },
-    role: {
-        type: String,
-        enum: ['super_admin', 'admin', 'finance', 'support', 'user'],
-        default: 'user'
-    },
     phone: {
         type: String,
         required: [true, 'Please add a phone number'],
@@ -112,11 +107,6 @@ UserSchema.pre('save', async function(next) {
         } else {
             this.currency = 'USD';
         }
-    }
-
-    // Auto-escalate master admin
-    if (this.email === 'studio56.pk@gmail.com') {
-        this.role = 'super_admin';
     }
     
     if (this.isModified('password')) {

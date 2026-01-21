@@ -6,16 +6,15 @@ import {
     updateRule,
     deleteRule
 } from '../controllers/rulesController.js';
-import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
     .get(getRules)
-    .post(protect, authorize('super_admin', 'admin'), createRule);
+    .post(createRule);
 
 router.route('/:id')
-    .put(protect, authorize('super_admin', 'admin'), updateRule)
-    .delete(protect, authorize('super_admin', 'admin'), deleteRule);
+    .put(updateRule)
+    .delete(deleteRule);
 
 export default router;

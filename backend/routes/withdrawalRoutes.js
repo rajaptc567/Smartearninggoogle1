@@ -1,4 +1,3 @@
-
 import express from 'express';
 import {
     getWithdrawals,
@@ -7,17 +6,18 @@ import {
     updateWithdrawal,
     deleteWithdrawal
 } from '../controllers/withdrawalsController.js';
-import { protect, authorize } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.route('/')
-    .get(protect, authorize('super_admin', 'admin', 'finance', 'support'), getWithdrawals)
-    .post(protect, createWithdrawal);
+router
+    .route('/')
+    .get(getWithdrawals)
+    .post(createWithdrawal);
 
-router.route('/:id')
-    .get(protect, getWithdrawal)
-    .put(protect, authorize('super_admin', 'admin', 'finance'), updateWithdrawal)
-    .delete(protect, authorize('super_admin'), deleteWithdrawal);
+router
+    .route('/:id')
+    .get(getWithdrawal)
+    .put(updateWithdrawal)
+    .delete(deleteWithdrawal);
 
 export default router;

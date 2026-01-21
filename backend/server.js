@@ -74,21 +74,14 @@ const seedAdminUser = async () => {
                     fullName: 'System Admin',
                     email: adminEmail,
                     password: adminPassword,
-                    role: 'super_admin',
                     phone: '0000000000',
                     country: 'Pakistan',
                     currency: 'PKR',
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
-            } else if (anyAdmin.role !== 'super_admin') {
-                anyAdmin.role = 'super_admin';
-                await anyAdmin.save();
             }
-        } else if (existingUser.role !== 'super_admin') {
-            existingUser.role = 'super_admin';
-            await existingUser.save();
-        }
+        } 
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
