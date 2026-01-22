@@ -1,12 +1,21 @@
+
 import Transaction from '../models/Transaction.js';
 
-// @desc    Get all transactions
-// @route   GET /api/v1/transactions
 export const getTransactions = async (req, res) => {
     try {
-        const transactions = await Transaction.find().sort({ date: -1 });
+        let query = {};
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && req.user) {
+            query = { userId: req.user.id };
+        } else if (!isAdmin) {
+            // Unauthenticated requests get nothing
+            return res.status(200).json({ success: true, count: 0, data: [] });
+        }
+
+        const transactions = await Transaction.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, count: transactions.length, data: transactions });
     } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        res.status(200).json({ success: false, data: [], error: err.message });
     }
 };
