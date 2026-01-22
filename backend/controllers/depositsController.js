@@ -52,6 +52,7 @@ export const createDeposit = async (req, res) => {
             description: `Pending Deposit #${deposit._id}`
         });
         
+        // Version bump removed to prevent fetch storm on normal user activity
         res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -63,7 +64,8 @@ export const updateDeposit = async (req, res) => {
         if (status === 'Approved') {
             await User.findByIdAndUpdate(deposit.userId, { $inc: { walletBalance: deposit.amount } });
         }
-        await Setting.bumpVersion();
+        // Requirement: Version only bumps on MAJOR GLOBAL CHANGES. 
+        // Single deposit approval is considered user activity, bump removed.
         res.status(200).json({ success: true, data: { deposit } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -71,7 +73,6 @@ export const updateDeposit = async (req, res) => {
 export const deleteDeposit = async (req, res) => {
     try {
         await Deposit.findByIdAndDelete(req.params.id);
-        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

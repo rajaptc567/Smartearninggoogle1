@@ -48,6 +48,7 @@ export const createWithdrawal = async (req, res) => {
             description: `Pending Withdrawal #${withdrawal._id}`
         });
 
+        // Version bump removed to prevent refetch loop on user action
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -55,7 +56,7 @@ export const createWithdrawal = async (req, res) => {
 export const updateWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await Setting.bumpVersion();
+        // Version bump removed - withdrawal updates are standard activity
         res.status(200).json({ success: true, data: { withdrawal } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -63,7 +64,6 @@ export const updateWithdrawal = async (req, res) => {
 export const deleteWithdrawal = async (req, res) => {
     try {
         await Withdrawal.findByIdAndDelete(req.params.id);
-        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

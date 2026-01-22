@@ -20,16 +20,8 @@ export const getUsers = async (req, res) => {
         if (isAdmin) {
             users = await User.find();
         } else if (req.user) {
-            // Standard User: Return self + direct referrals for tree building
-            const self = await User.findById(req.user.id);
-            if (!self) return res.status(200).json({ success: true, data: [] });
-            
-            users = await User.find({
-                $or: [
-                    { _id: req.user.id },
-                    { sponsor: self.username }
-                ]
-            });
+            // Requirement: Standard users only receive data belonging to their own userId
+            users = await User.find({ _id: req.user.id });
         } else {
             users = [];
         }
@@ -94,6 +86,7 @@ export const adminActivatePlan = async (req, res) => {
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         const updatedUser = await user.save();
+        // Manual activation by Admin is a significant change, so we bump the version
         await Setting.bumpVersion();
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }

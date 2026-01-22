@@ -9,12 +9,13 @@ export const getTransactions = async (req, res) => {
         if (!isAdmin && req.user) {
             query = { userId: req.user.id };
         } else if (!isAdmin) {
-            return res.status(200).json({ success: true, count: 0, data: [] });
+            // Non-logged in or non-admin users shouldn't see anything
+            return res.status(200).json({ success: true, data: [] });
         }
 
         const transactions = await Transaction.find(query).sort({ date: -1 });
-        res.status(200).json({ success: true, count: transactions.length, data: transactions });
+        res.status(200).json({ success: true, data: transactions });
     } catch (err) {
-        res.status(200).json({ success: true, count: 0, data: [] });
+        res.status(200).json({ success: true, data: [] });
     }
 };

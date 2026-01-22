@@ -1,4 +1,3 @@
-
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Setting from '../models/Setting.js';
 
@@ -26,6 +25,7 @@ export const getInvestmentPlan = async (req, res) => {
 export const createInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.create(req.body);
+        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
         await Setting.bumpVersion();
         res.status(201).json({ success: true, data: plan });
     } catch (err) {
@@ -45,6 +45,7 @@ export const updateInvestmentPlan = async (req, res) => {
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
+        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
         await Setting.bumpVersion();
         res.status(200).json({ success: true, data: plan });
     } catch (err) {
@@ -61,6 +62,7 @@ export const deleteInvestmentPlan = async (req, res) => {
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
+        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
         await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {

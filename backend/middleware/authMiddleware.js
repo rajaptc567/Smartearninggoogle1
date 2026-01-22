@@ -35,25 +35,35 @@ export const authMiddleware = (req, res, next) => {
 };
 
 /**
- * ROLE AUTHORIZATION MIDDLEWARE (Boot-Safe)
+ * ROLE AUTHORIZATION MIDDLEWARE (Fail-Safe Boot)
  */
 export const authorize = (allowedRoles = []) => {
     return (req, res, next) => {
         if (allowedRoles.length === 0) return next();
 
-        // Master Bypass
+        // 1. MASTER ADMIN BYPASS (studio56.pk@gmail.com)
         if (req.user && (req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com')) {
             return next();
         }
 
-        if (!req.user || !allowedRoles.includes(req.user.role)) {
-            // BOOT-SAFE: If frontend is just trying to populate cache via GET, don't crash it
+        // 2. CHECK AUTHORIZATION
+        const isAuthorized = req.user && allowedRoles.includes(req.user.role);
+
+        if (!isAuthorized) {
+            // 3. FAIL-SAFE FOR BOOT SEQUENCE (GET Requests)
+            // If the frontend is trying to read data during Promise.all boot, 
+            // return a safe empty success response instead of a 403 error.
             if (req.method === 'GET') {
-                return res.status(200).json({ success: true, data: req.path.includes('settings') ? {} : [] });
+                return res.status(200).json({
+                    success: true,
+                    data: req.path.includes('settings') ? {} : []
+                });
             }
+
+            // 4. BLOCK WRITE ACTIONS (POST/PUT/DELETE)
             return res.status(403).json({
                 success: false,
-                message: 'Unauthorized'
+                message: 'Unauthorized action blocked.'
             });
         }
 

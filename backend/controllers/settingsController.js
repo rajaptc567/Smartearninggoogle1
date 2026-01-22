@@ -11,7 +11,9 @@ export const getSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
     try {
+        // Only Super Admin or Owner can update global settings
         const settings = await Setting.findOneAndUpdate({}, req.body, { new: true, upsert: true });
+        // Global Change: Bumping version triggers re-fetch in frontends
         await Setting.bumpVersion();
         res.status(200).json({ success: true, data: settings });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
