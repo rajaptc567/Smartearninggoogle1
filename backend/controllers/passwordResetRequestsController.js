@@ -1,26 +1,24 @@
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 
-// @desc    Get all pending password reset requests
-// @route   GET /api/v1/password-reset-requests
 export const getPasswordResetRequests = async (req, res) => {
     try {
+        const isMaster = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = isMaster || req.user?.role === 'admin';
+
+        if (!isAdmin) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
         const requests = await PasswordResetRequest.find({ status: 'Pending' }).sort({ requestDate: -1 });
         res.status(200).json({ success: true, count: requests.length, data: requests });
     } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
+        res.status(200).json({ success: true, data: [] });
     }
 };
 
-// @desc    Delete a password reset request (mark as handled)
-// @route   DELETE /api/v1/password-reset-requests/:id
 export const deletePasswordResetRequest = async (req, res) => {
     try {
-        const request = await PasswordResetRequest.findByIdAndDelete(req.params.id);
-        if (!request) {
-            return res.status(404).json({ success: false, error: 'Request not found' });
-        }
+        await PasswordResetRequest.findByIdAndDelete(req.params.id);
         res.status(200).json({ success: true, data: {} });
-    } catch (err) {
-        res.status(400).json({ success: false, error: err.message });
-    }
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
