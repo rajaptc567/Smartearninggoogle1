@@ -328,14 +328,14 @@ const initializer = (initialState: AppState) => {
         
         let initialData = initialState;
         
-        if (appCache) {
+        if (appCache && appCache !== "null" && appCache !== "undefined") {
             try {
                 const parsedCache = JSON.parse(appCache);
                 if (parsedCache) initialData = { ...initialData, ...parsedCache };
             } catch (e) {}
         }
 
-        if (savedUser && savedUser !== "null") {
+        if (savedUser && savedUser !== "null" && savedUser !== "undefined") {
             try {
                 initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
             } catch (e) {}
@@ -400,13 +400,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
+                    console.log("Sync conflict detected: Updating in background...");
                     lastVersionRef.current = serverVersion;
-                    // Requirement: Silent background update instead of window.location.reload()
-                    // This prevents step-loss during deposit/withdraw forms.
+                    
+                    // Silent background update instead of window.location.reload()
                     const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                         getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
                     ]);
+                    
                     dispatch({ 
                         type: 'SET_ALL_DATA', 
                         payload: { 
@@ -416,14 +418,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     });
                 }
             } catch (err) {}
-        }, 5000); 
+        }, 8000); // 8 second interval to reduce server load
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);
 
     return (
-        <DataContext.Provider value={{ state, dispatch }}>
-            {children}
-        </DataContext.Provider>
+        <div id="app-root-container">
+            <DataContext.Provider value={{ state, dispatch }}>
+                {children}
+            </DataContext.Provider>
+        </div>
     );
 };

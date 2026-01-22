@@ -17,25 +17,42 @@ export const getUsers = async (req, res) => {
         const isMaster = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
         const isAdmin = isMaster || req.user?.role === 'admin';
 
-        let users;
         if (isAdmin) {
-            users = await User.find();
-        } else if (req.user) {
-            // Standard User: Return self + direct referrals for tree building
+            const users = await User.find();
+            return res.status(200).json({ success: true, count: users.length, data: users });
+        } 
+        
+        if (req.user) {
+            // Standard User: We need to fetch the entire DOWNLINE tree for genealogy
             const self = await User.findById(req.user.id);
             if (!self) return res.status(200).json({ success: true, data: [] });
-            
-            users = await User.find({
-                $or: [
-                    { _id: req.user.id },
-                    { sponsor: self.username }
-                ]
-            });
-        } else {
-            users = [];
+
+            const downline = [self];
+            let currentLevelUsernames = [self.username];
+
+            // Iterative search to get all levels of referrals
+            // Safety limit of 10 levels or 5000 users to prevent resource exhaustion
+            let depth = 0;
+            while (currentLevelUsernames.length > 0 && depth < 10) {
+                const nextLevelUsers = await User.find({ 
+                    sponsor: { $in: currentLevelUsernames } 
+                });
+
+                if (nextLevelUsers.length === 0) break;
+
+                downline.push(...nextLevelUsers);
+                currentLevelUsernames = nextLevelUsers.map(u => u.username);
+                depth++;
+                
+                if (downline.length > 5000) break;
+            }
+
+            return res.status(200).json({ success: true, count: downline.length, data: downline });
         }
-        res.status(200).json({ success: true, count: users.length, data: users });
+
+        res.status(200).json({ success: true, data: [] });
     } catch (err) {
+        console.error("Error in getUsers downline fetch:", err);
         res.status(200).json({ success: true, data: [] });
     }
 };
