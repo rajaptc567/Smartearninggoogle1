@@ -30,15 +30,12 @@ import taskRoutes from './routes/taskRoutes.js';
 // Load env vars
 dotenv.config();
 
-// CRITICAL SECURITY CHECK
+// 1. CRITICAL ENVIRONMENT SAFETY CHECK
+// Server will fail to start if JWT_SECRET is missing. No hardcoded fallbacks allowed.
 if (!process.env.JWT_SECRET) {
     console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
     process.exit(1);
 }
-
-// --- REAL-TIME SYNC ENGINE ---
-global.appDataVersion = Date.now();
-// -----------------------------
 
 // Connect to database
 connectDB();
@@ -52,8 +49,8 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// PASSIVE AUTHENTICATION LAYER
-// Attaches user identity to req.user if token present, but never blocks.
+// 2. PASSIVE AUTHENTICATION LAYER
+// Identifies user but NEVER blocks requests. req.user will be null if token is invalid/missing.
 app.use(authMiddleware);
 
 // Handle ES Modules path resolution
@@ -88,7 +85,6 @@ const seedAdminUser = async () => {
                     role: 'super_admin',
                     phone: '0000000000',
                     country: 'Pakistan',
-                    currency: 'PKR',
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
@@ -99,9 +95,9 @@ const seedAdminUser = async () => {
     }
 };
 
-// A simple test route
+// Simple test route
 app.get('/', (req, res) => {
-    res.send('SmartEarning API is running...');
+    res.send('SmartEarning API is running in PASSIVE AUTH mode...');
 });
 
 // Mount routers

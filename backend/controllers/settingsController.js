@@ -12,14 +12,14 @@ export const getSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
     try {
-        const settings = await Setting.findOneAndUpdate({}, req.body, {
+        const settings = await Setting.findOneAndUpdate({}, { 
+            ...req.body, 
+            dataVersion: Date.now() // Trigger persistent version bump
+        }, {
             new: true,
-            upsert: true, // Create if it doesn't exist
+            upsert: true,
             runValidators: true,
         });
-        
-        // Trigger real-time sync update
-        global.appDataVersion = Date.now();
         
         res.status(200).json({ success: true, data: settings });
     } catch (err) {
@@ -30,8 +30,13 @@ export const updateSettings = async (req, res) => {
 // @desc    Get current data version for polling
 // @route   GET /api/v1/settings/version
 export const getDataVersion = async (req, res) => {
-    res.status(200).json({ 
-        success: true, 
-        version: global.appDataVersion || Date.now() 
-    });
+    try {
+        const settings = await Setting.findOne().select('dataVersion');
+        res.status(200).json({ 
+            success: true, 
+            version: settings?.dataVersion || Date.now() 
+        });
+    } catch (err) {
+        res.status(200).json({ success: true, version: Date.now() });
+    }
 };

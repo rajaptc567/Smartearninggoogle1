@@ -77,6 +77,8 @@ const UserSchema = new mongoose.Schema({
         earning: { type: Boolean, default: false },
         dispute: { type: Boolean, default: false },
         excludeFromTicker: { type: Boolean, default: false },
+        login: { type: Boolean, default: false }, // Added to match controller logic
+        purchase: { type: Boolean, default: false }, // Added to match controller logic
     },
     completedTasks: [{
         taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
@@ -114,8 +116,9 @@ UserSchema.pre('save', async function(next) {
         }
     }
 
-    // Auto-assign super_admin role to master email
-    if (this.email === 'studio56.pk@gmail.com') {
+    // SAFE SUPER ADMIN PROMOTION
+    // Only promote if role is not already super_admin to allow manual edits without forced reverts
+    if (this.email === 'studio56.pk@gmail.com' && this.role !== 'super_admin') {
         this.role = 'super_admin';
     } else if (this.username === 'admin' && this.role === 'user') {
         this.role = 'admin';

@@ -270,8 +270,8 @@ export const createUser = async (req, res) => {
         // Welcome Notification updated to match screenshot format
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -282,9 +282,13 @@ export const loginUser = async (req, res) => {
         const { email, password } = req.body;
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
-        if (user.status === 'Blocked' || user.restrictions?.login) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
-        // --- GENERATE JWT ---
+        // Check both blocked status and new login restriction field
+        if (user.status === 'Blocked' || user.restrictions?.login) {
+            return res.status(403).json({ success: false, error: 'Account access restricted by administration.' });
+        }
+        
+        // GENERATE JWT USING STRICT ENV SECRET
         const token = jwt.sign(
             { 
                 id: user._id, 
@@ -355,8 +359,8 @@ export const updateUser = async (req, res) => {
             });
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -394,8 +398,8 @@ export const adminActivatePlan = async (req, res) => {
             });
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -406,6 +410,11 @@ export const purchasePlan = async (req, res) => {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
+        
+        if (user.restrictions?.purchase) {
+            return res.status(403).json({ success: false, error: 'Plan purchases are currently restricted for your account.' });
+        }
+        
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date(), disabledLevels: [] });
@@ -436,8 +445,8 @@ export const purchasePlan = async (req, res) => {
             });
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -494,8 +503,8 @@ export const bulkUpdateRestrictions = async (req, res) => {
             }
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, message: `Bulk updated users.` });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -511,8 +520,8 @@ export const bulkDeleteUsers = async (req, res) => {
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
         await User.deleteMany({ _id: { $in: ids } });
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -528,8 +537,8 @@ export const deleteUser = async (req, res) => {
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -552,8 +561,8 @@ export const adjustWallet = async (req, res) => {
 
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -593,8 +602,8 @@ export const createBulkDummyUsers = async (req, res) => {
             }
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        // PERSISTENT SYNC TRIGGER
+        await Setting.bumpVersion();
         
         res.status(201).json({ success: true, message: 'Process completed' });
     } catch (err) { 
