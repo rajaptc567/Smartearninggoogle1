@@ -1,3 +1,4 @@
+
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -20,8 +21,16 @@ export const getUsers = async (req, res) => {
         if (isAdmin) {
             users = await User.find();
         } else if (req.user) {
-            // Requirement: Standard users only receive data belonging to their own userId
-            users = await User.find({ _id: req.user.id });
+            // Standard User: Return self + direct referrals for tree building
+            const self = await User.findById(req.user.id);
+            if (!self) return res.status(200).json({ success: true, data: [] });
+            
+            users = await User.find({
+                $or: [
+                    { _id: req.user.id },
+                    { sponsor: self.username }
+                ]
+            });
         } else {
             users = [];
         }
@@ -151,7 +160,9 @@ export const createBulkDummyUsers = async (req, res) => {
 export const userRequestPasswordReset = async (req, res) => {
     try {
         res.status(200).json({ success: true, data: 'Admin notified.' });
-    } catch (err) { res.status(200).json({ success: true }); }
+    } catch (err) {
+        res.status(200).json({ success: true });
+    }
 };
 
 export const adminInitiatePasswordReset = async (req, res) => {

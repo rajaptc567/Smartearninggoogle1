@@ -163,7 +163,7 @@ type Action =
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } };
+    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } | null };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -192,12 +192,19 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             newState = { ...state, ...sanitizedPayload };
             break;
 
-        case 'SET_CURRENT_USER':
+        case 'SET_CURRENT_USER': {
+            if (!action.payload) {
+                newState = { ...state, currentUser: null };
+                break;
+            }
+            const user = action.payload.user;
+            const token = action.payload.token;
+
             try {
-                if (action.payload.user) {
-                    localStorage.setItem('currentUser', JSON.stringify(action.payload.user));
-                    if (action.payload.token) {
-                        localStorage.setItem('authToken', action.payload.token);
+                if (user) {
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                    if (token) {
+                        localStorage.setItem('authToken', token);
                     }
                 } else {
                     localStorage.removeItem('currentUser');
@@ -206,8 +213,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             } catch (error) {
                 console.error("Could not access localStorage:", error);
             }
-            newState = { ...state, currentUser: action.payload.user };
+            newState = { ...state, currentUser: user || null };
             break;
+        }
 
         case 'SET_USERS': newState = { ...state, users: action.payload }; break;
         case 'ADD_USER': newState = { ...state, users: [...state.users, action.payload] }; break;
@@ -295,7 +303,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     try {
         localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
-            currentUser: state.currentUser 
+            currentUser: newState.currentUser 
         }));
     } catch (e) {
         console.warn("Failed to update app cache", e);
@@ -319,14 +327,16 @@ const initializer = (initialState: AppState) => {
         if (appCache) {
             try {
                 const parsedCache = JSON.parse(appCache);
-                initialData = { ...initialData, ...parsedCache };
+                initialData = { ...initialData, ...(parsedCache || {}) };
             } catch (e) {
                 console.warn("Invalid app cache");
             }
         }
 
-        if (savedUser) {
-            initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
+        if (savedUser && savedUser !== "null" && savedUser !== "undefined") {
+            try {
+                initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
+            } catch (e) {}
         }
         
         return initialData;
@@ -350,7 +360,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             try {
                 const [
                     users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                    investment_plans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
                     currentVersion
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
@@ -364,7 +374,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     type: 'SET_ALL_DATA', 
                     payload: { 
                         users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                        investmentPlans: investment_plans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
                     } 
                 });
             } catch (error) {

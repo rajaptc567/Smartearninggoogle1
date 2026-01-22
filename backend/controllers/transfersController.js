@@ -1,3 +1,4 @@
+
 import Transfer from '../models/Transfer.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
@@ -32,7 +33,8 @@ export const createTransfer = async (req, res) => {
 export const updateTransfer = async (req, res) => {
     try {
         const transfer = await Transfer.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await Setting.bumpVersion();
+        // NOTE: Standard user transactions (transfers) do NOT bump global dataVersion
+        // only admin-level global changes should trigger a sync.
         res.status(200).json({ success: true, data: { transfer }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
