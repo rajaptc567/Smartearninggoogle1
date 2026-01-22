@@ -1,3 +1,4 @@
+
 import jwt from 'jsonwebtoken';
 
 /**
@@ -39,7 +40,8 @@ export const authMiddleware = (req, res, next) => {
  */
 export const authorize = (allowedRoles = []) => {
     return (req, res, next) => {
-        if (allowedRoles.length === 0) return next();
+        // If no roles are defined, allow public access
+        if (!allowedRoles || allowedRoles.length === 0) return next();
 
         // 1. MASTER ADMIN BYPASS (studio56.pk@gmail.com)
         if (req.user && (req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com')) {
@@ -51,7 +53,7 @@ export const authorize = (allowedRoles = []) => {
 
         if (!isAuthorized) {
             // 3. FAIL-SAFE FOR BOOT SEQUENCE (GET Requests)
-            // Critical: Frontend components expect specific shapes.
+            // Critical: Frontend components expect specific shapes if unauthorized.
             if (req.method === 'GET') {
                 const isObjectPath = req.path.toLowerCase().includes('settings') || req.path.toLowerCase().includes('profile');
                 return res.status(200).json({
