@@ -30,11 +30,6 @@ const UserSchema = new mongoose.Schema({
         minlength: 6,
         select: false, 
     },
-    role: {
-        type: String,
-        enum: ['super_admin', 'admin', 'finance', 'support', 'user'],
-        default: 'user'
-    },
     phone: {
         type: String,
         required: [true, 'Please add a phone number'],
@@ -77,8 +72,6 @@ const UserSchema = new mongoose.Schema({
         earning: { type: Boolean, default: false },
         dispute: { type: Boolean, default: false },
         excludeFromTicker: { type: Boolean, default: false },
-        loginBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
-        purchaseBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
     },
     completedTasks: [{
         taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
@@ -114,13 +107,6 @@ UserSchema.pre('save', async function(next) {
         } else {
             this.currency = 'USD';
         }
-    }
-
-    // Role Safety: Promote master email only if not already at sufficient privilege level
-    if (this.email === 'studio56.pk@gmail.com' && this.role !== 'super_admin') {
-        this.role = 'super_admin';
-    } else if (this.username === 'admin' && this.role === 'user') {
-        this.role = 'admin';
     }
     
     if (this.isModified('password')) {

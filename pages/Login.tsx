@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -33,9 +34,8 @@ const Login: React.FC = () => {
         setError(null);
 
         try {
-            const loginResult = await apiLogin(email, password);
-            // FIX: apiLogin returns { token, data: User }. Map these to the expected payload structure { user, token }.
-            dispatch({ type: 'SET_CURRENT_USER', payload: { user: loginResult.data, token: loginResult.token } });
+            const loggedInUser = await apiLogin(email, password);
+            dispatch({ type: 'SET_CURRENT_USER', payload: loggedInUser });
             navigate('/member');
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';

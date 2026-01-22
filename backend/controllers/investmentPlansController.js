@@ -1,6 +1,8 @@
-import InvestmentPlan from '../models/InvestmentPlan.js';
-import Setting from '../models/Setting.js';
 
+import InvestmentPlan from '../models/InvestmentPlan.js';
+
+// @desc    Get all investment plans
+// @route   GET /api/v1/investment-plans
 export const getInvestmentPlans = async (req, res) => {
     try {
         const plans = await InvestmentPlan.find();
@@ -10,6 +12,8 @@ export const getInvestmentPlans = async (req, res) => {
     }
 };
 
+// @desc    Get single investment plan
+// @route   GET /api/v1/investment-plans/:id
 export const getInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.findById(req.params.id);
@@ -22,11 +26,15 @@ export const getInvestmentPlan = async (req, res) => {
     }
 };
 
+// @desc    Create new investment plan
+// @route   POST /api/v1/investment-plans
 export const createInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.create(req.body);
-        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
-        await Setting.bumpVersion();
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(201).json({ success: true, data: plan });
     } catch (err) {
         if (err.code === 11000) {
@@ -36,6 +44,8 @@ export const createInvestmentPlan = async (req, res) => {
     }
 };
 
+// @desc    Update investment plan
+// @route   PUT /api/v1/investment-plans/:id
 export const updateInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.findByIdAndUpdate(req.params.id, req.body, {
@@ -45,8 +55,10 @@ export const updateInvestmentPlan = async (req, res) => {
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
-        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
-        await Setting.bumpVersion();
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: plan });
     } catch (err) {
          if (err.code === 11000) {
@@ -56,14 +68,18 @@ export const updateInvestmentPlan = async (req, res) => {
     }
 };
 
+// @desc    Delete investment plan
+// @route   DELETE /api/v1/investment-plans/:id
 export const deleteInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.findByIdAndDelete(req.params.id);
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
-        // MAJOR GLOBAL CHANGE: Bump version to force dashboard refresh
-        await Setting.bumpVersion();
+        
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

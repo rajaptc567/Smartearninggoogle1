@@ -1,3 +1,4 @@
+
 import Setting from '../models/Setting.js';
 
 export const getSettings = async (req, res) => {
@@ -5,29 +6,32 @@ export const getSettings = async (req, res) => {
         const settings = await Setting.getSettings();
         res.status(200).json({ success: true, data: settings });
     } catch (err) {
-        res.status(200).json({ success: true, data: {} });
+        res.status(400).json({ success: false, error: err.message });
     }
 };
 
 export const updateSettings = async (req, res) => {
     try {
-        // Only Super Admin or Owner can update global settings
-        const settings = await Setting.findOneAndUpdate({}, req.body, { new: true, upsert: true });
-        // Global Change: Bumping version triggers re-fetch in frontends
-        await Setting.bumpVersion();
+        const settings = await Setting.findOneAndUpdate({}, req.body, {
+            new: true,
+            upsert: true, // Create if it doesn't exist
+            runValidators: true,
+        });
+        
+        // Trigger real-time sync update
+        global.appDataVersion = Date.now();
+        
         res.status(200).json({ success: true, data: settings });
-    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
 };
 
+// @desc    Get current data version for polling
+// @route   GET /api/v1/settings/version
 export const getDataVersion = async (req, res) => {
-    try {
-        const settings = await Setting.findOne().select('dataVersion');
-        res.status(200).json({ 
-            success: true, 
-            version: settings?.dataVersion || 1 
-        });
-    } catch (err) {
-        // Critical: Fallback to 1 to prevent endless "detected change" polling loops
-        res.status(200).json({ success: true, version: 1 });
-    }
+    res.status(200).json({ 
+        success: true, 
+        version: global.appDataVersion || Date.now() 
+    });
 };

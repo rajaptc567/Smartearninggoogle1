@@ -19,21 +19,17 @@ const AdminLogin: React.FC = () => {
 
         try {
             // Attempt login via API
-            // FIX: apiLogin returns { token, data: User }. Access username and email through result.data.
-            const loginResult = await apiLogin(email, password);
+            const user = await apiLogin(email, password);
             
             // SECURITY CHECK: Ensure the user is actually the admin account.
-            // FIX: Property 'username' and 'email' exist on loginResult.data, not on loginResult itself.
-            if (loginResult.data.username !== 'admin' && loginResult.data.email !== 'studio56.pk@gmail.com') {
+            if (user.username !== 'admin' && user.email !== 'studio56.pk@gmail.com') {
                 setError('Unauthorized access. This area is restricted to administrators.');
                 // Log them out immediately if they aren't admin
-                // FIX: Ensure payload matches { user: User | null; token?: string }.
-                dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } }); 
+                dispatch({ type: 'SET_CURRENT_USER', payload: null }); 
                 return;
             }
 
-            // FIX: Ensure payload matches { user: User | null; token?: string }.
-            dispatch({ type: 'SET_CURRENT_USER', payload: { user: loginResult.data, token: loginResult.token } });
+            dispatch({ type: 'SET_CURRENT_USER', payload: user });
             navigate('/admin');
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Invalid credentials';

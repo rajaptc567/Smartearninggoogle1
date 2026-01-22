@@ -140,7 +140,6 @@ const defaultFaqs = [
 ];
 
 const SettingSchema = new mongoose.Schema({
-    dataVersion: { type: Number, default: Date.now }, // Moved from global memory to persistent DB
     isUserTransferEnabled: { type: Boolean, default: true },
     isTasksEnabled: { type: Boolean, default: true },
     transferConfig: {
@@ -218,11 +217,6 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (needsSave) { await settings.save(); }
     return settings;
-};
-
-// Static method to bump the version
-SettingSchema.statics.bumpVersion = async function() {
-    await this.findOneAndUpdate({}, { dataVersion: Date.now() }, { upsert: true });
 };
 
 export default mongoose.model('Setting', SettingSchema);

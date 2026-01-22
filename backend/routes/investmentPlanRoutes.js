@@ -1,6 +1,5 @@
 
 import express from 'express';
-import { authorize } from '../middleware/authMiddleware.js';
 import {
     getInvestmentPlans,
     getInvestmentPlan,
@@ -13,13 +12,13 @@ const router = express.Router();
 
 router
     .route('/')
-    .get(getInvestmentPlans) // PUBLIC: Needed for home page featured plans
-    .post(authorize(['admin']), createInvestmentPlan);
+    .get(getInvestmentPlans)
+    .post(createInvestmentPlan);
 
 router
     .route('/:id')
     .get(getInvestmentPlan)
-    .put(authorize(['admin']), updateInvestmentPlan)
-    .delete(authorize(['admin']), deleteInvestmentPlan);
+    .put(updateInvestmentPlan)
+    .delete(deleteInvestmentPlan);
 
 export default router;

@@ -163,12 +163,11 @@ type Action =
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } | null };
+    | { type: 'SET_CURRENT_USER'; payload: User | null };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
-        if (!settings) return state.settings;
         const newSettings = { ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
@@ -176,6 +175,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.exchangeRates && !newSettings.exchangeRates.EUR) newSettings.exchangeRates.EUR = 0.92;
         if (newSettings.exchangeRates && !newSettings.exchangeRates.USD) newSettings.exchangeRates.USD = 1;
         if (newSettings.isTasksEnabled === undefined) newSettings.isTasksEnabled = true;
+        if (newSettings.showRejectedCommissionTransaction === undefined) newSettings.showRejectedCommissionTransaction = true;
+        if (newSettings.notifySponsorOnCommissionLimit === undefined) newSettings.notifySponsorOnCommissionLimit = true;
+        if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
         return newSettings;
     };
 
@@ -183,45 +185,25 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     switch (action.type) {
         case 'SET_ALL_DATA':
-            // Safety: Ensure we don't nullify existing arrays if payload is partial
-            newState = { 
-                ...state, 
-                users: action.payload.users || state.users,
-                deposits: action.payload.deposits || state.deposits,
-                withdrawals: action.payload.withdrawals || state.withdrawals,
-                transfers: action.payload.transfers || state.transfers,
-                paymentMethods: action.payload.paymentMethods || state.paymentMethods,
-                investmentPlans: action.payload.investmentPlans || state.investmentPlans,
-                transactions: action.payload.transactions || state.transactions,
-                rules: action.payload.rules || state.rules,
-                tasks: action.payload.tasks || state.tasks,
-                settings: action.payload.settings ? sanitizeSettings(action.payload.settings) : state.settings,
-                notifications: action.payload.notifications || state.notifications,
-                logs: action.payload.logs || state.logs,
-                passwordResetRequests: action.payload.passwordResetRequests || state.passwordResetRequests,
-                disputes: action.payload.disputes || state.disputes,
-            };
+            const sanitizedPayload = { ...action.payload };
+            if (sanitizedPayload.settings) {
+                sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
+            }
+            newState = { ...state, ...sanitizedPayload };
             break;
 
-        case 'SET_CURRENT_USER': {
-            if (!action.payload) {
-                newState = { ...state, currentUser: null };
-            } else {
-                const user = action.payload.user;
-                const token = action.payload.token;
-                try {
-                    if (user) {
-                        localStorage.setItem('currentUser', JSON.stringify(user));
-                        if (token) localStorage.setItem('authToken', token);
-                    } else {
-                        localStorage.removeItem('currentUser');
-                        localStorage.removeItem('authToken');
-                    }
-                } catch (e) {}
-                newState = { ...state, currentUser: user || null };
+        case 'SET_CURRENT_USER':
+            try {
+                if (action.payload) {
+                    localStorage.setItem('currentUser', JSON.stringify(action.payload));
+                } else {
+                    localStorage.removeItem('currentUser');
+                }
+            } catch (error) {
+                console.error("Could not access localStorage:", error);
             }
+            newState = { ...state, currentUser: action.payload };
             break;
-        }
 
         case 'SET_USERS': newState = { ...state, users: action.payload }; break;
         case 'ADD_USER': newState = { ...state, users: [...state.users, action.payload] }; break;
@@ -309,9 +291,11 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     try {
         localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
-            currentUser: newState.currentUser 
+            currentUser: state.currentUser 
         }));
-    } catch (e) {}
+    } catch (e) {
+        console.warn("Failed to update app cache", e);
+    }
 
     return newState;
 };
@@ -328,21 +312,23 @@ const initializer = (initialState: AppState) => {
         
         let initialData = initialState;
         
-        if (appCache && appCache !== "null" && appCache !== "undefined") {
+        if (appCache) {
             try {
                 const parsedCache = JSON.parse(appCache);
-                if (parsedCache) initialData = { ...initialData, ...parsedCache };
-            } catch (e) {}
+                initialData = { ...initialData, ...parsedCache };
+            } catch (e) {
+                console.warn("Invalid app cache");
+            }
         }
 
-        if (savedUser && savedUser !== "null" && savedUser !== "undefined") {
-            try {
-                initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
-            } catch (e) {}
+        if (savedUser) {
+            initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
         }
         
         return initialData;
-    } catch (error) {}
+    } catch (error) {
+        console.error("Could not parse user from localStorage", error);
+    }
     return initialState;
 };
 
@@ -360,7 +346,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             try {
                 const [
                     users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investment_plans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
+                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
                     currentVersion
                 ] = await Promise.all([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
@@ -374,7 +360,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     type: 'SET_ALL_DATA', 
                     payload: { 
                         users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                        investmentPlans: investment_plans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
                     } 
                 });
             } catch (error) {
@@ -386,13 +372,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }, []);
 
     // --- REAL-TIME SYNC POLLING ---
+    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; 
+            if (!state.currentUser) return; // Only poll if logged in
 
             try {
                 const serverVersion = await getDataVersion();
-                if (!serverVersion) return;
                 
                 if (lastVersionRef.current === 0) {
                     lastVersionRef.current = serverVersion;
@@ -400,34 +386,40 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    console.log("Sync conflict detected: Updating in background...");
-                    lastVersionRef.current = serverVersion;
+                    console.log("Remote changes detected by admin. Synchronizing app state...");
                     
-                    // Silent background update instead of window.location.reload()
-                    const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                    ]);
-                    
-                    dispatch({ 
-                        type: 'SET_ALL_DATA', 
-                        payload: { 
-                            users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
-                            investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
-                        } 
-                    });
+                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
+                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
+                        lastVersionRef.current = serverVersion;
+                        // Just trigger data fetch instead of refresh for admin
+                        // This keeps their modal/forms open but refreshes background data
+                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        ]);
+                        dispatch({ 
+                            type: 'SET_ALL_DATA', 
+                            payload: { 
+                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                            } 
+                        });
+                    } else {
+                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
+                        window.location.reload();
+                    }
                 }
-            } catch (err) {}
-        }, 8000); // 8 second interval to reduce server load
+            } catch (err) {
+                // Silently ignore polling errors
+            }
+        }, 5000); // Check every 5 seconds
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);
 
     return (
-        <div id="app-root-container">
-            <DataContext.Provider value={{ state, dispatch }}>
-                {children}
-            </DataContext.Provider>
-        </div>
+        <DataContext.Provider value={{ state, dispatch }}>
+            {children}
+        </DataContext.Provider>
     );
 };
