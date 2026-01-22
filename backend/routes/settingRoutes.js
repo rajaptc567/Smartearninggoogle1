@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getSettings,
     updateSettings,
@@ -8,10 +9,11 @@ import {
 
 const router = express.Router();
 
-router.route('/')
-    .get(getSettings)
-    .put(updateSettings);
-
+// Version polling is public for real-time sync
 router.get('/version', getDataVersion);
+
+router.route('/')
+    .get(authorize(['admin']), getSettings) // Admins can see settings
+    .put(authorize(['super_admin']), updateSettings); // Only Super Admin can change settings
 
 export default router;

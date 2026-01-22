@@ -23,20 +23,56 @@ export const authMiddleware = (req, res, next) => {
     }
 
     try {
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Attach identity to request
+        // Fail-safe: if role is missing in token, default to 'user'
         req.user = {
             id: decoded.id,
-            role: decoded.role,
+            role: decoded.role || 'user',
             email: decoded.email
         };
         
         next();
     } catch (err) {
-        // Token is invalid or expired - silently fail and continue as guest
         req.user = null;
         next();
     }
+};
+
+/**
+ * ROLE AUTHORIZATION MIDDLEWARE
+ * Blocks access based on roles.
+ * @param {Array} allowedRoles - List of roles permitted to access the route
+ */
+export const authorize = (allowedRoles = []) => {
+    return (req, res, next) => {
+        // 1. If no roles are specified, allow by default (unprotected route)
+        if (allowedRoles.length === 0) {
+            return next();
+        }
+
+        // 2. Check if user was identified by authMiddleware
+        if (!req.user) {
+            return res.status(403).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        // 3. MASTER BYPASS: Super Admin always has access
+        if (req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com') {
+            return next();
+        }
+
+        // 4. Role Check
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        next();
+    };
 };

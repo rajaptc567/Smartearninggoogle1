@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getUsers,
     getUser,
@@ -21,20 +22,33 @@ import {
 
 const router = express.Router();
 
-router.route('/').get(getUsers).post(createUser);
+// Public/Auth routes
 router.post('/login', loginUser);
 router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
-router.put('/bulk-restrictions', bulkUpdateRestrictions);
-router.post('/bulk-dummy', createBulkDummyUsers);
-router.delete('/bulk', bulkDeleteUsers);
 
-router.route('/:id').get(getUser).put(updateUser).delete(deleteUser);
+// Standard Member + Admin routes
+// NOTE: GET / is shared because users fetch it to build the referral tree locally
+router.route('/')
+    .get(authorize(['user', 'admin']), getUsers) 
+    .post(createUser);
 
-router.post('/:id/adjust-wallet', adjustWallet);
-router.post('/:id/purchase-plan', purchasePlan);
-router.post('/:id/activate-plan', adminActivatePlan);
-router.post('/:id/admin-reset-password', adminInitiatePasswordReset);
+// User-Specific actions (Passive identification handles ownership checks inside controllers later)
+router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);
+
+// Admin-Only actions
+router.put('/bulk-restrictions', authorize(['admin']), bulkUpdateRestrictions);
+router.post('/bulk-dummy', authorize(['admin']), createBulkDummyUsers);
+router.delete('/bulk', authorize(['admin']), bulkDeleteUsers);
+
+router.route('/:id')
+    .get(authorize(['user', 'admin']), getUser)
+    .put(authorize(['user', 'admin']), updateUser)
+    .delete(authorize(['admin']), deleteUser);
+
+router.post('/:id/adjust-wallet', authorize(['admin']), adjustWallet);
+router.post('/:id/activate-plan', authorize(['admin']), adminActivatePlan);
+router.post('/:id/admin-reset-password', authorize(['admin']), adminInitiatePasswordReset);
 
 export default router;
