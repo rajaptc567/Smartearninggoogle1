@@ -10,6 +10,7 @@ import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
+import jwt from 'jsonwebtoken';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
@@ -282,7 +283,19 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.login) return res.status(403).json({ success: false, error: 'Account restricted.' });
-        res.status(200).json({ success: true, data: user });
+        
+        // --- GENERATE JWT ---
+        const token = jwt.sign(
+            { 
+                id: user._id, 
+                role: user.role || 'user', 
+                email: user.email 
+            }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '30d' }
+        );
+
+        res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
