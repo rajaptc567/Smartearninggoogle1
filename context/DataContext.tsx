@@ -168,6 +168,7 @@ type Action =
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
+        if (!settings) return state.settings;
         const newSettings = { ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
@@ -175,9 +176,6 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.exchangeRates && !newSettings.exchangeRates.EUR) newSettings.exchangeRates.EUR = 0.92;
         if (newSettings.exchangeRates && !newSettings.exchangeRates.USD) newSettings.exchangeRates.USD = 1;
         if (newSettings.isTasksEnabled === undefined) newSettings.isTasksEnabled = true;
-        if (newSettings.showRejectedCommissionTransaction === undefined) newSettings.showRejectedCommissionTransaction = true;
-        if (newSettings.notifySponsorOnCommissionLimit === undefined) newSettings.notifySponsorOnCommissionLimit = true;
-        if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
         return newSettings;
     };
 
@@ -185,35 +183,43 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     switch (action.type) {
         case 'SET_ALL_DATA':
-            const sanitizedPayload = { ...action.payload };
-            if (sanitizedPayload.settings) {
-                sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
-            }
-            newState = { ...state, ...sanitizedPayload };
+            // Safety: Ensure we don't nullify existing arrays if payload is partial
+            newState = { 
+                ...state, 
+                users: action.payload.users || state.users,
+                deposits: action.payload.deposits || state.deposits,
+                withdrawals: action.payload.withdrawals || state.withdrawals,
+                transfers: action.payload.transfers || state.transfers,
+                paymentMethods: action.payload.paymentMethods || state.paymentMethods,
+                investmentPlans: action.payload.investmentPlans || state.investmentPlans,
+                transactions: action.payload.transactions || state.transactions,
+                rules: action.payload.rules || state.rules,
+                tasks: action.payload.tasks || state.tasks,
+                settings: action.payload.settings ? sanitizeSettings(action.payload.settings) : state.settings,
+                notifications: action.payload.notifications || state.notifications,
+                logs: action.payload.logs || state.logs,
+                passwordResetRequests: action.payload.passwordResetRequests || state.passwordResetRequests,
+                disputes: action.payload.disputes || state.disputes,
+            };
             break;
 
         case 'SET_CURRENT_USER': {
             if (!action.payload) {
                 newState = { ...state, currentUser: null };
-                break;
-            }
-            const user = action.payload.user;
-            const token = action.payload.token;
-
-            try {
-                if (user) {
-                    localStorage.setItem('currentUser', JSON.stringify(user));
-                    if (token) {
-                        localStorage.setItem('authToken', token);
+            } else {
+                const user = action.payload.user;
+                const token = action.payload.token;
+                try {
+                    if (user) {
+                        localStorage.setItem('currentUser', JSON.stringify(user));
+                        if (token) localStorage.setItem('authToken', token);
+                    } else {
+                        localStorage.removeItem('currentUser');
+                        localStorage.removeItem('authToken');
                     }
-                } else {
-                    localStorage.removeItem('currentUser');
-                    localStorage.removeItem('authToken');
-                }
-            } catch (error) {
-                console.error("Could not access localStorage:", error);
+                } catch (e) {}
+                newState = { ...state, currentUser: user || null };
             }
-            newState = { ...state, currentUser: user || null };
             break;
         }
 
@@ -305,9 +311,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             ...newState,
             currentUser: newState.currentUser 
         }));
-    } catch (e) {
-        console.warn("Failed to update app cache", e);
-    }
+    } catch (e) {}
 
     return newState;
 };
@@ -327,22 +331,18 @@ const initializer = (initialState: AppState) => {
         if (appCache) {
             try {
                 const parsedCache = JSON.parse(appCache);
-                initialData = { ...initialData, ...(parsedCache || {}) };
-            } catch (e) {
-                console.warn("Invalid app cache");
-            }
+                if (parsedCache) initialData = { ...initialData, ...parsedCache };
+            } catch (e) {}
         }
 
-        if (savedUser && savedUser !== "null" && savedUser !== "undefined") {
+        if (savedUser && savedUser !== "null") {
             try {
                 initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
             } catch (e) {}
         }
         
         return initialData;
-    } catch (error) {
-        console.error("Could not parse user from localStorage", error);
-    }
+    } catch (error) {}
     return initialState;
 };
 
@@ -392,6 +392,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
             try {
                 const serverVersion = await getDataVersion();
+                if (!serverVersion) return;
                 
                 if (lastVersionRef.current === 0) {
                     lastVersionRef.current = serverVersion;
@@ -399,28 +400,22 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    console.log("Remote changes detected by admin. Synchronizing app state...");
-                    
-                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
-                        lastVersionRef.current = serverVersion;
-                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
-                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                        ]);
-                        dispatch({ 
-                            type: 'SET_ALL_DATA', 
-                            payload: { 
-                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
-                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
-                            } 
-                        });
-                    } else {
-                        window.location.reload();
-                    }
+                    lastVersionRef.current = serverVersion;
+                    // Requirement: Silent background update instead of window.location.reload()
+                    // This prevents step-loss during deposit/withdraw forms.
+                    const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                    ]);
+                    dispatch({ 
+                        type: 'SET_ALL_DATA', 
+                        payload: { 
+                            users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
+                            investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                        } 
+                    });
                 }
-            } catch (err) {
-                // Silently ignore polling errors
-            }
+            } catch (err) {}
         }, 5000); 
 
         return () => clearInterval(pollInterval);

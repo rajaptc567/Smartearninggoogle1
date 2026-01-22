@@ -51,12 +51,12 @@ export const authorize = (allowedRoles = []) => {
 
         if (!isAuthorized) {
             // 3. FAIL-SAFE FOR BOOT SEQUENCE (GET Requests)
-            // If the frontend is trying to read data during Promise.all boot, 
-            // return a safe empty success response instead of a 403 error.
+            // Critical: Frontend components expect specific shapes.
             if (req.method === 'GET') {
+                const isObjectPath = req.path.toLowerCase().includes('settings') || req.path.toLowerCase().includes('profile');
                 return res.status(200).json({
                     success: true,
-                    data: req.path.includes('settings') ? {} : []
+                    data: isObjectPath ? {} : []
                 });
             }
 
