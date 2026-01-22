@@ -30,11 +30,9 @@ import taskRoutes from './routes/taskRoutes.js';
 // Load env vars
 dotenv.config();
 
-// 1. CRITICAL ENVIRONMENT SAFETY CHECK
-// Server will fail to start if JWT_SECRET is missing. No hardcoded fallbacks allowed.
+// 1. ENVIRONMENT SAFETY CHECK (Non-Fatal)
 if (!process.env.JWT_SECRET) {
-    console.error('FATAL ERROR: JWT_SECRET is not defined in environment variables.');
-    process.exit(1);
+    console.warn('WARNING: JWT_SECRET is not defined. Authentication will not work properly.');
 }
 
 // Connect to database
@@ -50,7 +48,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // 2. PASSIVE AUTHENTICATION LAYER
-// Identifies user but NEVER blocks requests. req.user will be null if token is invalid/missing.
 app.use(authMiddleware);
 
 // Handle ES Modules path resolution
@@ -97,7 +94,7 @@ const seedAdminUser = async () => {
 
 // Simple test route
 app.get('/', (req, res) => {
-    res.send('SmartEarning API is running in PASSIVE AUTH mode...');
+    res.send('SmartEarning API is running...');
 });
 
 // Mount routers

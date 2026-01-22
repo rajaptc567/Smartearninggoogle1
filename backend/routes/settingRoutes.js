@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/version', getDataVersion);
 
 router.route('/')
-    .get(authorize(['admin']), getSettings) // Admins can see settings
+    .get(authorize(['user', 'admin']), getSettings) // Users need settings for exchange rates/tickers
     .put(authorize(['super_admin']), updateSettings); // Only Super Admin can change settings
 
 export default router;
