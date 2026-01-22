@@ -254,11 +254,11 @@ export const createUser = async (req, res) => {
         
         req.body.currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
         req.body.activePlans = [];
-        req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
+        // Ensure new safety fields are initialized
+        req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
         
         const user = await User.create(req.body);
         
-        // --- NEW REFERRAL NOTIFICATION ---
         if (sponsorUser) {
             await Notification.create({
                 userId: sponsorUser._id,
@@ -267,10 +267,9 @@ export const createUser = async (req, res) => {
             });
         }
 
-        // Welcome Notification updated to match screenshot format
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
         
-        // PERSISTENT SYNC TRIGGER
+        // PERSISTENT SYNC BUMP
         await Setting.bumpVersion();
         
         res.status(201).json({ success: true, data: user });
@@ -283,12 +282,10 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         
-        // Check both blocked status and new login restriction field
-        if (user.status === 'Blocked' || user.restrictions?.login) {
-            return res.status(403).json({ success: false, error: 'Account access restricted by administration.' });
-        }
+        // Use updated field names
+        if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
-        // GENERATE JWT USING STRICT ENV SECRET
+        // --- GENERATE JWT ---
         const token = jwt.sign(
             { 
                 id: user._id, 
@@ -323,7 +320,6 @@ export const updateUser = async (req, res) => {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
         
-        // --- STATUS CHANGE NOTIFICATION ---
         if (req.body.status && req.body.status !== userToUpdate.status) {
             await Notification.create({
                 userId: userToUpdate._id,
@@ -350,16 +346,13 @@ export const updateUser = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
-                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet.` 
             });
         }
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: updatedUser });
@@ -389,16 +382,13 @@ export const adminActivatePlan = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
-                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet.` 
             });
         }
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
@@ -411,10 +401,11 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         
-        if (user.restrictions?.purchase) {
-            return res.status(403).json({ success: false, error: 'Plan purchases are currently restricted for your account.' });
+        // Check new safety field
+        if (user.restrictions?.purchaseBlocked) {
+            return res.status(403).json({ success: false, error: 'Plan purchases are currently disabled for your account.' });
         }
-        
+
         if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date(), disabledLevels: [] });
@@ -436,16 +427,13 @@ export const purchasePlan = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
-                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+                message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet.` 
             });
         }
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
@@ -463,7 +451,8 @@ export const bulkUpdateRestrictions = async (req, res) => {
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         for (const user of usersToUpdate) {
-            let cur = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
+            // Align with new schema field names if necessary in bulk mapper
+            let cur = user.restrictions || { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
             let changed = false;
             let checkRel = false;
             for (const key of Object.keys(restrictions)) {
@@ -490,12 +479,10 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     }
                     if (rel > 0) {
                         user.walletBalance = Number((user.walletBalance + rel).toFixed(2));
-                        
-                        // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION (Bulk path) ---
                         await Notification.create({ 
                             userId: user._id, 
                             subject: 'Commission Unlocked 🔓',
-                            message: `Success! A total of ${user.currency}${rel.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
+                            message: `Success! A total of ${user.currency}${rel.toFixed(2)} in held commissions has been released to your wallet.` 
                         });
                     }
                 }
@@ -503,7 +490,6 @@ export const bulkUpdateRestrictions = async (req, res) => {
             }
         }
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, message: `Bulk updated users.` });
@@ -520,7 +506,6 @@ export const bulkDeleteUsers = async (req, res) => {
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
         await User.deleteMany({ _id: { $in: ids } });
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: {} });
@@ -537,7 +522,6 @@ export const deleteUser = async (req, res) => {
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: {} });
@@ -552,7 +536,6 @@ export const adjustWallet = async (req, res) => {
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         await user.save();
         
-        // --- WALLET ADJUSTMENT NOTIFICATION ---
         await Notification.create({
             userId: user._id,
             subject: 'Wallet Adjusted',
@@ -561,7 +544,6 @@ export const adjustWallet = async (req, res) => {
 
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: { user, transaction }});
@@ -576,7 +558,7 @@ export const createBulkDummyUsers = async (req, res) => {
 
         const createOne = async (uname) => {
             const existing = await User.findOne({ username: uname });
-            if (existing) return; // Skip duplicates
+            if (existing) return; 
             await User.create({
                 fullName: `Dummy ${uname}`,
                 username: uname,
@@ -602,7 +584,6 @@ export const createBulkDummyUsers = async (req, res) => {
             }
         }
         
-        // PERSISTENT SYNC TRIGGER
         await Setting.bumpVersion();
         
         res.status(201).json({ success: true, message: 'Process completed' });
