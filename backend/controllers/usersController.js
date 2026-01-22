@@ -12,6 +12,122 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
 
+/**
+ * SHARED UTILITY: THE COMMISSION ENGINE
+ * Handles multi-level distribution, currency conversion, overflow, and eligibility.
+ */
+const runCommissionEngine = async (buyer, plan) => {
+    const settings = await Setting.getSettings();
+    let currentSponsorUsername = buyer.sponsor;
+    let level = 1;
+
+    // Iterate up the upline
+    while (currentSponsorUsername && level <= (plan.indirectCommissions.length + 1)) {
+        const sponsor = await User.findOne({ username: currentSponsorUsername });
+        if (!sponsor) break;
+
+        // Get commission config for this level
+        let commConfig;
+        if (level === 1) {
+            // Find L1 slot
+            const equivGroup = settings.planEquivalencyGroups.find(g => 
+                [String(g.usdPlanId), String(g.pkrPlanId), String(g.eurPlanId)].includes(String(plan._id))
+            );
+            const equivIds = equivGroup ? [equivGroup.usdPlanId, equivGroup.pkrPlanId, equivGroup.eurPlanId] : [String(plan._id)];
+            
+            const existingL1CommsCount = await Transaction.countDocuments({
+                userId: sponsor._id,
+                type: 'Commission',
+                level: 1,
+                relatedPlanId: { $in: equivIds },
+                status: { $in: ['Approved', 'Pending'] }
+            });
+
+            // Check for Overflow
+            if (plan.directReferralLimit > 0 && existingL1CommsCount >= plan.directReferralLimit) {
+                await Transaction.create({
+                    userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
+                    type: 'Commission', amount: 0, level: 1, sourceUserId: buyer._id,
+                    description: `[OVERFLOW] Referral limit reached for ${plan.name} scope. No commission paid.`,
+                    status: 'Rejected'
+                });
+                currentSponsorUsername = sponsor.sponsor;
+                level++;
+                continue;
+            }
+            
+            // Pick specific slot config if exists, else default to first
+            commConfig = plan.directCommissions[existingL1CommsCount] || plan.directCommissions[0];
+        } else {
+            commConfig = plan.indirectCommissions[level - 2];
+        }
+
+        if (!commConfig) break;
+
+        // Calculate Amount
+        let commAmount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
+        
+        // Cross-Currency Conversion
+        if (sponsor.currency !== plan.currency) {
+            const fromRate = settings.exchangeRates[plan.currency] || 1;
+            const toRate = settings.exchangeRates[sponsor.currency] || 1;
+            commAmount = (commAmount / fromRate) * toRate;
+        }
+
+        // Check Eligibility
+        let isEligible = true;
+        let reason = 'Approved';
+        
+        if (settings.requireActivePlanForCommission && (!sponsor.activePlans || sponsor.activePlans.length === 0)) {
+            isEligible = false;
+            reason = 'No active plan';
+        } else if (settings.requirePlanMatchForCommission) {
+            const equivGroup = settings.planEquivalencyGroups.find(g => 
+                [String(g.usdPlanId), String(g.pkrPlanId), String(g.eurPlanId)].includes(String(plan._id))
+            );
+            const allowedIds = equivGroup ? [equivGroup.usdPlanId, equivGroup.pkrPlanId, equivGroup.eurPlanId] : [String(plan._id)];
+            const hasMatch = sponsor.activePlans.some(ap => allowedIds.includes(String(ap.planId)));
+            if (!hasMatch) {
+                isEligible = false;
+                reason = 'Plan match required';
+            }
+        }
+
+        // Create Transaction record for Sponsor
+        await Transaction.create({
+            userId: sponsor._id,
+            userName: sponsor.username,
+            currency: sponsor.currency,
+            type: 'Commission',
+            amount: Number(commAmount.toFixed(2)),
+            level,
+            sourceUserId: buyer._id,
+            relatedPlanId: plan._id,
+            status: isEligible ? 'Approved' : 'Pending',
+            description: isEligible ? `Commission from @${buyer.username} (${plan.name})` : `[HELD] ${reason}: From @${buyer.username}`,
+            originalAmount: commAmount,
+            originalCurrency: plan.currency
+        });
+
+        // Credit balance if eligible
+        if (isEligible) {
+            sponsor.walletBalance = Number((sponsor.walletBalance + commAmount).toFixed(2));
+            await sponsor.save();
+            
+            // Notify Sponsor
+            await Notification.create({
+                userId: sponsor._id,
+                subject: 'Commission Received',
+                message: `You earned ${sponsor.currency} ${commAmount.toFixed(2)} from @${buyer.username}'s ${plan.name} activation.`
+            });
+        }
+
+        // Move up to next sponsor
+        currentSponsorUsername = sponsor.sponsor;
+        level++;
+    }
+};
+
 export const getUsers = async (req, res) => {
     try {
         const isMaster = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
@@ -95,26 +211,53 @@ export const updateUser = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
+/**
+ * ADMIN ACTION: MANUALLY ACTIVATE PLAN (BONUS OR OVERRIDE)
+ * Now triggers the commission engine.
+ */
 export const adminActivatePlan = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
+        
+        // 1. Add plan to profile
+        user.activePlans.push({ 
+            planId: plan._id, 
+            planName: plan.name, 
+            price: plan.price, 
+            purchaseDate: new Date() 
+        });
         const updatedUser = await user.save();
+
+        // 2. Log manual activation transaction (0 cost to user)
+        await Transaction.create({
+            userId: user._id,
+            userName: user.username,
+            currency: user.currency,
+            type: 'Manual Activation',
+            amount: 0,
+            description: `Admin activated ${plan.name} plan`,
+            status: 'Approved'
+        });
+
+        // 3. Trigger Commission Engine
+        await runCommissionEngine(user, plan);
+
+        // 4. Update real-time sync
         await Setting.bumpVersion();
+
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
 /**
- * CORE FINANCIAL ENGINE: PURCHASE PLAN & DISTRIBUTE COMMISSIONS
+ * USER ACTION: PURCHASE PLAN WITH WALLET
  */
 export const purchasePlan = async (req, res) => {
     try {
         const buyer = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
-        const settings = await Setting.getSettings();
 
         if (!buyer || !plan) return res.status(404).json({ success: false, error: 'Entity not found' });
         if (buyer.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds' });
@@ -140,108 +283,11 @@ export const purchasePlan = async (req, res) => {
             status: 'Approved'
         });
 
-        // 3. START COMMISSION ENGINE
-        let currentSponsorUsername = buyer.sponsor;
-        let level = 1;
+        // 3. Trigger Commission Engine
+        await runCommissionEngine(buyer, plan);
 
-        // Iterate up the upline
-        while (currentSponsorUsername && level <= (plan.indirectCommissions.length + 1)) {
-            const sponsor = await User.findOne({ username: currentSponsorUsername });
-            if (!sponsor) break;
-
-            // Get commission config for this level
-            let commConfig;
-            if (level === 1) {
-                // Find L1 slot
-                const equivGroup = settings.planEquivalencyGroups.find(g => 
-                    [String(g.usdPlanId), String(g.pkrPlanId), String(g.eurPlanId)].includes(String(plan._id))
-                );
-                const equivIds = equivGroup ? [equivGroup.usdPlanId, equivGroup.pkrPlanId, equivGroup.eurPlanId] : [String(plan._id)];
-                
-                const existingL1CommsCount = await Transaction.countDocuments({
-                    userId: sponsor._id,
-                    type: 'Commission',
-                    level: 1,
-                    relatedPlanId: { $in: equivIds },
-                    status: { $in: ['Approved', 'Pending'] }
-                });
-
-                // Check for Overflow
-                if (plan.directReferralLimit > 0 && existingL1CommsCount >= plan.directReferralLimit) {
-                    await Transaction.create({
-                        userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency,
-                        type: 'Commission', amount: 0, level: 1, sourceUserId: buyer._id,
-                        description: `[OVERFLOW] Referral limit reached for ${plan.name} scope. No commission paid.`,
-                        status: 'Rejected'
-                    });
-                    currentSponsorUsername = sponsor.sponsor;
-                    level++;
-                    continue;
-                }
-                
-                // Pick specific slot config if exists, else default to first
-                commConfig = plan.directCommissions[existingL1CommsCount] || plan.directCommissions[0];
-            } else {
-                commConfig = plan.indirectCommissions[level - 2];
-            }
-
-            if (!commConfig) break;
-
-            // Calculate Amount
-            let commAmount = commConfig.type === 'percentage' ? (plan.price * commConfig.value) / 100 : commConfig.value;
-            
-            // Cross-Currency Conversion
-            if (sponsor.currency !== plan.currency) {
-                const fromRate = settings.exchangeRates[plan.currency] || 1;
-                const toRate = settings.exchangeRates[sponsor.currency] || 1;
-                commAmount = (commAmount / fromRate) * toRate;
-            }
-
-            // Check Eligibility
-            let isEligible = true;
-            let reason = 'Approved';
-            
-            if (settings.requireActivePlanForCommission && (!sponsor.activePlans || sponsor.activePlans.length === 0)) {
-                isEligible = false;
-                reason = 'No active plan';
-            } else if (settings.requirePlanMatchForCommission) {
-                // Check if sponsor owns an equivalent plan
-                const equivGroup = settings.planEquivalencyGroups.find(g => 
-                    [String(g.usdPlanId), String(g.pkrPlanId), String(g.eurPlanId)].includes(String(plan._id))
-                );
-                const allowedIds = equivGroup ? [equivGroup.usdPlanId, equivGroup.pkrPlanId, equivGroup.eurPlanId] : [String(plan._id)];
-                const hasMatch = sponsor.activePlans.some(ap => allowedIds.includes(String(ap.planId)));
-                if (!hasMatch) {
-                    isEligible = false;
-                    reason = 'Plan match required';
-                }
-            }
-
-            // Create Transaction
-            await Transaction.create({
-                userId: sponsor._id,
-                userName: sponsor.username,
-                currency: sponsor.currency,
-                type: 'Commission',
-                amount: Number(commAmount.toFixed(2)),
-                level,
-                sourceUserId: buyer._id,
-                relatedPlanId: plan._id,
-                status: isEligible ? 'Approved' : 'Pending',
-                description: isEligible ? `Commission from @${buyer.username} (${plan.name})` : `[HELD] ${reason}: From @${buyer.username}`,
-                originalAmount: commAmount,
-                originalCurrency: plan.currency
-            });
-
-            if (isEligible) {
-                sponsor.walletBalance = Number((sponsor.walletBalance + commAmount).toFixed(2));
-                await sponsor.save();
-            }
-
-            // Move up
-            currentSponsorUsername = sponsor.sponsor;
-            level++;
-        }
+        // 4. Update real-time sync
+        await Setting.bumpVersion();
 
         res.status(200).json({ success: true, data: { user: updatedBuyer, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
