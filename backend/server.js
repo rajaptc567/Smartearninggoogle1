@@ -43,29 +43,24 @@ connectDB();
 const app = express();
 
 /**
- * COMPREHENSIVE CORS CONFIGURATION
- * Required for cross-origin HttpOnly cookies (Vercel -> Render)
+ * RESILIENT CORS CONFIGURATION
+ * Allows all Vercel subdomains and common local ports for development.
  */
-const allowedOrigins = [
-    'http://localhost:3000', 
-    'http://localhost:5173',
-    'https://smartearning-admin.vercel.app',
-    'https://smartearning-member.vercel.app' // Added member domain
-];
-
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps)
         if (!origin) return callback(null, true);
         
-        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+        const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+        const isVercel = origin.endsWith('.vercel.app');
+        
+        if (isLocalhost || isVercel || process.env.NODE_ENV !== 'production') {
             callback(null, true);
         } else {
-            // Strictly fail if origin is not recognized in production
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true // MUST be true for cookies
+    credentials: true 
 }));
 
 // Middlewares

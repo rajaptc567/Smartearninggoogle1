@@ -289,10 +289,22 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     // --- CACHE PERSISTENCE ---
     try {
-        localStorage.setItem('app_cache', JSON.stringify({
+        const cacheString = JSON.stringify({
             ...newState,
             currentUser: state.currentUser 
-        }));
+        });
+
+        /**
+         * QUOTA SAFETY CHECK:
+         * To prevent mobile browsers from crashing due to localStorage quota limits (usually 5MB),
+         * we only persist the state if its stringified size is under 500KB. 
+         * This ensures login/dashboard stability without losing mission-critical state.
+         */
+        if (cacheString.length < 500000) {
+            localStorage.setItem('app_cache', cacheString);
+        } else {
+            console.warn("App state size exceeds 500KB. Skipping local cache update to prevent quota errors.");
+        }
     } catch (e) {
         console.warn("Failed to update app cache", e);
     }
