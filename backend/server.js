@@ -43,24 +43,41 @@ connectDB();
 const app = express();
 
 /**
- * RESILIENT CORS CONFIGURATION
- * Allows all Vercel subdomains and common local ports for development.
+ * ADVANCED CORS CONFIGURATION
+ * Supports credentials:true (HttpOnly Cookies) across dynamic Vercel subdomains and custom domains.
  */
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps)
+        // 1. Allow requests with no origin (like mobile apps, curl, or server-to-server)
         if (!origin) return callback(null, true);
         
-        const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
-        const isVercel = origin.endsWith('.vercel.app');
-        
-        if (isLocalhost || isVercel || process.env.NODE_ENV !== 'production') {
+        // 2. Explicit whitelist for production custom domains and local dev ports
+        const whitelist = [
+            'https://smartexn.com',
+            'https://www.smartexn.com',
+            'https://smartearninggoogle1.vercel.app',
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://localhost:5000',
+            'http://127.0.0.1:3000'
+        ];
+
+        const isWhitelisted = whitelist.includes(origin);
+        const isVercelSubdomain = origin.endsWith('.vercel.app'); // Permits all Vercel previews/deployments
+        const isDevMode = process.env.NODE_ENV !== 'production';
+
+        if (isWhitelisted || isVercelSubdomain || isDevMode) {
+            // Reflecting the requesting origin back to the browser is required when credentials: true is set
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            // Rejects unauthorized cross-origin requests for security
+            callback(new Error('CORS Blocking: Origin not authorized by security policy'));
         }
     },
-    credentials: true 
+    credentials: true, // Mandatory for HttpOnly JWT cookie transmission
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Standardizes supported HTTP verbs
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'], // Standardizes supported headers
+    optionsSuccessStatus: 204 // Ensures legacy and mobile browsers handle OPTIONS preflight with 204 No Content
 }));
 
 // Middlewares
