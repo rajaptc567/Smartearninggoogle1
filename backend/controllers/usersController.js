@@ -5,6 +5,7 @@ import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js'; 
+import jwt from 'jsonwebtoken';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
@@ -12,6 +13,31 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+
+// Helper for sending token in cookie
+const sendTokenResponse = (user, statusCode, res) => {
+    // 1. Generate Token using JWT_EXPIRE from Render Env
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRE || '7d'
+    });
+
+    // 2. Configure Cookie using JWT_COOKIE_EXPIRE from Render Env
+    // We parse the env var to an integer, defaulting to 7 days if not found
+    const cookieExpireDays = parseInt(process.env.JWT_COOKIE_EXPIRE) || 7;
+    const options = {
+        expires: new Date(Date.now() + cookieExpireDays * 24 * 60 * 60 * 1000),
+        httpOnly: true, // Prevents XSS (JavaScript cannot access the token)
+        secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+        sameSite: 'none' // Required for cross-origin if frontend is on a different domain
+    };
+
+    res.status(statusCode)
+        .cookie('token', token, options)
+        .json({
+            success: true,
+            data: user // Frontend receives user info, token stays safe in the cookie
+        });
+};
 
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
@@ -161,15 +187,11 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         if (eligibility.status === 'Approved') {
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
-
-            // --- USER NOTIFICATION FOR SUCCESSFUL COMMISSION ---
             await Notification.create({
                 userId: uplineUser._id,
                 subject: 'Commission Received!',
                 message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.`
             });
-
-            // --- ADMIN & USER NOTIFICATION FOR LIMIT REACHED ---
             if (level === 0) {
                 const equivIds = [plan._id.toString()];
                 if (settings.planEquivalencyGroups) {
@@ -178,7 +200,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 }
                 const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
                 if (plan.directReferralLimit > 0 && approvedCount === plan.directReferralLimit) {
-                    // Notify Admin
                     const admin = await User.findOne({ username: 'admin' });
                     if (admin) {
                         await Notification.create({
@@ -188,7 +209,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                             isPopup: true
                         });
                     }
-                    // Notify User
                     await Notification.create({
                         userId: uplineUser._id,
                         subject: '⚠️ Slot Limit Reached!',
@@ -199,8 +219,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             }
         } else if (eligibility.status === 'Rejected') {
             const isLimitRejected = eligibility.message.includes('[Limit]');
-            
-            // Check admin preference for notifications on rejected commissions
             if (!isLimitRejected || (isLimitRejected && settings.notifySponsorOnCommissionLimit)) {
                 await Notification.create({ 
                     userId: uplineUser._id, 
@@ -210,15 +228,12 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 });
             }
         } else if (eligibility.status === 'Pending') {
-            // --- USER NOTIFICATION FOR HELD COMMISSION (Inbox & Bell) ---
             await Notification.create({
                 userId: uplineUser._id,
                 subject: 'Commission Locked 🔐',
                 message: `A commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} has been held. Reason: ${eligibility.message}`
             });
         }
-
-        // Check admin preference for transaction record visibility on rejected commissions
         const isLimitRejectedTx = eligibility.status === 'Rejected' && eligibility.message.includes('[Limit]');
         if (!isLimitRejectedTx || (isLimitRejectedTx && settings.showRejectedCommissionTransaction)) {
             await Transaction.create({ 
@@ -234,7 +249,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
                 relatedPlanId: plan._id 
             });
         }
-
         currentUplineUsername = uplineUser.sponsor;
     }
 };
@@ -243,21 +257,16 @@ export const createUser = async (req, res) => {
     try {
         const { fullName, username, email, password, phone, sponsor, country } = req.body;
         if (!country) return res.status(400).json({ success: false, error: 'Country is required.' });
-        
         let sponsorUser = null;
         if (sponsor) {
             sponsorUser = await User.findOne({ username: { $regex: new RegExp(`^${sponsor}$`, 'i') } });
             if (!sponsorUser) return res.status(400).json({ success: false, error: `Sponsor '${sponsor}' not found.` });
             req.body.sponsor = sponsorUser.username;
         }
-        
         req.body.currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
         req.body.activePlans = [];
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, login: false, purchase: false };
-        
         const user = await User.create(req.body);
-        
-        // --- NEW REFERRAL NOTIFICATION ---
         if (sponsorUser) {
             await Notification.create({
                 userId: sponsorUser._id,
@@ -265,13 +274,8 @@ export const createUser = async (req, res) => {
                 message: `Great news! @${user.username} has joined your network using your link.`
             });
         }
-
-        // Welcome Notification updated to match screenshot format
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -282,8 +286,18 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.login) return res.status(403).json({ success: false, error: 'Account restricted.' });
-        res.status(200).json({ success: true, data: user });
+        
+        // Secure token issuance via cookies
+        sendTokenResponse(user, 200, res);
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const logout = (req, res) => {
+    res.cookie('token', 'none', {
+        expires: new Date(Date.now() + 10 * 1000),
+        httpOnly: true
+    });
+    res.status(200).json({ success: true, data: {} });
 };
 
 export const getUsers = async (req, res) => {
@@ -305,8 +319,6 @@ export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
-        
-        // --- STATUS CHANGE NOTIFICATION ---
         if (req.body.status && req.body.status !== userToUpdate.status) {
             await Notification.create({
                 userId: userToUpdate._id,
@@ -315,7 +327,6 @@ export const updateUser = async (req, res) => {
                 isPopup: true
             });
         }
-
         Object.assign(userToUpdate, req.body);
         let updatedUser = await userToUpdate.save();
         const settings = await Setting.getSettings();
@@ -333,18 +344,13 @@ export const updateUser = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
                 message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
             });
         }
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -372,18 +378,13 @@ export const adminActivatePlan = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
                 message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
             });
         }
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -414,18 +415,13 @@ export const purchasePlan = async (req, res) => {
         if (releasedAmount > 0) {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
-            
-            // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION ---
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
                 message: `Success! A total of ${updatedUser.currency}${releasedAmount.toFixed(2)} in held commissions has been released to your wallet following your account qualification.` 
             });
         }
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: { user: updatedUser, transaction: {} } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -468,8 +464,6 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     }
                     if (rel > 0) {
                         user.walletBalance = Number((user.walletBalance + rel).toFixed(2));
-                        
-                        // --- NEW: USER NOTIFICATION FOR RELEASED COMMISSION (Bulk path) ---
                         await Notification.create({ 
                             userId: user._id, 
                             subject: 'Commission Unlocked 🔓',
@@ -480,10 +474,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
                 await user.save();
             }
         }
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, message: `Bulk updated users.` });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -497,10 +488,7 @@ export const bulkDeleteUsers = async (req, res) => {
         await Notification.deleteMany({ userId: { $in: ids } });
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
         await User.deleteMany({ _id: { $in: ids } });
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -514,10 +502,7 @@ export const deleteUser = async (req, res) => {
         await Transaction.deleteMany({ userId: user._id });
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -529,19 +514,13 @@ export const adjustWallet = async (req, res) => {
         const { amount, description } = req.body;
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         await user.save();
-        
-        // --- WALLET ADJUSTMENT NOTIFICATION ---
         await Notification.create({
             userId: user._id,
             subject: 'Wallet Adjusted',
             message: `Admin has ${amount > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(amount)}. Reason: ${description || 'Manual adjustment'}`
         });
-
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 }
@@ -551,10 +530,9 @@ export const createBulkDummyUsers = async (req, res) => {
         const { count, sponsor, balance, country, currency, usernames } = req.body;
         const s = await User.findOne({ username: sponsor });
         if (!s) return res.status(404).json({ success: false, error: 'Sponsor not found' });
-
         const createOne = async (uname) => {
             const existing = await User.findOne({ username: uname });
-            if (existing) return; // Skip duplicates
+            if (existing) return;
             await User.create({
                 fullName: `Dummy ${uname}`,
                 username: uname,
@@ -567,7 +545,6 @@ export const createBulkDummyUsers = async (req, res) => {
                 sponsor: s.username
             });
         };
-
         if (usernames && Array.isArray(usernames) && usernames.length > 0) {
             for (const uname of usernames) {
                 if (uname.trim()) await createOne(uname.trim());
@@ -579,10 +556,7 @@ export const createBulkDummyUsers = async (req, res) => {
                 await createOne(`user_${suf}`);
             }
         }
-        
-        // Update version for real-time sync
         global.appDataVersion = Date.now();
-        
         res.status(201).json({ success: true, message: 'Process completed' });
     } catch (err) { 
         res.status(400).json({ success: false, error: err.message }); 

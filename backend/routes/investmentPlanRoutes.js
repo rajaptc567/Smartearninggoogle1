@@ -7,17 +7,20 @@ import {
     updateInvestmentPlan,
     deleteInvestmentPlan,
 } from '../controllers/investmentPlansController.js';
+import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router
-    .route('/')
-    .get(getInvestmentPlans)
-    .post(createInvestmentPlan);
+// GET public for landing page/catalog
+router.get('/', getInvestmentPlans);
+router.get('/:id', getInvestmentPlan);
 
-router
-    .route('/:id')
-    .get(getInvestmentPlan)
+// Management requires Admin
+router.use(protect);
+router.use(authorizeAdmin);
+
+router.post('/', createInvestmentPlan);
+router.route('/:id')
     .put(updateInvestmentPlan)
     .delete(deleteInvestmentPlan);
 

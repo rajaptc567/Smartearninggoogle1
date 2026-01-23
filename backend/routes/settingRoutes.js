@@ -5,13 +5,15 @@ import {
     updateSettings,
     getDataVersion
 } from '../controllers/settingsController.js';
+import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.route('/')
-    .get(getSettings)
-    .put(updateSettings);
-
+// Public read / version check
+router.get('/', getSettings);
 router.get('/version', getDataVersion);
+
+// Protected update
+router.put('/', protect, authorizeAdmin, updateSettings);
 
 export default router;
