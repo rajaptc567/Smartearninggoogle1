@@ -11,23 +11,14 @@ const toMoneyDec = (val) => Number((val / 100).toFixed(2));
 
 export const getWithdrawals = async (req, res) => {
     try {
-        const { page = 1, limit = 20, searchTerm, statusFilter } = req.query;
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 1000;
+        const skip = (page - 1) * limit;
 
-        let query = {};
-        if (statusFilter) query.status = statusFilter;
-        if (searchTerm) {
-            query.$or = [
-                { userName: { $regex: searchTerm, $options: 'i' } },
-                { _id: { $regex: searchTerm, $options: 'i' } },
-                { method: { $regex: searchTerm, $options: 'i' } }
-            ];
-        }
-
-        const totalCount = await Withdrawal.countDocuments(query);
-        const withdrawals = await Withdrawal.find(query)
+        const totalCount = await Withdrawal.countDocuments();
+        const withdrawals = await Withdrawal.find()
             .skip(skip)
-            .limit(parseInt(limit))
+            .limit(limit)
             .sort({ date: -1 })
             .populate({
                 path: 'matchedDepositIds',
@@ -36,6 +27,7 @@ export const getWithdrawals = async (req, res) => {
             
         res.status(200).json({ 
             success: true, 
+            count: withdrawals.length, 
             data: withdrawals,
             totalCount,
             totalPages: Math.ceil(totalCount / limit)
@@ -73,12 +65,7 @@ export const createWithdrawal = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Insufficient balance' });
         }
 
-        // ATOMIC UPDATE: Deduct balance
-        const updatedUser = await User.findByIdAndUpdate(
-            user._id,
-            { $inc: { walletBalance: -req.body.amount } },
-            { new: true }
-        );
+        user.walletBalance = toMoneyDec(balanceInt - requestAmtInt);
         
         const withdrawalData = { ...req.body, currency: user.currency };
         const withdrawal = await Withdrawal.create(withdrawalData);
@@ -98,8 +85,9 @@ export const createWithdrawal = async (req, res) => {
             message: `Withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} submitted.`
         });
         
+        await user.save();
         global.appDataVersion = Date.now();
-        res.status(201).json({ success: true, data: { withdrawal, user: updatedUser, transaction } });
+        res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -162,12 +150,10 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            // ATOMIC REFUND
-            const updatedUser = await User.findByIdAndUpdate(
-                user._id,
-                { $inc: { walletBalance: withdrawal.amount } },
-                { new: true }
-            );
+            const curBalInt = toMoneyInt(user.walletBalance);
+            const refundInt = toMoneyInt(withdrawal.amount);
+            
+            user.walletBalance = toMoneyDec(curBalInt + refundInt);
             
             await Transaction.create({
                 userId: user._id, userName: user.username, currency: user.currency,
@@ -192,9 +178,9 @@ export const updateWithdrawal = async (req, res) => {
         withdrawal.adminNotes = adminNotes;
         
         await withdrawal.save();
+        await user.save();
         global.appDataVersion = Date.now();
-        const finalUser = await User.findById(user._id);
-        res.status(200).json({ success: true, data: { withdrawal, user: finalUser } });
+        res.status(200).json({ success: true, data: { withdrawal, user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
