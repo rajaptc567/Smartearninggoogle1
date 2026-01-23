@@ -6,25 +6,37 @@ import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 
-// @desc    Get all withdrawals
-// @route   GET /api/v1/withdrawals
+const toMoneyInt = (val) => Math.round(parseFloat(val || 0) * 100);
+const toMoneyDec = (val) => Number((val / 100).toFixed(2));
+
 export const getWithdrawals = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 1000;
+        const skip = (page - 1) * limit;
+
+        const totalCount = await Withdrawal.countDocuments();
         const withdrawals = await Withdrawal.find()
+            .skip(skip)
+            .limit(limit)
             .sort({ date: -1 })
             .populate({
                 path: 'matchedDepositIds',
                 select: 'amount date status receiptUrl userName transactionId method'
             });
             
-        res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+        res.status(200).json({ 
+            success: true, 
+            count: withdrawals.length, 
+            data: withdrawals,
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit)
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
-// @desc    Get single withdrawal
-// @route   GET /api/v1/withdrawals/:id
 export const getWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
@@ -37,62 +49,23 @@ export const getWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Create new withdrawal request
-// @route   POST /api/v1/withdrawals
 export const createWithdrawal = async (req, res) => {
     try {
         const user = await User.findById(req.body.userId);
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.withdrawal)) {
-            return res.status(403).json({ success: false, error: `Withdrawals are currently disabled for your account.` });
+            return res.status(403).json({ success: false, error: `Withdrawals disabled.` });
         }
         
-        const settings = await Setting.getSettings();
-        if (settings.withdrawalFrequency && settings.withdrawalFrequency.enabled) {
-            const { value, unit } = settings.withdrawalFrequency;
-            const lastWithdrawal = await Withdrawal.findOne({ userId: user._id }).sort({ date: -1 });
-            
-            if (lastWithdrawal) {
-                const lastDate = new Date(lastWithdrawal.date).getTime();
-                const now = Date.now();
-                let durationMs = 0;
+        const balanceInt = toMoneyInt(user.walletBalance);
+        const requestAmtInt = toMoneyInt(req.body.amount);
 
-                switch (unit) {
-                    case 'hours': durationMs = value * 60 * 60 * 1000; break;
-                    case 'days': durationMs = value * 24 * 60 * 60 * 1000; break;
-                    case 'weeks': durationMs = value * 7 * 24 * 60 * 60 * 1000; break;
-                    case 'months': durationMs = value * 30 * 24 * 60 * 60 * 1000; break;
-                }
-
-                const nextAllowedTime = lastDate + durationMs;
-                
-                if (now < nextAllowedTime) {
-                    const remainingMs = nextAllowedTime - now;
-                    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-                    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-                    
-                    let timeString = '';
-                    if (days > 0) timeString += `${days} days, `;
-                    if (hours > 0) timeString += `${hours} hours, `;
-                    timeString += `${minutes} minutes`;
-
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: `Withdrawal frequency limit reached. You can make your next withdrawal in: ${timeString}.`
-                    });
-                }
-            }
-        }
-
-        if (user.walletBalance < req.body.amount) {
+        if (balanceInt < requestAmtInt) {
             return res.status(400).json({ success: false, error: 'Insufficient balance' });
         }
 
-        user.walletBalance -= req.body.amount;
+        user.walletBalance = toMoneyDec(balanceInt - requestAmtInt);
         
         const withdrawalData = { ...req.body, currency: user.currency };
         const withdrawal = await Withdrawal.create(withdrawalData);
@@ -109,7 +82,7 @@ export const createWithdrawal = async (req, res) => {
 
         await Notification.create({
             userId: user._id,
-            message: `Your withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} has been submitted for review.`
+            message: `Withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} submitted.`
         });
         
         await user.save();
@@ -120,27 +93,20 @@ export const createWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Update withdrawal (Approve/Reject)
-// @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
         const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pLogoUrl, p2pCustomFields } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
-        if (!withdrawal) {
-            return res.status(404).json({ success: false, error: 'Withdrawal not found' });
-        }
+        if (!withdrawal) return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         
         const user = await User.findById(withdrawal.userId);
-        if (!user) {
-            return res.status(404).json({ success: false, error: 'Associated user not found' });
-        }
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const originalStatus = withdrawal.status;
 
         if (status === 'Matching') {
             const remainingAmount = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
-
             const methodData = {
                 name: p2pName || `Gateway - ${withdrawal.method}`,
                 type: 'Deposit',
@@ -184,40 +150,28 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
+            const curBalInt = toMoneyInt(user.walletBalance);
+            const refundInt = toMoneyInt(withdrawal.amount);
+            
+            user.walletBalance = toMoneyDec(curBalInt + refundInt);
             
             await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                currency: user.currency,
-                type: 'Withdrawal Refund',
-                amount: withdrawal.amount,
-                status: 'Approved',
-                description: `Refund for rejected withdrawal #${withdrawal._id}`
+                userId: user._id, userName: user.username, currency: user.currency,
+                type: 'Withdrawal Refund', amount: withdrawal.amount,
+                status: 'Approved', description: `Refund for rejected withdrawal #${withdrawal._id}`
             });
 
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
-                originalTransaction.description = `Rejected Withdrawal #${withdrawal._id}`;
                 await originalTransaction.save();
             }
-
-             await Notification.create({
-                userId: user._id,
-                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
-            });
         }
         
         if (status === 'Paid' || status === 'Approved') {
             if (originalTransaction) {
                 originalTransaction.status = status === 'Paid' ? 'Approved' : status;
-                originalTransaction.description = `${status} Withdrawal #${withdrawal._id}`;
                 await originalTransaction.save();
             }
-            const message = status === 'Paid' 
-                ? `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
-                : `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been approved.`;
-            await Notification.create({ userId: user._id, message });
         }
         
         withdrawal.status = status;
@@ -227,25 +181,16 @@ export const updateWithdrawal = async (req, res) => {
         await user.save();
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: { withdrawal, user } });
-
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
-// @desc    Delete withdrawal
-// @route   DELETE /api/v1/withdrawals/:id
 export const deleteWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findByIdAndDelete(req.params.id);
-        if (!withdrawal) {
-            return res.status(404).json({ success: false, error: 'Withdrawal not found' });
-        }
-        
-        if (withdrawal.status === 'Matching') {
-             await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
-        }
-        
+        if (!withdrawal) return res.status(404).json({ success: false, error: 'Withdrawal not found' });
+        if (withdrawal.status === 'Matching') await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
