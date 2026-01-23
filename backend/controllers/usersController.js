@@ -87,9 +87,10 @@ export const purchasePlan = async (req, res) => {
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         
         const priceInt = toMoneyInt(plan.price);
+        const balanceInt = toMoneyInt(user.walletBalance);
         
         // Safety check before atomic update
-        if (toMoneyInt(user.walletBalance) < priceInt) {
+        if (balanceInt < priceInt) {
             return res.status(400).json({ success: false, error: 'Insufficient funds'});
         }
 
@@ -97,7 +98,7 @@ export const purchasePlan = async (req, res) => {
         const updatedUser = await User.findByIdAndUpdate(
             user._id,
             { 
-                $inc: { walletBalance: -(priceInt / 100) },
+                $inc: { walletBalance: -(plan.price) },
                 $push: { activePlans: { planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() } }
             },
             { new: true }
@@ -146,7 +147,6 @@ export const adjustWallet = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// ... other methods remain largely unchanged but inherit the pagination/search improvements ...
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -179,5 +179,169 @@ export const deleteUser = async (req, res) => {
         await User.findByIdAndDelete(req.params.id);
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: {} });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const logout = async (req, res) => {
+    res.cookie('token', 'none', {
+        expires: new Date(Date.now() + 10 * 1000),
+        httpOnly: true,
+    });
+    res.status(200).json({ success: true, data: {} });
+};
+
+export const getUser = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        res.status(200).json({ success: true, data: user });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const bulkDeleteUsers = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        await User.deleteMany({ _id: { $in: ids } });
+        global.appDataVersion = Date.now();
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const userRequestPasswordReset = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (user) {
+            await PasswordResetRequest.create({
+                userId: user._id,
+                userEmail: user.email,
+                userName: user.username
+            });
+        }
+        res.status(200).json({ success: true, message: 'Request sent to admin' });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const adminInitiatePasswordReset = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const resetToken = randomBytes(20).toString('hex');
+        user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+        user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000; // 48 hours
+
+        await user.save();
+        res.status(200).json({ success: true, data: { resetToken } });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const verifyAndStartResetTimer = async (req, res) => {
+    try {
+        const resetToken = createHash('sha256').update(req.params.token).digest('hex');
+        const user = await User.findOne({
+            passwordResetToken: resetToken,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!user) return res.status(400).json({ success: false, error: 'Invalid token' });
+        res.status(200).json({ success: true });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const resetPasswordWithToken = async (req, res) => {
+    try {
+        const resetToken = createHash('sha256').update(req.params.token).digest('hex');
+        const user = await User.findOne({
+            passwordResetToken: resetToken,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!user) return res.status(400).json({ success: false, error: 'Invalid token' });
+
+        user.password = req.body.password;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const bulkUpdateRestrictions = async (req, res) => {
+    try {
+        const { targetType, targetIds, restrictions, action, sendNotification } = req.body;
+        let query = {};
+        if (targetType === 'plan') query = { 'activePlans.planId': { $in: targetIds } };
+        else if (targetType === 'single') query = { _id: { $in: targetIds } };
+
+        const users = await User.find(query);
+        for (const user of users) {
+            const currentRes = user.restrictions || {};
+            Object.keys(restrictions).forEach(key => {
+                if (action === 'enable') currentRes[key] = true;
+                else if (action === 'disable') currentRes[key] = false;
+                else if (action === 'toggle') currentRes[key] = !currentRes[key];
+            });
+            user.restrictions = currentRes;
+            await user.save();
+            if (sendNotification) {
+                await Notification.create({
+                    userId: user._id,
+                    message: `Account restrictions updated by administrator.`
+                });
+            }
+        }
+        global.appDataVersion = Date.now();
+        res.status(200).json({ success: true });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const createBulkDummyUsers = async (req, res) => {
+    try {
+        const { count, usernames, sponsor, balance, country, currency } = req.body;
+        const generated = [];
+        const loopCount = usernames ? usernames.length : count;
+        for (let i = 0; i < loopCount; i++) {
+            const uname = usernames ? usernames[i] : `user_${randomBytes(3).toString('hex')}`;
+            generated.push({
+                username: uname,
+                fullName: uname.split('_').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+                email: `${uname}@example.com`,
+                password: 'password123',
+                phone: '0000000000',
+                country,
+                currency,
+                walletBalance: balance,
+                sponsor,
+                status: 'Active'
+            });
+        }
+        await User.insertMany(generated);
+        global.appDataVersion = Date.now();
+        res.status(201).json({ success: true, count: generated.length });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
+};
+
+export const adminActivatePlan = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        const plan = await InvestmentPlan.findById(req.body.planId);
+        if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found' });
+
+        user.activePlans.push({
+            planId: plan._id,
+            planName: plan.name,
+            price: plan.price,
+            purchaseDate: new Date()
+        });
+
+        await user.save();
+        const transaction = await Transaction.create({
+            userId: user._id, userName: user.username, currency: user.currency,
+            type: 'Plan Purchase', amount: 0, status: 'Approved',
+            description: `Admin Activated: ${plan.name}`
+        });
+
+        global.appDataVersion = Date.now();
+        res.status(200).json({ success: true, data: { user, transaction } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

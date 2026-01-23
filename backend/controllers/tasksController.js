@@ -99,7 +99,7 @@ export const verifyTaskSubmission = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-export const deleteTask = async (id: string) => {
+export const deleteTask = async (id) => {
     try {
         await Task.findByIdAndDelete(id);
         global.appDataVersion = Date.now();
