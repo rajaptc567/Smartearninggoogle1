@@ -1,35 +1,23 @@
 
 import Transaction from '../models/Transaction.js';
 
-// @desc    Get all transactions (Paginated & Filtered)
+// @desc    Get all transactions (Paginated)
 // @route   GET /api/v1/transactions
 export const getTransactions = async (req, res) => {
     try {
-        const { page = 1, limit = 20, searchTerm, typeFilter, statusFilter, userId } = req.query;
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 1000;
+        const skip = (page - 1) * limit;
 
-        let query = {};
-
-        if (userId) query.userId = userId;
-        if (typeFilter) query.type = typeFilter;
-        if (statusFilter) query.status = statusFilter;
-
-        if (searchTerm) {
-            query.$or = [
-                { userName: { $regex: searchTerm, $options: 'i' } },
-                { description: { $regex: searchTerm, $options: 'i' } },
-                { _id: { $regex: searchTerm, $options: 'i' } }
-            ];
-        }
-
-        const totalCount = await Transaction.countDocuments(query);
-        const transactions = await Transaction.find(query)
+        const totalCount = await Transaction.countDocuments();
+        const transactions = await Transaction.find()
             .skip(skip)
-            .limit(parseInt(limit))
+            .limit(limit)
             .sort({ date: -1 });
 
         res.status(200).json({ 
             success: true, 
+            count: transactions.length, 
             data: transactions,
             totalCount,
             totalPages: Math.ceil(totalCount / limit)
