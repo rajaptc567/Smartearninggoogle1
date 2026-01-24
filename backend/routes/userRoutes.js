@@ -28,13 +28,14 @@ router.post('/request-password-reset', userRequestPasswordReset);
 router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
 router.put('/reset-password/:token', resetPasswordWithToken);
 
-// Standard Member + Admin routes
-// NOTE: GET / is shared because users fetch it to build the referral tree locally
+// User Directory
+// Removed authorize middleware from GET / to allow DataProvider initial handshake.
+// Privacy is handled inside the getUsers controller function via data masking.
 router.route('/')
-    .get(authorize(['user', 'admin']), getUsers) 
+    .get(getUsers) 
     .post(createUser);
 
-// User-Specific actions (Passive identification handles ownership checks inside controllers later)
+// User-Specific actions
 router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);
 
 // Admin-Only actions

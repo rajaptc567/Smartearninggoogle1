@@ -1,5 +1,7 @@
+
 import express from 'express';
 import multer from 'multer';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getPaymentMethods,
     createPaymentMethod,
@@ -25,11 +27,11 @@ const cpUpload = upload.fields([
 ]);
 
 router.route('/')
-    .get(getPaymentMethods)
-    .post(cpUpload, createPaymentMethod);
+    .get(getPaymentMethods) // Publicly accessible to show logos on homepage
+    .post(authorize(['admin']), cpUpload, createPaymentMethod);
 
 router.route('/:id')
-    .put(cpUpload, updatePaymentMethod)
-    .delete(deletePaymentMethod);
+    .put(authorize(['admin']), cpUpload, updatePaymentMethod)
+    .delete(authorize(['admin']), deletePaymentMethod);
 
 export default router;

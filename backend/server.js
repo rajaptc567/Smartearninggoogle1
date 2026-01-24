@@ -30,14 +30,6 @@ import taskRoutes from './routes/taskRoutes.js';
 // Load env vars
 dotenv.config();
 
-// 1. ENVIRONMENT SAFETY CHECK (Non-Fatal)
-if (!process.env.JWT_SECRET) {
-    console.warn('WARNING: JWT_SECRET is not defined. Authentication will not work properly.');
-}
-
-// Connect to database
-connectDB();
-
 const app = express();
 
 // Enable CORS
@@ -47,7 +39,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// 2. PASSIVE AUTHENTICATION LAYER
+// Passive Authentication Layer
 app.use(authMiddleware);
 
 // Handle ES Modules path resolution
@@ -85,6 +77,7 @@ const seedAdminUser = async () => {
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
+                console.log('Admin account seeded successfully.');
             }
         } 
     } catch (error) {
@@ -92,9 +85,8 @@ const seedAdminUser = async () => {
     }
 };
 
-// Simple test route
 app.get('/', (req, res) => {
-    res.send('SmartEarning API is running...');
+    res.send('SmartEarning API is operational.');
 });
 
 // Mount routers
@@ -114,22 +106,30 @@ app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes); 
 
 // Custom Error Handler
-const errorHandler = (err, req, res, next) => {
+app.use((err, req, res, next) => {
     console.error(err.stack);
-    if (err.type === 'entity.too.large') {
-        return res.status(413).json({ success: false, error: 'Payload too large.' });
-    }
-    res.status(500).json({ success: false, error: 'Internal Server Error' });
-};
-app.use(errorHandler);
+    const status = err.status || 500;
+    res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
+});
 
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, async () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    await seedAdminUser();
-});
 
-process.on('unhandledRejection', (err, promise) => {
-    console.log(`Error: ${err.message}`);
-    server.close(() => process.exit(1));
-});
+/**
+ * ASYNC STARTUP
+ * Ensures database is connected and admin is seeded before listening.
+ */
+const startServer = async () => {
+    try {
+        await connectDB();
+        await seedAdminUser();
+        
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('SERVER FATAL ERROR:', error.message);
+        process.exit(1);
+    }
+};
+
+startServer();
