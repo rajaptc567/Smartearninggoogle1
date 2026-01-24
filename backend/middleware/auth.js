@@ -37,7 +37,7 @@ export const protect = async (req, res, next) => {
 
         next();
     } catch (err) {
-        return res.status(401).json({ success: false, error: 'Not authorized: Invalid security token.' });
+        return res.status(401).json({ success: false, error: 'Not authorized to access this route' });
     }
 };
 
@@ -46,16 +46,12 @@ export const protect = async (req, res, next) => {
  * Restricts route to Master Admin email or the 'admin' username.
  */
 export const authorizeAdmin = (req, res, next) => {
-    if (!req.user) {
-        return res.status(401).json({ success: false, error: 'Authentication required.' });
-    }
-
     const isMasterAdmin = req.user.email === 'studio56.pk@gmail.com';
     const isUsernameAdmin = req.user.username === 'admin';
 
     if (!isMasterAdmin && !isUsernameAdmin) {
         return res.status(403).json({ 
-            success: false,
+            success: true, // We use success true here to match the frontend response handler's data parsing but with 403 status
             error: `Access Denied: Administrative privileges required.` 
         });
     }

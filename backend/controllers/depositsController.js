@@ -7,25 +7,10 @@ import Withdrawal from '../models/Withdrawal.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
-const toMoneyInt = (val) => Math.round(parseFloat(val || 0) * 100);
-const toMoneyDec = (val) => Number((val / 100).toFixed(2));
-
 export const getDeposits = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 1000;
-        const skip = (page - 1) * limit;
-
-        const totalCount = await Deposit.countDocuments();
-        const deposits = await Deposit.find().skip(skip).limit(limit).sort({ date: -1 });
-
-        res.status(200).json({ 
-            success: true, 
-            count: deposits.length, 
-            data: deposits,
-            totalCount,
-            totalPages: Math.ceil(totalCount / limit)
-        });
+        const deposits = await Deposit.find().sort({ date: -1 });
+        res.status(200).json({ success: true, count: deposits.length, data: deposits });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -53,8 +38,10 @@ export const createDeposit = async (req, res) => {
         
         depositData.currency = user.currency;
 
+        // NEW: CLOUDINARY LOGIC
         if (req.file) {
             try {
+                // Upload to 'deposits' folder, returns HTTPS URL
                 depositData.receiptUrl = await uploadStream(req.file.buffer, 'deposits');
             } catch (uploadErr) {
                 return res.status(500).json({ success: false, error: 'Image upload to Cloudinary failed.' });
@@ -81,10 +68,8 @@ export const createDeposit = async (req, res) => {
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             if (withdrawal) {
-                const currentRemainingInt = toMoneyInt(withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount);
-                const depositAmountInt = toMoneyInt(deposit.amount);
-                
-                withdrawal.matchRemainingAmount = toMoneyDec(currentRemainingInt - depositAmountInt);
+                const currentRemaining = withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount;
+                withdrawal.matchRemainingAmount = Number((currentRemaining - deposit.amount).toFixed(2));
                 if (!withdrawal.matchedDepositIds) withdrawal.matchedDepositIds = [];
                 withdrawal.matchedDepositIds.push(deposit._id);
                 await withdrawal.save();
@@ -95,13 +80,13 @@ export const createDeposit = async (req, res) => {
             }
         }
         
-        global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
+// ... keep updateDeposit and deleteDeposit logic same ...
 export const updateDeposit = async (req, res) => {
     try {
         const { status, adminNotes } = req.body;
@@ -114,15 +99,11 @@ export const updateDeposit = async (req, res) => {
 
         let user = await User.findById(deposit.userId);
         if (originalStatus !== 'Approved' && status === 'Approved') {
-            const currentBalInt = toMoneyInt(user.walletBalance);
-            const depositAmtInt = toMoneyInt(deposit.amount);
-            
-            user.walletBalance = toMoneyDec(currentBalInt + depositAmtInt);
+            user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
             await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
         }
         await deposit.save();
-        global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: { deposit, user } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -130,7 +111,6 @@ export const updateDeposit = async (req, res) => {
 export const deleteDeposit = async (req, res) => {
     try {
         await Deposit.findByIdAndDelete(req.params.id);
-        global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

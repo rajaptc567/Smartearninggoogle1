@@ -33,19 +33,12 @@ router.post('/', createUser); // Registration
 // Protected - All
 router.use(protect);
 router.get('/logout', logout);
-
-/**
- * Access Control Fix:
- * Moved getUsers above authorizeAdmin. 
- * The controller handles data masking for non-admin users.
- * This is required for the frontend to initialize the MLM hierarchy logic.
- */
-router.route('/').get(getUsers);
 router.route('/:id').get(getUser).put(updateUser);
 router.post('/:id/purchase-plan', purchasePlan);
 
 // Admin Only
 router.use(authorizeAdmin);
+router.route('/').get(getUsers);
 router.put('/bulk-restrictions', bulkUpdateRestrictions);
 router.post('/bulk-dummy', createBulkDummyUsers);
 router.delete('/bulk', bulkDeleteUsers);
