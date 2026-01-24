@@ -1,19 +1,19 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getSettings,
     updateSettings,
     getDataVersion
 } from '../controllers/settingsController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Public read / version check
-router.get('/', getSettings);
+// Version polling is public for real-time sync
 router.get('/version', getDataVersion);
 
-// Protected update
-router.put('/', protect, authorizeAdmin, updateSettings);
+router.route('/')
+    .get(authorize(['user', 'admin']), getSettings) // Users need settings for exchange rates/tickers
+    .put(authorize(['super_admin']), updateSettings); // Only Super Admin can change settings
 
 export default router;

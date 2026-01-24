@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Withdrawal from '../models/Withdrawal.js';
+import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
@@ -38,10 +39,8 @@ export const createDeposit = async (req, res) => {
         
         depositData.currency = user.currency;
 
-        // NEW: CLOUDINARY LOGIC
         if (req.file) {
             try {
-                // Upload to 'deposits' folder, returns HTTPS URL
                 depositData.receiptUrl = await uploadStream(req.file.buffer, 'deposits');
             } catch (uploadErr) {
                 return res.status(500).json({ success: false, error: 'Image upload to Cloudinary failed.' });
@@ -80,13 +79,13 @@ export const createDeposit = async (req, res) => {
             }
         }
         
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
-// ... keep updateDeposit and deleteDeposit logic same ...
 export const updateDeposit = async (req, res) => {
     try {
         const { status, adminNotes } = req.body;
@@ -104,6 +103,7 @@ export const updateDeposit = async (req, res) => {
             await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
         }
         await deposit.save();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: { deposit, user } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -111,6 +111,7 @@ export const updateDeposit = async (req, res) => {
 export const deleteDeposit = async (req, res) => {
     try {
         await Deposit.findByIdAndDelete(req.params.id);
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

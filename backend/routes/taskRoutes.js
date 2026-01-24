@@ -10,28 +10,25 @@ import {
     getPendingVerifications,
     verifyTaskSubmission
 } from '../controllers/tasksController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for proof images
 });
 
 const router = express.Router();
 
-router.use(protect);
-
 router.route('/')
     .get(getTasks)
-    .post(authorizeAdmin, createTask);
+    .post(createTask);
 
-router.get('/pending-verifications', authorizeAdmin, getPendingVerifications);
-router.put('/verify/:userId/:taskId', authorizeAdmin, verifyTaskSubmission);
+router.get('/pending-verifications', getPendingVerifications);
+router.put('/verify/:userId/:taskId', verifyTaskSubmission);
 
 router.route('/:id')
-    .put(authorizeAdmin, updateTask)
-    .delete(authorizeAdmin, deleteTask);
+    .put(updateTask)
+    .delete(deleteTask);
 
 router.post('/:id/complete', upload.single('proof'), completeTask);
 

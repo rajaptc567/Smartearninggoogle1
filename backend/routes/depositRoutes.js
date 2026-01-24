@@ -1,6 +1,7 @@
 
 import express from 'express';
 import multer from 'multer';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getDeposits,
     getDeposit,
@@ -8,25 +9,22 @@ import {
     updateDeposit,
     deleteDeposit
 } from '../controllers/depositsController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }
+    limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
 const router = express.Router();
 
-router.use(protect);
-
 router.route('/')
-    .get(authorizeAdmin, getDeposits)
-    .post(upload.single('receipt'), createDeposit);
+    .get(authorize(['user', 'admin']), getDeposits)
+    .post(upload.single('receipt'), authorize(['user', 'admin']), createDeposit);
 
 router.route('/:id')
-    .get(getDeposit)
-    .put(authorizeAdmin, updateDeposit)
-    .delete(authorizeAdmin, deleteDeposit);
+    .get(authorize(['user', 'admin']), getDeposit)
+    .put(authorize(['admin']), updateDeposit)
+    .delete(authorize(['admin']), deleteDeposit);
 
 export default router;

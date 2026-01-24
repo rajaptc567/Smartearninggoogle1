@@ -1,16 +1,12 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import { getLogs, clearLogs } from '../controllers/logsController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Admin only
-router.use(protect);
-router.use(authorizeAdmin);
-
 router.route('/')
-    .get(getLogs)
-    .delete(clearLogs);
+    .get(authorize(['super_admin']), getLogs)
+    .delete(authorize(['super_admin']), clearLogs);
 
 export default router;

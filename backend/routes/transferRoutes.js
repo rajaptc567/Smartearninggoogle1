@@ -5,17 +5,14 @@ import {
     createTransfer,
     updateTransfer
 } from '../controllers/transfersController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.use(protect);
-
 router.route('/')
-    .get(authorizeAdmin, getTransfers)
+    .get(getTransfers)
     .post(createTransfer);
 
 router.route('/:id')
-    .put(authorizeAdmin, updateTransfer);
+    .put(updateTransfer);
 
 export default router;

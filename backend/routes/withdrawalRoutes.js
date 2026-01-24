@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getWithdrawals,
     getWithdrawal,
@@ -7,19 +8,16 @@ import {
     updateWithdrawal,
     deleteWithdrawal
 } from '../controllers/withdrawalsController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.use(protect);
-
 router.route('/')
-    .get(authorizeAdmin, getWithdrawals)
-    .post(createWithdrawal);
+    .get(authorize(['user', 'admin']), getWithdrawals)
+    .post(authorize(['user', 'admin']), createWithdrawal);
 
 router.route('/:id')
-    .get(getWithdrawal)
-    .put(authorizeAdmin, updateWithdrawal)
-    .delete(authorizeAdmin, deleteWithdrawal);
+    .get(authorize(['user', 'admin']), getWithdrawal)
+    .put(authorize(['admin']), updateWithdrawal)
+    .delete(authorize(['admin']), deleteWithdrawal);
 
 export default router;

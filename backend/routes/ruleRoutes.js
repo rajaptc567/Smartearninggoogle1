@@ -6,18 +6,13 @@ import {
     updateRule,
     deleteRule
 } from '../controllers/rulesController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Public read
-router.get('/', getRules);
+router.route('/')
+    .get(getRules)
+    .post(createRule);
 
-// Admin management
-router.use(protect);
-router.use(authorizeAdmin);
-
-router.post('/', createRule);
 router.route('/:id')
     .put(updateRule)
     .delete(deleteRule);

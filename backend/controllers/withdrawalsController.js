@@ -6,8 +6,6 @@ import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 
-// @desc    Get all withdrawals
-// @route   GET /api/v1/withdrawals
 export const getWithdrawals = async (req, res) => {
     try {
         const withdrawals = await Withdrawal.find()
@@ -23,8 +21,6 @@ export const getWithdrawals = async (req, res) => {
     }
 };
 
-// @desc    Get single withdrawal
-// @route   GET /api/v1/withdrawals/:id
 export const getWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
@@ -37,8 +33,6 @@ export const getWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Create new withdrawal request
-// @route   POST /api/v1/withdrawals
 export const createWithdrawal = async (req, res) => {
     try {
         const user = await User.findById(req.body.userId);
@@ -113,15 +107,13 @@ export const createWithdrawal = async (req, res) => {
         });
         
         await user.save();
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
-// @desc    Update withdrawal (Approve/Reject)
-// @route   PUT /api/v1/withdrawals/:id
 export const updateWithdrawal = async (req, res) => {
     try {
         const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pLogoUrl, p2pCustomFields } = req.body;
@@ -225,7 +217,7 @@ export const updateWithdrawal = async (req, res) => {
         
         await withdrawal.save();
         await user.save();
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: { withdrawal, user } });
 
     } catch (err) {
@@ -233,8 +225,6 @@ export const updateWithdrawal = async (req, res) => {
     }
 };
 
-// @desc    Delete withdrawal
-// @route   DELETE /api/v1/withdrawals/:id
 export const deleteWithdrawal = async (req, res) => {
     try {
         const withdrawal = await Withdrawal.findByIdAndDelete(req.params.id);
@@ -246,7 +236,7 @@ export const deleteWithdrawal = async (req, res) => {
              await PaymentMethod.deleteOne({ p2pWithdrawalId: withdrawal._id });
         }
         
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

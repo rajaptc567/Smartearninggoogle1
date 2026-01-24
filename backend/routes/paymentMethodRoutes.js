@@ -1,4 +1,3 @@
-
 import express from 'express';
 import multer from 'multer';
 import {
@@ -7,15 +6,14 @@ import {
     updatePaymentMethod,
     deletePaymentMethod
 } from '../controllers/paymentMethodsController.js';
-import { protect, authorizeAdmin } from '../middleware/auth.js';
 
-// Configure multer for Memory Storage
+// Configure multer for Memory Storage (same as deposits)
 const storage = multer.memoryStorage();
 const upload = multer({ 
     storage: storage,
     limits: { 
-        fileSize: 10 * 1024 * 1024,
-        fieldSize: 10 * 1024 * 1024
+        fileSize: 10 * 1024 * 1024, // 10MB limit for files
+        fieldSize: 10 * 1024 * 1024 // 10MB limit for text fields
     }
 });
 
@@ -26,14 +24,10 @@ const cpUpload = upload.fields([
     { name: 'qrCode', maxCount: 1 }
 ]);
 
-// GET remains public for registration/deposit forms
-router.get('/', getPaymentMethods);
+router.route('/')
+    .get(getPaymentMethods)
+    .post(cpUpload, createPaymentMethod);
 
-// Management requires Admin
-router.use(protect);
-router.use(authorizeAdmin);
-
-router.post('/', cpUpload, createPaymentMethod);
 router.route('/:id')
     .put(cpUpload, updatePaymentMethod)
     .delete(deletePaymentMethod);

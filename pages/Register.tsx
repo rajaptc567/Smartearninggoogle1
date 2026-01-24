@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
@@ -77,7 +76,8 @@ const Register: React.FC = () => {
             dispatch({ type: 'ADD_USER', payload: createdUser });
             
             // Set the new user as the currently logged-in user
-            dispatch({ type: 'SET_CURRENT_USER', payload: createdUser });
+            // FIX: SET_CURRENT_USER expects payload as { user: User | null; token?: string }.
+            dispatch({ type: 'SET_CURRENT_USER', payload: { user: createdUser } });
 
             alert('Registration successful! Redirecting to your dashboard...');
             navigate('/member');

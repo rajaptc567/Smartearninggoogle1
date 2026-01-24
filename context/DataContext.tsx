@@ -163,7 +163,7 @@ type Action =
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'SET_CURRENT_USER'; payload: User | null };
+    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -194,15 +194,19 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
         case 'SET_CURRENT_USER':
             try {
-                if (action.payload) {
-                    localStorage.setItem('currentUser', JSON.stringify(action.payload));
+                if (action.payload.user) {
+                    localStorage.setItem('currentUser', JSON.stringify(action.payload.user));
+                    if (action.payload.token) {
+                        localStorage.setItem('authToken', action.payload.token);
+                    }
                 } else {
                     localStorage.removeItem('currentUser');
+                    localStorage.removeItem('authToken');
                 }
             } catch (error) {
                 console.error("Could not access localStorage:", error);
             }
-            newState = { ...state, currentUser: action.payload };
+            newState = { ...state, currentUser: action.payload.user };
             break;
 
         case 'SET_USERS': newState = { ...state, users: action.payload }; break;
@@ -289,22 +293,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     // --- CACHE PERSISTENCE ---
     try {
-        const cacheString = JSON.stringify({
+        localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
             currentUser: state.currentUser 
-        });
-
-        /**
-         * QUOTA SAFETY CHECK:
-         * To prevent mobile browsers from crashing due to localStorage quota limits (usually 5MB),
-         * we only persist the state if its stringified size is under 500KB. 
-         * This ensures login/dashboard stability without losing mission-critical state.
-         */
-        if (cacheString.length < 500000) {
-            localStorage.setItem('app_cache', cacheString);
-        } else {
-            console.warn("App state size exceeds 500KB. Skipping local cache update to prevent quota errors.");
-        }
+        }));
     } catch (e) {
         console.warn("Failed to update app cache", e);
     }
@@ -384,10 +376,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }, []);
 
     // --- REAL-TIME SYNC POLLING ---
-    // If admin makes a change, incremented global version will trigger an auto-refresh for all logged-in users.
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; // Only poll if logged in
+            if (!state.currentUser) return; 
 
             try {
                 const serverVersion = await getDataVersion();
@@ -400,11 +391,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 if (serverVersion > lastVersionRef.current) {
                     console.log("Remote changes detected by admin. Synchronizing app state...");
                     
-                    // IF ADMIN: Just update locally without full refresh (prevents interruption during configuration)
                     if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
                         lastVersionRef.current = serverVersion;
-                        // Just trigger data fetch instead of refresh for admin
-                        // This keeps their modal/forms open but refreshes background data
                         const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
                             getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                             getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
@@ -417,14 +405,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             } 
                         });
                     } else {
-                        // IF MEMBER: Auto-refresh to show updated banking/P2P matching/plan info instantly
                         window.location.reload();
                     }
                 }
             } catch (err) {
                 // Silently ignore polling errors
             }
-        }, 5000); // Check every 5 seconds
+        }, 5000); 
 
         return () => clearInterval(pollInterval);
     }, [state.currentUser]);
