@@ -111,7 +111,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const toRate = getRate(toKey);
         
         if (fromRate === 0) return 0;
-        // Perform conversion on integers to maintain precision
         return Math.round((amountInt / fromRate) * toRate);
     };
 
@@ -205,14 +204,13 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const finalAmountInt = convertCurrency(amountInt, user.currency, uplineUser.currency);
 
         if (eligibility.status === 'Approved') {
-            const currentBalanceInt = toMoneyInt(uplineUser.walletBalance);
-            uplineUser.walletBalance = toMoneyDec(currentBalanceInt + finalAmountInt);
-            await uplineUser.save();
+            const amountToCredit = toMoneyDec(finalAmountInt);
+            await User.findByIdAndUpdate(uplineUser._id, { $inc: { walletBalance: amountToCredit } });
             
             await Notification.create({
                 userId: uplineUser._id,
                 subject: 'Commission Received!',
-                message: `You earned ${uplineUser.currency}${toMoneyDec(finalAmountInt)} from @${user.username}'s plan purchase.`
+                message: `You earned ${uplineUser.currency}${amountToCredit} from @${user.username}'s plan purchase.`
             });
             
             if (level === 0) {
@@ -401,13 +399,14 @@ export const updateUser = async (req, res) => {
         }
         
         if (releasedAmountInt > 0) {
-            const currentBalInt = toMoneyInt(updatedUser.walletBalance);
-            updatedUser.walletBalance = toMoneyDec(currentBalInt + releasedAmountInt);
-            updatedUser = await updatedUser.save();
+            const amountToCredit = toMoneyDec(releasedAmountInt);
+            // ATOMIC CREDIT
+            updatedUser = await User.findByIdAndUpdate(updatedUser._id, { $inc: { walletBalance: amountToCredit } }, { new: true });
+            
             await Notification.create({ 
                 userId: updatedUser._id, 
                 subject: 'Commission Unlocked 🔓',
-                message: `Success! A total of ${updatedUser.currency}${toMoneyDec(releasedAmountInt)} in held commissions has been released.` 
+                message: `Success! A total of ${updatedUser.currency}${amountToCredit} in held commissions has been released.` 
             });
         }
         
@@ -422,8 +421,10 @@ export const adminActivatePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
-        let updatedUser = await user.save();
+        // Use findByIdAndUpdate for reliability
+        const updatedUser = await User.findByIdAndUpdate(user._id, {
+            $push: { activePlans: { planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() } }
+        }, { new: true });
         
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
@@ -440,14 +441,19 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         
-        const balanceInt = toMoneyInt(user.walletBalance);
-        const priceInt = toMoneyInt(plan.price);
-        
-        if (balanceInt < priceInt) return res.status(400).json({ success: false, error: 'Insufficient funds'});
-        
-        user.walletBalance = toMoneyDec(balanceInt - priceInt);
-        user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
-        let updatedUser = await user.save();
+        // ATOMIC CHECK AND DEDUCT
+        const updatedUser = await User.findOneAndUpdate(
+            { _id: user._id, walletBalance: { $gte: plan.price } },
+            { 
+                $inc: { walletBalance: -plan.price },
+                $push: { activePlans: { planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() } }
+            },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(400).json({ success: false, error: 'Insufficient funds or account modified concurrenty.' });
+        }
         
         await Transaction.create({ 
             userId: user._id, 
@@ -470,28 +476,30 @@ export const purchasePlan = async (req, res) => {
 
 export const adjustWallet = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id);
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        
         const { amount, description } = req.body;
-        const currentBalInt = toMoneyInt(user.walletBalance);
-        const adjInt = toMoneyInt(amount);
+        const amountToAdjust = parseFloat(amount);
         
-        user.walletBalance = toMoneyDec(currentBalInt + adjInt);
-        await user.save();
+        // ATOMIC ADJUSTMENT
+        const user = await User.findByIdAndUpdate(
+            req.params.id, 
+            { $inc: { walletBalance: amountToAdjust } }, 
+            { new: true }
+        );
+
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
         await Notification.create({
             userId: user._id,
             subject: 'Wallet Adjusted',
-            message: `Admin has ${amount > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(amount)}.`
+            message: `Admin has ${amountToAdjust > 0 ? 'credited' : 'debited'} your wallet by ${user.currency}${Math.abs(amountToAdjust)}.`
         });
         
         const transaction = await Transaction.create({ 
             userId: user._id, 
             userName: user.username, 
             currency: user.currency, 
-            type: amount > 0 ? 'Manual Credit' : 'Manual Debit', 
-            amount: amount, 
+            type: amountToAdjust > 0 ? 'Manual Credit' : 'Manual Debit', 
+            amount: amountToAdjust, 
             description: description || 'Admin manual adjustment', 
             status: 'Approved' 
         });
@@ -623,12 +631,12 @@ export const bulkUpdateRestrictions = async (req, res) => {
                         }
                     }
                     if (relInt > 0) {
-                        const currentBalInt = toMoneyInt(user.walletBalance);
-                        user.walletBalance = toMoneyDec(currentBalInt + relInt);
+                        const amountToCredit = toMoneyDec(relInt);
+                        await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: amountToCredit } });
                         await Notification.create({ 
                             userId: user._id, 
                             subject: 'Commission Unlocked 🔓',
-                            message: `Success! ${user.currency}${toMoneyDec(relInt)} released.` 
+                            message: `Success! ${user.currency}${amountToCredit} released.` 
                         });
                     }
                 }

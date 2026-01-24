@@ -112,18 +112,18 @@ export const updateDeposit = async (req, res) => {
         deposit.status = status;
         deposit.adminNotes = adminNotes;
 
-        let user = await User.findById(deposit.userId);
+        let finalUser = null;
         if (originalStatus !== 'Approved' && status === 'Approved') {
-            const currentBalInt = toMoneyInt(user.walletBalance);
-            const depositAmtInt = toMoneyInt(deposit.amount);
-            
-            user.walletBalance = toMoneyDec(currentBalInt + depositAmtInt);
-            await user.save();
+            // ATOMIC CREDIT
+            finalUser = await User.findByIdAndUpdate(deposit.userId, { $inc: { walletBalance: deposit.amount } }, { new: true });
             await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
+        } else {
+            finalUser = await User.findById(deposit.userId);
         }
+
         await deposit.save();
         global.appDataVersion = Date.now();
-        res.status(200).json({ success: true, data: { deposit, user } });
+        res.status(200).json({ success: true, data: { deposit, user: finalUser } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 

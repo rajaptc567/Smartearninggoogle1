@@ -48,30 +48,35 @@ export const createTransfer = async (req, res) => {
 
         let feeInt = tier.feeType === 'percentage' ? Math.round((valInt * tier.feeValue) / 100) : toMoneyInt(tier.feeValue);
         const totalDeductionInt = valInt + feeInt;
+        const totalDeductionDec = toMoneyDec(totalDeductionInt);
 
-        if (toMoneyInt(sender.walletBalance) < totalDeductionInt) {
-            return res.status(400).json({ success: false, error: `Insufficient funds.` });
+        // ATOMIC SENDER DEDUCTION
+        const updatedSender = await User.findOneAndUpdate(
+            { _id: senderId, walletBalance: { $gte: totalDeductionDec } },
+            { $inc: { walletBalance: -totalDeductionDec } },
+            { new: true }
+        );
+
+        if (!updatedSender) {
+            return res.status(400).json({ success: false, error: `Insufficient funds or concurrent transfer request.` });
         }
 
-        sender.walletBalance = toMoneyDec(toMoneyInt(sender.walletBalance) - totalDeductionInt);
-        
         const transfer = await Transfer.create({
             ...req.body,
             currency: sender.currency,
             fee: toMoneyDec(feeInt),
-            totalDeducted: toMoneyDec(totalDeductionInt),
+            totalDeducted: totalDeductionDec,
             status: 'Pending'
         });
 
         await Transaction.create({
             userId: sender._id, userName: sender.username, currency: sender.currency,
-            type: 'Transfer Request', amount: -toMoneyDec(totalDeductionInt),
+            type: 'Transfer Request', amount: -totalDeductionDec,
             status: 'Pending', description: `Pending Transfer #${transfer._id}`
         });
         
-        await sender.save();
         global.appDataVersion = Date.now();
-        res.status(201).json({ success: true, data: { transfer, user: sender }});
+        res.status(201).json({ success: true, data: { transfer, user: updatedSender }});
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -86,30 +91,33 @@ export const updateTransfer = async (req, res) => {
         const sender = await User.findById(transfer.senderId);
         const recipient = await User.findById(transfer.recipientId);
         
+        let finalSender = sender;
+        let finalRecipient = recipient;
+        let finalTransaction = null;
+
         if (status === 'Approved') {
             const settings = await Setting.getSettings();
             const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.50 };
 
-            let receivedAmountInt = toMoneyInt(transfer.amount);
+            let receivedAmount = parseFloat(transfer.amount);
             if (sender.currency !== recipient.currency) {
                 const fromRate = rates[sender.currency.toUpperCase()] || 1;
                 const toRate = rates[recipient.currency.toUpperCase()] || 1;
-                receivedAmountInt = Math.round((toMoneyInt(transfer.amount) / fromRate) * toRate);
+                receivedAmount = toMoneyDec(Math.round((toMoneyInt(transfer.amount) / fromRate) * toRate));
             }
 
-            recipient.walletBalance = toMoneyDec(toMoneyInt(recipient.walletBalance) + receivedAmountInt);
-            await recipient.save();
+            // ATOMIC RECIPIENT CREDIT
+            finalRecipient = await User.findByIdAndUpdate(recipient._id, { $inc: { walletBalance: receivedAmount } }, { new: true });
 
             await Transaction.findOneAndUpdate({ description: { $regex: transfer._id } }, { status: 'Approved' });
-            await Transaction.create({
+            finalTransaction = await Transaction.create({
                 userId: recipient._id, userName: recipient.username, currency: recipient.currency,
-                type: 'Transfer Received', amount: toMoneyDec(receivedAmountInt),
+                type: 'Transfer Received', amount: receivedAmount,
                 status: 'Approved', description: `Received from ${sender.username}`
             });
         } else if (status === 'Rejected') {
-            const refundInt = toMoneyInt(transfer.totalDeducted);
-            sender.walletBalance = toMoneyDec(toMoneyInt(sender.walletBalance) + refundInt);
-            await sender.save();
+            // ATOMIC SENDER REFUND
+            finalSender = await User.findByIdAndUpdate(sender._id, { $inc: { walletBalance: transfer.totalDeducted } }, { new: true });
             await Transaction.findOneAndUpdate({ description: { $regex: transfer._id } }, { status: 'Rejected' });
         }
         
@@ -117,7 +125,7 @@ export const updateTransfer = async (req, res) => {
         transfer.adminNotes = adminNotes;
         await transfer.save();
         global.appDataVersion = Date.now();
-        res.status(200).json({ success: true, data: { transfer, sender, recipient }});
+        res.status(200).json({ success: true, data: { transfer, sender: finalSender, recipient: finalRecipient, transaction: finalTransaction }});
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
