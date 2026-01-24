@@ -201,7 +201,10 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 
         if (eligibility.status === 'Approved') {
             const amountToCredit = toMoneyDec(finalAmountInt);
-            await User.findByIdAndUpdate(uplineUser._id, { $inc: { walletBalance: amountToCredit } });
+            // ATOMIC CREDIT WITH PRECISION NORMALIZATION
+            await User.findByIdAndUpdate(uplineUser._id, [
+                { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", amountToCredit] }, 2] } } }
+            ]);
             
             await Notification.create({
                 userId: uplineUser._id,
@@ -377,6 +380,11 @@ export const updateUser = async (req, res) => {
         }
 
         Object.assign(userToUpdate, updates);
+        // Normalize balance if updated manually
+        if (updates.walletBalance !== undefined) {
+            userToUpdate.walletBalance = toMoneyDec(toMoneyInt(updates.walletBalance));
+        }
+        
         let updatedUser = await userToUpdate.save();
 
         // Check if commissions can be released if earnings were unblocked
@@ -396,8 +404,10 @@ export const updateUser = async (req, res) => {
         
         if (releasedAmountInt > 0) {
             const amountToCredit = toMoneyDec(releasedAmountInt);
-            // ATOMIC CREDIT
-            updatedUser = await User.findByIdAndUpdate(updatedUser._id, { $inc: { walletBalance: amountToCredit } }, { new: true });
+            // ATOMIC CREDIT WITH PRECISION NORMALIZATION
+            updatedUser = await User.findByIdAndUpdate(updatedUser._id, [
+                { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", amountToCredit] }, 2] } } }
+            ], { new: true });
             
             await Notification.create({ 
                 userId: updatedUser._id, 
@@ -439,14 +449,19 @@ export const purchasePlan = async (req, res) => {
         
         // PRECISION: Use integers for price matching
         const priceInt = toMoneyInt(plan.price);
+        const priceDec = toMoneyDec(priceInt);
         
-        // ATOMIC CHECK AND DEDUCT
+        // ATOMIC CHECK AND DEDUCT WITH PRECISION NORMALIZATION
         const updatedUser = await User.findOneAndUpdate(
-            { _id: user._id, walletBalance: { $gte: toMoneyDec(priceInt) } },
-            { 
-                $inc: { walletBalance: -toMoneyDec(priceInt) },
-                $push: { activePlans: { planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() } }
-            },
+            { _id: user._id, walletBalance: { $gte: priceDec } },
+            [
+                { 
+                    $set: { 
+                        walletBalance: { $round: [{ $subtract: ["$walletBalance", priceDec] }, 2] },
+                        activePlans: { $concatArrays: ["$activePlans", [{ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() }]] }
+                    } 
+                }
+            ],
             { new: true }
         );
 
@@ -479,10 +494,12 @@ export const adjustWallet = async (req, res) => {
         const amountInt = toMoneyInt(amount);
         const amountToAdjust = toMoneyDec(amountInt);
         
-        // ATOMIC ADJUSTMENT
+        // ATOMIC ADJUSTMENT WITH PRECISION NORMALIZATION
         const user = await User.findByIdAndUpdate(
             req.params.id, 
-            { $inc: { walletBalance: amountToAdjust } }, 
+            [
+                { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", amountToAdjust] }, 2] } } }
+            ],
             { new: true }
         );
 
@@ -632,7 +649,10 @@ export const bulkUpdateRestrictions = async (req, res) => {
                     }
                     if (relInt > 0) {
                         const amountToCredit = toMoneyDec(relInt);
-                        await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: amountToCredit } });
+                        // ATOMIC CREDIT WITH PRECISION NORMALIZATION
+                        await User.findByIdAndUpdate(user._id, [
+                            { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", amountToCredit] }, 2] } } }
+                        ]);
                         await Notification.create({ 
                             userId: user._id, 
                             subject: 'Commission Unlocked 🔓',

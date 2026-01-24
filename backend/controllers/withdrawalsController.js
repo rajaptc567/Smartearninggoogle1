@@ -53,7 +53,7 @@ export const getWithdrawal = async (req, res) => {
 export const createWithdrawal = async (req, res) => {
     try {
         const userId = req.body.userId;
-        const amountToWithdraw = parseFloat(req.body.amount);
+        const settings = await Setting.getSettings();
         
         // 1. SECURITY: Enforce Mandatory Task Completion (Backend Guard)
         const mandatoryTasks = await Task.find({ status: 'Active', isRequiredForWithdrawal: true });
@@ -73,15 +73,49 @@ export const createWithdrawal = async (req, res) => {
             }
         }
 
-        // 2. PRECISION: Convert to integers for safe arithmetic
+        // 2. SECURITY: Enforce Withdrawal Frequency (Cooldown)
+        if (settings.withdrawalFrequency?.enabled) {
+            const lastWithdrawal = await Withdrawal.findOne({ userId }).sort({ date: -1 });
+            if (lastWithdrawal) {
+                const lastDate = new Date(lastWithdrawal.date).getTime();
+                const now = Date.now();
+                const { value, unit } = settings.withdrawalFrequency;
+                let durationMs = 0;
+                switch (unit) {
+                    case 'hours': durationMs = value * 3600000; break;
+                    case 'days': durationMs = value * 86400000; break;
+                    case 'weeks': durationMs = value * 604800000; break;
+                    case 'months': durationMs = value * 2592000000; break;
+                }
+
+                if (now < lastDate + durationMs) {
+                    return res.status(403).json({ 
+                        success: false, 
+                        error: `Withdrawal restricted: Frequency limit reached. Please try again later.` 
+                    });
+                }
+            }
+        }
+
+        // 3. PRECISION: Convert to integers for safe arithmetic and normalize balance
         const amountInt = toMoneyInt(req.body.amount);
         const feeInt = toMoneyInt(req.body.fee);
         const finalAmtInt = amountInt - feeInt;
         
-        // ATOMIC DEDUCTION
+        const amountDec = toMoneyDec(amountInt);
+
+        // ATOMIC DEDUCTION WITH PRECISION NORMALIZATION
         const updatedUser = await User.findOneAndUpdate(
-            { _id: userId, walletBalance: { $gte: toMoneyDec(amountInt) } },
-            { $inc: { walletBalance: -toMoneyDec(amountInt) } },
+            { _id: userId, walletBalance: { $gte: amountDec } },
+            [
+                { 
+                    $set: { 
+                        walletBalance: { 
+                            $round: [{ $subtract: ["$walletBalance", amountDec] }, 2] 
+                        } 
+                    } 
+                }
+            ],
             { new: true }
         );
 
@@ -90,14 +124,16 @@ export const createWithdrawal = async (req, res) => {
         }
 
         if (updatedUser.status === 'Blocked' || (updatedUser.restrictions && updatedUser.restrictions.withdrawal)) {
-            // Rollback if blocked (rare edge case during race)
-            await User.findByIdAndUpdate(userId, { $inc: { walletBalance: toMoneyDec(amountInt) } });
+            // Rollback if blocked and normalize
+            await User.findByIdAndUpdate(userId, [
+                { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", amountDec] }, 2] } } }
+            ]);
             return res.status(403).json({ success: false, error: `Withdrawals disabled.` });
         }
         
         const withdrawalData = { 
             ...req.body, 
-            amount: toMoneyDec(amountInt),
+            amount: amountDec,
             fee: toMoneyDec(feeInt),
             finalAmount: toMoneyDec(finalAmtInt),
             currency: updatedUser.currency 
@@ -183,8 +219,10 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            // ATOMIC REFUND
-            const updatedUser = await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: withdrawal.amount } }, { new: true });
+            // ATOMIC REFUND WITH PRECISION NORMALIZATION
+            const updatedUser = await User.findByIdAndUpdate(user._id, [
+                { $set: { walletBalance: { $round: [{ $add: ["$walletBalance", withdrawal.amount] }, 2] } } }
+            ], { new: true });
             
             await Transaction.create({
                 userId: user._id, userName: user.username, currency: user.currency,
