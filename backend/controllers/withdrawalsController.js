@@ -51,33 +51,29 @@ export const getWithdrawal = async (req, res) => {
 
 export const createWithdrawal = async (req, res) => {
     try {
-        const userId = req.body.userId;
-        const amountToWithdraw = parseFloat(req.body.amount);
+        const user = await User.findById(req.body.userId);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-        // ATOMIC DEDUCTION
-        const updatedUser = await User.findOneAndUpdate(
-            { _id: userId, walletBalance: { $gte: amountToWithdraw } },
-            { $inc: { walletBalance: -amountToWithdraw } },
-            { new: true }
-        );
-
-        if (!updatedUser) {
-            return res.status(400).json({ success: false, error: 'Insufficient balance or concurrent transaction interference.' });
-        }
-
-        if (updatedUser.status === 'Blocked' || (updatedUser.restrictions && updatedUser.restrictions.withdrawal)) {
-            // Rollback if blocked (rare edge case during race)
-            await User.findByIdAndUpdate(userId, { $inc: { walletBalance: amountToWithdraw } });
+        if (user.status === 'Blocked' || (user.restrictions && user.restrictions.withdrawal)) {
             return res.status(403).json({ success: false, error: `Withdrawals disabled.` });
         }
         
-        const withdrawalData = { ...req.body, currency: updatedUser.currency };
+        const balanceInt = toMoneyInt(user.walletBalance);
+        const requestAmtInt = toMoneyInt(req.body.amount);
+
+        if (balanceInt < requestAmtInt) {
+            return res.status(400).json({ success: false, error: 'Insufficient balance' });
+        }
+
+        user.walletBalance = toMoneyDec(balanceInt - requestAmtInt);
+        
+        const withdrawalData = { ...req.body, currency: user.currency };
         const withdrawal = await Withdrawal.create(withdrawalData);
         
         const transaction = await Transaction.create({
-            userId: updatedUser._id,
-            userName: updatedUser.username,
-            currency: updatedUser.currency,
+            userId: user._id,
+            userName: user.username,
+            currency: user.currency,
             type: 'Withdrawal Request',
             amount: -withdrawal.amount,
             status: 'Pending',
@@ -85,12 +81,13 @@ export const createWithdrawal = async (req, res) => {
         });
 
         await Notification.create({
-            userId: updatedUser._id,
-            message: `Withdrawal request for ${updatedUser.currency}${withdrawal.amount.toFixed(2)} submitted.`
+            userId: user._id,
+            message: `Withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} submitted.`
         });
         
+        await user.save();
         global.appDataVersion = Date.now();
-        res.status(201).json({ success: true, data: { withdrawal, user: updatedUser, transaction } });
+        res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -153,8 +150,10 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            // ATOMIC REFUND
-            const updatedUser = await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: withdrawal.amount } }, { new: true });
+            const curBalInt = toMoneyInt(user.walletBalance);
+            const refundInt = toMoneyInt(withdrawal.amount);
+            
+            user.walletBalance = toMoneyDec(curBalInt + refundInt);
             
             await Transaction.create({
                 userId: user._id, userName: user.username, currency: user.currency,
@@ -166,12 +165,6 @@ export const updateWithdrawal = async (req, res) => {
                 originalTransaction.status = 'Rejected';
                 await originalTransaction.save();
             }
-
-            withdrawal.status = status;
-            withdrawal.adminNotes = adminNotes;
-            await withdrawal.save();
-            global.appDataVersion = Date.now();
-            return res.status(200).json({ success: true, data: { withdrawal, user: updatedUser } });
         }
         
         if (status === 'Paid' || status === 'Approved') {
@@ -185,9 +178,9 @@ export const updateWithdrawal = async (req, res) => {
         withdrawal.adminNotes = adminNotes;
         
         await withdrawal.save();
+        await user.save();
         global.appDataVersion = Date.now();
-        const finalUser = await User.findById(user._id);
-        res.status(200).json({ success: true, data: { withdrawal, user: finalUser } });
+        res.status(200).json({ success: true, data: { withdrawal, user } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

@@ -5,6 +5,7 @@ import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
+// ... getTasks, createTask, updateTask, deleteTask same ...
 export const getTasks = async (req, res) => {
     try {
         const tasks = await Task.find().sort({ priority: -1, createdAt: -1 });
@@ -28,11 +29,12 @@ export const updateTask = async (req, res) => {
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-export const deleteTask = async (id) => {
+export const deleteTask = async (req, res) => {
     try {
-        await Task.findByIdAndDelete(id);
+        await Task.findByIdAndDelete(req.params.id);
         global.appDataVersion = Date.now();
-    } catch (err) { console.error(err); }
+        res.status(200).json({ success: true, data: {} });
+    } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
 export const completeTask = async (req, res) => {
@@ -49,6 +51,7 @@ export const completeTask = async (req, res) => {
             status: task.requireProof ? 'Pending' : 'Approved'
         };
 
+        // NEW: CLOUDINARY LOGIC FOR TASK PROOF
         if (task.requireProof) {
             if (!req.file) return res.status(400).json({ success: false, error: 'Proof required.' });
             try {
@@ -58,23 +61,22 @@ export const completeTask = async (req, res) => {
             }
         }
 
-        // Atomic update for task reward and user completedTasks array
-        const userUpdate = { $push: { completedTasks: completionData } };
+        user.completedTasks.push(completionData);
+        
         if (completionData.status === 'Approved' && task.rewardAmount > 0) {
-            userUpdate.$inc = { walletBalance: task.rewardAmount };
-            
+            user.walletBalance = Number((user.walletBalance + task.rewardAmount).toFixed(2));
             await Transaction.create({
                 userId: user._id, userName: user.username, currency: user.currency,
                 type: 'Manual Credit', amount: task.rewardAmount,
                 description: `Reward: ${task.title}`, status: 'Approved'
             });
-            
-            await Task.findByIdAndUpdate(task._id, { $inc: { currentGlobalCompletions: 1 } });
+            task.currentGlobalCompletions += 1;
+            await task.save();
         }
 
-        const updatedUser = await User.findByIdAndUpdate(userId, userUpdate, { new: true });
+        await user.save();
         global.appDataVersion = Date.now();
-        res.status(200).json({ success: true, data: updatedUser });
+        res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -84,35 +86,20 @@ export const verifyTaskSubmission = async (req, res) => {
     try {
         const { userId, taskId } = req.params;
         const { status, adminNotes } = req.body;
-        
+        const user = await User.findById(userId);
         const task = await Task.findById(taskId);
-        
-        // Use atomic update to find correct submission in array and increment balance if approved
-        const updateQuery = {
-            $set: { 
-                "completedTasks.$[elem].status": status,
-                "completedTasks.$[elem].adminNotes": adminNotes
-            }
-        };
-
+        const sub = user.completedTasks.find(ct => ct.taskId.toString() === taskId && ct.status === 'Pending');
+        if (!sub) return res.status(400).json({ success: false, error: 'No pending sub' });
+        sub.status = status;
+        sub.adminNotes = adminNotes;
         if (status === 'Approved' && task.rewardAmount > 0) {
-            updateQuery.$inc = { walletBalance: task.rewardAmount };
-            await Task.findByIdAndUpdate(taskId, { $inc: { currentGlobalCompletions: 1 } });
+            user.walletBalance = Number((user.walletBalance + task.rewardAmount).toFixed(2));
+            task.currentGlobalCompletions += 1;
+            await task.save();
         }
-
-        const updatedUser = await User.findOneAndUpdate(
-            { _id: userId, "completedTasks.taskId": taskId, "completedTasks.status": "Pending" },
-            updateQuery,
-            { 
-                arrayFilters: [{ "elem.taskId": taskId, "elem.status": "Pending" }],
-                new: true 
-            }
-        );
-
-        if (!updatedUser) return res.status(400).json({ success: false, error: 'Pending submission not found.' });
-
+        await user.save();
         global.appDataVersion = Date.now();
-        res.status(200).json({ success: true, data: updatedUser });
+        res.status(200).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
