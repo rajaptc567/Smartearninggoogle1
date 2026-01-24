@@ -329,6 +329,24 @@ export const getUsers = async (req, res) => {
         const totalCount = await User.countDocuments();
         const users = await User.find().skip(skip).limit(limit).sort({ registrationDate: -1 });
 
+        /**
+         * REGRESSION FIX & DATA MASKING:
+         * Restore accessibility for regular users to enable MLM hierarchy calculations.
+         * For security, mask private data for all users except the requester themselves.
+         */
+        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
+        if (!isAdmin) {
+            users.forEach(u => {
+                if (u._id.toString() !== req.user._id.toString()) {
+                    u.email = 'masked@smartearning.com';
+                    u.phone = '**********';
+                    u.walletBalance = 0;
+                    u.restrictions = undefined;
+                    // Keep username, fullName, country, currency, sponsor, registrationDate, activePlans for MLM logic
+                }
+            });
+        }
+
         res.status(200).json({ 
             success: true, 
             count: users.length, 
@@ -343,6 +361,19 @@ export const getUser = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: `User not found` });
+
+        /**
+         * SECURITY: If a regular user tries to view someone else's specific profile,
+         * mask the sensitive fields.
+         */
+        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
+        if (!isAdmin && user._id.toString() !== req.user._id.toString()) {
+            user.email = 'masked@smartearning.com';
+            user.phone = '**********';
+            user.walletBalance = 0;
+            user.restrictions = undefined;
+        }
+
         res.status(200).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

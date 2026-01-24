@@ -33,12 +33,16 @@ router.post('/', createUser); // Registration
 // Protected - All
 router.use(protect);
 router.get('/logout', logout);
+/**
+ * Regression Fix: Allow regular users to access the user list for network building.
+ * Data is masked in the controller for privacy.
+ */
+router.route('/').get(getUsers);
 router.route('/:id').get(getUser).put(updateUser);
 router.post('/:id/purchase-plan', purchasePlan);
 
 // Admin Only
 router.use(authorizeAdmin);
-router.route('/').get(getUsers);
 router.put('/bulk-restrictions', bulkUpdateRestrictions);
 router.post('/bulk-dummy', createBulkDummyUsers);
 router.delete('/bulk', bulkDeleteUsers);

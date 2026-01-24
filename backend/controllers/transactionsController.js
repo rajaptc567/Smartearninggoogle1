@@ -10,9 +10,9 @@ export const getTransactions = async (req, res) => {
         const skip = (page - 1) * limit;
 
         /**
-         * SECURITY ENFORCEMENT (P0):
-         * Filter results by userId unless the requester is an authorized administrator.
-         * This prevents authenticated users from accessing the global financial ledger via manual API calls.
+         * SECURITY ENFORCEMENT:
+         * Admin sees everything. Regular members see ONLY their own transactions.
+         * This allows the frontend to calculate user-specific totals/referral earnings correctly.
          */
         const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
         const filter = isAdmin ? {} : { userId: req.user._id };
