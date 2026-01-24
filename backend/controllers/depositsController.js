@@ -51,6 +51,9 @@ export const createDeposit = async (req, res) => {
             return res.status(403).json({ success: false, error: `Deposits disabled.` });
         }
         
+        // PRECISION: Ensure amount is exactly 2 decimal places from integer math
+        const amountInt = toMoneyInt(req.body.amount);
+        depositData.amount = toMoneyDec(amountInt);
         depositData.currency = user.currency;
 
         if (req.file) {
@@ -81,6 +84,7 @@ export const createDeposit = async (req, res) => {
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             if (withdrawal) {
+                // PRECISION: Use integer math for P2P remaining calculations
                 const currentRemainingInt = toMoneyInt(withdrawal.matchRemainingAmount !== undefined ? withdrawal.matchRemainingAmount : withdrawal.finalAmount);
                 const depositAmountInt = toMoneyInt(deposit.amount);
                 
@@ -89,7 +93,7 @@ export const createDeposit = async (req, res) => {
                 withdrawal.matchedDepositIds.push(deposit._id);
                 await withdrawal.save();
 
-                if (withdrawal.matchRemainingAmount <= 0) {
+                if (toMoneyInt(withdrawal.matchRemainingAmount) <= 0) {
                     await PaymentMethod.findOneAndDelete({ p2pWithdrawalId: withdrawal._id });
                 }
             }

@@ -1,6 +1,7 @@
 
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
+import Task from '../models/Task.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
@@ -53,11 +54,34 @@ export const createWithdrawal = async (req, res) => {
     try {
         const userId = req.body.userId;
         const amountToWithdraw = parseFloat(req.body.amount);
+        
+        // 1. SECURITY: Enforce Mandatory Task Completion (Backend Guard)
+        const mandatoryTasks = await Task.find({ status: 'Active', isRequiredForWithdrawal: true });
+        if (mandatoryTasks.length > 0) {
+            const user = await User.findById(userId);
+            const completedTaskIds = (user.completedTasks || [])
+                .filter(ct => ct.status === 'Approved')
+                .map(ct => ct.taskId.toString());
+            
+            const pendingTasks = mandatoryTasks.filter(t => !completedTaskIds.includes(t._id.toString()));
+            
+            if (pendingTasks.length > 0) {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Access Restricted: You must complete all mandatory verification tasks before withdrawing.' 
+                });
+            }
+        }
 
+        // 2. PRECISION: Convert to integers for safe arithmetic
+        const amountInt = toMoneyInt(req.body.amount);
+        const feeInt = toMoneyInt(req.body.fee);
+        const finalAmtInt = amountInt - feeInt;
+        
         // ATOMIC DEDUCTION
         const updatedUser = await User.findOneAndUpdate(
-            { _id: userId, walletBalance: { $gte: amountToWithdraw } },
-            { $inc: { walletBalance: -amountToWithdraw } },
+            { _id: userId, walletBalance: { $gte: toMoneyDec(amountInt) } },
+            { $inc: { walletBalance: -toMoneyDec(amountInt) } },
             { new: true }
         );
 
@@ -67,11 +91,17 @@ export const createWithdrawal = async (req, res) => {
 
         if (updatedUser.status === 'Blocked' || (updatedUser.restrictions && updatedUser.restrictions.withdrawal)) {
             // Rollback if blocked (rare edge case during race)
-            await User.findByIdAndUpdate(userId, { $inc: { walletBalance: amountToWithdraw } });
+            await User.findByIdAndUpdate(userId, { $inc: { walletBalance: toMoneyDec(amountInt) } });
             return res.status(403).json({ success: false, error: `Withdrawals disabled.` });
         }
         
-        const withdrawalData = { ...req.body, currency: updatedUser.currency };
+        const withdrawalData = { 
+            ...req.body, 
+            amount: toMoneyDec(amountInt),
+            fee: toMoneyDec(feeInt),
+            finalAmount: toMoneyDec(finalAmtInt),
+            currency: updatedUser.currency 
+        };
         const withdrawal = await Withdrawal.create(withdrawalData);
         
         const transaction = await Transaction.create({

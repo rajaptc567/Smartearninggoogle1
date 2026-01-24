@@ -63,6 +63,7 @@ export const createTransfer = async (req, res) => {
 
         const transfer = await Transfer.create({
             ...req.body,
+            amount: toMoneyDec(valInt),
             currency: sender.currency,
             fee: toMoneyDec(feeInt),
             totalDeducted: totalDeductionDec,
@@ -99,20 +100,22 @@ export const updateTransfer = async (req, res) => {
             const settings = await Setting.getSettings();
             const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.50 };
 
-            let receivedAmount = parseFloat(transfer.amount);
+            let receivedAmountInt = toMoneyInt(transfer.amount);
             if (sender.currency !== recipient.currency) {
                 const fromRate = rates[sender.currency.toUpperCase()] || 1;
                 const toRate = rates[recipient.currency.toUpperCase()] || 1;
-                receivedAmount = toMoneyDec(Math.round((toMoneyInt(transfer.amount) / fromRate) * toRate));
+                receivedAmountInt = Math.round((receivedAmountInt / fromRate) * toRate);
             }
 
+            const receivedAmountDec = toMoneyDec(receivedAmountInt);
+
             // ATOMIC RECIPIENT CREDIT
-            finalRecipient = await User.findByIdAndUpdate(recipient._id, { $inc: { walletBalance: receivedAmount } }, { new: true });
+            finalRecipient = await User.findByIdAndUpdate(recipient._id, { $inc: { walletBalance: receivedAmountDec } }, { new: true });
 
             await Transaction.findOneAndUpdate({ description: { $regex: transfer._id } }, { status: 'Approved' });
             finalTransaction = await Transaction.create({
                 userId: recipient._id, userName: recipient.username, currency: recipient.currency,
-                type: 'Transfer Received', amount: receivedAmount,
+                type: 'Transfer Received', amount: receivedAmountDec,
                 status: 'Approved', description: `Received from ${sender.username}`
             });
         } else if (status === 'Rejected') {
