@@ -14,9 +14,6 @@ import Transfer from '../models/Transfer.js';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
-const toMoneyInt = (val) => Math.round(parseFloat(val || 0) * 100);
-const toMoneyDec = (val) => Number((val / 100).toFixed(2));
-
 // Helper for sending token in cookie
 const sendTokenResponse = (user, statusCode, res) => {
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
@@ -38,6 +35,13 @@ const sendTokenResponse = (user, statusCode, res) => {
             data: user
         });
 };
+
+/**
+ * FINANCIAL INTEGRITY HELPERS
+ * Converts decimals to integers (cents) for safe math
+ */
+const toMoneyInt = (val) => Math.round(parseFloat(val || 0) * 100);
+const toMoneyDec = (val) => Number((val / 100).toFixed(2));
 
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
@@ -437,14 +441,11 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         
-        // PRECISION: Use integers for price matching
-        const priceInt = toMoneyInt(plan.price);
-        
         // ATOMIC CHECK AND DEDUCT
         const updatedUser = await User.findOneAndUpdate(
-            { _id: user._id, walletBalance: { $gte: toMoneyDec(priceInt) } },
+            { _id: user._id, walletBalance: { $gte: plan.price } },
             { 
-                $inc: { walletBalance: -toMoneyDec(priceInt) },
+                $inc: { walletBalance: -plan.price },
                 $push: { activePlans: { planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() } }
             },
             { new: true }
@@ -476,8 +477,7 @@ export const purchasePlan = async (req, res) => {
 export const adjustWallet = async (req, res) => {
     try {
         const { amount, description } = req.body;
-        const amountInt = toMoneyInt(amount);
-        const amountToAdjust = toMoneyDec(amountInt);
+        const amountToAdjust = parseFloat(amount);
         
         // ATOMIC ADJUSTMENT
         const user = await User.findByIdAndUpdate(
