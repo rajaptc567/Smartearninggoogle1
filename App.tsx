@@ -22,6 +22,7 @@ import SentMessages from './pages/SentMessages';
 import TickerSettings from './pages/TickerSettings';
 import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
+import FeatureMap from './pages/FeatureMap';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -64,6 +65,7 @@ const App: React.FC = () => {
         {/* Admin Panel Routes */}
         <Route path="/admin" element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="feature-map" element={<FeatureMap />} />
           <Route path="users" element={<Users />} />
           <Route path="deposits" element={<Deposits />} />
           <Route path="withdrawals" element={<Withdrawals />} />

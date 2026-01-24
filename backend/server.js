@@ -37,47 +37,44 @@ if (!process.env.JWT_SECRET) {
 // Global version for sync
 global.appDataVersion = Date.now();
 
-// Connect to database
-connectDB();
-
 const app = express();
 
 /**
  * ADVANCED CORS CONFIGURATION
- * Supports credentials:true (HttpOnly Cookies) across dynamic Vercel subdomains and custom domains.
+ * Optimized for Vercel + Render production environments.
+ * Fixed: Preflight (OPTIONS) response standardization.
  */
+const whitelist = [
+    'https://smartexn.com',
+    'https://www.smartexn.com',
+    'https://smartearninggoogle1.vercel.app',
+    'https://smartearning-google.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:3000'
+];
+
 app.use(cors({
     origin: function (origin, callback) {
-        // 1. Allow requests with no origin (like mobile apps, curl, or server-to-server)
+        // Allow requests with no origin (like mobile apps, curl, server-to-server)
         if (!origin) return callback(null, true);
         
-        // 2. Explicit whitelist for production custom domains and local dev ports
-        const whitelist = [
-            'https://smartexn.com',
-            'https://www.smartexn.com',
-            'https://smartearninggoogle1.vercel.app',
-            'http://localhost:3000',
-            'http://localhost:5173',
-            'http://localhost:5000',
-            'http://127.0.0.1:3000'
-        ];
-
         const isWhitelisted = whitelist.includes(origin);
-        const isVercelSubdomain = origin.endsWith('.vercel.app'); // Permits all Vercel previews/deployments
-        const isDevMode = process.env.NODE_ENV !== 'production';
+        const isVercel = origin.match(/\.vercel\.app$/); 
+        const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1');
 
-        if (isWhitelisted || isVercelSubdomain || isDevMode) {
-            // Reflecting the requesting origin back to the browser is required when credentials: true is set
+        if (isWhitelisted || isVercel || isLocal || process.env.NODE_ENV !== 'production') {
             callback(null, true);
         } else {
-            // Rejects unauthorized cross-origin requests for security
-            callback(new Error('CORS Blocking: Origin not authorized by security policy'));
+            console.warn(`CORS Filtered: ${origin}`);
+            callback(null, false);
         }
     },
-    credentials: true, // Mandatory for HttpOnly JWT cookie transmission
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Standardizes supported HTTP verbs
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'], // Standardizes supported headers
-    optionsSuccessStatus: 204 // Ensures legacy and mobile browsers handle OPTIONS preflight with 204 No Content
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cache-Control', 'Pragma'],
+    optionsSuccessStatus: 200 // Changed from 240 for better cross-browser stability
 }));
 
 // Middlewares
@@ -114,6 +111,7 @@ const seedAdminUser = async () => {
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
+                console.log('Admin account seeded.');
             }
         } 
     } catch (error) {
@@ -121,7 +119,7 @@ const seedAdminUser = async () => {
     }
 };
 
-app.get('/', (req, res) => res.send('SmartEarning API is running...'));
+app.get('/', (req, res) => res.send('SmartEarning API is operational.'));
 
 // Mount routers
 app.use('/api/v1/users', userRoutes);
@@ -146,12 +144,27 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, async () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    await seedAdminUser();
-});
 
-process.on('unhandledRejection', (err, promise) => {
-    console.log(`Error: ${err.message}`);
-    server.close(() => process.exit(1));
-});
+/**
+ * STARTUP SEQUENCE
+ * Ensures database is connected before server starts listening.
+ */
+const startServer = async () => {
+    try {
+        await connectDB();
+        const server = app.listen(PORT, () => {
+            console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+            seedAdminUser();
+        });
+
+        process.on('unhandledRejection', (err) => {
+            console.log(`Unhandled Rejection: ${err.message}`);
+            server.close(() => process.exit(1));
+        });
+    } catch (error) {
+        console.error(`Startup Failure: ${error.message}`);
+        process.exit(1);
+    }
+};
+
+startServer();
