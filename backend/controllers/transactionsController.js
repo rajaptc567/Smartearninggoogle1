@@ -9,16 +9,8 @@ export const getTransactions = async (req, res) => {
         const limit = parseInt(req.query.limit) || 1000;
         const skip = (page - 1) * limit;
 
-        /**
-         * SECURITY ENFORCEMENT:
-         * Admin sees everything. Regular members see ONLY their own transactions.
-         * This allows the frontend to calculate user-specific totals/referral earnings correctly.
-         */
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-
-        const totalCount = await Transaction.countDocuments(filter);
-        const transactions = await Transaction.find(filter)
+        const totalCount = await Transaction.countDocuments();
+        const transactions = await Transaction.find()
             .skip(skip)
             .limit(limit)
             .sort({ date: -1 });

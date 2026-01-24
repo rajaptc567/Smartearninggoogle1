@@ -16,11 +16,8 @@ export const getDeposits = async (req, res) => {
         const limit = parseInt(req.query.limit) || 1000;
         const skip = (page - 1) * limit;
 
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-
-        const totalCount = await Deposit.countDocuments(filter);
-        const deposits = await Deposit.find(filter).skip(skip).limit(limit).sort({ date: -1 });
+        const totalCount = await Deposit.countDocuments();
+        const deposits = await Deposit.find().skip(skip).limit(limit).sort({ date: -1 });
 
         res.status(200).json({ 
             success: true, 
@@ -38,12 +35,6 @@ export const getDeposit = async (req, res) => {
     try {
         const deposit = await Deposit.findById(req.params.id);
         if (!deposit) return res.status(404).json({ success: false, error: 'Deposit not found' });
-        
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        if (!isAdmin && deposit.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, error: 'Access Denied' });
-        }
-
         res.status(200).json({ success: true, data: deposit });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

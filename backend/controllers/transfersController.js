@@ -14,11 +14,8 @@ export const getTransfers = async (req, res) => {
         const limit = parseInt(req.query.limit) || 1000;
         const skip = (page - 1) * limit;
 
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { $or: [{ senderId: req.user._id }, { recipientId: req.user._id }] };
-
-        const totalCount = await Transfer.countDocuments(filter);
-        const transfers = await Transfer.find(filter).skip(skip).limit(limit).sort({ date: -1 });
+        const totalCount = await Transfer.countDocuments();
+        const transfers = await Transfer.find().skip(skip).limit(limit).sort({ date: -1 });
         
         res.status(200).json({ 
             success: true, 

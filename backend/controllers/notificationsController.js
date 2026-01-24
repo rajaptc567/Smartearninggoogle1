@@ -2,18 +2,11 @@
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
-// @desc    Get all notifications (Filtered by Ownership)
+// @desc    Get all notifications
 // @route   GET /api/v1/notifications
 export const getNotifications = async (req, res) => {
     try {
-        /**
-         * SECURITY FIX:
-         * Ensure members only receive their own notifications to prevent data leaks.
-         */
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-
-        const notifications = await Notification.find(filter).sort({ date: -1 });
+        const notifications = await Notification.find().sort({ date: -1 });
         res.status(200).json({ success: true, count: notifications.length, data: notifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -108,9 +101,7 @@ export const markAsRead = async (req, res) => {
             { userId: req.params.userId, read: false },
             { $set: { read: true } }
         );
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-        const updatedNotifications = await Notification.find(filter).sort({ date: -1 });
+        const updatedNotifications = await Notification.find().sort({ date: -1 });
         res.status(200).json({ success: true, data: updatedNotifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -121,16 +112,12 @@ export const markAsRead = async (req, res) => {
 // @route   PUT /api/v1/notifications/:id
 export const updateNotification = async (req, res) => {
     try {
-        const notification = await Notification.findById(req.params.id);
+        const notification = await Notification.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true }
+        );
         if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
-
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        if (!isAdmin && notification.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
-        }
-
-        Object.assign(notification, req.body);
-        await notification.save();
         res.status(200).json({ success: true, data: notification });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -141,15 +128,8 @@ export const updateNotification = async (req, res) => {
 // @route   DELETE /api/v1/notifications/:id
 export const deleteNotification = async (req, res) => {
     try {
-        const notification = await Notification.findById(req.params.id);
+        const notification = await Notification.findByIdAndDelete(req.params.id);
         if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
-
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        if (!isAdmin && notification.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
-        }
-
-        await notification.deleteOne();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -160,15 +140,15 @@ export const deleteNotification = async (req, res) => {
 // @route   PUT /api/v1/notifications/popup-shown/:id
 export const markPopupShown = async (req, res) => {
     try {
-        const notification = await Notification.findById(req.params.id);
+        const notification = await Notification.findByIdAndUpdate(
+            req.params.id,
+            { popupShown: true },
+            { new: true }
+        );
         if(!notification) return res.status(404).json({ success: false, error: "Notification not found" });
         
-        notification.popupShown = true;
-        await notification.save();
-
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-        const notifications = await Notification.find(filter).sort({ date: -1 });
+        // Return updated list for frontend sync
+        const notifications = await Notification.find().sort({ date: -1 });
         res.status(200).json({ success: true, data: notifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

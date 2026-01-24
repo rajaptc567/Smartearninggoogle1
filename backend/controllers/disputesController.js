@@ -6,10 +6,7 @@ import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 export const getDisputes = async (req, res) => {
     try {
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        const filter = isAdmin ? {} : { userId: req.user._id };
-
-        const disputes = await Dispute.find(filter).sort({ date: -1 });
+        const disputes = await Dispute.find().sort({ date: -1 });
         res.status(200).json({ success: true, data: disputes });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -48,11 +45,6 @@ export const updateDispute = async (req, res) => {
         const dispute = await Dispute.findById(req.params.id);
         if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
 
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        if (!isAdmin && dispute.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, error: 'Access Denied' });
-        }
-
         if (newMessage || req.file) {
             const messageData = { sender: sender || 'Admin', message: newMessage || '' };
 
@@ -88,13 +80,6 @@ export const markAsRead = async (req, res) => {
     try {
         const { role } = req.body;
         const dispute = await Dispute.findById(req.params.id);
-        if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
-
-        const isAdmin = req.user.email === 'studio56.pk@gmail.com' || req.user.username === 'admin';
-        if (!isAdmin && dispute.userId.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, error: 'Access Denied' });
-        }
-
         if (role === 'admin') dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();
