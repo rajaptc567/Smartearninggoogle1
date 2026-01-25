@@ -48,7 +48,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
     const activeLinkClass = "bg-blue-600 text-white shadow-lg shadow-blue-600/20";
 
     const handleLogout = () => {
-        dispatch({ type: 'SET_CURRENT_USER', payload: null });
+        dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
         setSidebarOpen(false);
     };
 

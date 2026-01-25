@@ -7,19 +7,42 @@ import User from '../models/User.js';
 export const getNotifications = async (req, res) => {
     try {
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        
+        // Safe Pagination Logic
+        const page = parseInt(req.query.page, 10) || 1;
+        let limit = parseInt(req.query.limit, 10) || 50; 
+        if (limit > 100) limit = 100;
+        const skip = (page - 1) * limit;
+
         const query = isAdmin ? {} : { userId: req.user?.id };
 
         if (!isAdmin && !req.user?.id) {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
-        const notifications = await Notification.find(query).sort({ date: -1 });
-        res.status(200).json({ success: true, count: notifications.length, data: notifications });
+        const totalRecords = await Notification.countDocuments(query);
+        const notifications = await Notification.find(query)
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({ 
+            success: true, 
+            count: notifications.length, 
+            pagination: {
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limit),
+                currentPage: page,
+                pageSize: limit
+            },
+            data: notifications 
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
+// ... (Remainder of file createNotification, markAsRead, etc. remain unchanged)
 // @desc    Create a notification (Admin message, single or bulk)
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {

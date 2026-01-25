@@ -11,15 +11,35 @@ import { uploadStream } from '../utils/cloudinaryUploader.js';
 export const getDeposits = async (req, res) => {
     try {
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
-        const query = isAdmin ? {} : { userId: req.user?.id };
         
-        // If not admin and no user ID found in token, return empty
+        // Safe Pagination Logic
+        const page = parseInt(req.query.page, 10) || 1;
+        let limit = parseInt(req.query.limit, 10) || 20;
+        if (limit > 100) limit = 100;
+        const skip = (page - 1) * limit;
+
+        const query = isAdmin ? {} : { userId: req.user?.id };
         if (!isAdmin && !req.user?.id) {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
-        const deposits = await Deposit.find(query).sort({ date: -1 });
-        res.status(200).json({ success: true, count: deposits.length, data: deposits });
+        const totalRecords = await Deposit.countDocuments(query);
+        const deposits = await Deposit.find(query)
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({ 
+            success: true, 
+            count: deposits.length, 
+            pagination: {
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limit),
+                currentPage: page,
+                pageSize: limit
+            },
+            data: deposits 
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

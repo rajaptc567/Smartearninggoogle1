@@ -9,20 +9,39 @@ import PaymentMethod from '../models/PaymentMethod.js';
 export const getWithdrawals = async (req, res) => {
     try {
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
-        const query = isAdmin ? {} : { userId: req.user?.id };
+        
+        // Safe Pagination Logic
+        const page = parseInt(req.query.page, 10) || 1;
+        let limit = parseInt(req.query.limit, 10) || 20;
+        if (limit > 100) limit = 100;
+        const skip = (page - 1) * limit;
 
+        const query = isAdmin ? {} : { userId: req.user?.id };
         if (!isAdmin && !req.user?.id) {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
+        const totalRecords = await Withdrawal.countDocuments(query);
         const withdrawals = await Withdrawal.find(query)
             .sort({ date: -1 })
+            .skip(skip)
+            .limit(limit)
             .populate({
                 path: 'matchedDepositIds',
                 select: 'amount date status receiptUrl userName transactionId method'
             });
             
-        res.status(200).json({ success: true, count: withdrawals.length, data: withdrawals });
+        res.status(200).json({ 
+            success: true, 
+            count: withdrawals.length, 
+            pagination: {
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limit),
+                currentPage: page,
+                pageSize: limit
+            },
+            data: withdrawals 
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
