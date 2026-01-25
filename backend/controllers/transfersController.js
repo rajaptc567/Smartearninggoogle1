@@ -7,7 +7,19 @@ import Setting from '../models/Setting.js';
 
 export const getTransfers = async (req, res) => {
     try {
-        const transfers = await Transfer.find().sort({ date: -1 });
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const query = isAdmin ? {} : { 
+            $or: [
+                { senderId: req.user?.id }, 
+                { recipientId: req.user?.id }
+            ] 
+        };
+
+        if (!isAdmin && !req.user?.id) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const transfers = await Transfer.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, data: transfers });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

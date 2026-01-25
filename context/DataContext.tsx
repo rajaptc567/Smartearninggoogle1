@@ -344,31 +344,43 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
 
-    // Initial Data Fetch
+    // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [
-                    users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                    investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks,
-                    currentVersion
-                ] = await Promise.all([
+                const results = await Promise.allSettled([
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                     getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
                     getDataVersion()
                 ]);
                 
+                const getValue = (idx: number, fallback: any) => 
+                    results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                const currentVersion = getValue(14, 0);
                 lastVersionRef.current = currentVersion;
 
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
-                        users, deposits, withdrawals, transactions, notifications, paymentMethods, 
-                        investmentPlans, rules, settings, transfers, logs, passwordResetRequests, disputes, tasks 
+                        users: getValue(0, []),
+                        deposits: getValue(1, []),
+                        withdrawals: getValue(2, []),
+                        transactions: getValue(3, []),
+                        notifications: getValue(4, []),
+                        paymentMethods: getValue(5, []),
+                        investmentPlans: getValue(6, []),
+                        rules: getValue(7, []),
+                        settings: getValue(8, state.settings),
+                        transfers: getValue(9, []),
+                        logs: getValue(10, []),
+                        passwordResetRequests: getValue(11, []),
+                        disputes: getValue(12, []),
+                        tasks: getValue(13, [])
                     } 
                 });
             } catch (error) {
-                console.error("Failed to fetch initial data:", error);
+                console.error("Critical error during initial data handshake:", error);
             }
         };
 
@@ -389,19 +401,26 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    console.log("Remote changes detected by admin. Synchronizing app state...");
+                    const isAdmin = state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com';
                     
-                    if (state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com') {
+                    if (isAdmin) {
                         lastVersionRef.current = serverVersion;
-                        const [u, d, w, t, n, pm, ip, r, s, tf, l, pr, dis, tsk] = await Promise.all([
+                        const results = await Promise.allSettled([
                             getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
                             getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
                         ]);
+                        
+                        const getValue = (idx: number, fallback: any) => 
+                            results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
                         dispatch({ 
                             type: 'SET_ALL_DATA', 
                             payload: { 
-                                users: u, deposits: d, withdrawals: w, transactions: t, notifications: n, paymentMethods: pm, 
-                                investmentPlans: ip, rules: r, settings: s, transfers: tf, logs: l, passwordResetRequests: pr, disputes: dis, tasks: tsk 
+                                users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
+                                transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
+                                investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
+                                transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
+                                disputes: getValue(12, []), tasks: getValue(13, [])
                             } 
                         });
                     } else {
@@ -409,7 +428,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     }
                 }
             } catch (err) {
-                // Silently ignore polling errors
+                // Silently ignore polling network errors
             }
         }, 5000); 
 
@@ -417,8 +436,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }, [state.currentUser]);
 
     return (
-        <DataContext.Provider value={{ state, dispatch }}>
-            {children}
-        </DataContext.Provider>
+        <div id="data-state-container">
+            <DataContext.Provider value={{ state, dispatch }}>
+                {children}
+            </DataContext.Provider>
+        </div>
     );
 };

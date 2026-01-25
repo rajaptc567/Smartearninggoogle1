@@ -8,7 +8,14 @@ import PaymentMethod from '../models/PaymentMethod.js';
 
 export const getWithdrawals = async (req, res) => {
     try {
-        const withdrawals = await Withdrawal.find()
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const query = isAdmin ? {} : { userId: req.user?.id };
+
+        if (!isAdmin && !req.user?.id) {
+            return res.status(200).json({ success: true, count: 0, data: [] });
+        }
+
+        const withdrawals = await Withdrawal.find(query)
             .sort({ date: -1 })
             .populate({
                 path: 'matchedDepositIds',
@@ -27,6 +34,12 @@ export const getWithdrawal = async (req, res) => {
         if (!withdrawal) {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
+
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        if (!isAdmin && withdrawal.userId.toString() !== req.user.id) {
+            return res.status(403).json({ success: false, error: 'Unauthorized access to this record' });
+        }
+
         res.status(200).json({ success: true, data: withdrawal });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

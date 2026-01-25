@@ -12,6 +12,8 @@ import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
 import jwt from 'jsonwebtoken';
 
+const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
+
 // ... (Helper functions remain unchanged for logic integrity)
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
@@ -183,19 +185,29 @@ export const getUsers = async (req, res) => {
         if (isAdmin) {
             users = await User.find();
         } else if (req.user) {
-            // SMART FILTER: Regular users only get their own profile + downline
-            const currentUser = await User.findById(req.user.id);
-            if (!currentUser) return res.status(200).json({ success: true, data: [] });
-            
-            // Fetch all users who have this user as their sponsor recursively
-            // For now, we fetch one level to reduce JSON size immediately
-            // The frontend needs the downline to build the referral tree
-            users = await User.find({ 
-                $or: [
-                    { _id: req.user.id },
-                    { sponsor: currentUser.username }
-                ] 
-            });
+            // FIX: Recursively fetch FULL downline for regular users.
+            // Using $graphLookup to find all descendants at all levels.
+            const results = await User.aggregate([
+                { 
+                    $match: { email: req.user.email } 
+                },
+                {
+                    $graphLookup: {
+                        from: 'users',
+                        startWith: '$username',
+                        connectFromField: 'username',
+                        connectToField: 'sponsor',
+                        as: 'downline'
+                    }
+                }
+            ]);
+
+            if (results.length > 0) {
+                // Merge the current user with their recursive downline
+                users = [results[0], ...results[0].downline];
+            } else {
+                users = [];
+            }
         } else {
             users = [];
         }

@@ -10,7 +10,15 @@ import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 export const getDeposits = async (req, res) => {
     try {
-        const deposits = await Deposit.find().sort({ date: -1 });
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const query = isAdmin ? {} : { userId: req.user?.id };
+        
+        // If not admin and no user ID found in token, return empty
+        if (!isAdmin && !req.user?.id) {
+            return res.status(200).json({ success: true, count: 0, data: [] });
+        }
+
+        const deposits = await Deposit.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, count: deposits.length, data: deposits });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -21,6 +29,12 @@ export const getDeposit = async (req, res) => {
     try {
         const deposit = await Deposit.findById(req.params.id);
         if (!deposit) return res.status(404).json({ success: false, error: 'Deposit not found' });
+        
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        if (!isAdmin && deposit.userId.toString() !== req.user.id) {
+            return res.status(403).json({ success: false, error: 'Unauthorized access to this record' });
+        }
+
         res.status(200).json({ success: true, data: deposit });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
