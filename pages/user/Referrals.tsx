@@ -115,7 +115,8 @@ const Referrals: React.FC = () => {
         if (!currentUser) return { earned: 0, held: 0, overflow: 0, history: [], isRecurringReferral: false, shouldRemoveCompletely: false, statusText: '', level: 0, relatedPlanId: null, isOverflow: false };
         
         const findLevel = (sponsor: string, targetId: string, currentLvl: number): number => {
-            const directs = users.filter(u => u.sponsor === sponsor);
+            // FIX: Case-insensitive match
+            const directs = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsor.toLowerCase());
             if (directs.some(u => u._id === targetId)) return currentLvl;
             for (const d of directs) {
                 const lvl = findLevel(d.username, targetId, currentLvl + 1);
@@ -144,8 +145,6 @@ const Referrals: React.FC = () => {
         const held = contextComms.filter(t => t.status === 'Pending' && !isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         const overflow = contextComms.filter(t => isTransactionOverflow(t)).reduce((sum, t) => sum + t.amount, 0);
         
-        // REFINED LOGIC: A referral is only an "Overflow Ref" in this scope if they have
-        // triggered an overflow AND have ZERO valid earnings (earned or held) in this scope.
         const isOverflow = (overflow > 0) && (earned === 0 && held === 0);
 
         const oldestComm = [...referralComms].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).find(t => t.level === 1);
@@ -226,6 +225,7 @@ const Referrals: React.FC = () => {
         if (!currentUser) return { genealogyTree: [], directEarners: [], indirectEarners: [], overflowReferrals: [], inactiveReferrals: [], allNodes: [], scopeStats: { earned: 0, held: 0, directCount: 0, indirectCount: 0 } };
 
         const buildFullTree = (sponsorUsername: string, level: number): GenealogyNode[] => {
+            // FIX: Case-insensitive match
             const directReferrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
             return directReferrals.map(child => ({
                 user: child,
@@ -263,13 +263,11 @@ const Referrals: React.FC = () => {
             } else {
                 const isActive = node.user.activePlans && node.user.activePlans.length > 0;
                 
-                // Member counts for stats (only if not overflow)
                 earnedSum += info.earned;
                 heldSum += info.held;
                 if (info.level === 1) directCount++;
                 else indirectCount++;
 
-                // If they generated REAL (Approved) commission, they go to Earning Tab
                 if (info.earned > 0) {
                     if (info.level === 1) directEarnersList.push({ ...node, info });
                     else indirectEarnersList.push({ ...node, info });
@@ -279,18 +277,15 @@ const Referrals: React.FC = () => {
             }
         });
 
-        // "All Referral" tab logic: Strictly show contributors to THIS specific scope.
-        // User requested: don't show overflow refs from other scopes here.
         const filteredAllNodes = nodesList.map(node => ({
             ...node,
             info: getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected)
         })).filter(n => 
             !n.info.shouldRemoveCompletely && 
-            (n.info.earned > 0 || n.info.held > 0) && // Must have some financial contribution in THIS scope
-            n.info.overflow === 0 // Must NOT be an overflowed ref in THIS scope
+            (n.info.earned > 0 || n.info.held > 0) &&
+            n.info.overflow === 0
         );
 
-        // "Ref Tree" logic: synchronized with contribution logic
         const filterRecursive = (nodes: GenealogyNode[]): GenealogyNode[] => {
             return nodes.map(node => {
                 const info = getCommissionInfoForReferral(node.user, equivalentPlanIdsForSelected);
@@ -333,13 +328,9 @@ const Referrals: React.FC = () => {
         const globalHistory = heldStats?.breakdown || [];
         
         const historyToShow = isHeldView ? globalHistory : info.history;
-        
-        // Amount logic
         const amountToShow = isHeldView ? totalHeldGlobal : (info.isOverflow ? info.overflow : info.earned);
-        
         const hasHeld = totalHeldGlobal > 0;
         const isOverflow = info.isOverflow;
-
         const requiredPlan = getRequiredPlanForCommission(info.relatedPlanId);
         const symbol = currencySymbols[currentUser?.currency || 'USD'];
 
@@ -460,7 +451,7 @@ const Referrals: React.FC = () => {
 
                     <div className="mt-6 flex justify-between items-center text-[11px] font-black uppercase tracking-[0.2em] pt-5 border-t border-gray-800/50">
                         <span className="text-gray-500">{info.statusText}</span>
-                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username === user.sponsor) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400">Referrer: @{user.sponsor || 'Direct'}</button>
+                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username && u.username.toLowerCase() === user.sponsor?.toLowerCase()) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400">Referrer: @{user.sponsor || 'Direct'}</button>
                     </div>
                 </div>
             </div>
@@ -630,7 +621,7 @@ const Referrals: React.FC = () => {
                     <div className="flex flex-col gap-6 w-full lg:w-2/5">
                         <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
                             <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Total Direct Refs</p>
-                            <p className="text-4xl font-black text-white">{users.filter(u => u.sponsor === currentUser.username).length}</p>
+                            <p className="text-4xl font-black text-white">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase()).length}</p>
                         </div>
                         <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
                             <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Global Commissioners</p>

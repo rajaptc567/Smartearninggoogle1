@@ -110,7 +110,8 @@ const UserDashboard: React.FC = () => {
         };
 
         const traverse = (sponsorUsername: string, level: number) => {
-            const referrals = users.filter(u => u.sponsor === sponsorUsername);
+            // FIX: Case-insensitive match for sponsor
+            const referrals = users.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
             if (referrals.length === 0) return;
 
             referrals.forEach(ref => {
@@ -160,7 +161,7 @@ const UserDashboard: React.FC = () => {
                     <div>
                         <h4 className="font-semibold text-green-600 dark:text-green-400 mb-2">Active Referrals ({totalActive})</h4>
                         <ul className="space-y-1 text-gray-600 dark:text-gray-300">
-                            {Object.keys(networkBreakdown.active).map(level => (
+                            {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
                                 <li key={`active-${level}`} className="flex justify-between">
                                     <span>Level {level}:</span>
                                     <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
@@ -171,7 +172,7 @@ const UserDashboard: React.FC = () => {
                     <div>
                         <h4 className="font-semibold text-red-500 dark:text-red-400 mb-2">Inactive Referrals ({totalInactive})</h4>
                         <ul className="space-y-1 text-gray-600 dark:text-gray-300">
-                            {Object.keys(networkBreakdown.inactive).map(level => (
+                            {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
                                 <li key={`inactive-${level}`} className="flex justify-between">
                                     <span>Level {level}:</span>
                                     <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
