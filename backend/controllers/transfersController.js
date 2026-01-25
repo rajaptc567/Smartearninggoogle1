@@ -8,13 +8,6 @@ import Setting from '../models/Setting.js';
 export const getTransfers = async (req, res) => {
     try {
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
-        
-        // Safe Pagination Logic
-        const page = parseInt(req.query.page, 10) || 1;
-        let limit = parseInt(req.query.limit, 10) || 20;
-        if (limit > 100) limit = 100;
-        const skip = (page - 1) * limit;
-
         const query = isAdmin ? {} : { 
             $or: [
                 { senderId: req.user?.id }, 
@@ -26,23 +19,8 @@ export const getTransfers = async (req, res) => {
             return res.status(200).json({ success: true, data: [] });
         }
 
-        const totalRecords = await Transfer.countDocuments(query);
-        const transfers = await Transfer.find(query)
-            .sort({ date: -1 })
-            .skip(skip)
-            .limit(limit);
-
-        res.status(200).json({ 
-            success: true, 
-            count: transfers.length,
-            pagination: {
-                totalRecords,
-                totalPages: Math.ceil(totalRecords / limit),
-                currentPage: page,
-                pageSize: limit
-            },
-            data: transfers 
-        });
+        const transfers = await Transfer.find(query).sort({ date: -1 });
+        res.status(200).json({ success: true, data: transfers });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -59,20 +37,24 @@ export const createTransfer = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Sender or recipient not found.' });
         }
 
+        // 1. Check User Restrictions
         if (sender.status === 'Blocked' || (sender.restrictions && sender.restrictions.transfer)) {
             return res.status(403).json({ success: false, error: `Transfers are currently disabled for your account.` });
         }
 
+        // 2. Check Global Transfer Settings
         const config = settings.transferConfig || { enabled: settings.isUserTransferEnabled, tiers: [], allowCrossCurrency: false };
         
         if (!config.enabled) {
             return res.status(403).json({ success: false, error: 'Transfers are currently disabled by the administrator.' });
         }
         
+        // 3. Check Cross-Currency Setting
         if (sender.currency !== recipient.currency && !config.allowCrossCurrency) {
             return res.status(403).json({ success: false, error: 'Cross-currency transfers are currently disabled by the administrator.' });
         }
 
+        // 4. Determine Fee based on Tiers (always based on sender's currency)
         const tier = config.tiers.find(t => 
             t.currency === sender.currency &&
             amount >= t.minAmount && 
@@ -91,20 +73,23 @@ export const createTransfer = async (req, res) => {
         fee = Number(fee.toFixed(2));
         const totalDeduction = Number((amount + fee).toFixed(2));
 
+        // 5. Check Balance
         if (sender.walletBalance < totalDeduction) {
             return res.status(400).json({ success: false, error: `Insufficient funds. You need ${sender.currency}${totalDeduction.toFixed(2)} (Amount + Fee) but have ${sender.currency}${sender.walletBalance.toFixed(2)}.` });
         }
 
+        // 6. Process Transfer
         sender.walletBalance = Number((sender.walletBalance - totalDeduction).toFixed(2));
         
         const transfer = await Transfer.create({
             ...req.body,
-            currency: sender.currency,
+            currency: sender.currency, // Transfer is always recorded in sender's currency
             fee: fee,
             totalDeducted: totalDeduction,
             status: 'Pending'
         });
 
+        // 7. Logs & Notifications
         const transaction = await Transaction.create({
             userId: sender._id,
             userName: sender.username,
@@ -167,19 +152,29 @@ export const updateTransfer = async (req, res) => {
             let senderDesc = `Transfer Sent #${transfer._id} to ${recipient.username}`;
             let recipientDesc = `Received from ${sender.username}`;
 
+            // Correct Conversion Logic (USD is base)
             if (sender.currency !== recipient.currency) {
                 const fromCurrency = sender.currency.toUpperCase();
                 const toCurrency = recipient.currency.toUpperCase();
+
+                // Step 1: Convert sender's amount to base currency (USD).
                 const fromRate = getRate(fromCurrency);
                 const toRate = getRate(toCurrency);
+
                 const amountInUSD = transfer.amount / fromRate;
+                
+                // Step 2: Convert from USD to the recipient's currency.
                 receivedAmount = Number((amountInUSD * toRate).toFixed(2));
+                
                 originalAmountForTx = transfer.amount;
                 originalCurrencyForTx = sender.currency;
+
+                // Update Descriptions to reflect exchange
                 senderDesc += `. Recipient received: ${recipient.currency} ${receivedAmount.toFixed(2)}`;
                 recipientDesc += ` (Original: ${sender.currency} ${transfer.amount.toFixed(2)})`;
             }
 
+            // Add converted funds to recipient
             recipient.walletBalance = Number((recipient.walletBalance + receivedAmount).toFixed(2));
             await recipient.save();
 
@@ -189,6 +184,7 @@ export const updateTransfer = async (req, res) => {
                 await originalTransaction.save();
             }
 
+            // Create Receipt Transaction for Recipient with converted amount
             const transactionPayload = {
                 userId: recipient._id,
                 userName: recipient.username,
@@ -208,6 +204,7 @@ export const updateTransfer = async (req, res) => {
 
             await Transaction.create(transactionPayload);
 
+
             await Notification.create({ 
                 userId: sender._id, 
                 message: `Your transfer of ${sender.currency}${transfer.amount.toFixed(2)} to ${recipient.username} was approved. (Fee deducted: ${sender.currency}${(transfer.fee || 0).toFixed(2)})` 
@@ -217,14 +214,18 @@ export const updateTransfer = async (req, res) => {
 
         } else if (status === 'Rejected') {
             if (!sender) return res.status(404).json({success: false, error: "Sender not found"});
+
             const refundAmount = transfer.totalDeducted || (transfer.amount + (transfer.fee || 0));
+            
             sender.walletBalance = Number((sender.walletBalance + refundAmount).toFixed(2));
             await sender.save();
+
             if (originalTransaction) {
                 originalTransaction.status = 'Rejected';
                 originalTransaction.description = `Transfer Rejected #${transfer._id}`;
                 await originalTransaction.save();
             }
+            
             await Transaction.create({
                 userId: sender._id,
                 userName: sender.username,
@@ -234,13 +235,16 @@ export const updateTransfer = async (req, res) => {
                 status: 'Approved',
                 description: `Refund for rejected transfer #${transfer._id}`
             });
+
             await Notification.create({ userId: sender._id, message: `Your transfer to ${recipient ? recipient.username : 'User'} was rejected and funds (${sender.currency}${refundAmount.toFixed(2)}) returned.` });
         }
         
         transfer.status = status;
         transfer.adminNotes = adminNotes;
         await transfer.save();
+        
         res.status(200).json({ success: true, data: { transfer, sender, recipient }});
+
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

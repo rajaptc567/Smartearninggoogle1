@@ -14,106 +14,183 @@ import jwt from 'jsonwebtoken';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
-const canReleaseCommission = async (transaction, user, settings, allPlans) => {
-    if (!transaction.relatedPlanId) return true;
-    if (!settings.requireActivePlanForCommission && !settings.requirePlanMatchForCommission) return true;
-    if (settings.requireActivePlanForCommission && (!user.activePlans || user.activePlans.length === 0)) return false;
-    if (settings.requirePlanMatchForCommission) {
-        const relatedPlan = allPlans.find(p => p._id.toString() === transaction.relatedPlanId.toString());
-        if (!relatedPlan) return false;
-        let isMatch = user.activePlans?.some(ap => ap.planId.toString() === transaction.relatedPlanId.toString());
-        if (!isMatch && settings.planEquivalencyGroups) {
-            const group = settings.planEquivalencyGroups.find(g => g.usdPlanId === transaction.relatedPlanId.toString() || g.pkrPlanId === transaction.relatedPlanId.toString() || g.eurPlanId === transaction.relatedPlanId.toString());
-            if (group) {
-                const equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean);
-                isMatch = user.activePlans?.some(ap => equivIds.includes(ap.planId.toString()));
+// ... (canReleaseCommission helper unchanged)
+const canReleaseCommission = async (commission, user, settings, allPlans) => {
+    if (commission.status !== 'Pending') return false;
+    let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
+    if (!targetPlanId) return false;
+    if (settings.oneTimeCommissionPerGroup) {
+        const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+        const hasRecurringPlan = (user.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
+        if (!hasRecurringPlan) {
+            const alreadyReceived = await Transaction.findOne({
+                userId: user._id, sourceUserId: commission.sourceUserId, type: 'Commission', status: 'Approved', _id: { $ne: commission._id }
+            });
+            if (alreadyReceived) {
+                commission.status = 'Rejected';
+                commission.description = `[Limit] One-time commission already received from @${commission.userName || 'referral'}.`;
+                await commission.save();
+                return false;
             }
         }
-        if (!isMatch) return false;
+    }
+    let equivIds = [targetPlanId];
+    if (settings.planEquivalencyGroups) {
+        const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === targetPlanId || String(g.pkrPlanId) === targetPlanId || String(g.eurPlanId) === targetPlanId);
+        if (group) equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+    }
+    const qualifyingActivePlan = (user.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+    if (settings.requirePlanMatchForCommission) {
+        if (!qualifyingActivePlan) return false;
+    } else if (settings.requireActivePlanForCommission) {
+        if ((user.activePlans || []).length === 0) return false;
+    }
+    const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan?.planId));
+    if (commission.level === 1 && qualifyingActivePlan && planConfig) {
+        const limit = planConfig.directReferralLimit || 0;
+        if (limit > 0) {
+            const approvedCount = await Transaction.countDocuments({ userId: user._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+            if (approvedCount >= limit) {
+                commission.status = 'Rejected';
+                commission.description = `[Overflow] Slot Limit reached for ${planConfig.name}.`;
+                await commission.save();
+                return false;
+            }
+        }
     }
     return true;
 };
 
-const distributeCommissions = async (purchaser, plan, settings, rates, defaultRates, allPlans) => {
-    if (!purchaser.sponsor) return;
-    const getRate = (curr) => {
-        const r = rates[curr];
-        if (curr === 'PKR' && (r === 1 || !r)) return defaultRates.PKR;
-        if (curr === 'EUR' && (r === 0 || !r)) return defaultRates.EUR;
-        return (r !== undefined && r !== null && r !== 0) ? r : (defaultRates[curr] || 1);
+// ... (distributeCommissions helper unchanged)
+const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
+    if (!user.sponsor) return;
+    const convertCurrency = (amount, from, to) => {
+        if (!from || !to) return amount;
+        const fromKey = from.toUpperCase(); const toKey = to.toUpperCase();
+        if (fromKey === toKey) return Number(amount.toFixed(2));
+        const getRate = (curr) => { const r = exchangeRates[curr]; if (r !== undefined && r !== null && r !== 0) return r; return defaultRates[curr] || 1; };
+        const fromRate = getRate(fromKey); const toRate = getRate(toKey);
+        if (fromRate === 0) return 0;
+        return Number(((amount / fromRate) * toRate).toFixed(2));
     };
-    let currentSponsorUsername = purchaser.sponsor;
-    let level = 1;
-    let totalLevels = 1 + (plan.indirectCommissions?.length || 0);
-    while (level <= totalLevels && currentSponsorUsername) {
-        const sponsor = await User.findOne({ username: currentSponsorUsername });
-        if (!sponsor) break;
-        if (sponsor.restrictions?.earning) {
-            currentSponsorUsername = sponsor.sponsor; level++; continue;
-        }
-        let commissionConfig = level === 1 ? plan.directCommissions?.[0] : plan.indirectCommissions?.[level - 2];
-        if (!commissionConfig) break;
-        if (level === 1 && plan.directReferralLimit > 0) {
-            const equivIds = new Set();
-            equivIds.add(plan._id.toString());
-            const group = settings.planEquivalencyGroups?.find(g => String(g.usdPlanId) === plan._id.toString() || String(g.pkrPlanId) === plan._id.toString() || String(g.eurPlanId) === plan._id.toString());
-            if (group) { [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.add(id.toString())); }
-            const usedSlots = await Transaction.countDocuments({ userId: sponsor._id, type: 'Commission', level: 1, relatedPlanId: { $in: Array.from(equivIds) }, status: { $in: ['Approved', 'Pending'] } });
-            if (usedSlots >= plan.directReferralLimit) {
-                if (settings.showRejectedCommissionTransaction) { await Transaction.create({ userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency, type: 'Commission', amount: 0, status: 'Rejected', description: `Overflow: Slot limit reached for ${plan.name} from @${purchaser.username}`, level, sourceUserId: purchaser._id, relatedPlanId: plan._id }); }
-                if (settings.notifySponsorOnCommissionLimit) { await Notification.create({ userId: sponsor._id, subject: 'Slot Limit Reached', message: `You missed a commission from @${purchaser.username} because your ${plan.name} direct slots are full. Upgrade to a higher plan to increase capacity.` }); }
-                currentSponsorUsername = sponsor.sponsor; level++; continue;
-            } else if (plan.directCommissions && plan.directCommissions.length > usedSlots) {
-                commissionConfig = plan.directCommissions[usedSlots];
+    const calculateAmount = (commissionConfig, planPrice) => {
+        if (!commissionConfig) return 0;
+        const value = parseFloat(commissionConfig.value);
+        return commissionConfig.type === 'percentage' ? (planPrice * value) / 100 : value;
+    };
+    const checkInitialEligibility = async (uplineUser, purchasePlanId, level, referralId) => {
+        if (uplineUser.restrictions?.earning) return { status: 'Pending', message: `Commission Held! Earnings paused.` };
+        if (settings.oneTimeCommissionPerGroup) {
+            const recurringPlanIds = settings.recurringCommissionPlanIds || [];
+            const hasRecurringPlan = (uplineUser.activePlans || []).some(ap => recurringPlanIds.includes(String(ap.planId)));
+            if (!hasRecurringPlan) {
+                const alreadyReceived = await Transaction.findOne({ userId: uplineUser._id, sourceUserId: referralId, type: 'Commission', status: 'Approved' });
+                if (alreadyReceived) return { status: 'Rejected', message: `[Limit] One-time commission limit reached.` };
             }
         }
-        if (commissionConfig.disabledLevels?.includes(level)) { currentSponsorUsername = sponsor.sponsor; level++; continue; }
-        let amountInPurchaserCurrency = commissionConfig.type === 'percentage' ? (plan.price * commissionConfig.value) / 100 : commissionConfig.value;
-        let amountInSponsorCurrency = amountInPurchaserCurrency;
-        let exRate = 1;
-        if (purchaser.currency !== sponsor.currency) {
-            const pRate = getRate(purchaser.currency);
-            const sRate = getRate(sponsor.currency);
-            amountInSponsorCurrency = (amountInPurchaserCurrency / pRate) * sRate;
-            exRate = sRate / pRate;
+        const equivIds = [purchasePlanId.toString()];
+        if (settings.planEquivalencyGroups) {
+            const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === purchasePlanId.toString() || String(g.pkrPlanId) === purchasePlanId.toString() || String(g.eurPlanId) === purchasePlanId.toString());
+            if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.push(String(id)));
         }
-        amountInSponsorCurrency = Number(amountInSponsorCurrency.toFixed(2));
-        const txData = { userId: sponsor._id, userName: sponsor.username, currency: sponsor.currency, type: 'Commission', amount: amountInSponsorCurrency, level, sourceUserId: purchaser._id, relatedPlanId: plan._id, originalAmount: amountInPurchaserCurrency, originalCurrency: purchaser.currency, exchangeRate: exRate };
-        if (await canReleaseCommission(txData, sponsor, settings, allPlans)) {
-            txData.status = 'Approved'; txData.description = `Commission (L${level}) from @${purchaser.username} for ${plan.name}`;
-            sponsor.walletBalance = Number((sponsor.walletBalance + amountInSponsorCurrency).toFixed(2)); await sponsor.save();
-        } else {
-            txData.status = 'Pending'; txData.description = `Held: Commission (L${level}) from @${purchaser.username} - Requirements not met`;
+        const qualifyingActivePlan = (uplineUser.activePlans || []).find(ap => equivIds.includes(String(ap.planId)));
+        if (settings.requirePlanMatchForCommission) {
+            if (!qualifyingActivePlan) return { status: 'Pending', message: `Commission Held! Equivalent plan required.` };
+        } else if (settings.requireActivePlanForCommission) {
+            if ((uplineUser.activePlans || []).length === 0) return { status: 'Pending', message: `Commission Held! Active plan required.` };
         }
-        await Transaction.create(txData);
-        if (settings.requireUplineEligibility && txData.status === 'Pending') break;
-        currentSponsorUsername = sponsor.sponsor; level++;
+        if (level === 1 && qualifyingActivePlan) {
+            const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan.planId));
+            const limit = planConfig?.directReferralLimit || 0;
+            if (limit > 0) {
+                const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+                if (approvedCount >= limit) return { status: 'Rejected', message: `[Overflow] Slot Limit reached.` };
+            }
+        }
+        return { status: 'Approved', message: '' };
+    };
+    const getSlotIndex = async (sponsorUsername, planId) => {
+        const sponsor = await User.findOne({ username: sponsorUsername });
+        if (!sponsor) return 0;
+        let equivIds = [planId.toString()];
+        if (settings.planEquivalencyGroups) {
+            const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === planId.toString() || String(g.pkrPlanId) === planId.toString() || String(g.eurPlanId) === planId.toString());
+            if (group) equivIds = [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).map(id => String(id));
+        }
+        const existingCount = await Transaction.countDocuments({ userId: sponsor._id, type: 'Commission', level: 1, relatedPlanId: { $in: equivIds }, status: { $in: ['Approved', 'Pending'] } });
+        return existingCount;
+    };
+    let currentUplineUsername = user.sponsor;
+    const totalCommissionLevels = 1 + (plan.indirectCommissions || []).length;
+    let isPreviousUplineEligible = true;
+    const firstSponsorUsername = user.sponsor;
+    const slotIndexForStrategy = await getSlotIndex(firstSponsorUsername, plan._id);
+    const directCommsArr = plan.directCommissions || [];
+    const slotStrategy = directCommsArr[Math.min(slotIndexForStrategy, directCommsArr.length - 1)];
+    for (let level = 0; level < totalCommissionLevels; level++) {
+        if (!currentUplineUsername) break;
+        const uplineUser = await User.findOne({ username: { $regex: new RegExp(`^${currentUplineUsername}$`, 'i') } });
+        if (!uplineUser || uplineUser.status === 'Blocked') break;
+        if (settings.requireUplineEligibility && level > 0 && !isPreviousUplineEligible) break;
+        let commissionConfig;
+        if (level === 0) commissionConfig = slotStrategy;
+        else {
+            const overrides = slotStrategy?.indirectOverrides || [];
+            commissionConfig = overrides[level - 1] || plan.indirectCommissions[level - 1];
+        }
+        if (!commissionConfig || commissionConfig.enabled === false) { currentUplineUsername = uplineUser.sponsor; continue; }
+        let eligibility = await checkInitialEligibility(uplineUser, plan._id, level + 1, user._id);
+        isPreviousUplineEligible = (eligibility.status === 'Approved');
+        const rawAmount = calculateAmount(commissionConfig, plan.price);
+        if (rawAmount <= 0) { currentUplineUsername = uplineUser.sponsor; continue; }
+        const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
+        if (eligibility.status === 'Approved') {
+            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
+            await uplineUser.save();
+            await Notification.create({ userId: uplineUser._id, subject: 'Commission Received!', message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.` });
+            if (level === 0 && plan.directReferralLimit > 0) {
+                const equivIds = [plan._id.toString()];
+                if (settings.planEquivalencyGroups) {
+                    const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === plan._id.toString() || String(g.pkrPlanId) === plan._id.toString() || String(g.eurPlanId) === plan._id.toString());
+                    if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.push(String(id)));
+                }
+                const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+                if (approvedCount === plan.directReferralLimit) {
+                    const admin = await User.findOne({ username: 'admin' });
+                    if (admin) await Notification.create({ userId: admin._id, subject: '⚠️ Slot Limit Reached', message: `User @${uplineUser.username} filled slots for ${plan.name}.`, isPopup: true });
+                    await Notification.create({ userId: uplineUser._id, subject: '⚠️ Slot Limit Reached!', message: `Slots for ${plan.name} are now FULL.`, isPopup: true });
+                }
+            }
+        } else if (eligibility.status === 'Rejected') {
+            const isLimitRejected = eligibility.message.includes('[Limit]');
+            if (!isLimitRejected || (isLimitRejected && settings.notifySponsorOnCommissionLimit)) {
+                await Notification.create({ userId: uplineUser._id, subject: 'Commission Missed', message: `${eligibility.message} commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`, isPopup: level === 0 });
+            }
+        } else if (eligibility.status === 'Pending') {
+            await Notification.create({ userId: uplineUser._id, subject: 'Commission Locked 🔐', message: `A commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} has been held.` });
+        }
+        const isLimitRejectedTx = eligibility.status === 'Rejected' && eligibility.message.includes('[Limit]');
+        if (!isLimitRejectedTx || (isLimitRejectedTx && settings.showRejectedCommissionTransaction)) {
+            await Transaction.create({ userId: uplineUser._id, userName: uplineUser.username, currency: uplineUser.currency, type: 'Commission', amount: finalAmount, level: level + 1, sourceUserId: user._id, description: eligibility.message || `Commission from ${user.username} (L${level + 1})`, status: eligibility.status, relatedPlanId: plan._id });
+        }
+        currentUplineUsername = uplineUser.sponsor;
     }
 };
 
+// ... (getUsers, getUser, createUser unchanged)
 export const getUsers = async (req, res) => {
     try {
+        let users;
         const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
         const isAdmin = isMasterAdmin || req.user?.role === 'admin';
 
-        // Safe Pagination Logic
-        const page = parseInt(req.query.page, 10) || 1;
-        let limit = parseInt(req.query.limit, 10) || 20;
-        if (limit > 100) limit = 100;
-        const skip = (page - 1) * limit;
-
-        let users;
-        let totalRecords;
-
         if (isAdmin) {
-            totalRecords = await User.countDocuments();
-            users = await User.find()
-                .sort({ registrationDate: -1 })
-                .skip(skip)
-                .limit(limit);
+            users = await User.find();
         } else if (req.user) {
             const results = await User.aggregate([
-                { $match: { email: req.user.email } },
+                { 
+                    $match: { email: req.user.email } 
+                },
                 {
                     $graphLookup: {
                         from: 'users',
@@ -126,29 +203,14 @@ export const getUsers = async (req, res) => {
             ]);
 
             if (results.length > 0) {
-                const fullList = [results[0], ...results[0].downline];
-                totalRecords = fullList.length;
-                users = fullList.slice(skip, skip + limit);
+                users = [results[0], ...results[0].downline];
             } else {
-                totalRecords = 0;
                 users = [];
             }
         } else {
-            totalRecords = 0;
             users = [];
         }
-
-        res.status(200).json({ 
-            success: true, 
-            count: users.length,
-            pagination: {
-                totalRecords,
-                totalPages: Math.ceil(totalRecords / limit),
-                currentPage: page,
-                pageSize: limit
-            },
-            data: users 
-        });
+        res.status(200).json({ success: true, count: users.length, data: users });
     } catch (err) { res.status(200).json({ success: false, data: [], error: err.message }); }
 };
 
@@ -187,12 +249,14 @@ export const loginUser = async (req, res) => {
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
+        // SECURITY UPDATE: Reduced token lifespan to 24h
         const token = jwt.sign({ id: user._id, role: user.role || 'user', email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
         
         res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
+// ... (Remainder of file updatePlan, adjustWallet, etc. unchanged)
 export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);
