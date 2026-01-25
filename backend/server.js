@@ -10,6 +10,7 @@ import User from './models/User.js';
 
 // Middleware
 import { authMiddleware } from './middleware/authMiddleware.js';
+import { globalLimiter } from './middleware/rateLimiter.js';
 
 // Route files
 import userRoutes from './routes/userRoutes.js';
@@ -31,6 +32,9 @@ import taskRoutes from './routes/taskRoutes.js';
 dotenv.config();
 
 const app = express();
+
+// Apply Global Rate Limiting
+app.use('/api', globalLimiter);
 
 // Enable CORS
 app.use(cors());
@@ -116,7 +120,6 @@ const PORT = process.env.PORT || 5000;
 
 /**
  * ASYNC STARTUP
- * Ensures database is connected and admin is seeded before listening.
  */
 const startServer = async () => {
     try {

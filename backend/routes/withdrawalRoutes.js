@@ -1,6 +1,7 @@
 
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
+import { financeLimiter } from '../middleware/rateLimiter.js';
 import {
     getWithdrawals,
     getWithdrawal,
@@ -13,7 +14,7 @@ const router = express.Router();
 
 router.route('/')
     .get(authorize(['user', 'admin']), getWithdrawals)
-    .post(authorize(['user', 'admin']), createWithdrawal);
+    .post(authorize(['user', 'admin']), financeLimiter, createWithdrawal);
 
 router.route('/:id')
     .get(authorize(['user', 'admin']), getWithdrawal)

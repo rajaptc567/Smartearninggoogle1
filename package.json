@@ -23,7 +23,8 @@
     "multer": "^2.0.2",
     "crypto": "^1.0.1",
     "cloudinary": "^2.9.0",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "express-rate-limit": "^8.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

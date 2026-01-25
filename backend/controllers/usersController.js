@@ -14,7 +14,7 @@ import jwt from 'jsonwebtoken';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
-// ... (Helper functions remain unchanged for logic integrity)
+// ... (canReleaseCommission helper unchanged)
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
     let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
@@ -61,6 +61,7 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
     return true;
 };
 
+// ... (distributeCommissions helper unchanged)
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
     const convertCurrency = (amount, from, to) => {
@@ -176,6 +177,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
     }
 };
 
+// ... (getUsers, getUser, createUser unchanged)
 export const getUsers = async (req, res) => {
     try {
         let users;
@@ -185,8 +187,6 @@ export const getUsers = async (req, res) => {
         if (isAdmin) {
             users = await User.find();
         } else if (req.user) {
-            // FIX: Recursively fetch FULL downline for regular users.
-            // Using $graphLookup to find all descendants at all levels.
             const results = await User.aggregate([
                 { 
                     $match: { email: req.user.email } 
@@ -203,7 +203,6 @@ export const getUsers = async (req, res) => {
             ]);
 
             if (results.length > 0) {
-                // Merge the current user with their recursive downline
                 users = [results[0], ...results[0].downline];
             } else {
                 users = [];
@@ -249,11 +248,15 @@ export const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
-        const token = jwt.sign({ id: user._id, role: user.role || 'user', email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+        
+        // SECURITY UPDATE: Reduced token lifespan to 24h
+        const token = jwt.sign({ id: user._id, role: user.role || 'user', email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        
         res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
+// ... (Remainder of file updatePlan, adjustWallet, etc. unchanged)
 export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);

@@ -1,6 +1,7 @@
 
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
 import {
     getUsers,
     getUser,
@@ -22,18 +23,16 @@ import {
 
 const router = express.Router();
 
-// Public/Auth routes
-router.post('/login', loginUser);
-router.post('/request-password-reset', userRequestPasswordReset);
-router.post('/verify-reset-token/:token', verifyAndStartResetTimer);
-router.put('/reset-password/:token', resetPasswordWithToken);
+// Public/Auth routes with rate limiting
+router.post('/login', authLimiter, loginUser);
+router.post('/request-password-reset', authLimiter, userRequestPasswordReset);
+router.post('/verify-reset-token/:token', authLimiter, verifyAndStartResetTimer);
+router.put('/reset-password/:token', authLimiter, resetPasswordWithToken);
 
 // User Directory
-// Removed authorize middleware from GET / to allow DataProvider initial handshake.
-// Privacy is handled inside the getUsers controller function via data masking.
 router.route('/')
     .get(getUsers) 
-    .post(createUser);
+    .post(authLimiter, createUser); // Registration protection
 
 // User-Specific actions
 router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);

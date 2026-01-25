@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { financeLimiter } from '../middleware/rateLimiter.js';
 import {
     getTransfers,
     createTransfer,
@@ -10,7 +11,7 @@ const router = express.Router();
 
 router.route('/')
     .get(getTransfers)
-    .post(createTransfer);
+    .post(financeLimiter, createTransfer);
 
 router.route('/:id')
     .put(updateTransfer);
