@@ -194,7 +194,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
         case 'SET_CURRENT_USER':
             try {
-                if (action.payload?.user) {
+                if (action.payload.user) {
                     localStorage.setItem('currentUser', JSON.stringify(action.payload.user));
                     if (action.payload.token) {
                         localStorage.setItem('authToken', action.payload.token);
@@ -206,7 +206,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             } catch (error) {
                 console.error("Could not access localStorage:", error);
             }
-            newState = { ...state, currentUser: action.payload?.user || null };
+            newState = { ...state, currentUser: action.payload.user };
             break;
 
         case 'SET_USERS': newState = { ...state, users: action.payload }; break;
