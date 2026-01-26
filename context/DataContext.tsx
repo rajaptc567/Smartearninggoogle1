@@ -168,6 +168,7 @@ type Action =
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
+        if (!settings) return state.settings;
         const newSettings = { ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
@@ -185,6 +186,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
     switch (action.type) {
         case 'SET_ALL_DATA':
+            if (!action.payload) return state;
             const sanitizedPayload = { ...action.payload };
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
@@ -194,7 +196,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
         case 'SET_CURRENT_USER':
             try {
-                if (action.payload.user) {
+                if (action.payload && action.payload.user) {
                     localStorage.setItem('currentUser', JSON.stringify(action.payload.user));
                     if (action.payload.token) {
                         localStorage.setItem('authToken', action.payload.token);
@@ -203,15 +205,16 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                     localStorage.removeItem('currentUser');
                     localStorage.removeItem('authToken');
                 }
-            } catch (error) {
-                console.error("Could not access localStorage:", error);
+            } catch (error: any) {
+                console.error("Could not access localStorage:", error.message);
             }
-            newState = { ...state, currentUser: action.payload.user };
+            newState = { ...state, currentUser: action.payload?.user || null };
             break;
 
-        case 'SET_USERS': newState = { ...state, users: action.payload }; break;
+        case 'SET_USERS': newState = { ...state, users: action.payload || [] }; break;
         case 'ADD_USER': newState = { ...state, users: [...state.users, action.payload] }; break;
         case 'UPDATE_USER': {
+            if (!action.payload) return state;
             const updatedUsers = state.users.map(u => u._id === action.payload._id ? action.payload : u);
             let updatedCurrentUser = state.currentUser;
             if (state.currentUser?._id === action.payload._id) {
@@ -223,66 +226,66 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         }
         case 'DELETE_USER': newState = { ...state, users: state.users.filter(u => u._id !== action.payload) }; break;
 
-        case 'SET_DEPOSITS': newState = { ...state, deposits: action.payload }; break;
+        case 'SET_DEPOSITS': newState = { ...state, deposits: action.payload || [] }; break;
         case 'ADD_DEPOSIT': newState = { ...state, deposits: [action.payload, ...state.deposits] }; break;
         case 'UPDATE_DEPOSIT': newState = { ...state, deposits: state.deposits.map(d => d._id === action.payload._id ? action.payload : d) }; break;
 
-        case 'SET_WITHDRAWALS': newState = { ...state, withdrawals: action.payload }; break;
+        case 'SET_WITHDRAWALS': newState = { ...state, withdrawals: action.payload || [] }; break;
         case 'ADD_WITHDRAWAL': newState = { ...state, withdrawals: [action.payload, ...state.withdrawals] }; break;
         case 'UPDATE_WITHDRAWAL': newState = { ...state, withdrawals: state.withdrawals.map(w => w._id === action.payload._id ? action.payload : w) }; break;
 
-        case 'SET_PAYMENT_METHODS': newState = { ...state, paymentMethods: action.payload }; break;
+        case 'SET_PAYMENT_METHODS': newState = { ...state, paymentMethods: action.payload || [] }; break;
         case 'ADD_PAYMENT_METHOD': newState = { ...state, paymentMethods: [action.payload, ...state.paymentMethods] }; break;
         case 'UPDATE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.map(p => p._id === action.payload._id ? action.payload : p) }; break;
         case 'DELETE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.filter(p => p._id !== action.payload) }; break;
 
-        case 'SET_INVESTMENT_PLANS': newState = { ...state, investmentPlans: action.payload }; break;
+        case 'SET_INVESTMENT_PLANS': newState = { ...state, investmentPlans: action.payload || [] }; break;
         case 'ADD_INVESTMENT_PLAN': newState = { ...state, investmentPlans: [action.payload, ...state.investmentPlans] }; break;
         case 'UPDATE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.map(p => p._id === action.payload._id ? action.payload : p) }; break;
         case 'DELETE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.filter(p => p._id !== action.payload) }; break;
 
-        case 'SET_RULES': newState = { ...state, rules: action.payload }; break;
+        case 'SET_RULES': newState = { ...state, rules: action.payload || [] }; break;
         case 'ADD_RULE': newState = { ...state, rules: [action.payload, ...state.rules] }; break;
         case 'DELETE_RULE': newState = { ...state, rules: state.rules.filter(r => r._id !== action.payload) }; break;
         
-        case 'SET_TRANSFERS': newState = { ...state, transfers: action.payload }; break;
+        case 'SET_TRANSFERS': newState = { ...state, transfers: action.payload || [] }; break;
         case 'ADD_TRANSFER': newState = { ...state, transfers: [action.payload, ...state.transfers] }; break;
         case 'UPDATE_TRANSFER': newState = { ...state, transfers: state.transfers.map(t => t._id === action.payload._id ? action.payload : t) }; break;
 
-        case 'SET_TRANSACTIONS': newState = { ...state, transactions: action.payload }; break;
+        case 'SET_TRANSACTIONS': newState = { ...state, transactions: action.payload || [] }; break;
         case 'ADD_TRANSACTION': newState = { ...state, transactions: [action.payload, ...state.transactions] }; break;
 
         case 'SET_SETTINGS': newState = { ...state, settings: sanitizeSettings(action.payload) }; break;
         case 'UPDATE_SETTINGS': newState = { ...state, settings: sanitizeSettings(action.payload) }; break;
 
-        case 'SET_LOGS': newState = { ...state, logs: action.payload }; break;
+        case 'SET_LOGS': newState = { ...state, logs: action.payload || [] }; break;
         case 'ADD_LOG': newState = { ...state, logs: [action.payload, ...state.logs] }; break;
 
-        case 'SET_NOTIFICATIONS': newState = { ...state, notifications: action.payload }; break;
+        case 'SET_NOTIFICATIONS': newState = { ...state, notifications: action.payload || [] }; break;
         case 'ADD_NOTIFICATION': newState = { ...state, notifications: [action.payload, ...state.notifications] }; break;
         case 'UPDATE_NOTIFICATION':
             newState = { ...state, notifications: state.notifications.map(n => n._id === action.payload._id ? action.payload : n) };
             break;
         case 'UPDATE_NOTIFICATIONS':
-            newState = { ...state, notifications: [...action.payload, ...state.notifications] };
+            newState = { ...state, notifications: [...(action.payload || []), ...state.notifications] };
             break;
-        case 'MARK_NOTIFICATIONS_AS_READ': newState = { ...state, notifications: action.payload }; break;
+        case 'MARK_NOTIFICATIONS_AS_READ': newState = { ...state, notifications: action.payload || [] }; break;
         case 'DELETE_NOTIFICATIONS':
-            newState = { ...state, notifications: state.notifications.filter(n => !action.payload.includes(n._id)) };
+            newState = { ...state, notifications: state.notifications.filter(n => !(action.payload || []).includes(n._id)) };
             break;
 
         case 'SET_PASSWORD_RESET_REQUESTS':
-            newState = { ...state, passwordResetRequests: action.payload };
+            newState = { ...state, passwordResetRequests: action.payload || [] };
             break;
         case 'DELETE_PASSWORD_RESET_REQUEST':
             newState = { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => req._id !== action.payload) };
             break;
 
-        case 'SET_DISPUTES': newState = { ...state, disputes: action.payload }; break;
+        case 'SET_DISPUTES': newState = { ...state, disputes: action.payload || [] }; break;
         case 'ADD_DISPUTE': newState = { ...state, disputes: [action.payload, ...state.disputes] }; break;
         case 'UPDATE_DISPUTE': newState = { ...state, disputes: state.disputes.map(d => d._id === action.payload._id ? action.payload : d) }; break;
 
-        case 'SET_TASKS': newState = { ...state, tasks: action.payload }; break;
+        case 'SET_TASKS': newState = { ...state, tasks: action.payload || [] }; break;
         case 'ADD_TASK': newState = { ...state, tasks: [action.payload, ...state.tasks] }; break;
         case 'UPDATE_TASK': newState = { ...state, tasks: state.tasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
         case 'DELETE_TASK': newState = { ...state, tasks: state.tasks.filter(t => t._id !== action.payload) }; break;
@@ -295,7 +298,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     try {
         localStorage.setItem('app_cache', JSON.stringify({
             ...newState,
-            currentUser: state.currentUser 
+            currentUser: newState.currentUser 
         }));
     } catch (e) {
         console.warn("Failed to update app cache", e);
@@ -314,24 +317,29 @@ const initializer = (initialState: AppState) => {
         const savedUser = localStorage.getItem('currentUser');
         const appCache = localStorage.getItem('app_cache');
         
-        let initialData = initialState;
+        let initialData = { ...initialState };
         
-        if (appCache) {
+        if (appCache && appCache !== 'undefined' && appCache !== 'null') {
             try {
                 const parsedCache = JSON.parse(appCache);
-                initialData = { ...initialData, ...parsedCache };
+                if (parsedCache) {
+                    initialData = { ...initialData, ...parsedCache };
+                }
             } catch (e) {
-                console.warn("Invalid app cache");
+                console.warn("Invalid app cache structure");
             }
         }
 
-        if (savedUser) {
-            initialData = { ...initialData, currentUser: JSON.parse(savedUser) as User };
+        if (savedUser && savedUser !== 'undefined' && savedUser !== 'null') {
+            const parsedUser = JSON.parse(savedUser);
+            if (parsedUser) {
+                initialData.currentUser = parsedUser;
+            }
         }
         
         return initialData;
     } catch (error) {
-        console.error("Could not parse user from localStorage", error);
+        console.error("Could not parse data from localStorage", error);
     }
     return initialState;
 };
