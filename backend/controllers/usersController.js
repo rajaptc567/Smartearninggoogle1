@@ -14,7 +14,6 @@ import jwt from 'jsonwebtoken';
 
 const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
 
-// ... (canReleaseCommission helper unchanged)
 const canReleaseCommission = async (commission, user, settings, allPlans) => {
     if (commission.status !== 'Pending') return false;
     let targetPlanId = commission.relatedPlanId ? String(commission.relatedPlanId) : null;
@@ -61,7 +60,6 @@ const canReleaseCommission = async (commission, user, settings, allPlans) => {
     return true;
 };
 
-// ... (distributeCommissions helper unchanged)
 const distributeCommissions = async (user, plan, settings, exchangeRates, defaultRates, allPlans) => {
     if (!user.sponsor) return;
     const convertCurrency = (amount, from, to) => {
@@ -177,7 +175,6 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
     }
 };
 
-// ... (getUsers, getUser, createUser unchanged)
 export const getUsers = async (req, res) => {
     try {
         let users;
@@ -249,21 +246,53 @@ export const loginUser = async (req, res) => {
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
-        // SECURITY UPDATE: Reduced token lifespan to 24h
         const token = jwt.sign({ id: user._id, role: user.role || 'user', email: user.email }, process.env.JWT_SECRET, { expiresIn: '24h' });
         
         res.status(200).json({ success: true, token, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 
-// ... (Remainder of file updatePlan, adjustWallet, etc. unchanged)
 export const updateUser = async (req, res) => {
     try {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
-        if (req.body.status && req.body.status !== userToUpdate.status) await Notification.create({ userId: userToUpdate._id, subject: 'Account Status Updated', message: `Your status changed to: ${req.body.status}.`, isPopup: true });
-        Object.assign(userToUpdate, req.body);
+
+        // SECURITY: Role-aware field whitelisting
+        const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = isMasterAdmin || req.user?.role === 'admin' || req.user?.role === 'finance' || req.user?.role === 'support';
+        
+        // Fields standard users are allowed to modify
+        const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
+        
+        // Fields admins are allowed to modify via this specific endpoint
+        const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor'];
+
+        const allowedFields = isAdmin ? adminWhitelist : userWhitelist;
+        
+        const filteredUpdate = {};
+        Object.keys(req.body).forEach(key => {
+            if (allowedFields.includes(key)) {
+                // Additional protection: Only Super Admin can promote someone to Super Admin
+                if (key === 'role' && req.body[key] === 'super_admin' && !isMasterAdmin) {
+                    return;
+                }
+                filteredUpdate[key] = req.body[key];
+            }
+        });
+
+        if (filteredUpdate.status && filteredUpdate.status !== userToUpdate.status) {
+            await Notification.create({ 
+                userId: userToUpdate._id, 
+                subject: 'Account Status Updated', 
+                message: `Your status changed to: ${filteredUpdate.status}.`, 
+                isPopup: true 
+            });
+        }
+
+        // Apply filtered updates instead of raw req.body
+        Object.assign(userToUpdate, filteredUpdate);
         let updatedUser = await userToUpdate.save();
+
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });
