@@ -204,6 +204,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
                 } else {
                     localStorage.removeItem('currentUser');
                     localStorage.removeItem('authToken');
+                    localStorage.removeItem('app_cache');
                 }
             } catch (error: any) {
                 console.error("Could not access localStorage:", error.message);
@@ -294,14 +295,18 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             return state;
     }
 
-    // --- CACHE PERSISTENCE ---
+    // --- OPTIMIZED CACHE PERSISTENCE ---
+    // We only persist essential session info and settings.
+    // Large arrays (users, transactions, logs) are NOT cached to prevent QuotaExceededError.
     try {
-        localStorage.setItem('app_cache', JSON.stringify({
-            ...newState,
-            currentUser: newState.currentUser 
-        }));
+        const cacheData = {
+            currentUser: newState.currentUser,
+            settings: newState.settings
+        };
+        localStorage.setItem('app_cache', JSON.stringify(cacheData));
     } catch (e) {
-        console.warn("Failed to update app cache", e);
+        // Silently swallow storage errors to prevent UI crashes if local storage is full
+        console.warn("Storage quota exceeded or restricted. Persistent settings may not be updated.");
     }
 
     return newState;
@@ -323,6 +328,7 @@ const initializer = (initialState: AppState) => {
             try {
                 const parsedCache = JSON.parse(appCache);
                 if (parsedCache) {
+                    // Safe merge of cached settings and user info
                     initialData = { ...initialData, ...parsedCache };
                 }
             } catch (e) {
