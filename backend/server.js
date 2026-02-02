@@ -1,4 +1,3 @@
-
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
@@ -32,6 +31,13 @@ import taskRoutes from './routes/taskRoutes.js';
 dotenv.config();
 
 const app = express();
+
+/**
+ * INFRASTRUCTURE SETTINGS
+ * Enable trust proxy to allow express-rate-limit to see real user IPs
+ * behind the Render/Cloudflare load balancers.
+ */
+app.set('trust proxy', 1);
 
 // Apply Global Rate Limiting
 app.use('/api', globalLimiter);

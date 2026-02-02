@@ -1,20 +1,14 @@
-
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
+// Production configuration: Uses environment variable for backend routing.
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://smartearning-api.onrender.com';
+
 function getApiBaseUrl() {
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000/api/v1';
-  }
-  return 'https://smartearning-api.onrender.com/api/v1';
+  return `${BASE_URL}/api/v1`;
 }
 
 export function getUploadsBaseUrl() {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:5000';
-    }
-    return 'https://smartearning-api.onrender.com';
+    return BASE_URL;
 }
 
 const API_BASE_URL = getApiBaseUrl();
