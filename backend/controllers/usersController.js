@@ -1,4 +1,3 @@
-
 import User from '../models/User.js';
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Transaction from '../models/Transaction.js';
@@ -101,7 +100,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const planConfig = allPlans.find(p => p._id.toString() === String(qualifyingActivePlan.planId));
             const limit = planConfig?.directReferralLimit || 0;
             if (limit > 0) {
-                const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+                const approvedCount = await Transaction.countDocuments({ userId: user._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
                 if (approvedCount >= limit) return { status: 'Rejected', message: `[Overflow] Slot Limit reached.` };
             }
         }
