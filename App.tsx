@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -8,29 +7,18 @@ import Deposits from './pages/Deposits';
 import Withdrawals from './pages/Withdrawals';
 import PaymentMethods from './pages/PaymentMethods';
 import InvestmentPlans from './pages/InvestmentPlans';
-import PlanEquivalency from './pages/PlanEquivalency';
 import Wallet from './pages/Wallet';
 import Rules from './pages/Rules';
-import SponsorCommissionRules from './pages/SponsorCommissionRules';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
 import Transfers from './pages/Transfers';
-import PasswordResets from './pages/PasswordResets';
-import AdminDisputes from './pages/AdminDisputes';
-import SentMessages from './pages/SentMessages';
-import TickerSettings from './pages/TickerSettings';
-import AdminProfile from './pages/AdminProfile';
-import AdminTasks from './pages/AdminTasks';
 
 // Public facing components
 import HomePage from './pages/HomePage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminLogin from './pages/AdminLogin';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import FaqPage from './pages/FaqPage';
 
 // User facing components
 import UserLayout from './components/UserLayout';
@@ -42,10 +30,6 @@ import Transactions from './pages/user/Transactions';
 import Referrals from './pages/user/Referrals';
 import Profile from './pages/user/Profile';
 import TransferFunds from './pages/user/TransferFunds';
-import ActivePlans from './pages/user/ActivePlans';
-import UserDisputes from './pages/user/UserDisputes';
-import Messages from './pages/user/Messages';
-import UserTasks from './pages/user/UserTasks';
 
 
 const App: React.FC = () => {
@@ -56,10 +40,7 @@ const App: React.FC = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/faqs" element={<FaqPage />} />
-        <Route path="/secure-admin-login56" element={<AdminLogin />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/secure-admin-login" element={<AdminLogin />} />
 
         {/* Admin Panel Routes */}
         <Route path="/admin" element={<Layout />}>
@@ -68,21 +49,13 @@ const App: React.FC = () => {
           <Route path="deposits" element={<Deposits />} />
           <Route path="withdrawals" element={<Withdrawals />} />
           <Route path="transfers" element={<Transfers />} />
-          <Route path="password-resets" element={<PasswordResets />} />
           <Route path="payment-methods" element={<PaymentMethods />} />
           <Route path="investment-plans" element={<InvestmentPlans />} />
-          <Route path="plan-equivalency" element={<PlanEquivalency />} />
-          <Route path="tasks" element={<AdminTasks />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
-          <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="ticker-settings" element={<TickerSettings />} />
           <Route path="logs" element={<Logs />} />
-          <Route path="disputes" element={<AdminDisputes />} />
-          <Route path="sent-messages" element={<SentMessages />} />
-          <Route path="profile" element={<AdminProfile />} />
         </Route>
 
         {/* User Member Area Routes */}
@@ -92,12 +65,8 @@ const App: React.FC = () => {
           <Route path="withdraw" element={<WithdrawFunds />} />
           <Route path="transfer" element={<TransferFunds />} />
           <Route path="plans" element={<UserInvestmentPlans />} />
-          <Route path="active-plans" element={<ActivePlans />} />
-          <Route path="tasks" element={<UserTasks />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="referrals" element={<Referrals />} />
-          <Route path="disputes" element={<UserDisputes />} />
-          <Route path="messages" element={<Messages />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

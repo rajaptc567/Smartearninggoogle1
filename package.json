@@ -1,12 +1,14 @@
 {
-  "name": "12.6",
+  "name": "12.1",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server.js",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -15,16 +17,8 @@
     "express": "^5.1.0",
     "dotenv": "^17.2.3",
     "cors": "^2.8.5",
-    "path": "^0.12.7",
-    "url": "^0.11.4",
-    "fs": "^0.0.1-security",
-    "mongoose": "^8.19.4",
-    "bcryptjs": "^3.0.3",
-    "multer": "^2.0.2",
-    "crypto": "^1.0.1",
-    "cloudinary": "^2.9.0",
-    "jsonwebtoken": "^9.0.3",
-    "express-rate-limit": "^8.2.1"
+    "mongoose": "^8.19.3",
+    "tsx": "^4.19.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
