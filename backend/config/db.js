@@ -11,7 +11,11 @@ const connectDB = async () => {
     } catch (error) {
         // Log a more detailed error message to help with debugging connection issues.
         console.error(`Error connecting to MongoDB: ${error.message}`);
-        console.error('Check your MONGO_URI in the Settings > Secrets menu.');
+        console.error('This can happen if:');
+        console.error('1. The MONGO_URI environment variable is incorrect (check username, password, and cluster URL).');
+        console.error('2. The database user does not have the correct permissions (should be "Read and write to any database").');
+        console.error('3. The IP address of the Render server is not whitelisted in MongoDB Atlas (you have already done this with 0.0.0.0/0, which is correct).');
+        process.exit(1);
     }
 };
 

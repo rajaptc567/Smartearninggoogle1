@@ -1,5 +1,5 @@
 {
-  "name": "12.1",
+  "name": "12.6",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,22 +7,32 @@
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "fs": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.19.4",
+    "multer": "^2.0.2",
+    "path": "^0.12.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.5",
-    "express": "^5.1.0",
-    "dotenv": "^17.2.3",
-    "cors": "^2.8.5",
-    "mongoose": "^8.19.3",
-    "tsx": "^4.19.3"
+    "tailwindcss": "^4.2.1",
+    "url": "^0.11.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
