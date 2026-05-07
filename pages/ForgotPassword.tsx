@@ -31,7 +31,7 @@ const ForgotPassword = () => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">Smart Earning</h1>
+                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
                     <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Forgot Password</h2>
                 </div>
 

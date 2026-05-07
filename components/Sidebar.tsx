@@ -71,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
             </div>
             <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-gray-800 dark:bg-gray-900 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 flex flex-col`}>
                 <div className="flex items-center justify-center h-20 border-b border-gray-700 flex-shrink-0">
-                    <h1 className="text-2xl font-bold text-white">Smart Earning</h1>
+                    <h1 className="text-2xl font-bold text-white">SmartEarning</h1>
                 </div>
                 <nav className="mt-6 px-4 flex-grow">
                     {navLinks.map(({ to, label, icon, badge }) => (

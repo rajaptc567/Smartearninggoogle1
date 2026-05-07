@@ -325,12 +325,7 @@ const TransferFunds: React.FC = () => {
                 <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tighter">Transfer Dispatched!</h2>
                 <p className="text-gray-500 dark:text-gray-400 mb-10 leading-relaxed font-medium">Funds have been allocated to the destination. Request is now awaiting audit confirmation.</p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button onClick={() => {
-                        setIsSubmitted(false);
-                        setAmount('');
-                        setRecipientIdentifier('');
-                        setStep(1);
-                    }} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transfer</Button>
+                    <Button onClick={() => window.location.reload()} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transfer</Button>
                     <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">Return to Hub</Button>
                 </div>
             </div>

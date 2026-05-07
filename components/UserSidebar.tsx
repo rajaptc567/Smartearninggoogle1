@@ -60,7 +60,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
             <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-gray-900 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 flex flex-col shadow-2xl`}>
                 <div className="flex items-center justify-center h-24 border-b border-gray-800 flex-shrink-0">
                     <div className="w-10 h-10 bg-blue-600 rounded-lg mr-3 shadow-md"></div>
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Smart Earning</h1>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Member Area</h1>
                 </div>
                 
                 {/* Scrollable navigation area */}

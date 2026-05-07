@@ -221,14 +221,7 @@ const DepositFunds: React.FC = () => {
                 <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tighter">Deposit Transmitted!</h2>
                 <p className="text-gray-500 dark:text-gray-400 mb-10 leading-relaxed font-medium">Your request has been securely received. Auditors will confirm your transaction shortly.</p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button onClick={() => {
-                        setIsSubmitted(false);
-                        setAmount('');
-                        setSelectedMethodId('');
-                        setTransactionId('');
-                        setUserNotes('');
-                        setStep(1);
-                    }} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transaction</Button>
+                    <Button onClick={() => window.location.reload()} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transaction</Button>
                     <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">Back to Hub</Button>
                 </div>
             </div>

@@ -70,7 +70,7 @@ const HomepageContentSchema = new mongoose.Schema({
     showFAQ: { type: Boolean, default: true },
     showCTA: { type: Boolean, default: true },
     heroTitle: { type: String, default: "Invest in Your Future, Grow Your Network" },
-    heroSubtitle: { type: String, default: "Smart Earning provides a secure platform to manage your investments and leverage your network for greater earning potential." },
+    heroSubtitle: { type: String, default: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential." },
     feature1Title: { type: String, default: "Secure Investments" },
     feature1Desc: { type: String, default: "Your funds and data are protected with industry-standard security measures." },
     feature2Title: { type: String, default: "Powerful MLM System" },
@@ -94,7 +94,7 @@ const HomepageContentSchema = new mongoose.Schema({
 const defaultFaqs = [
     { 
         question: "How do I earn commissions through the level system?", 
-        answer: "Smart Earning uses a multi-level marketing structure. You earn 'Direct Commissions' (Level 1) from people you personally invite using your link. Additionally, you earn 'Indirect Commissions' (Level 2 and beyond) from referrals made by your team members, creating multiple streams of passive income.",
+        answer: "SmartEarning uses a multi-level marketing structure. You earn 'Direct Commissions' (Level 1) from people you personally invite using your link. Additionally, you earn 'Indirect Commissions' (Level 2 and beyond) from referrals made by your team members, creating multiple streams of passive income.",
         showOnHomepage: true
     },
     { 
@@ -119,7 +119,7 @@ const defaultFaqs = [
     },
     { 
         question: "Can I refer members from different countries/currencies?", 
-        answer: "Absolutely! Smart Earning is global. Our 'Plan Equivalency' system handles cross-currency referrals (USD, EUR, PKR) seamlessly. If you are a PKR user and your referral buys a USD plan, you will still earn your commission, automatically converted to PKR at our current platform exchange rate.",
+        answer: "Absolutely! SmartEarning is global. Our 'Plan Equivalency' system handles cross-currency referrals (USD, EUR, PKR) seamlessly. If you are a PKR user and your referral buys a USD plan, you will still earn your commission, automatically converted to PKR at our current platform exchange rate.",
         showOnHomepage: true
     },
     { 

@@ -14,7 +14,6 @@ export const globalLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false },
 });
 
 /**
@@ -30,7 +29,6 @@ export const authLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false },
 });
 
 /**
@@ -46,5 +44,4 @@ export const financeLimiter = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false },
 });

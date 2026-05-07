@@ -15,7 +15,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 );
 
 const InvestmentPlans: React.FC = () => {
-    const { state, dispatch, refreshData } = useData();
+    const { state, dispatch } = useData();
     const { investmentPlans, rules, settings } = state;
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -152,7 +152,7 @@ const InvestmentPlans: React.FC = () => {
     const handleToggleRule = async (rule: Rule) => {
         try {
             await updateRule(rule._id, { isActive: !rule.isActive });
-            refreshData(); 
+            window.location.reload(); 
         } catch (error) {
             console.error("Failed to toggle rule:", error);
             alert("Failed to toggle rule status.");
@@ -417,7 +417,7 @@ interface PlanRuleModalProps {
 }
 
 const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPlans, onClose }) => {
-    const { dispatch, refreshData } = useData();
+    const { dispatch } = useData();
     const [selectedRequiredPlans, setSelectedRequiredPlans] = useState<string[]>(existingRule?.requiredPlanIds || []);
     const [minEarnings, setMinEarnings] = useState(existingRule?.minTotalEarnings?.toString() || '');
     const [maxEarnings, setMaxEarnings] = useState(existingRule?.maxTotalEarnings?.toString() || '');
@@ -458,7 +458,7 @@ const PlanRuleModal: React.FC<PlanRuleModalProps> = ({ plan, existingRule, allPl
                 dispatch({ type: 'ADD_RULE', payload: result.data || result });
                 alert("Rule created successfully!");
             }
-            refreshData(); 
+            window.location.reload(); 
         } catch (error) {
             console.error("Failed to save rule:", error);
             alert("Error saving rule.");

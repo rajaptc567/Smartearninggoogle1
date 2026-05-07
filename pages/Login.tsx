@@ -6,31 +6,25 @@ import { login as apiLogin } from '../services/api';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { state, dispatch, refreshData } = useData();
-    const { currentUser } = state;
+    const { dispatch } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // Redirect if already logged in
-    React.useEffect(() => {
-        if (currentUser) {
-            navigate('/member');
-        }
-    }, [currentUser, navigate]);
-    
     // Secret interaction state for admin backdoor
     const [secretClicks, setSecretClicks] = useState(0);
 
     const handleSecretClick = () => {
-        const newCount = secretClicks + 1;
-        if (newCount >= 5) {
-            setSecretClicks(0);
-            navigate('/secure-admin-login56');
-        } else {
-            setSecretClicks(newCount);
-        }
+        setSecretClicks(prev => {
+            const newCount = prev + 1;
+            if (newCount >= 5) {
+                // Redirect to secure admin login after 5 clicks
+                navigate('/secure-admin-login56');
+                return 0;
+            }
+            return newCount;
+        });
     };
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -42,10 +36,6 @@ const Login: React.FC = () => {
             const loginResult = await apiLogin(email, password);
             // FIX: apiLogin returns { token, data: User }. Map these to the expected payload structure { user, token }.
             dispatch({ type: 'SET_CURRENT_USER', payload: { user: loginResult.data, token: loginResult.token } });
-            
-            // Trigger an immediate data refresh with the new token
-            refreshData();
-            
             navigate('/member');
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';

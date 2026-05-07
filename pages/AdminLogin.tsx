@@ -6,19 +6,7 @@ import { login as apiLogin } from '../services/api';
 
 const AdminLogin: React.FC = () => {
     const navigate = useNavigate();
-    const { state, dispatch } = useData();
-    const { currentUser } = state;
-
-    // Redirect if already logged in
-    React.useEffect(() => {
-        const isAdmin = currentUser && (
-            currentUser.username === 'admin' || 
-            currentUser.email === 'studio56.pk@gmail.com'
-        );
-        if (isAdmin) {
-            navigate('/admin');
-        }
-    }, [currentUser, navigate]);
+    const { dispatch } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -59,7 +47,7 @@ const AdminLogin: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
             <div className="w-full max-w-md p-8 space-y-6 bg-[#111827] rounded-xl shadow-2xl border border-gray-800/50">
                 <div className="text-center">
-                    <h1 className="text-4xl font-black text-blue-500 tracking-tight">Smart Earning</h1>
+                    <h1 className="text-4xl font-black text-blue-500 tracking-tight">SmartEarning</h1>
                     <h2 className="mt-4 text-2xl font-bold text-white">Admin Panel Login</h2>
                     <p className="mt-2 text-sm text-gray-400">Restricted Access: Authorized Personnel Only</p>
                 </div>

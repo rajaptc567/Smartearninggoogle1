@@ -359,57 +359,47 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const lastVersionRef = useRef<number>(0);
 
     // Initial Data Fetch with AllSettled for Resilience
-    const fetchData = async () => {
-        try {
-            const results = await Promise.allSettled([
-                getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
-                getDataVersion()
-            ]);
-            
-            const getValue = (idx: number, fallback: any) => 
-                results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-            const currentVersion = getValue(14, 0);
-            lastVersionRef.current = currentVersion;
-
-            dispatch({ 
-                type: 'SET_ALL_DATA', 
-                payload: { 
-                    users: getValue(0, []),
-                    deposits: getValue(1, []),
-                    withdrawals: getValue(2, []),
-                    transactions: getValue(3, []),
-                    notifications: getValue(4, []),
-                    paymentMethods: getValue(5, []),
-                    investmentPlans: getValue(6, []),
-                    rules: getValue(7, []),
-                    settings: getValue(8, state.settings),
-                    transfers: getValue(9, []),
-                    logs: getValue(10, []),
-                    passwordResetRequests: getValue(11, []),
-                    disputes: getValue(12, []),
-                    tasks: getValue(13, [])
-                } 
-            });
-        } catch (error) {
-            console.error("Critical error during data fetch:", error);
-        }
-    };
-
     useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const results = await Promise.allSettled([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                    getDataVersion()
+                ]);
+                
+                const getValue = (idx: number, fallback: any) => 
+                    results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                const currentVersion = getValue(14, 0);
+                lastVersionRef.current = currentVersion;
+
+                dispatch({ 
+                    type: 'SET_ALL_DATA', 
+                    payload: { 
+                        users: getValue(0, []),
+                        deposits: getValue(1, []),
+                        withdrawals: getValue(2, []),
+                        transactions: getValue(3, []),
+                        notifications: getValue(4, []),
+                        paymentMethods: getValue(5, []),
+                        investmentPlans: getValue(6, []),
+                        rules: getValue(7, []),
+                        settings: getValue(8, state.settings),
+                        transfers: getValue(9, []),
+                        logs: getValue(10, []),
+                        passwordResetRequests: getValue(11, []),
+                        disputes: getValue(12, []),
+                        tasks: getValue(13, [])
+                    } 
+                });
+            } catch (error) {
+                console.error("Critical error during initial data handshake:", error);
+            }
+        };
+
         fetchData();
     }, []);
-
-    // Re-fetch data when user logs in to ensure they see their specific data immediately
-    const prevUserRef = useRef<User | null>(null);
-    useEffect(() => {
-        if (state.currentUser && !prevUserRef.current) {
-            // User just logged in
-            fetchData();
-        }
-        prevUserRef.current = state.currentUser;
-    }, [state.currentUser]);
 
     // --- REAL-TIME SYNC POLLING ---
     useEffect(() => {
@@ -425,9 +415,31 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    lastVersionRef.current = serverVersion;
-                    // Re-fetch data instead of reloading the page for a smoother experience
-                    fetchData();
+                    const isAdmin = state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com';
+                    
+                    if (isAdmin) {
+                        lastVersionRef.current = serverVersion;
+                        const results = await Promise.allSettled([
+                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        ]);
+                        
+                        const getValue = (idx: number, fallback: any) => 
+                            results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                        dispatch({ 
+                            type: 'SET_ALL_DATA', 
+                            payload: { 
+                                users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
+                                transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
+                                investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
+                                transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
+                                disputes: getValue(12, []), tasks: getValue(13, [])
+                            } 
+                        });
+                    } else {
+                        window.location.reload();
+                    }
                 }
             } catch (err) {
                 // Silently ignore polling network errors
