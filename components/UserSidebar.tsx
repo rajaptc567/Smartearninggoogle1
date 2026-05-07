@@ -43,9 +43,9 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
         { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, condition: null },
     ];
 
-    const baseLinkClass = "flex items-center px-4 py-3.5 rounded-xl transition-all duration-200 mx-3 mb-1.5";
-    const inactiveLinkClass = "text-gray-400 hover:bg-gray-800 hover:text-white";
-    const activeLinkClass = "bg-blue-600 text-white shadow-xl shadow-blue-600/30 scale-[1.02]";
+    const baseLinkClass = "flex items-center px-4 py-3 rounded-xl transition-all duration-200 mx-2 mb-1";
+    const inactiveLinkClass = "text-gray-400 hover:bg-gray-700/50 hover:text-white";
+    const activeLinkClass = "bg-blue-600 text-white shadow-lg shadow-blue-600/20";
 
     const handleLogout = () => {
         dispatch({ type: 'SET_CURRENT_USER', payload: null });

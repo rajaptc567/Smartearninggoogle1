@@ -1,7 +1,7 @@
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
-// Production configuration: Uses absolute origin for reliable full-stack integration in iframes.
-const BASE_URL = typeof window !== 'undefined' ? window.location.origin : ''; 
+// Production configuration: Uses relative paths for full-stack integration.
+const BASE_URL = ''; 
 
 function getApiBaseUrl() {
   return `${BASE_URL}/api/v1`;
@@ -38,9 +38,7 @@ const handleResponse = async (response: Response) => {
         return data; 
     } else {
          const text = await response.text();
-         const status = response.status;
-         const statusText = response.statusText || 'No Status Text';
-         throw new Error(`API Error ${status} (${statusText}): Expected JSON, but got ${contentType || 'unknown'}. Response body starts with: ${text.substring(0, 200)}`);
+         throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
     }
 };
 
@@ -164,7 +162,7 @@ export const adminActivatePlan = async (userId: string, planId: string): Promise
 };
 
 export const userRequestPasswordReset = async (email: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/request-password-reset`, {
+    const response = await fetch(`${API_BASE_URL}/request-password-reset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -182,14 +180,14 @@ export const adminInitiatePasswordReset = async (userId: string): Promise<{ rese
 };
 
 export const verifyResetToken = async (token: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/verify-reset-token/${token}`, {
+    const response = await fetch(`${API_BASE_URL}/verify-reset-token/${token}`, {
         method: 'POST'
     });
     await handleResponse(response);
 };
 
 export const resetPasswordWithToken = async (token: string, password: string): Promise<void> => {
-    const response = await fetch(`${API_BASE_URL}/users/reset-password/${token}`, {
+    const response = await fetch(`${API_BASE_URL}/reset-password/${token}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),

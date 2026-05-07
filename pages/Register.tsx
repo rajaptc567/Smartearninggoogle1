@@ -98,40 +98,40 @@ const Register: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 py-12 px-4">
-            <div className="w-full max-w-xl p-6 sm:p-10 space-y-8 bg-white rounded-3xl shadow-2xl dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                <div className="text-center select-none">
-                    <h1 className="text-4xl font-black text-blue-600 dark:text-blue-400 tracking-tighter uppercase">SmartEarning</h1>
-                    <h2 className="mt-4 text-2xl font-black text-gray-800 dark:text-white uppercase tracking-tight">Create Your Account</h2>
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-medium">Join us and start your earning journey today.</p>
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 py-12">
+            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">Smart Earning</h1>
+                    <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Create Your Account</h2>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Join us and start your earning journey today.</p>
                 </div>
-                <form className="space-y-5" onSubmit={handleRegister}>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <form className="space-y-4" onSubmit={handleRegister}>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                           <label htmlFor="fullName"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Full Name</label>
-                           <input id="fullName" name="fullName" type="text" value={formData.fullName} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="John Doe" />
+                           <label htmlFor="fullName"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                           <input id="fullName" name="fullName" type="text" value={formData.fullName} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
                         <div>
-                           <label htmlFor="username"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">User Name</label>
-                           <input id="username" name="username" type="text" value={formData.username} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="johndoe123" />
+                           <label htmlFor="username"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">User Name</label>
+                           <input id="username" name="username" type="text" value={formData.username} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
                      </div>
                     <div>
-                        <label htmlFor="email" className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Email address</label>
-                        <input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="name@example.com" />
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
+                        <input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                     </div>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="phone"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Mobile Number</label>
-                            <input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="+1234567890" />
+                            <label htmlFor="phone"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mobile Number</label>
+                            <input id="phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
                          <div>
-                            <label htmlFor="whatsapp"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">WhatsApp Number</label>
-                            <input id="whatsapp" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="+1234567890" />
+                            <label htmlFor="whatsapp"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">WhatsApp Number</label>
+                            <input id="whatsapp" name="whatsapp" type="tel" value={formData.whatsapp} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </div>
                      </div>
                       <div className="relative">
-                        <label htmlFor="country" className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Country</label>
+                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
                         <input
                             type="text"
                             id="country"
@@ -141,17 +141,17 @@ const Register: React.FC = () => {
                             onFocus={() => setIsCountryDropdownOpen(true)}
                             onBlur={() => setTimeout(() => setIsCountryDropdownOpen(false), 200)}
                             placeholder="Type to search or enter country"
-                            className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all"
+                            className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             autoComplete="off"
                             required
                         />
                         {isCountryDropdownOpen && filteredCountries.length > 0 && (
-                            <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto custom-scrollbar">
+                            <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
                                 {filteredCountries.map(c => (
                                     <li 
                                         key={c}
-                                        className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer text-sm font-bold dark:text-gray-200 transition-colors"
-                                        onMouseDown={() => handleCountrySelect(c)}
+                                        className="px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer text-sm dark:text-gray-200"
+                                        onMouseDown={() => handleCountrySelect(c)} // Use onMouseDown to trigger before onBlur
                                     >
                                         {c}
                                     </li>
@@ -160,7 +160,7 @@ const Register: React.FC = () => {
                         )}
                     </div>
                      <div>
-                        <label htmlFor="sponsor"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Sponsor Username (Optional)</label>
+                        <label htmlFor="sponsor"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sponsor Username (Optional)</label>
                         <input 
                             id="sponsor" 
                             name="sponsor" 
@@ -168,13 +168,12 @@ const Register: React.FC = () => {
                             value={formData.sponsor} 
                             onChange={handleChange} 
                             readOnly={isSponsorFromUrl}
-                            className={`w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all ${isSponsorFromUrl && 'cursor-not-allowed bg-gray-50 dark:bg-gray-900/50'}`}
-                            placeholder="Sponsor username"
+                            className={`w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white ${isSponsorFromUrl && 'cursor-not-allowed bg-gray-100 dark:bg-gray-700/50'}`}
                         />
                     </div>
                     <div>
-                        <label htmlFor="password"  className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 ml-1">Password</label>
-                        <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white transition-all" placeholder="••••••••" />
+                        <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                        <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                     </div>
                     <div className="pt-4">
                         <Button type="submit" size="lg" className="w-full">

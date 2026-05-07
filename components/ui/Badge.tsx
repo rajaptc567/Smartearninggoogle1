@@ -27,7 +27,7 @@ const statusColors: { [key in Status | 'Enabled' | 'Disabled']: string } = {
 
 const Badge: React.FC<BadgeProps> = ({ status }) => {
   return (
-    <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-tighter rounded-md shadow-sm border border-black/5 dark:border-white/5 ${statusColors[status]}`}>
+    <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status]}`}>
       {status}
     </span>
   );

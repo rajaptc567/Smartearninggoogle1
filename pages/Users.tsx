@@ -285,15 +285,15 @@ const Users: React.FC = () => {
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-                <h2 className="text-xl font-black text-gray-800 dark:text-white shrink-0 uppercase tracking-tight">Member Management ({filteredUsers.length})</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white shrink-0">Member Management ({filteredUsers.length})</h2>
                 <div className="flex flex-wrap items-center gap-2 justify-end w-full">
-                     <div className="flex items-center gap-2 mr-2 bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5 rounded-xl border dark:border-gray-600">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">Show:</label>
+                     <div className="flex items-center gap-2 mr-2">
+                        <label className="text-xs font-bold uppercase text-gray-400 whitespace-nowrap">Show:</label>
                         <select 
                             value={itemsPerPage} 
                             onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                            className="bg-transparent border-0 text-xs font-bold focus:ring-0 p-0 dark:text-white"
+                            className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 text-sm py-1 shadow-sm focus:ring-blue-500"
                         >
                             <option value={10}>10</option>
                             <option value={20}>20</option>
@@ -304,9 +304,9 @@ const Users: React.FC = () => {
                      <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="block rounded-xl border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2 px-3"
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
-                        <option value="">Status</option>
+                        <option value="">All Statuses</option>
                         <option value={Status.Active}>Active</option>
                         <option value={Status.Blocked}>Blocked</option>
                         <option value={Status.Paused}>Paused</option>
@@ -315,10 +315,10 @@ const Users: React.FC = () => {
                      <select
                         value={planFilter}
                         onChange={(e) => setPlanFilter(e.target.value)}
-                        className="block rounded-xl border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2 px-3"
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
-                        <option value="">Plans</option>
-                        <option value="NO_PLAN">No Plan</option>
+                        <option value="">All Plans</option>
+                        <option value="NO_PLAN">No Active Plan</option>
                         {investmentPlans.map(plan => (
                             <option key={plan._id} value={plan._id}>{plan.name}</option>
                         ))}
@@ -326,44 +326,44 @@ const Users: React.FC = () => {
                      <select
                         value={currencyFilter}
                         onChange={(e) => setCurrencyFilter(e.target.value as Currency | '')}
-                        className="block rounded-xl border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2 px-3"
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     >
-                        <option value="">Currency</option>
+                        <option value="">All Currencies</option>
                         <option value="PKR">PKR</option>
                         <option value="EUR">EUR</option>
                         <option value="USD">USD</option>
                     </select>
                     <input 
                         type="text" 
-                        placeholder="Search..."
+                        placeholder="Search name, email, ID..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="block w-full sm:w-auto rounded-xl border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:text-white py-2 px-4"
+                        className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                 </div>
             </div>
 
-            <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700 mb-6 gap-4">
-                <div className="flex items-center gap-4 overflow-x-auto pb-2 xl:pb-0 custom-scrollbar">
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border dark:border-gray-700 mb-6 gap-4">
+                <div className="flex items-center gap-4">
                     {selectedUserIds.length > 0 ? (
-                        <div className="flex items-center gap-3 animate-fade-in shrink-0">
-                            <span className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-tight">
-                                {selectedUserIds.length} Selected
+                        <div className="flex items-center gap-3 animate-fade-in">
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                {selectedUserIds.length} users selected
                             </span>
                             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                            <Button size="sm" variant="secondary" onClick={() => handleDownloadDossiers(selectedUserIds)} className="whitespace-nowrap">Dossiers</Button>
-                            <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing} className="whitespace-nowrap">
-                                {isProcessing ? 'Wait...' : 'Delete'}
+                            <Button size="sm" variant="secondary" onClick={() => handleDownloadDossiers(selectedUserIds)}>Download Dossiers</Button>
+                            <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
+                                {isProcessing ? 'Processing...' : 'Delete Selected'}
                             </Button>
                         </div>
                     ) : (
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bulk Actions</span>
+                        <span className="text-sm text-gray-500">Select users for bulk actions</span>
                     )}
                 </div>
-                <div className="flex flex-wrap gap-2 shrink-0">
-                    <Button variant="secondary" size="sm" onClick={() => setIsBulkRestrictionsModalOpen(true)} className="flex-1 sm:flex-none">Restrictions</Button>
-                    <Button variant="secondary" size="sm" onClick={() => setIsBulkDummyModalOpen(true)} className="flex-1 sm:flex-none">Dummy Add</Button>
-                    <Button size="sm" onClick={() => handleOpenUserManagementModal(null)} className="flex-1 sm:flex-none">Add User</Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setIsBulkRestrictionsModalOpen(true)}>Bulk Restrictions</Button>
+                    <Button variant="secondary" size="sm" onClick={() => setIsBulkDummyModalOpen(true)}>Bulk Dummy Add</Button>
+                    <Button size="sm" onClick={() => handleOpenUserManagementModal(null)}>Add New User</Button>
                 </div>
             </div>
 

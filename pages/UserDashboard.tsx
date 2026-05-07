@@ -138,47 +138,44 @@ const UserDashboard: React.FC = () => {
     };
 
     const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode, color: string }> = ({ title, value, icon, color }) => (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 sm:p-5 flex items-center justify-between transition-all hover:shadow-md">
-            <div className="min-w-0">
-                <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 truncate">{title}</p>
-                <p className="text-lg sm:text-2xl font-black text-gray-800 dark:text-white truncate">{value}</p>
-            </div>
-            <div className={`text-white p-2 sm:p-3 rounded-xl shadow-lg shrink-0 ${color}`}>{icon}</div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex items-center justify-between">
+            <div><p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p><p className="text-2xl font-semibold text-gray-800 dark:text-white">{value}</p></div>
+            <div className={`text-white p-3 rounded-full ${color}`}>{icon}</div>
         </div>
     );
     
-    const NetworkSummaryCard = () => {
+     const NetworkSummaryCard = () => {
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6 flex flex-col h-full">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="min-w-0">
-                        <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Network Overview</p>
-                        <p className="text-xl sm:text-2xl font-black text-gray-800 dark:text-white truncate">{networkBreakdown.total} Total</p>
+                    <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Network Overview</p>
+                        <p className="text-2xl font-semibold text-gray-800 dark:text-white">{networkBreakdown.total} Total Referrals</p>
                     </div>
-                    <div className="text-white p-2 sm:p-3 rounded-xl shadow-lg bg-gradient-to-br from-purple-500 to-purple-600 shrink-0"><UsersIcon /></div>
+                    <div className="text-white p-3 rounded-full bg-purple-500"><UsersIcon /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 text-[10px] sm:text-xs mt-auto border-t dark:border-gray-700 pt-4">
-                    <div className="min-w-0">
-                        <h4 className="font-black text-green-600 dark:text-green-400 mb-2 uppercase tracking-tight truncate">Active ({totalActive})</h4>
-                        <ul className="space-y-1 text-gray-500 dark:text-gray-400 font-medium">
-                            {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).slice(0, 3).map(level => (
-                                <li key={`active-${level}`} className="flex justify-between gap-1">
-                                    <span className="truncate">Lvl {level}:</span>
-                                    <span className="font-bold shrink-0">{networkBreakdown.active[parseInt(level)]}</span>
+                <div className="grid grid-cols-2 gap-4 text-sm mt-4 border-t dark:border-gray-700 pt-4">
+                    <div>
+                        <h4 className="font-semibold text-green-600 dark:text-green-400 mb-2">Active Referrals ({totalActive})</h4>
+                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
+                            {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                <li key={`active-${level}`} className="flex justify-between">
+                                    <span>Level {level}:</span>
+                                    <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
                                 </li>
                             ))}
                         </ul>
                     </div>
-                    <div className="min-w-0">
-                        <h4 className="font-black text-red-500 dark:text-red-400 mb-2 uppercase tracking-tight truncate">Inactive ({totalInactive})</h4>
-                        <ul className="space-y-1 text-gray-500 dark:text-gray-400 font-medium">
-                            {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).slice(0, 3).map(level => (
-                                <li key={`inactive-${level}`} className="flex justify-between gap-1">
-                                    <span className="truncate">Lvl {level}:</span>
-                                    <span className="font-bold shrink-0">{networkBreakdown.inactive[parseInt(level)]}</span>
+                    <div>
+                        <h4 className="font-semibold text-red-500 dark:text-red-400 mb-2">Inactive Referrals ({totalInactive})</h4>
+                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
+                            {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                <li key={`inactive-${level}`} className="flex justify-between">
+                                    <span>Level {level}:</span>
+                                    <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
                                 </li>
                             ))}
                         </ul>
@@ -205,27 +202,27 @@ const UserDashboard: React.FC = () => {
             </div>
 
             <div className="relative">
-                <Button onClick={() => setShowCustomize(!showCustomize)} size="sm" variant="secondary" className="absolute top-0 right-0 -mt-10 sm:-mt-8">Customize</Button>
+                <Button onClick={() => setShowCustomize(!showCustomize)} size="sm" variant="secondary" className="absolute top-0 right-0 -mt-8">Customize</Button>
                 {showCustomize && (
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs sm:text-sm">
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-sm">
                         {Object.keys(visibleWidgets).map(key => (
-                          <label key={key} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-1 rounded">
-                            <input type="checkbox" checked={visibleWidgets[key as keyof typeof visibleWidgets]} onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} className="rounded text-blue-600"/>
+                          <label key={key} className="flex items-center space-x-2">
+                            <input type="checkbox" checked={visibleWidgets[key as keyof typeof visibleWidgets]} onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} className="rounded"/>
                             <span className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
                           </label>
                         ))}
                     </div>
                 )}
-                <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                    {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-gradient-to-br from-blue-500 to-blue-600" />}
-                    {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-gradient-to-br from-sky-500 to-sky-600" />}
-                    {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-gradient-to-br from-green-500 to-green-600" />}
-                    {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-gradient-to-br from-red-500 to-red-600" />}
-                    {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-gradient-to-br from-yellow-500 to-yellow-600" />}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
+                    {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
+                    {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
+                    {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
+                    {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
                     {visibleWidgets.referrals && <NetworkSummaryCard />}
-                    {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-gradient-to-br from-indigo-500 to-indigo-600" />}
-                    {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-gradient-to-br from-teal-500 to-teal-600" />}
-                    {visibleWidgets.plan && <StatCard title="Active Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-gradient-to-br from-pink-500 to-pink-600" />}
+                    {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
+                    {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
+                    {visibleWidgets.plan && <StatCard title="Active Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-pink-500" />}
                 </div>
             </div>
 
@@ -240,8 +237,8 @@ const UserDashboard: React.FC = () => {
                 </div>}
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 sm:p-8">
-                <h2 className="text-xl font-black text-gray-800 dark:text-white mb-6 uppercase tracking-tight">Recent Transactions</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Recent Transactions</h2>
                 <Table headers={['ID', 'Type', 'Amount', 'Status', 'Date', 'Description']}>
                     {recentTransactions.map((tx: Transaction) => (
                          <tr key={tx._id} className="text-gray-700 dark:text-gray-400">

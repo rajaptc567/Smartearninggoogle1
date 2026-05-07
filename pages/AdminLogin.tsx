@@ -56,12 +56,12 @@ const AdminLogin: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-[#0f172a] p-4">
-            <div className="w-full max-w-md p-6 sm:p-10 space-y-8 bg-[#111827] rounded-3xl shadow-2xl border border-gray-800/50">
-                <div className="text-center select-none">
-                    <h1 className="text-4xl font-black text-blue-500 tracking-tighter uppercase">SmartEarning</h1>
-                    <h2 className="mt-4 text-2xl font-black text-white uppercase tracking-tight">Admin Panel Login</h2>
-                    <p className="mt-2 text-sm text-gray-500 font-medium">Restricted Access: Authorized Personnel Only</p>
+        <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
+            <div className="w-full max-w-md p-8 space-y-6 bg-[#111827] rounded-xl shadow-2xl border border-gray-800/50">
+                <div className="text-center">
+                    <h1 className="text-4xl font-black text-blue-500 tracking-tight">Smart Earning</h1>
+                    <h2 className="mt-4 text-2xl font-bold text-white">Admin Panel Login</h2>
+                    <p className="mt-2 text-sm text-gray-400">Restricted Access: Authorized Personnel Only</p>
                 </div>
 
                 {error && (
@@ -72,7 +72,7 @@ const AdminLogin: React.FC = () => {
 
                 <form className="space-y-5" onSubmit={handleLogin}>
                     <div>
-                        <label htmlFor="email" className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1 ml-1">Admin Email</label>
+                        <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5 ml-1">Admin Email</label>
                         <input
                             id="email"
                             name="email"
@@ -81,11 +81,11 @@ const AdminLogin: React.FC = () => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="admin@example.com"
-                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                         />
                     </div>
                     <div>
-                        <label htmlFor="password"  className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1 ml-1">Password</label>
+                        <label htmlFor="password"  className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5 ml-1">Password</label>
                         <input
                             id="password"
                             name="password"
@@ -94,7 +94,7 @@ const AdminLogin: React.FC = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••"
-                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
+                            className="w-full px-4 py-3 bg-[#1e293b]/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                         />
                     </div>
                     <div className="pt-2">

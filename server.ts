@@ -41,6 +41,22 @@ async function startServer() {
   app.set('trust proxy', 1);
 
   // Database Connection
+  const connectDB = async () => {
+    try {
+        if (!process.env.MONGO_URI) {
+            console.warn('MONGO_URI is not defined. Backend will not work correctly.');
+            return;
+        }
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log(`MongoDB Connected`);
+    } catch (error) {
+        console.error(`Error connecting to MongoDB: ${error.message}`);
+    }
+  };
+
+  await connectDB();
+
+  // Seed Admin
   const seedAdminUser = async () => {
     try {
         const adminEmail = 'studio56.pk@gmail.com';
@@ -63,74 +79,33 @@ async function startServer() {
         console.error('Admin seeding error:', e.message);
     }
   };
-
-  const connectDB = async () => {
-    try {
-        if (!process.env.MONGO_URI) {
-            console.error('MONGO_URI is not defined. Backend will not work correctly.');
-            return;
-        }
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log(`MongoDB Connected`);
-        await seedAdminUser();
-    } catch (error) {
-        console.error(`Error connecting to MongoDB: ${error.message}`);
-    }
-  };
-
-  connectDB();
+  await seedAdminUser();
 
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   
-  // Health check
-  app.get('/api/health', (req, res) => {
-    res.json({ 
-      status: 'ok', 
-      db: mongoose.connection.readyState === 1 ? 'connected' : 'connecting/disconnected',
-      mongo_uri_exists: !!process.env.MONGO_URI,
-      env: process.env.NODE_ENV,
-      time: new Date().toISOString()
-    });
-  });
-
-  // Simple request logger
-  app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-    next();
-  });
-  
-  // API Routes
-  const apiRouter = express.Router();
-  apiRouter.use('/users', userRoutes);
-  apiRouter.use('/deposits', depositRoutes);
-  apiRouter.use('/withdrawals', withdrawalRoutes);
-  apiRouter.use('/transactions', transactionRoutes);
-  apiRouter.use('/notifications', notificationRoutes);
-  apiRouter.use('/payment-methods', paymentMethodRoutes);
-  apiRouter.use('/investment-plans', investmentPlanRoutes);
-  apiRouter.use('/transfers', transferRoutes);
-  apiRouter.use('/rules', ruleRoutes);
-  apiRouter.use('/settings', settingRoutes);
-  apiRouter.use('/logs', logRoutes);
-  apiRouter.use('/password-reset-requests', passwordResetRequestRoutes);
-  apiRouter.use('/disputes', disputeRoutes);
-  apiRouter.use('/tasks', taskRoutes);
-
-  // Apply Global Rate Limiting to all API routes
+  // Apply Global Rate Limiting
   app.use('/api', globalLimiter);
   
   // Passive Authentication Layer
   app.use(authMiddleware);
 
-  // Mount the API Router
-  app.use('/api/v1', apiRouter);
-
-  // Catch-all for undefined API routes
-  app.all('/api/*', (req, res) => {
-    res.status(404).json({ success: false, error: `API route ${req.method} ${req.originalUrl} not found` });
-  });
+  // API Routes
+  app.use('/api/v1/users', userRoutes);
+  app.use('/api/v1/deposits', depositRoutes);
+  app.use('/api/v1/withdrawals', withdrawalRoutes);
+  app.use('/api/v1/transactions', transactionRoutes);
+  app.use('/api/v1/notifications', notificationRoutes);
+  app.use('/api/v1/payment-methods', paymentMethodRoutes);
+  app.use('/api/v1/investment-plans', investmentPlanRoutes);
+  app.use('/api/v1/transfers', transferRoutes);
+  app.use('/api/v1/rules', ruleRoutes);
+  app.use('/api/v1/settings', settingRoutes);
+  app.use('/api/v1/logs', logRoutes);
+  app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
+  app.use('/api/v1/disputes', disputeRoutes);
+  app.use('/api/v1/tasks', taskRoutes);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -140,14 +115,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("/*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"), (err) => {
-        if (err) {
-          res.status(500).send("index.html not found. Please run 'npm run build'.");
-        }
-      });
+    app.use(express.static(path.join(__dirname, "dist")));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
 
