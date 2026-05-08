@@ -108,6 +108,28 @@ const initialState: AppState = {
         homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
+        faqs: [
+            { 
+                question: "How do I earn commissions through the level system?", 
+                answer: "SmartEarning uses a multi-level marketing structure. You earn 'Direct Commissions' (Level 1) from people you personally invite using your link.",
+                showOnHomepage: true
+            },
+            { 
+                question: "Why is my commission status showing as 'Held' or 'Pending'?", 
+                answer: "Commissions are placed on 'Held' status if you do not currently own an active investment plan that is equivalent to the plan purchased by your referral.",
+                showOnHomepage: true
+            },
+            {
+                question: "What happens when a plan's referral 'Slot Limit' is reached?",
+                answer: "Each investment plan has a specific number of 'Direct Slots' available for Level 1 commissions. If you reach this limit, new direct referrals will trigger an 'Overflow' event.",
+                showOnHomepage: true
+            }
+        ],
+        homepagePaymentLogos: [
+            { name: "Binance", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Binance_Logo.png" },
+            { name: "Visa", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" },
+            { name: "Mastercard", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" }
+        ],
     },
     notifications: [],
     logs: [],
@@ -168,8 +190,17 @@ type Action =
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
-        if (!settings) return state.settings;
+        if (!settings || Object.keys(settings).length === 0) return state.settings;
         const newSettings = { ...settings };
+        if (!newSettings.homepageContent || Object.keys(newSettings.homepageContent).length === 0) {
+            newSettings.homepageContent = state.settings.homepageContent;
+        }
+        if (!newSettings.faqs || newSettings.faqs.length === 0) {
+            newSettings.faqs = state.settings.faqs;
+        }
+        if (!newSettings.homepagePaymentLogos || newSettings.homepagePaymentLogos.length === 0) {
+            newSettings.homepagePaymentLogos = state.settings.homepagePaymentLogos;
+        }
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
         }
