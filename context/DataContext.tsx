@@ -375,40 +375,69 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
         const fetchData = async () => {
+            const token = localStorage.getItem('authToken');
+            
             try {
-                const results = await Promise.allSettled([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
+                // Step 1: Prioritize essential homepage data to unblock UI fast
+                const essentialPromises = [
+                    getSettings(),
+                    getInvestmentPlans(),
+                    getPaymentMethods(),
                     getDataVersion()
-                ]);
-                
-                const getValue = (idx: number, fallback: any) => 
-                    results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+                ];
 
-                const currentVersion = getValue(14, 0);
-                lastVersionRef.current = currentVersion;
+                const essentialResults = await Promise.allSettled(essentialPromises);
+                
+                const getEssValue = (idx: number, fallback: any) => 
+                    essentialResults[idx].status === 'fulfilled' ? (essentialResults[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                const publicSettings = getEssValue(0, state.settings);
+                const publicPlans = getEssValue(1, []);
+                const publicMethods = getEssValue(2, []);
+                const serverVersion = getEssValue(3, 0);
+                lastVersionRef.current = serverVersion;
+
+                // Dispatch essential data immediately to show homepage
+                dispatch({ 
+                    type: 'SET_ALL_DATA', 
+                    payload: { 
+                        settings: publicSettings,
+                        investmentPlans: publicPlans,
+                        paymentMethods: publicMethods
+                    } 
+                });
+
+                if (!token) return;
+
+                // Step 2: Authenticated user - fetch private data in background
+                const privatePromises = [
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
+                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                ];
+
+                const privateResults = await Promise.allSettled(privatePromises);
+                const getPrivValue = (idx: number, fallback: any) => 
+                    privateResults[idx].status === 'fulfilled' ? (privateResults[idx] as PromiseFulfilledResult<any>).value : fallback;
 
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
-                        users: getValue(0, []),
-                        deposits: getValue(1, []),
-                        withdrawals: getValue(2, []),
-                        transactions: getValue(3, []),
-                        notifications: getValue(4, []),
-                        paymentMethods: getValue(5, []),
-                        investmentPlans: getValue(6, []),
-                        rules: getValue(7, []),
-                        settings: getValue(8, state.settings),
-                        transfers: getValue(9, []),
-                        logs: getValue(10, []),
-                        passwordResetRequests: getValue(11, []),
-                        disputes: getValue(12, []),
-                        tasks: getValue(13, [])
+                        users: getPrivValue(0, []),
+                        deposits: getPrivValue(1, []),
+                        withdrawals: getPrivValue(2, []),
+                        transactions: getPrivValue(3, []),
+                        notifications: getPrivValue(4, []),
+                        rules: getPrivValue(5, []),
+                        transfers: getPrivValue(6, []),
+                        logs: getPrivValue(7, []),
+                        passwordResetRequests: getPrivValue(8, []),
+                        disputes: getPrivValue(9, []),
+                        tasks: getPrivValue(10, [])
                     } 
                 });
             } catch (error) {
                 console.error("Critical error during initial data handshake:", error);
+                dispatch({ type: 'SET_ALL_DATA', payload: {} });
             }
         };
 
