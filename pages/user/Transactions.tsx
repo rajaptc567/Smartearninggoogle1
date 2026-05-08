@@ -25,6 +25,7 @@ const Transactions: React.FC = () => {
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     
     if (!currentUser) {
         return <div>Loading...</div>;
@@ -115,31 +116,87 @@ const Transactions: React.FC = () => {
 
             {paginatedTransactions.length > 0 ? (
                 <>
-                    <Table headers={tableHeaders}>
+                    <div className="hidden md:block">
+                        <Table headers={tableHeaders}>
+                            {paginatedTransactions.map((tx: Transaction) => (
+                                 <tr key={tx._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                    <td className="px-4 py-3 text-sm font-mono">{tx._id.substring(0, 8)}...</td>
+                                    <td className="px-4 py-3 text-sm font-bold">{tx.type}</td>
+                                    <td className={`px-4 py-3 text-sm font-black ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatCurrency(tx.amount, tx.currency)}
+                                    </td>
+                                     <td className="px-4 py-3 text-xs">
+                                        {/* MASKING: Show 'Matching' as 'Pending' to user */}
+                                        <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
+                                    </td>
+                                    <td className="px-4 py-3 text-sm font-mono opacity-70">{new Date(tx.date).toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-sm">
+                                        {tx.description}
+                                        {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
+                                        {tx.originalAmount && tx.originalCurrency && (
+                                            <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5">
+                                                (Orig: {formatCurrency(tx.originalAmount, tx.originalCurrency)})
+                                            </span>
+                                        )}
+                                    </td>
+                                 </tr>
+                            ))}
+                        </Table>
+                    </div>
+
+                    {/* Mobile View Transactions */}
+                    <div className="md:hidden space-y-4">
                         {paginatedTransactions.map((tx: Transaction) => (
-                             <tr key={tx._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                <td className="px-4 py-3 text-sm font-mono">{tx._id.substring(0, 8)}...</td>
-                                <td className="px-4 py-3 text-sm font-bold">{tx.type}</td>
-                                <td className={`px-4 py-3 text-sm font-black ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatCurrency(tx.amount, tx.currency)}
-                                </td>
-                                 <td className="px-4 py-3 text-xs">
-                                    {/* MASKING: Show 'Matching' as 'Pending' to user */}
-                                    <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
-                                </td>
-                                <td className="px-4 py-3 text-sm font-mono opacity-70">{new Date(tx.date).toLocaleString()}</td>
-                                <td className="px-4 py-3 text-sm">
-                                    {tx.description}
-                                    {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
-                                    {tx.originalAmount && tx.originalCurrency && (
-                                        <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase mt-0.5">
-                                            (Orig: {formatCurrency(tx.originalAmount, tx.originalCurrency)})
+                            <div key={tx._id} className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden transition-all duration-300">
+                                 <div 
+                                    className="p-4 flex items-center justify-between cursor-pointer"
+                                    onClick={() => setExpandedTxId(expandedTxId === tx._id ? null : tx._id)}
+                                 >
+                                    <div className="flex flex-col text-left">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{tx.type}</span>
+                                        <span className={`text-sm font-black ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {formatCurrency(tx.amount, tx.currency)}
                                         </span>
-                                    )}
-                                </td>
-                             </tr>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
+                                        <div className={`w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-blue-500 transition-transform shadow-sm ${expandedTxId === tx._id ? 'rotate-180' : ''}`}>
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                        </div>
+                                    </div>
+                                 </div>
+                                 
+                                 {expandedTxId === tx._id && (
+                                    <div className="p-4 bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 animate-fade-in text-left">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="col-span-2 flex justify-between items-center border-b dark:border-gray-800 pb-2">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date</p>
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleString()}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Transaction ID</p>
+                                                    <p className="text-[10px] font-mono font-bold text-blue-500 break-all select-all">{tx._id.toUpperCase()}</p>
+                                                </div>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Description</p>
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed font-medium">
+                                                    {tx.description}
+                                                    {tx.type === 'Commission' && tx.level && ` (Level ${tx.level})`}
+                                                </p>
+                                                {tx.originalAmount && tx.originalCurrency && (
+                                                    <div className="mt-2 text-[9px] font-bold text-gray-500 dark:text-gray-400 border-t dark:border-gray-800 pt-1 uppercase">
+                                                        Original: {formatCurrency(tx.originalAmount, tx.originalCurrency)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                 )}
+                            </div>
                         ))}
-                    </Table>
+                    </div>
 
                     {/* Pagination Controls */}
                     <div className="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4 border-t dark:border-gray-700 pt-4">

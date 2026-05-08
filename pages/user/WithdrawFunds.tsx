@@ -66,6 +66,7 @@ const WithdrawFunds: React.FC = () => {
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [accountTitle, setAccountTitle] = useState('');
+    const [expandedWithdrawalId, setExpandedWithdrawalId] = useState<string | null>(null);
     const [accountNumber, setAccountNumber] = useState('');
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -676,7 +677,7 @@ const WithdrawFunds: React.FC = () => {
 
                 {paginatedWithdrawals.length > 0 ? (
                     <>
-                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                        <div className="hidden md:block overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
                             <Table headers={['Date', 'Network', 'Gross', 'Processing', 'Net Credit', 'State']}>
                                 {paginatedWithdrawals.map(withdrawal => (
                                     <tr key={withdrawal._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-teal-900/5 transition-colors group">
@@ -691,6 +692,69 @@ const WithdrawFunds: React.FC = () => {
                                     </tr>
                                 ))}
                             </Table>
+                        </div>
+
+                        {/* Mobile View Settlement Log */}
+                        <div className="md:hidden space-y-4">
+                            {paginatedWithdrawals.map(withdrawal => (
+                                <div key={withdrawal._id} className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden transition-all duration-300">
+                                     <div 
+                                        className="p-4 flex items-center justify-between cursor-pointer"
+                                        onClick={() => setExpandedWithdrawalId(expandedWithdrawalId === withdrawal._id ? null : withdrawal._id)}
+                                     >
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{withdrawal.method}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-black text-teal-600 dark:text-teal-400">{formatCurrency(withdrawal.finalAmount, withdrawal.currency)}</span>
+                                                <span className="text-[9px] text-gray-500 line-through">{formatCurrency(withdrawal.amount, withdrawal.currency)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Badge status={withdrawal.status === Status.Matching ? Status.Pending : withdrawal.status} />
+                                            <div className={`w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-teal-500 transition-transform shadow-sm ${expandedWithdrawalId === withdrawal._id ? 'rotate-180' : ''}`}>
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                            </div>
+                                        </div>
+                                     </div>
+                                     
+                                     {expandedWithdrawalId === withdrawal._id && (
+                                        <div className="p-4 bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 animate-fade-in text-left">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="col-span-2 flex justify-between items-center border-b dark:border-gray-800 pb-2">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date</p>
+                                                        <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{new Date(withdrawal.date).toLocaleString()}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Processing Fee</p>
+                                                        <p className="text-xs font-bold text-red-500">-{formatCurrency(withdrawal.fee, withdrawal.currency)}</p>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Account Title</p>
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate uppercase">{withdrawal.accountTitle}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Account / ID</p>
+                                                    <p className="text-xs font-mono font-bold text-blue-500 truncate select-all">{withdrawal.accountNumber}</p>
+                                                </div>
+                                                {withdrawal.userNotes && (
+                                                    <div className="col-span-2 pt-2 border-t dark:border-gray-800">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Your Remarks</p>
+                                                        <p className="text-[10px] text-gray-500 italic">"{withdrawal.userNotes}"</p>
+                                                    </div>
+                                                )}
+                                                {withdrawal.adminNotes && (
+                                                    <div className="col-span-2 pt-2 border-t dark:border-gray-800">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Admin Feedback</p>
+                                                        <p className="text-[10px] text-orange-500 font-bold italic">"{withdrawal.adminNotes}"</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                     )}
+                                </div>
+                            ))}
                         </div>
                         {/* Pagination Controls */}
                         <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">

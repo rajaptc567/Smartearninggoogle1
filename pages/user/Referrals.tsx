@@ -335,43 +335,43 @@ const Referrals: React.FC = () => {
         const symbol = currencySymbols[currentUser?.currency || 'USD'];
 
         return (
-            <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-[2.5rem] shadow-sm border transition-all duration-200 overflow-hidden group 
+            <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-2xl md:rounded-[2.5rem] shadow-sm border transition-all duration-200 overflow-hidden group 
                 ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-800 dark:border-gray-700'} 
                 ${highlightedUserId === user._id ? 'border-blue-400 ring-2 ring-blue-400' : ''} 
-                border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
+                border-l-[6px] md:border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
                 
                 {isOverflow && (
-                    <div className="bg-red-600 text-white py-1.5 px-4 text-center">
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em]">Direct Referral Limit Reached</span>
+                    <div className="bg-red-600 text-white py-1 px-3 md:py-1.5 md:px-4 text-center">
+                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-[0.3em]">Direct Referral Limit Reached</span>
                     </div>
                 )}
 
-                <div className="p-8">
-                    <div className="flex justify-between items-start mb-6">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-black text-2xl ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isOverflow ? 'bg-red-100 text-red-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                <div className="p-4 md:p-8">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4 md:mb-6">
+                        <div className="flex items-center gap-3 md:gap-4 w-full sm:w-auto">
+                            <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-black text-lg md:text-2xl shrink-0 ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isOverflow ? 'bg-red-100 text-red-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                 {user.username.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                                <h4 className="font-bold text-white flex items-center gap-2 text-xl">
+                                <h4 className="font-bold text-white flex flex-wrap items-center gap-2 text-lg md:text-xl leading-tight">
                                     {user.username}
-                                    {info.isRecurringReferral && !isHeldView && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
-                                    {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-3 w-3"><span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
+                                    {info.isRecurringReferral && !isHeldView && <span className="text-[9px] md:text-[10px] bg-indigo-100 text-indigo-700 px-1.5 md:px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
+                                    {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-2.5 w-2.5 md:h-3 md:w-3"><span className="animate-ping absolute inline-flex h-2.5 w-2.5 md:h-3 md:w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 md:h-3 md:w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
                                 </h4>
-                                <div className="flex flex-wrap items-center gap-2 mt-2">
-                                    <span className={`px-4 py-1 rounded-full font-black uppercase text-[11px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isOverflow ? 'bg-red-600 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
-                                        {isDirect ? 'DIRECT TEAM' : `NETWORK LEVEL ${level}`}
+                                <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1 md:mt-2">
+                                    <span className={`px-2.5 py-0.5 md:px-4 md:py-1 rounded-full font-black uppercase text-[9px] md:text-[11px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isOverflow ? 'bg-red-600 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                        {isDirect ? 'DIRECT' : `LEVEL ${level}`}
                                     </span>
-                                    <span className="text-sm text-gray-400 font-medium">@{user.username} • {user.fullName}</span>
+                                    <span className="text-xs md:text-sm text-gray-400 font-medium truncate max-w-[120px] md:max-w-none">@{user.username}</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <p className={`text-[11px] uppercase font-black tracking-[0.1em] mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
-                                {isHeldView || hasHeld ? 'LOCKED FUNDS' : isOverflow ? 'OVERFLOW LOST' : 'TOTAL EARNED'}
+                        <div className="text-left sm:text-right w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-800 sm:border-transparent mt-2 sm:mt-0 flex justify-between sm:block">
+                            <p className={`text-[9px] md:text-[11px] uppercase font-black tracking-[0.1em] mb-0.5 md:mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
+                                {isHeldView || hasHeld ? 'LOCKED' : isOverflow ? 'LOST' : 'EARNED'}
                             </p>
-                            <p className={`text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
-                                <span className="text-lg mr-1">{symbol}</span>
+                            <p className={`text-xl sm:text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
+                                <span className="text-sm md:text-lg mr-1">{symbol}</span>
                                 {amountToShow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                         </div>
@@ -379,79 +379,79 @@ const Referrals: React.FC = () => {
 
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
-                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : 'EARNING TIMELINE BREAKDOWN'}
+                            <p className="text-[9px] md:text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                                {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : 'TIMELINE BREAKDOWN'}
                             </p>
                             {info.held > 0 && !isHeldView && (
                                 <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded-lg border border-orange-500/20">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                    <span className="text-[10px] font-black text-orange-500 uppercase tracking-tighter">Held: {formatCurrency(info.held, currentUser?.currency)}</span>
+                                    <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                    <span className="text-[9px] md:text-[10px] font-black text-orange-500 uppercase tracking-tighter">Held: {formatCurrency(info.held, currentUser?.currency)}</span>
                                 </div>
                             )}
                         </div>
                         
-                        <div className="space-y-2.5">
+                        <div className="space-y-2">
                             {historyToShow && historyToShow.length > 0 ? historyToShow.map((item: any) => (
-                                <div key={item._id || item.txId} className={`flex justify-between items-center p-4 bg-[#1f2937] dark:bg-gray-900 rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : 'border-gray-800'} text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
-                                    <div className="flex flex-col">
-                                        <div className="flex items-center gap-2.5">
-                                            <span className={`w-2 h-2 rounded-full ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
-                                            <span className="font-bold text-gray-200">
+                                <div key={item._id || item.txId} className={`flex justify-between items-center p-3 md:p-4 bg-[#1f2937] dark:bg-gray-900 rounded-xl md:rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : 'border-gray-800'} text-[12px] md:text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
+                                    <div className="flex flex-col min-w-0 pr-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full shrink-0 ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                                            <span className="font-bold text-gray-200 truncate">
                                                 {isHeldView ? item.reason : item.description.split('from')[0].trim()}
                                             </span>
                                         </div>
-                                        <span className="text-[11px] text-gray-500 mt-1 ml-4.5 font-medium">
+                                        <span className="text-[10px] md:text-[11px] text-gray-500 mt-0.5 md:mt-1 ml-3.5 md:ml-4.5 font-medium">
                                             {new Date(item.date).toLocaleString()}
                                         </span>
                                     </div>
-                                    <div className="text-right flex flex-col items-end">
+                                    <div className="text-right flex flex-col items-end shrink-0">
                                         <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : 'text-orange-500'}`}>
-                                            <span className="text-[10px] mr-0.5">{symbol}</span>
+                                            <span className="text-[9px] md:text-[10px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                         {item.status === 'Pending' && item.planId && !isOverflow && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }}
-                                                className="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-1 hover:underline flex items-center gap-1"
+                                                className="text-[9px] md:text-[10px] text-blue-500 font-black uppercase tracking-wider md:tracking-widest mt-1 hover:underline flex items-center gap-1"
                                             >
-                                                Unlock Tier &rarr;
+                                                Unlock &rarr;
                                             </button>
                                         )}
                                     </div>
                                 </div>
                             )) : (
-                                <div className="text-center py-6 bg-gray-900/50 rounded-2xl border border-dashed border-gray-800">
-                                    <p className="text-sm italic text-gray-500 font-medium">{info.statusText}</p>
+                                <div className="text-center py-4 md:py-6 bg-gray-900/50 rounded-xl md:rounded-2xl border border-dashed border-gray-800">
+                                    <p className="text-xs md:text-sm italic text-gray-500 font-medium px-4">{info.statusText}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     {(isHeldView || hasHeld) && !isOverflow && (
-                        <div className="mt-6 p-5 bg-orange-500/10 border border-orange-500/30 rounded-[1.5rem] shadow-lg">
-                            <div className="flex justify-between items-start mb-4">
+                        <div className="mt-4 md:mt-6 p-4 md:p-5 bg-orange-500/10 border border-orange-500/30 rounded-2xl md:rounded-[1.5rem] shadow-lg">
+                            <div className="flex justify-between items-start mb-3 md:mb-4">
                                 <div>
-                                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">UNLOCK REQUIREMENT FOUND</p>
-                                    <p className="text-sm font-bold text-white">Requirement: <span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
+                                    <p className="text-[9px] md:text-[10px] font-black text-orange-500 uppercase tracking-widest mb-0.5 md:mb-1">QUALIFICATION NEEDED</p>
+                                    <p className="text-xs md:text-sm font-bold text-white"><span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase">VALUE AT STAKE</p>
-                                    <p className="text-lg font-black text-orange-500">{formatCurrency(totalHeldGlobal, currentUser?.currency)}</p>
+                                    <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase">VALUE</p>
+                                    <p className="text-sm md:text-lg font-black text-orange-500">{formatCurrency(totalHeldGlobal, currentUser?.currency)}</p>
                                 </div>
                             </div>
                             <button 
-                                className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all transform active:scale-95 shadow-xl shadow-orange-600/20 flex items-center justify-center gap-2"
+                                className="w-full py-2.5 md:py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider md:tracking-[0.2em] transition-all transform active:scale-95 shadow-xl shadow-orange-600/20 flex items-center justify-center gap-2"
                                 onClick={() => navigate('/member/plans', { state: { highlightPlanId: requiredPlan?._id } })}
                             >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                Buy to Unlock Commission &rarr;
+                                <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                Unlock &rarr;
                             </button>
                         </div>
                     )}
 
-                    <div className="mt-6 flex justify-between items-center text-[11px] font-black uppercase tracking-[0.2em] pt-5 border-t border-gray-800/50">
-                        <span className="text-gray-500">{info.statusText}</span>
-                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username && u.username.toLowerCase() === user.sponsor?.toLowerCase()) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400">Referrer: @{user.sponsor || 'Direct'}</button>
+                    <div className="mt-4 md:mt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.2em] pt-4 md:pt-5 border-t border-gray-800/50">
+                        <span className="text-gray-500 w-full sm:w-auto">{info.statusText}</span>
+                        <button onClick={() => { setSelectedSponsor(users.find(u => u.username && u.username.toLowerCase() === user.sponsor?.toLowerCase()) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400 whitespace-nowrap">Referrer: @{user.sponsor || 'Direct'}</button>
                     </div>
                 </div>
             </div>
@@ -462,11 +462,11 @@ const Referrals: React.FC = () => {
         const isCollapsed = collapsedNodes.has(node.user._id);
         const hasChildren = node.children.length > 0;
         return (
-            <li key={node.user._id} className="relative pl-10 pt-6">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-800 -ml-4 rounded-full"></div>
-                <div className="absolute left-0 top-16 w-8 h-1 bg-gray-800 -ml-4 rounded-full"></div>
-                <div className="mb-6 max-w-2xl shadow-xl"><ReferralCardContent node={node} showHeldAlert={true} /></div>
-                {hasChildren && !isCollapsed && <ul className="ml-6">{node.children.map(child => renderTreeNode(child))}</ul>}
+            <li key={node.user._id} className="relative pl-6 md:pl-10 pt-4 md:pt-6">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-800 -ml-3 md:-ml-4 rounded-full"></div>
+                <div className="absolute left-0 top-12 md:top-16 w-4 md:w-8 h-1 bg-gray-800 -ml-3 md:-ml-4 rounded-full"></div>
+                <div className="mb-4 md:mb-6 max-w-2xl shadow-xl"><ReferralCardContent node={node} showHeldAlert={true} /></div>
+                {hasChildren && !isCollapsed && <ul className="ml-4 md:ml-6">{node.children.map(child => renderTreeNode(child))}</ul>}
             </li>
         );
     };
@@ -476,9 +476,9 @@ const Referrals: React.FC = () => {
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
     return (
-        <div className="space-y-10 max-w-7xl mx-auto pb-20 px-4">
+        <div className="space-y-6 md:space-y-10 max-w-7xl mx-auto pb-20 px-4">
             {isUserInactive && (
-                <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[3rem] text-white shadow-2xl border border-white/10 flex flex-col md:flex-row items-center gap-8 animate-fade-in relative overflow-hidden group">
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-5 md:p-8 rounded-2xl md:rounded-[3rem] text-white shadow-2xl border border-white/10 flex flex-col md:flex-row items-center gap-6 md:gap-8 animate-fade-in relative overflow-hidden group">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
                     
@@ -504,8 +504,8 @@ const Referrals: React.FC = () => {
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
                 <div>
-                    <h1 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter">Network Intelligence</h1>
-                    <p className="text-[11px] text-gray-500 font-black uppercase tracking-[0.3em] mt-2 ml-1">Deep analysis of your multi-level affiliate performance</p>
+                    <h1 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter">Network Intelligence</h1>
+                    <p className="text-[10px] md:text-[11px] text-gray-500 font-black uppercase tracking-wider md:tracking-[0.3em] mt-1 md:mt-2 ml-1">Deep analysis of your multi-level affiliate performance</p>
                 </div>
                 
                 <div className="bg-[#111827] p-1.5 rounded-[1.5rem] border-2 border-gray-800 shadow-2xl flex flex-wrap gap-2 items-center">
@@ -529,29 +529,29 @@ const Referrals: React.FC = () => {
 
             {selectedPlanDetails && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-                    <div className="lg:col-span-2 bg-[#1e293b] rounded-[2.5rem] border border-gray-800 p-8 flex flex-col gap-8 overflow-hidden relative group">
+                    <div className="lg:col-span-2 bg-[#1e293b] rounded-2xl md:rounded-[2.5rem] border border-gray-800 p-5 md:p-8 flex flex-col gap-6 md:gap-8 overflow-hidden relative group">
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/5 blur-[60px] group-hover:bg-blue-500/10 transition-all duration-1000"></div>
-                        <div className="flex flex-col md:flex-row gap-8 items-center md:items-stretch">
-                            <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-6 bg-black/20 rounded-[2rem] border border-white/5 shadow-inner shrink-0">
+                        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-stretch">
+                            <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-4 md:p-6 bg-black/20 rounded-2xl md:rounded-[2rem] border border-white/5 shadow-inner shrink-0">
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">SCOPE TARGET</h4>
-                                <span className="text-2xl font-black text-blue-400">{selectedPlanDetails.name}</span>
-                                <span className="text-3xl font-black text-white mt-3">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
+                                <span className="text-xl md:text-2xl font-black text-blue-400">{selectedPlanDetails.name}</span>
+                                <span className="text-2xl md:text-3xl font-black text-white mt-2 md:mt-3">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
                             </div>
                             
-                            <div className="flex-grow flex flex-col justify-between py-2 space-y-6">
-                                <div className="p-4 bg-black/10 rounded-2xl border border-white/5">
-                                    <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">STRATEGIC OVERVIEW</h5>
-                                    <p className="text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
+                            <div className="flex-grow flex flex-col justify-between py-2 space-y-4 md:space-y-6">
+                                <div className="p-3 md:p-4 bg-black/10 rounded-2xl border border-white/5">
+                                    <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">STRATEGIC OVERVIEW</h5>
+                                    <p className="text-xs md:text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-3 md:gap-4">
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">MIN. WITHDRAWAL</h5>
-                                        <p className="text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
+                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">MIN. WITHDRAWAL</h5>
+                                        <p className="text-sm md:text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">DIRECT EARNING RATE</h5>
-                                        <p className="text-lg font-bold text-[#22c55e]">
+                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DIRECT RATE</h5>
+                                        <p className="text-sm md:text-lg font-bold text-[#22c55e]">
                                             {(() => {
                                                 const c = selectedPlanDetails.directCommissions?.[0];
                                                 if(!c) return 'None';
@@ -560,15 +560,15 @@ const Referrals: React.FC = () => {
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">DIRECT SLOT CAP</h5>
-                                        <p className="text-lg font-bold text-blue-400">
+                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DIRECT CAP</h5>
+                                        <p className="text-sm md:text-lg font-bold text-blue-400">
                                             {selectedPlanDetails.directReferralLimit === 0 ? 'Unlimited' : `${selectedPlanDetails.directReferralLimit} Slots`}
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[10px] font-black text-gray-500 uppercase mb-2 tracking-tighter">NETWORK DEPTH</h5>
-                                        <p className="text-lg font-bold text-purple-400">
-                                            {1 + (selectedPlanDetails.indirectCommissions?.length || 0)} Levels Deep
+                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DEPTH</h5>
+                                        <p className="text-sm md:text-lg font-bold text-purple-400">
+                                            {1 + (selectedPlanDetails.indirectCommissions?.length || 0)} Levels
                                         </p>
                                     </div>
                                 </div>
@@ -576,37 +576,37 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className={`rounded-[2.5rem] border p-8 flex flex-col justify-between shadow-2xl transition-all duration-300 
+                    <div className={`rounded-2xl md:rounded-[2.5rem] border p-6 md:p-8 flex flex-col justify-between shadow-2xl transition-all duration-300 
                         ${scopeStats.held > 0 ? 'bg-orange-500/10 border-orange-500/40 ring-1 ring-orange-500/20' : 'bg-[#111827] border-gray-800'}`}>
                          <div>
-                            <h4 className={`text-[11px] font-black uppercase tracking-[0.4em] mb-6 ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-500'}`}>Network Performance Audit</h4>
-                            <div className="space-y-6">
+                            <h4 className={`text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.4em] mb-4 md:mb-6 ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-500'}`}>Network Performance Audit</h4>
+                            <div className="space-y-4 md:space-y-6">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-gray-400">Scoped Direct Reach</span>
-                                    <span className="text-xl font-black text-white">{scopeStats.directCount} Members</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-gray-400">Direct Reach</span>
+                                    <span className="text-sm md:text-xl font-black text-white">{scopeStats.directCount} Members</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs font-bold text-gray-400">Commission Qualified</span>
-                                    <span className="text-xl font-black text-[#22c55e]">{formatCurrency(scopeStats.earned, currentUser.currency)}</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-gray-400">Qualified</span>
+                                    <span className="text-sm md:text-xl font-black text-[#22c55e]">{formatCurrency(scopeStats.earned, currentUser.currency)}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className={`text-xs font-bold ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-400'}`}>Commission Held (Locked)</span>
-                                    <span className={`text-xl font-black ${scopeStats.held > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>{formatCurrency(scopeStats.held, currentUser.currency)}</span>
+                                    <span className={`text-[10px] md:text-xs font-bold ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-400'}`}>Held (Locked)</span>
+                                    <span className={`text-sm md:text-xl font-black ${scopeStats.held > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>{formatCurrency(scopeStats.held, currentUser.currency)}</span>
                                 </div>
                             </div>
                          </div>
                          <button 
                             onClick={() => setViewMode('held')}
-                            className={`mt-8 w-full py-4 rounded-2xl transition-all duration-300 border text-[10px] font-black uppercase tracking-[0.2em] 
+                            className={`mt-6 md:mt-8 w-full py-3 md:py-4 rounded-[1.5rem] md:rounded-2xl transition-all duration-300 border text-[9px] md:text-[10px] font-black uppercase tracking-widest md:tracking-[0.2em] 
                                 ${scopeStats.held > 0 ? 'bg-orange-600 border-orange-400 text-white shadow-lg shadow-orange-600/30' : 'bg-white/5 border-white/10 text-blue-400 hover:bg-white/10'}`}
                          >
-                            {scopeStats.held > 0 ? 'Claim Held Eligibility Now \u2192' : 'Check Held Eligibility \u2192'}
+                            {scopeStats.held > 0 ? 'Claim Eligibility \u2192' : 'Check Eligibility \u2192'}
                          </button>
                     </div>
                 </div>
             )}
 
-            <div className="bg-[#0b0f19] p-10 rounded-[3rem] border border-gray-800 shadow-2xl relative overflow-hidden group">
+            <div className="bg-[#0b0f19] p-5 md:p-10 rounded-2xl md:rounded-[3rem] border border-gray-800 shadow-2xl relative overflow-hidden group">
                 <div className="absolute -top-32 -right-32 w-80 h-80 bg-blue-600/10 blur-[120px] group-hover:bg-blue-600/15 transition-all duration-1000"></div>
                 
                 <div className="flex flex-col lg:flex-row justify-between items-stretch gap-10 relative z-10">
@@ -631,7 +631,7 @@ const Referrals: React.FC = () => {
                 </div>
             </div>
 
-            <div className="p-3 bg-[#111827] rounded-[2.5rem] border border-gray-800 shadow-2xl flex flex-wrap gap-2 justify-center">
+            <div className="p-2 md:p-3 bg-[#111827] rounded-2xl md:rounded-[2.5rem] border border-gray-800 shadow-2xl flex flex-wrap gap-1 md:gap-2 justify-center">
                 {[
                     { id: 'earning', label: 'earning', count: directEarners.length + indirectEarners.length, active: 'border-green-400 bg-gradient-to-r from-green-600 to-green-500 text-white shadow-[0_0_15px_rgba(74,222,128,0.4)]', inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' },
                     { id: 'all', label: 'all refferal', count: allNodes.length, active: 'border-blue-400 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_0_15px_rgba(96,165,250,0.4)]', inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' },
@@ -656,19 +656,19 @@ const Referrals: React.FC = () => {
             <div className="min-h-[600px] animate-fade-in">
                 {viewMode === 'earning' && (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
-                        <div className="space-y-8">
-                            <div className="flex items-center gap-4 pl-3 border-l-4 border-blue-500">
-                                <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Direct Earning History (L1)</h3>
-                                <span className="bg-blue-600 text-white px-3 py-0.5 rounded-full text-[10px] font-black uppercase">{directEarners.length} Contributors</span>
+                        <div className="space-y-4 md:space-y-8">
+                            <div className="flex items-center gap-3 md:gap-4 pl-3 border-l-4 border-blue-500">
+                                <h3 className="text-lg md:text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Direct Earning History (L1)</h3>
+                                <span className="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-[9px] md:text-[10px] font-black uppercase">{directEarners.length} Contributors</span>
                             </div>
-                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No Level 1 commissions detected in this network.</div>}
+                            {directEarners.length > 0 ? directEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="py-12 md:p-24 text-center bg-white dark:bg-gray-800 rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No Level 1 commissions detected in this network.</div>}
                         </div>
-                        <div className="space-y-8">
-                            <div className="flex items-center gap-4 pl-3 border-l-4 border-purple-500">
-                                <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Indirect Team Payouts (L2+)</h3>
-                                <span className="bg-purple-600 text-white px-3 py-0.5 rounded-full text-[10px] font-black uppercase">{indirectEarners.length} Contributors</span>
+                        <div className="space-y-4 md:space-y-8">
+                            <div className="flex items-center gap-3 md:gap-4 pl-3 border-l-4 border-purple-500">
+                                <h3 className="text-lg md:text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Indirect Team Payouts (L2+)</h3>
+                                <span className="bg-purple-600 text-white px-2.5 py-0.5 rounded-full text-[9px] md:text-[10px] font-black uppercase">{indirectEarners.length} Contributors</span>
                             </div>
-                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="p-24 text-center bg-white dark:bg-gray-800 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No multi-level payouts found yet.</div>}
+                            {indirectEarners.length > 0 ? indirectEarners.map(node => <ReferralCardContent node={node} showHeldAlert={true} />) : <div className="py-12 md:p-24 text-center bg-white dark:bg-gray-800 rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-400 font-bold italic">No multi-level payouts found yet.</div>}
                         </div>
                     </div>
                 )}
@@ -682,11 +682,11 @@ const Referrals: React.FC = () => {
 
                 {viewMode === 'held' && (
                     <div className="space-y-10">
-                        <div className="bg-gradient-to-br from-orange-500 to-red-600 p-10 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row gap-10 items-center border border-white/10">
-                            <div className="w-24 h-24 bg-white/20 backdrop-blur-2xl flex items-center justify-center rounded-[2rem] text-5xl shrink-0 shadow-inner">🗝️</div>
+                        <div className="bg-gradient-to-br from-orange-500 to-red-600 p-5 md:p-10 rounded-2xl md:rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row gap-6 md:gap-10 items-center border border-white/10">
+                            <div className="w-16 h-16 md:w-24 md:h-24 bg-white/20 backdrop-blur-2xl flex items-center justify-center rounded-[1.5rem] md:rounded-[2rem] text-3xl md:text-5xl shrink-0 shadow-inner">🗝️</div>
                             <div className="text-center md:text-left">
-                                <h4 className="text-3xl font-black uppercase tracking-tighter">Qualification Action Center</h4>
-                                <p className="text-orange-50/80 font-medium mt-2 leading-relaxed max-w-4xl text-lg">
+                                <h4 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Qualification Action Center</h4>
+                                <p className="text-orange-50/80 font-medium mt-1 md:mt-2 leading-relaxed max-w-4xl text-sm md:text-lg">
                                     The team members listed below have triggered commissions that are currently <strong className="underline decoration-wavy underline-offset-4 decoration-white/40">locked</strong>. 
                                     Review each card to see the specific <strong>equivalent plan</strong> requirement needed to instantly claim these funds into your wallet balance.
                                 </p>
@@ -700,38 +700,38 @@ const Referrals: React.FC = () => {
                 )}
 
                 {viewMode === 'tree' && (
-                    <div className="bg-white dark:bg-gray-800 p-16 rounded-[4rem] border border-gray-100 dark:border-gray-700 shadow-2xl">
-                        {genealogyTree.length > 0 ? <ul className="space-y-8">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <div className="py-40 text-center text-gray-400 font-black italic text-xl">The architecture map is waiting for your first contributor in this scope.</div>}
+                    <div className="bg-white dark:bg-gray-800 p-6 md:p-16 rounded-2xl md:rounded-[4rem] border border-gray-100 dark:border-gray-700 shadow-2xl overflow-x-auto no-scrollbar">
+                        {genealogyTree.length > 0 ? <ul className="space-y-6 md:space-y-8">{genealogyTree.map(node => renderTreeNode(node))}</ul> : <div className="py-24 md:py-40 text-center text-gray-400 font-black italic text-lg md:text-xl">The architecture map is waiting for your first contributor in this scope.</div>}
                     </div>
                 )}
 
                 {viewMode === 'overflow' && (
-                    <div className="space-y-10">
-                         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-10 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row gap-10 items-center border border-white/10">
-                            <div className="w-24 h-24 bg-white/20 backdrop-blur-2xl flex items-center justify-center rounded-[2rem] text-5xl shrink-0 shadow-inner">📈</div>
+                    <div className="space-y-6 md:space-y-10">
+                         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 md:p-10 rounded-2xl md:rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row gap-6 md:gap-10 items-center border border-white/10">
+                            <div className="w-16 h-16 md:w-24 md:h-24 bg-white/20 backdrop-blur-2xl flex items-center justify-center rounded-[1.5rem] md:rounded-[2rem] text-3xl md:text-5xl shrink-0 shadow-inner">📈</div>
                             <div className="text-center md:text-left">
-                                <h4 className="text-3xl font-black uppercase tracking-tighter">Network Capacity Insight</h4>
-                                <p className="text-blue-50/80 font-medium mt-2 leading-relaxed max-w-4xl text-lg">
+                                <h4 className="text-xl md:text-3xl font-black uppercase tracking-tighter">Network Capacity Insight</h4>
+                                <p className="text-blue-50/80 font-medium mt-1 md:mt-2 leading-relaxed max-w-4xl text-sm md:text-lg">
                                     The team members listed below have reached your current plan's direct referral limit. <strong className="underline decoration-wavy underline-offset-4 decoration-white/40">You can still earn</strong> from these referrals when a slot is available in any higher plan and your referral buys that plan, then you get commission.
                                 </p>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-40 text-center text-gray-400 font-black italic text-xl">You have full capacity in all your levels. No overflow events recorded.</div>}
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+                            {overflowReferrals.length > 0 ? overflowReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-24 md:py-40 text-center text-gray-400 font-black italic text-lg md:text-xl">You have full capacity in all your levels. No overflow events recorded.</div>}
                         </div>
                     </div>
                 )}
 
                 {viewMode === 'inactive' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                        {inactiveReferrals.length > 0 ? inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-40 text-center text-gray-400 font-black italic text-xl">Every member of your network is currently an active contributor. Excellent leadership!</div>}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+                        {inactiveReferrals.length > 0 ? inactiveReferrals.map(node => <ReferralCardContent key={node.user._id} node={node} />) : <div className="col-span-full py-24 md:py-40 text-center text-gray-400 font-black italic text-lg md:text-xl">Every member of your network is currently an active contributor. Excellent leadership!</div>}
                     </div>
                 )}
             </div>
 
             {isSponsorModalOpen && selectedSponsor && (
                 <Modal isOpen={isSponsorModalOpen} onClose={() => setIsSponsorModalOpen(false)}>
-                    <div className="p-12 max-w-md text-center bg-white dark:bg-gray-900 rounded-[4rem]">
+                    <div className="p-6 md:p-12 max-w-md text-center bg-white dark:bg-gray-900 rounded-2xl md:rounded-[4rem]">
                         <div className="mb-10 inline-flex items-center justify-center w-28 h-28 rounded-[2.5rem] bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-5xl font-black shadow-inner shadow-blue-500/20">{selectedSponsor.fullName.charAt(0)}</div>
                         <h3 className="text-3xl font-black text-gray-900 dark:text-white mb-2 tracking-tighter">{selectedSponsor.fullName}</h3>
                         <p className="text-sm text-gray-400 font-black uppercase tracking-[0.3em] mb-12">@{selectedSponsor.username}</p>

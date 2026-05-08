@@ -53,6 +53,7 @@ const TransferFunds: React.FC = () => {
     const [isManualEntry, setIsManualEntry] = useState(false);
     const [amount, setAmount] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [expandedTransferId, setExpandedTransferId] = useState<string | null>(null);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
     const [fee, setFee] = useState(0);
@@ -608,7 +609,7 @@ const TransferFunds: React.FC = () => {
 
                 {paginatedTransfers.length > 0 ? (
                     <>
-                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                        <div className="hidden md:block overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
                             <Table headers={['Date', 'Type', 'Counterparty', 'Allocation', 'impact', 'Status']}>
                                 {paginatedTransfers.map(transfer => {
                                     const isSender = transfer.senderId === currentUser._id;
@@ -635,6 +636,81 @@ const TransferFunds: React.FC = () => {
                                     )
                                 })}
                             </Table>
+                        </div>
+
+                        {/* Mobile View Settlement Ledger */}
+                        <div className="md:hidden space-y-4">
+                            {paginatedTransfers.map(transfer => {
+                                const isSender = transfer.senderId === currentUser._id;
+                                const counterpartyName = isSender ? transfer.recipientName : transfer.senderName;
+                                const directionLabel = isSender ? 'Sent' : 'Received';
+                                const amountColor = isSender ? 'text-red-500' : 'text-green-500';
+                                const amountPrefix = isSender ? '-' : '+';
+                                
+                                return (
+                                    <div key={transfer._id} className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden transition-all duration-300">
+                                         <div 
+                                            className="p-4 flex items-center justify-between cursor-pointer"
+                                            onClick={() => setExpandedTransferId(expandedTransferId === transfer._id ? null : transfer._id)}
+                                         >
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1.5 mb-0.5">
+                                                    <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${isSender ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
+                                                        {directionLabel}
+                                                    </span>
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate max-w-[100px]">
+                                                        @{counterpartyName}
+                                                    </span>
+                                                </div>
+                                                <span className={`text-sm font-black ${amountColor}`}>
+                                                    {amountPrefix}{formatCurrency(isSender ? (transfer.totalDeducted || transfer.amount) : transfer.amount, transfer.currency)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <Badge status={transfer.status as Status} />
+                                                <div className={`w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-blue-500 transition-transform shadow-sm ${expandedTransferId === transfer._id ? 'rotate-180' : ''}`}>
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                                </div>
+                                            </div>
+                                         </div>
+                                         
+                                         {expandedTransferId === transfer._id && (
+                                            <div className="p-4 bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 animate-fade-in text-left">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="col-span-2 flex justify-between items-center border-b dark:border-gray-800 pb-2">
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date</p>
+                                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{new Date(transfer.date).toLocaleString()}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Type</p>
+                                                            <p className={`text-xs font-black uppercase ${isSender ? 'text-orange-500' : 'text-green-500'}`}>{directionLabel}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Impact Amount</p>
+                                                        <p className={`text-xs font-bold ${amountColor}`}>
+                                                            {amountPrefix}{formatCurrency(isSender ? (transfer.totalDeducted || transfer.amount) : transfer.amount, transfer.currency)}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Base Amount</p>
+                                                        <p className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                            {formatCurrency(transfer.amount, transfer.currency)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 pt-2 border-t dark:border-gray-800">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{isSender ? 'Recipient' : 'Sender'}</p>
+                                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase truncate">
+                                                            @{counterpartyName}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                         )}
+                                    </div>
+                                );
+                            })}
                         </div>
                         {/* Pagination Controls */}
                         <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">

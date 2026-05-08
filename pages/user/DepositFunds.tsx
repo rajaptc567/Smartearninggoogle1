@@ -98,6 +98,7 @@ const DepositFunds: React.FC = () => {
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [transactionId, setTransactionId] = useState('');
+    const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
     const [senderAccountTitle, setSenderAccountTitle] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const [userNotes, setUserNotes] = useState('');
@@ -484,7 +485,7 @@ const DepositFunds: React.FC = () => {
 
                 {paginatedDeposits.length > 0 ? (
                     <>
-                        <div className="overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
+                        <div className="hidden md:block overflow-hidden rounded-3xl border border-gray-50 dark:border-gray-800 shadow-inner">
                             <Table headers={['Date', 'Provider', 'Amount', 'Trx ID', 'Status']}>
                                 {paginatedDeposits.map(deposit => (
                                     <tr key={deposit._id} className="text-gray-700 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-blue-900/5 transition-colors group">
@@ -498,6 +499,50 @@ const DepositFunds: React.FC = () => {
                                     </tr>
                                 ))}
                             </Table>
+                        </div>
+
+                        {/* Mobile View Audit Log */}
+                        <div className="md:hidden space-y-4">
+                            {paginatedDeposits.map(deposit => (
+                                <div key={deposit._id} className="bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden transition-all duration-300">
+                                    <div 
+                                        className="p-4 flex items-center justify-between cursor-pointer"
+                                        onClick={() => setExpandedDepositId(expandedDepositId === deposit._id ? null : deposit._id)}
+                                    >
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{deposit.method}</span>
+                                            <span className="text-sm font-black text-gray-900 dark:text-white">{formatCurrency(deposit.amount, deposit.currency)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Badge status={deposit.status as Status} />
+                                            <div className={`w-8 h-8 rounded-full bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center text-blue-500 transition-transform shadow-sm ${expandedDepositId === deposit._id ? 'rotate-180' : ''}`}>
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {expandedDepositId === deposit._id && (
+                                        <div className="p-4 bg-white dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</p>
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{new Date(deposit.date).toLocaleString()}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Transaction ID</p>
+                                                    <p className="text-xs font-mono font-bold text-blue-500 break-all select-all">{deposit.transactionId}</p>
+                                                </div>
+                                                {deposit.notes && (
+                                                    <div className="col-span-2 pt-2 border-t dark:border-gray-800">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Admin Notes</p>
+                                                        <p className="text-[10px] text-gray-500 italic">"{deposit.notes}"</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                         {/* Pagination Controls */}
                         <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4 border-t dark:border-gray-800 pt-6">
