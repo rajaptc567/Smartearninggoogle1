@@ -23,6 +23,7 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
+    isDataLoaded: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -35,26 +36,26 @@ const defaultHomepageContent: HomepageContent = {
     showVideoSection: true,
     showFAQ: true,
     showCTA: true,
-    heroTitle: "Invest in Your Future, Grow Your Network",
-    heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
-    feature1Title: "Secure Investments",
-    feature1Desc: "Your funds and data are protected with industry-standard security measures.",
-    feature2Title: "Powerful MLM System",
-    feature2Desc: "Earn commissions not just from your referrals, but from their referrals too.",
-    feature3Title: "Real-Time Tracking",
-    feature3Desc: "Monitor your earnings, network growth, and transactions with our intuitive dashboard.",
-    videoTitle: "See How It Works",
-    videoDesc: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals.",
-    multiCurrencyTitle: "Global Reach, Local Convenience",
-    multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
-    mlmTitle: "Understanding Our Earning System",
-    mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
-    paymentMethodsTitle: "Supported Payment Partners",
-    paymentMethodsDesc: "We support a variety of secure payment gateways for your convenience.",
+    heroTitle: "",
+    heroSubtitle: "",
+    feature1Title: "",
+    feature1Desc: "",
+    feature2Title: "",
+    feature2Desc: "",
+    feature3Title: "",
+    feature3Desc: "",
+    videoTitle: "",
+    videoDesc: "",
+    multiCurrencyTitle: "",
+    multiCurrencyDesc: "",
+    mlmTitle: "",
+    mlmDesc: "",
+    paymentMethodsTitle: "",
+    paymentMethodsDesc: "",
     paymentMethodsDisplayType: 'static',
     paymentMethodsColorStyle: 'color',
-    ctaTitle: "Ready to Start Your Journey?",
-    ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
+    ctaTitle: "",
+    ctaDesc: ""
 };
 
 const initialState: AppState = {
@@ -105,38 +106,20 @@ const initialState: AppState = {
             PKR: { min: 5000, max: 50000 },
         },
         demoProfiles: [],
-        homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
+        homepageVideoUrl: '',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
-        faqs: [
-            { 
-                question: "How do I earn commissions through the level system?", 
-                answer: "SmartEarning uses a multi-level marketing structure. You earn 'Direct Commissions' (Level 1) from people you personally invite using your link.",
-                showOnHomepage: true
-            },
-            { 
-                question: "Why is my commission status showing as 'Held' or 'Pending'?", 
-                answer: "Commissions are placed on 'Held' status if you do not currently own an active investment plan that is equivalent to the plan purchased by your referral.",
-                showOnHomepage: true
-            },
-            {
-                question: "What happens when a plan's referral 'Slot Limit' is reached?",
-                answer: "Each investment plan has a specific number of 'Direct Slots' available for Level 1 commissions. If you reach this limit, new direct referrals will trigger an 'Overflow' event.",
-                showOnHomepage: true
-            }
-        ],
-        homepagePaymentLogos: [
-            { name: "Binance", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Binance_Logo.png" },
-            { name: "Visa", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" },
-            { name: "Mastercard", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" }
-        ],
+        faqs: [],
+        homepagePaymentLogos: [],
     },
     notifications: [],
     logs: [],
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
+    isDataLoaded: false,
 };
+
 
 type Action =
     | { type: 'SET_ALL_DATA'; payload: Partial<AppState> }
@@ -222,7 +205,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
             }
-            newState = { ...state, ...sanitizedPayload };
+            newState = { ...state, ...sanitizedPayload, isDataLoaded: true };
             break;
 
         case 'SET_CURRENT_USER':
@@ -360,7 +343,7 @@ const initializer = (initialState: AppState) => {
                 const parsedCache = JSON.parse(appCache);
                 if (parsedCache) {
                     // Safe merge of cached settings and user info
-                    initialData = { ...initialData, ...parsedCache };
+                    initialData = { ...initialData, ...parsedCache, isDataLoaded: false }; // Always set false initially to ensure fresh fetch
                 }
             } catch (e) {
                 console.warn("Invalid app cache structure");

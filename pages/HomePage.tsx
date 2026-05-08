@@ -180,7 +180,7 @@ const MLMDiagram = () => (
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
     const { state, dispatch } = useData();
-    const { settings, investmentPlans, currentUser } = state;
+    const { settings, investmentPlans, currentUser, isDataLoaded } = state;
 
     const [editMode, setEditMode] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -350,6 +350,18 @@ const HomePage: React.FC = () => {
         if (editMode) return localFaqs;
         return localFaqs.filter(f => f.showOnHomepage);
     }, [localFaqs, editMode]);
+
+    if (!isDataLoaded) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+                <div className="relative w-20 h-20">
+                    <div className="absolute inset-0 border-4 border-blue-200 dark:border-blue-900 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-0 border-t-4 border-blue-600 rounded-full animate-spin"></div>
+                </div>
+                <p className="mt-4 text-gray-500 dark:text-gray-400 font-medium animate-pulse">Loading amazing content...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen font-sans">
