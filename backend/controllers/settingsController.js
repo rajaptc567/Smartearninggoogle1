@@ -6,17 +6,7 @@ export const getSettings = async (req, res) => {
         const settings = await Setting.getSettings();
         res.status(200).json({ success: true, data: settings });
     } catch (err) {
-        // Fallback to an empty but correctly structured object to avoid frontend crashes
-        res.status(200).json({ 
-            success: false, 
-            data: {
-                exchangeRates: { USD: 1, EUR: 0.92, PKR: 278 },
-                homepageContent: {},
-                faqs: [],
-                homepagePaymentLogos: []
-            }, 
-            error: err.message 
-        });
+        res.status(200).json({ success: false, data: {}, error: err.message });
     }
 };
 

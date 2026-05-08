@@ -23,7 +23,6 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
-    isDataLoaded: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -36,26 +35,26 @@ const defaultHomepageContent: HomepageContent = {
     showVideoSection: true,
     showFAQ: true,
     showCTA: true,
-    heroTitle: "",
-    heroSubtitle: "",
-    feature1Title: "",
-    feature1Desc: "",
-    feature2Title: "",
-    feature2Desc: "",
-    feature3Title: "",
-    feature3Desc: "",
-    videoTitle: "",
-    videoDesc: "",
-    multiCurrencyTitle: "",
-    multiCurrencyDesc: "",
-    mlmTitle: "",
-    mlmDesc: "",
-    paymentMethodsTitle: "",
-    paymentMethodsDesc: "",
+    heroTitle: "Invest in Your Future, Grow Your Network",
+    heroSubtitle: "SmartEarning provides a secure platform to manage your investments and leverage your network for greater earning potential.",
+    feature1Title: "Secure Investments",
+    feature1Desc: "Your funds and data are protected with industry-standard security measures.",
+    feature2Title: "Powerful MLM System",
+    feature2Desc: "Earn commissions not just from your referrals, but from their referrals too.",
+    feature3Title: "Real-Time Tracking",
+    feature3Desc: "Monitor your earnings, network growth, and transactions with our intuitive dashboard.",
+    videoTitle: "See How It Works",
+    videoDesc: "Discover the power of our platform in this short overview. Watch how you can leverage your network to achieve your financial goals.",
+    multiCurrencyTitle: "Global Reach, Local Convenience",
+    multiCurrencyDesc: "Our platform is built for a global audience. Invest, earn, and withdraw in the currency that works for you.",
+    mlmTitle: "Understanding Our Earning System",
+    mlmDesc: "Our platform uses a Multi-Level Marketing (MLM) structure, which allows you to earn commissions from multiple levels of your network.",
+    paymentMethodsTitle: "Supported Payment Partners",
+    paymentMethodsDesc: "We support a variety of secure payment gateways for your convenience.",
     paymentMethodsDisplayType: 'static',
     paymentMethodsColorStyle: 'color',
-    ctaTitle: "",
-    ctaDesc: ""
+    ctaTitle: "Ready to Start Your Journey?",
+    ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
 };
 
 const initialState: AppState = {
@@ -106,20 +105,16 @@ const initialState: AppState = {
             PKR: { min: 5000, max: 50000 },
         },
         demoProfiles: [],
-        homepageVideoUrl: '',
+        homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
-        faqs: [],
-        homepagePaymentLogos: [],
     },
     notifications: [],
     logs: [],
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
-    isDataLoaded: false,
 };
-
 
 type Action =
     | { type: 'SET_ALL_DATA'; payload: Partial<AppState> }
@@ -173,17 +168,8 @@ type Action =
 
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
-        if (!settings || Object.keys(settings).length === 0) return state.settings;
+        if (!settings) return state.settings;
         const newSettings = { ...settings };
-        if (!newSettings.homepageContent || Object.keys(newSettings.homepageContent).length === 0) {
-            newSettings.homepageContent = state.settings.homepageContent;
-        }
-        if (!newSettings.faqs || newSettings.faqs.length === 0) {
-            newSettings.faqs = state.settings.faqs;
-        }
-        if (!newSettings.homepagePaymentLogos || newSettings.homepagePaymentLogos.length === 0) {
-            newSettings.homepagePaymentLogos = state.settings.homepagePaymentLogos;
-        }
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
         }
@@ -205,7 +191,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
             }
-            newState = { ...state, ...sanitizedPayload, isDataLoaded: true };
+            newState = { ...state, ...sanitizedPayload };
             break;
 
         case 'SET_CURRENT_USER':
@@ -343,7 +329,7 @@ const initializer = (initialState: AppState) => {
                 const parsedCache = JSON.parse(appCache);
                 if (parsedCache) {
                     // Safe merge of cached settings and user info
-                    initialData = { ...initialData, ...parsedCache, isDataLoaded: false }; // Always set false initially to ensure fresh fetch
+                    initialData = { ...initialData, ...parsedCache };
                 }
             } catch (e) {
                 console.warn("Invalid app cache structure");
@@ -375,69 +361,40 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
         const fetchData = async () => {
-            const token = localStorage.getItem('authToken');
-            
             try {
-                // Step 1: Prioritize essential homepage data to unblock UI fast
-                const essentialPromises = [
-                    getSettings(),
-                    getInvestmentPlans(),
-                    getPaymentMethods(),
+                const results = await Promise.allSettled([
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
                     getDataVersion()
-                ];
-
-                const essentialResults = await Promise.allSettled(essentialPromises);
+                ]);
                 
-                const getEssValue = (idx: number, fallback: any) => 
-                    essentialResults[idx].status === 'fulfilled' ? (essentialResults[idx] as PromiseFulfilledResult<any>).value : fallback;
+                const getValue = (idx: number, fallback: any) => 
+                    results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
 
-                const publicSettings = getEssValue(0, state.settings);
-                const publicPlans = getEssValue(1, []);
-                const publicMethods = getEssValue(2, []);
-                const serverVersion = getEssValue(3, 0);
-                lastVersionRef.current = serverVersion;
-
-                // Dispatch essential data immediately to show homepage
-                dispatch({ 
-                    type: 'SET_ALL_DATA', 
-                    payload: { 
-                        settings: publicSettings,
-                        investmentPlans: publicPlans,
-                        paymentMethods: publicMethods
-                    } 
-                });
-
-                if (!token) return;
-
-                // Step 2: Authenticated user - fetch private data in background
-                const privatePromises = [
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
-                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                ];
-
-                const privateResults = await Promise.allSettled(privatePromises);
-                const getPrivValue = (idx: number, fallback: any) => 
-                    privateResults[idx].status === 'fulfilled' ? (privateResults[idx] as PromiseFulfilledResult<any>).value : fallback;
+                const currentVersion = getValue(14, 0);
+                lastVersionRef.current = currentVersion;
 
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
-                        users: getPrivValue(0, []),
-                        deposits: getPrivValue(1, []),
-                        withdrawals: getPrivValue(2, []),
-                        transactions: getPrivValue(3, []),
-                        notifications: getPrivValue(4, []),
-                        rules: getPrivValue(5, []),
-                        transfers: getPrivValue(6, []),
-                        logs: getPrivValue(7, []),
-                        passwordResetRequests: getPrivValue(8, []),
-                        disputes: getPrivValue(9, []),
-                        tasks: getPrivValue(10, [])
+                        users: getValue(0, []),
+                        deposits: getValue(1, []),
+                        withdrawals: getValue(2, []),
+                        transactions: getValue(3, []),
+                        notifications: getValue(4, []),
+                        paymentMethods: getValue(5, []),
+                        investmentPlans: getValue(6, []),
+                        rules: getValue(7, []),
+                        settings: getValue(8, state.settings),
+                        transfers: getValue(9, []),
+                        logs: getValue(10, []),
+                        passwordResetRequests: getValue(11, []),
+                        disputes: getValue(12, []),
+                        tasks: getValue(13, [])
                     } 
                 });
             } catch (error) {
                 console.error("Critical error during initial data handshake:", error);
-                dispatch({ type: 'SET_ALL_DATA', payload: {} });
             }
         };
 
