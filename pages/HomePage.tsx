@@ -351,14 +351,20 @@ const HomePage: React.FC = () => {
         return localFaqs.filter(f => f.showOnHomepage);
     }, [localFaqs, editMode]);
 
-    if (!isDataLoaded) {
+    // Determine if we have enough essential data to show the layout
+    const hasEssentialData = settings.homepageContent && (settings.homepageContent.heroTitle || settings.homepageContent.heroSubtitle);
+
+    if (!isDataLoaded && !hasEssentialData) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-                <div className="relative w-20 h-20">
-                    <div className="absolute inset-0 border-4 border-blue-200 dark:border-blue-900 rounded-full animate-pulse"></div>
-                    <div className="absolute inset-0 border-t-4 border-blue-600 rounded-full animate-spin"></div>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                <div className="relative w-24 h-24">
+                    <div className="absolute inset-0 border-8 border-blue-500/10 rounded-full"></div>
+                    <div className="absolute inset-0 border-t-8 border-blue-600 rounded-full animate-spin"></div>
                 </div>
-                <p className="mt-4 text-gray-500 dark:text-gray-400 font-medium animate-pulse">Loading amazing content...</p>
+                <div className="mt-8 space-y-2 text-center">
+                    <div className="h-6 w-48 bg-gray-200 dark:bg-gray-800 rounded animate-pulse mx-auto"></div>
+                    <div className="h-4 w-32 bg-gray-100 dark:bg-gray-800/50 rounded animate-pulse mx-auto"></div>
+                </div>
             </div>
         );
     }

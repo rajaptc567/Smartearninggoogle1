@@ -343,7 +343,7 @@ const initializer = (initialState: AppState) => {
                 const parsedCache = JSON.parse(appCache);
                 if (parsedCache) {
                     // Safe merge of cached settings and user info
-                    initialData = { ...initialData, ...parsedCache, isDataLoaded: false }; // Always set false initially to ensure fresh fetch
+                    initialData = { ...initialData, ...parsedCache, isDataLoaded: true }; 
                 }
             } catch (e) {
                 console.warn("Invalid app cache structure");
@@ -403,7 +403,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     payload: { 
                         settings: publicSettings,
                         investmentPlans: publicPlans,
-                        paymentMethods: publicMethods
+                        paymentMethods: publicMethods,
+                        isDataLoaded: true
                     } 
                 });
 
