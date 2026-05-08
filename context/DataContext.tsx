@@ -57,6 +57,32 @@ const defaultHomepageContent: HomepageContent = {
     ctaDesc: "Join a community of forward-thinkers. Sign up today and unlock your earning potential."
 };
 
+const defaultFaqs: FaqItem[] = [
+    { 
+        question: "How do I earn commissions through the level system?", 
+        answer: "SmartEarning uses a multi-level marketing structure. You earn 'Direct Commissions' (Level 1) from people you personally invite using your link. Additionally, you earn 'Indirect Commissions' (Level 2 and beyond) from referrals made by your team members, creating multiple streams of passive income.",
+        showOnHomepage: true
+    },
+    { 
+        question: "Why is my commission status showing as 'Held' or 'Pending'?", 
+        answer: "Commissions are placed on 'Held' status if you do not currently own an active investment plan that is equivalent to the plan purchased by your referral. This ensures a fair ecosystem where active participants benefit from network growth. Once you purchase the required plan, all held funds are instantly released to your wallet.",
+        showOnHomepage: true
+    },
+    { 
+        question: "What happens when a plan's referral 'Slot Limit' is reached?", 
+        answer: "Each investment plan has a specific number of 'Direct Slots' available for Level 1 commissions. If you reach this limit, new direct referrals will trigger an 'Overflow' event. In this case, the commission is skipped for that specific plan tier. To continue earning from new direct referrals, you should upgrade to a higher-tier plan which offers more slots or unlimited capacity.",
+        showOnHomepage: true
+    }
+];
+
+const defaultPaymentLogos: HomepagePaymentLogo[] = [
+    { name: 'Easypaisa', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/archive/8/82/20210207125345%21Easypaisa_logo.png' },
+    { name: 'JazzCash', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/e/e8/JazzCash_logo.png' },
+    { name: 'Bank Transfer', logoUrl: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png' },
+    { name: 'PayPal', logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg' },
+    { name: 'Crypto', logoUrl: 'https://upload.wikimedia.org/wikipedia/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png' }
+];
+
 const initialState: AppState = {
     users: [],
     deposits: [],
@@ -107,6 +133,8 @@ const initialState: AppState = {
         demoProfiles: [],
         homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
+        homepagePaymentLogos: defaultPaymentLogos,
+        faqs: defaultFaqs,
         featuredPlanIds: [],
     },
     notifications: [],
@@ -170,6 +198,21 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
         if (!settings) return state.settings;
         const newSettings = { ...settings };
+        
+        // Deep merge homepage content to ensure defaults exist
+        newSettings.homepageContent = {
+            ...defaultHomepageContent,
+            ...(newSettings.homepageContent || {})
+        };
+
+        // Ensure default lists aren't empty if server returns nothing
+        if (!newSettings.faqs || newSettings.faqs.length === 0) {
+            newSettings.faqs = defaultFaqs;
+        }
+        if (!newSettings.homepagePaymentLogos || newSettings.homepagePaymentLogos.length === 0) {
+            newSettings.homepagePaymentLogos = defaultPaymentLogos;
+        }
+
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
         }
