@@ -23,6 +23,7 @@ interface AppState {
     passwordResetRequests: PasswordResetRequest[];
     disputes: Dispute[];
     currentUser: User | null;
+    isLoading: boolean;
 }
 
 const defaultHomepageContent: HomepageContent = {
@@ -105,7 +106,7 @@ const initialState: AppState = {
             PKR: { min: 5000, max: 50000 },
         },
         demoProfiles: [],
-        homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
+        homepageVideoUrl: '',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
         faqs: [],
@@ -116,6 +117,7 @@ const initialState: AppState = {
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
+    isLoading: true,
 };
 
 type Action =
@@ -165,7 +167,8 @@ type Action =
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } };
+    | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } }
+    | { type: 'SET_LOADING'; payload: boolean };
 
 
 const dataReducer = (state: AppState, action: Action): AppState => {
@@ -295,6 +298,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_TASK': newState = { ...state, tasks: state.tasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
         case 'DELETE_TASK': newState = { ...state, tasks: state.tasks.filter(t => t._id !== action.payload) }; break;
 
+        case 'SET_LOADING':
+            newState = { ...state, isLoading: action.payload };
+            break;
+
         default:
             return state;
     }
@@ -413,8 +420,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                         tasks: getValue(privateResults, 10, [])
                     } 
                 });
+                dispatch({ type: 'SET_LOADING', payload: false });
             } catch (error) {
                 console.error("Critical error during initial data handshake:", error);
+                dispatch({ type: 'SET_LOADING', payload: false });
             }
         };
 

@@ -6,6 +6,16 @@ import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
 
+import { Loader2 } from 'lucide-react';
+
+// --- Loading Component ---
+const SectionLoading: React.FC<{ text?: string }> = ({ text = "Waiting data is loading" }) => (
+    <div className="flex flex-col items-center justify-center py-20 w-full animate-pulse">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+        <p className="text-gray-500 font-medium tracking-wide">{text}</p>
+    </div>
+);
+
 // --- Reusable Editable Text Component ---
 interface EditableTextProps {
   editMode: boolean;
@@ -629,38 +639,42 @@ const HomePage: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className={`relative ${pmDisplayType === 'sliding' ? 'w-full' : ''}`}>
-                                {pmDisplayType === 'sliding' ? (
-                                    <div className="flex animate-slide gap-8 items-center">
-                                        {slidingMethods.map((pm, idx) => (
-                                            <PaymentMethodCard key={`${pm.name}-${idx}`} pm={pm} colorStyle={pmColorStyle} />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
-                                        {activePaymentMethods.map((pm, idx) => (
-                                            <div key={idx} className={pmDisplayType === 'pulsing' ? 'animate-pulse' : ''}>
-                                                <PaymentMethodCard pm={pm} colorStyle={pmColorStyle} />
-                                            </div>
-                                        ))}
-                                        {activePaymentMethods.length === 0 && (
-                                            <div className="text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg w-full max-w-lg mx-auto">
-                                                <p className="text-gray-500 dark:text-gray-400 mb-2">No payment logos configured.</p>
-                                                {currentUser?.username === 'admin' && (
-                                                    <Button size="sm" onClick={() => navigate('/admin/settings')}>Add Payment Logos</Button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                            {state.isLoading ? (
+                                <SectionLoading text="Fresh data is loading." />
+                            ) : (
+                                <div className={`relative ${pmDisplayType === 'sliding' ? 'w-full' : ''}`}>
+                                    {pmDisplayType === 'sliding' ? (
+                                        <div className="flex animate-slide gap-8 items-center">
+                                            {slidingMethods.map((pm, idx) => (
+                                                <PaymentMethodCard key={`${pm.name}-${idx}`} pm={pm} colorStyle={pmColorStyle} />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
+                                            {activePaymentMethods.map((pm, idx) => (
+                                                <div key={idx} className={pmDisplayType === 'pulsing' ? 'animate-pulse' : ''}>
+                                                    <PaymentMethodCard pm={pm} colorStyle={pmColorStyle} />
+                                                </div>
+                                            ))}
+                                            {activePaymentMethods.length === 0 && (
+                                                <div className="text-center p-8 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg w-full max-w-lg mx-auto">
+                                                    <p className="text-gray-500 dark:text-gray-400 mb-2">No payment logos configured.</p>
+                                                    {currentUser?.username === 'admin' && (
+                                                        <Button size="sm" onClick={() => navigate('/admin/settings')}>Add Payment Logos</Button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </section>
                 )}
 
                 {/* Video Showcase Section */}
-                {(showVideoSection && (settings.homepageVideoUrl || editMode)) && (
-                    <section className={`py-20 bg-gray-900 text-white ${!showVideoSection && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                {(showVideoSection && (videoUrl || editMode)) && (
+                    <section className={`py-20 bg-gray-900 text-white relative ${!showVideoSection && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             {editMode && !showVideoSection && (
                                 <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>
@@ -680,10 +694,13 @@ const HomePage: React.FC = () => {
                                         className="w-full rounded-md bg-gray-700 border-gray-600 text-white p-3 focus:ring-2 focus:ring-blue-500"
                                         placeholder="https://www.youtube.com/embed/..."
                                     />
+                                    <p className="text-xs text-gray-500 mt-2 italic">Note: Video showcase is only visible to guests when a URL is provided and enabled.</p>
                                 </div>
                             )}
 
-                            {videoUrl && (
+                            {state.isLoading ? (
+                                <SectionLoading text="Fresh data is loading." />
+                            ) : videoUrl ? (
                                 <div className="aspect-w-16 aspect-h-9 max-w-5xl mx-auto rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-black">
                                     <iframe
                                         className="w-full h-full"
@@ -694,7 +711,11 @@ const HomePage: React.FC = () => {
                                         allowFullScreen>
                                     </iframe>
                                 </div>
-                            )}
+                            ) : editMode ? (
+                                <div className="text-center p-12 border-2 border-dashed border-gray-700 rounded-2xl">
+                                    <p className="text-gray-500">No video URL provided. Showcase will be hidden from guests.</p>
+                                </div>
+                            ) : null}
                         </div>
                     </section>
                 )}
@@ -709,65 +730,69 @@ const HomePage: React.FC = () => {
                                 <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                                {displayedFaqs.map((faq, index) => (
-                                    <div key={index} className={`bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-xl hover:border-blue-500/30 group ${!editMode && openFaqIndex === index ? 'ring-2 ring-blue-500/10 border-blue-500/40 bg-white dark:bg-gray-800' : ''}`}>
-                                        {editMode ? (
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Question #{index + 1}</span>
-                                                        <button 
-                                                            onClick={() => handleFaqChange(index, 'showOnHomepage', !faq.showOnHomepage)}
-                                                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-black uppercase transition-all ${faq.showOnHomepage ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200' : 'bg-gray-100 text-gray-400'}`}
-                                                            title={faq.showOnHomepage ? "Featured on Home" : "Set as Featured"}
-                                                        >
-                                                            <StarIcon filled={faq.showOnHomepage} className="w-3.5 h-3.5" />
-                                                            {faq.showOnHomepage ? 'Featured' : 'Mark Featured'}
-                                                        </button>
+                            {state.isLoading ? (
+                                <SectionLoading text="Fresh data is loading." />
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                                    {displayedFaqs.map((faq, index) => (
+                                        <div key={index} className={`bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-xl hover:border-blue-500/30 group ${!editMode && openFaqIndex === index ? 'ring-2 ring-blue-500/10 border-blue-500/40 bg-white dark:bg-gray-800' : ''}`}>
+                                            {editMode ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Question #{index + 1}</span>
+                                                            <button 
+                                                                onClick={() => handleFaqChange(index, 'showOnHomepage', !faq.showOnHomepage)}
+                                                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-black uppercase transition-all ${faq.showOnHomepage ? 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200' : 'bg-gray-100 text-gray-400'}`}
+                                                                title={faq.showOnHomepage ? "Featured on Home" : "Set as Featured"}
+                                                            >
+                                                                <StarIcon filled={faq.showOnHomepage} className="w-3.5 h-3.5" />
+                                                                {faq.showOnHomepage ? 'Featured' : 'Mark Featured'}
+                                                            </button>
+                                                        </div>
+                                                        <button onClick={() => handleDeleteFaq(index)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon /></button>
                                                     </div>
-                                                    <button onClick={() => handleDeleteFaq(index)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon /></button>
+                                                    <input 
+                                                        type="text" 
+                                                        className="w-full font-bold text-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                                        value={faq.question} 
+                                                        onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
+                                                        placeholder="Enter Question..."
+                                                    />
+                                                    <textarea 
+                                                        className="w-full text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                                        value={faq.answer} 
+                                                        onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
+                                                        placeholder="Enter Detailed Answer..."
+                                                    />
                                                 </div>
-                                                <input 
-                                                    type="text" 
-                                                    className="w-full font-bold text-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 outline-none" 
-                                                    value={faq.question} 
-                                                    onChange={(e) => handleFaqChange(index, 'question', e.target.value)} 
-                                                    placeholder="Enter Question..."
-                                                />
-                                                <textarea 
-                                                    className="w-full text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl p-3 h-32 focus:ring-2 focus:ring-blue-500 outline-none" 
-                                                    value={faq.answer} 
-                                                    onChange={(e) => handleFaqChange(index, 'answer', e.target.value)} 
-                                                    placeholder="Enter Detailed Answer..."
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col h-full">
-                                                <button 
-                                                    onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
-                                                    className="flex justify-between items-start w-full text-left focus:outline-none"
-                                                >
-                                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-start gap-3 pr-4">
-                                                        <span className="text-blue-500 font-black shrink-0">Q.</span>
-                                                        {faq.question}
-                                                    </h3>
-                                                    <div className={`mt-1.5 p-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 transition-colors ${openFaqIndex === index ? 'bg-blue-600 text-white' : ''}`}>
-                                                        <ChevronDownIcon className={openFaqIndex === index ? 'rotate-180' : ''} />
-                                                    </div>
-                                                </button>
-                                                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === index ? 'max-h-[500px] opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
-                                                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                                                        <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
-                                                            {faq.answer}
-                                                        </p>
+                                            ) : (
+                                                <div className="flex flex-col h-full">
+                                                    <button 
+                                                        onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                                                        className="flex justify-between items-start w-full text-left focus:outline-none"
+                                                    >
+                                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-start gap-3 pr-4">
+                                                            <span className="text-blue-500 font-black shrink-0">Q.</span>
+                                                            {faq.question}
+                                                        </h3>
+                                                        <div className={`mt-1.5 p-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 transition-colors ${openFaqIndex === index ? 'bg-blue-600 text-white' : ''}`}>
+                                                            <ChevronDownIcon className={openFaqIndex === index ? 'rotate-180' : ''} />
+                                                        </div>
+                                                    </button>
+                                                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === index ? 'max-h-[500px] opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
+                                                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                                                            <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
+                                                                {faq.answer}
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             
                             {!editMode && localFaqs.length > displayedFaqs.length && (
                                 <div className="text-center mt-16 animate-bounce">
