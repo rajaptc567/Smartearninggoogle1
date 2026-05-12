@@ -30,7 +30,14 @@ import taskRoutes from './routes/taskRoutes.js';
 // Load env vars
 dotenv.config();
 
+import { createServer } from 'http';
+import { initSocket } from './utils/socket.js';
+
 const app = express();
+const httpServer = createServer(app);
+
+// Initialize Socket.io
+initSocket(httpServer);
 
 /**
  * INFRASTRUCTURE SETTINGS
@@ -122,17 +129,51 @@ app.use((err, req, res, next) => {
     res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 3000;
 
 /**
  * ASYNC STARTUP
  */
+import mongoose from 'mongoose';
+import { emitDataUpdate } from './utils/socket.js';
+
+// Global Mongoose Plugin for Real-time Updates
+mongoose.plugin((schema) => {
+    const broadcastChange = (doc) => {
+        const modelName = doc.constructor.modelName || 'System';
+        emitDataUpdate(modelName, { _id: doc._id });
+    };
+
+    schema.post('save', broadcastChange);
+    schema.post('findOneAndUpdate', (doc) => doc && broadcastChange(doc));
+    schema.post('findOneAndDelete', (doc) => doc && broadcastChange(doc));
+});
+
+import { createServer as createViteServer } from 'vite';
+
 const startServer = async () => {
     try {
         await connectDB();
         await seedAdminUser();
         
-        app.listen(PORT, () => {
+        // --- VITE MIDDLEWARE FOR UNIFIED FULL-STACK ---
+        if (process.env.NODE_ENV !== 'production') {
+            const vite = await createViteServer({
+                server: { middlewareMode: true },
+                appType: 'spa',
+            });
+            app.use(vite.middlewares);
+        } else {
+            const distPath = path.join(process.cwd(), 'dist');
+            if (fs.existsSync(distPath)) {
+                app.use(express.static(distPath));
+                app.get('*', (req, res) => {
+                    res.sendFile(path.join(distPath, 'index.html'));
+                });
+            }
+        }
+        
+        httpServer.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
