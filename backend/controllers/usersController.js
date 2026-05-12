@@ -234,6 +234,7 @@ export const createUser = async (req, res) => {
         const user = await User.create(req.body);
         if (sponsorUser) await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -307,6 +308,7 @@ export const updateUser = async (req, res) => {
             updatedUser = await updatedUser.save();
             await Notification.create({ userId: updatedUser._id, subject: 'Commission Unlocked 🔓', message: `Success! ${updatedUser.currency}${releasedAmount.toFixed(2)} in commissions released.` });
         }
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -398,6 +400,7 @@ export const bulkUpdateRestrictions = async (req, res) => {
                 await user.save();
             }
         }
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, message: `Bulk updated users.` });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -411,6 +414,7 @@ export const bulkDeleteUsers = async (req, res) => {
         await Notification.deleteMany({ userId: { $in: ids } });
         await Transfer.deleteMany({ $or: [{ senderId: { $in: ids } }, { recipientId: { $in: ids } }] });
         await User.deleteMany({ _id: { $in: ids } });
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -424,6 +428,7 @@ export const deleteUser = async (req, res) => {
         await Transaction.deleteMany({ userId: user._id });
         await Notification.deleteMany({ userId: user._id });
         await User.findByIdAndDelete(req.params.id);
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -437,6 +442,7 @@ export const adjustWallet = async (req, res) => {
         await user.save();
         await Notification.create({ userId: user._id, subject: 'Wallet Adjusted', message: `Admin adjusted balance by ${user.currency}${Math.abs(amount)}.` });
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 }
@@ -457,6 +463,7 @@ export const createBulkDummyUsers = async (req, res) => {
             const iterations = parseInt(count) || 0;
             for (let i = 0; i < iterations; i++) { const suf = Math.floor(1000 + Math.random() * 9000); await createOne(`user_${suf}`); }
         }
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, message: 'Process completed' });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -500,6 +507,7 @@ export const resetPasswordWithToken = async (req, res) => {
         user.password = req.body.password;
         user.passwordResetToken = undefined; user.passwordResetExpires = undefined;
         await user.save();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
 };

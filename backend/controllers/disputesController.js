@@ -2,6 +2,7 @@
 import Dispute from '../models/Dispute.js';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 export const getDisputes = async (req, res) => {
@@ -35,6 +36,7 @@ export const createDispute = async (req, res) => {
 
         const dispute = await Dispute.create(disputeData);
         await Notification.create({ userId: dispute.userId, message: `Dispute #${dispute._id} submitted.` });
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -72,6 +74,7 @@ export const updateDispute = async (req, res) => {
         }
         
         await dispute.save();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -83,6 +86,7 @@ export const markAsRead = async (req, res) => {
         if (role === 'admin') dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: dispute });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

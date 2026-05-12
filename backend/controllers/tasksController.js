@@ -3,6 +3,7 @@ import Task from '../models/Task.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
+import Setting from '../models/Setting.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 // ... getTasks, createTask, updateTask, deleteTask same ...
@@ -16,7 +17,7 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
     try {
         const task = await Task.create(req.body);
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: task });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -24,7 +25,7 @@ export const createTask = async (req, res) => {
 export const updateTask = async (req, res) => {
     try {
         const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: task });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -32,7 +33,7 @@ export const updateTask = async (req, res) => {
 export const deleteTask = async (req, res) => {
     try {
         await Task.findByIdAndDelete(req.params.id);
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -75,7 +76,7 @@ export const completeTask = async (req, res) => {
         }
 
         await user.save();
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: user });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -98,7 +99,7 @@ export const verifyTaskSubmission = async (req, res) => {
             await task.save();
         }
         await user.save();
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

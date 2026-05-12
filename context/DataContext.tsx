@@ -323,9 +323,10 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     return newState;
 };
 
-export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
+export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action>; syncData: () => Promise<void> }>({
     state: initialState,
     dispatch: () => null,
+    syncData: async () => {},
 });
 
 const initializer = (initialState: AppState) => {
@@ -368,9 +369,13 @@ interface DataProviderProps {
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
+    const isFetchingRef = useRef<boolean>(false);
 
     // Consolidated Data Fetcher
-    const fetchData = async () => {
+    const fetchData = React.useCallback(async (force = false) => {
+        if (isFetchingRef.current && !force) return;
+        isFetchingRef.current = true;
+
         const token = localStorage.getItem('authToken');
         const isLoggedIn = !!token;
 
@@ -397,7 +402,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const getValue = (results: any[], idx: number, fallback: any) => 
                 (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
 
-            const currentVersion = getValue(publicResults, 3, 0);
+            const currentVersion = getValue(publicResults, 3, lastVersionRef.current);
             lastVersionRef.current = currentVersion;
 
             dispatch({ 
@@ -423,18 +428,22 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         } catch (error) {
             console.error("Critical error during initial data handshake:", error);
             dispatch({ type: 'SET_LOADING', payload: false });
+        } finally {
+            isFetchingRef.current = false;
         }
-    };
+    }, [state.settings]);
 
     // Initial Data Fetch & Auth-State Change Sync
     useEffect(() => {
-        fetchData();
+        fetchData(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.currentUser?._id]);
 
     // --- REAL-TIME SYNC POLLING ---
     useEffect(() => {
         const pollInterval = setInterval(async () => {
+            if (isFetchingRef.current) return;
+            
             try {
                 const serverVersion = await getDataVersion();
                 
@@ -445,7 +454,6 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
                 if (serverVersion > lastVersionRef.current) {
                     console.log(`Syncing data: current version ${lastVersionRef.current} -> ${serverVersion}`);
-                    lastVersionRef.current = serverVersion;
                     await fetchData();
                 }
             } catch (err) {
@@ -454,12 +462,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }, 5000); 
 
         return () => clearInterval(pollInterval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [fetchData]);
 
     return (
         <div id="data-state-container">
-            <DataContext.Provider value={{ state, dispatch }}>
+            <DataContext.Provider value={{ state, dispatch, syncData: () => fetchData(true) }}>
                 {children}
             </DataContext.Provider>
         </div>

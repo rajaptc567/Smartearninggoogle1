@@ -1,5 +1,6 @@
 
 import Rule from '../models/Rule.js';
+import Setting from '../models/Setting.js';
 
 export const getRules = async (req, res) => {
     try {
@@ -18,16 +19,14 @@ export const createRule = async (req, res) => {
             // Update existing instead of creating duplicate (One rule per plan logic)
             const updatedRule = await Rule.findByIdAndUpdate(existingRule._id, req.body, { new: true, runValidators: true });
             
-            // Update version for real-time sync
-            global.appDataVersion = Date.now();
+            await Setting.bumpVersion();
             
             return res.status(200).json({ success: true, data: updatedRule });
         }
 
         const rule = await Rule.create(req.body);
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         
         res.status(201).json({ success: true, data: rule });
     } catch (err) {
@@ -45,8 +44,7 @@ export const updateRule = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Rule not found' });
         }
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: rule });
     } catch (err) {
@@ -59,8 +57,7 @@ export const deleteRule = async (req, res) => {
         const rule = await Rule.findByIdAndDelete(req.params.id);
         if (!rule) return res.status(404).json({ success: false, error: 'Rule not found' });
         
-        // Update version for real-time sync
-        global.appDataVersion = Date.now();
+        await Setting.bumpVersion();
         
         res.status(200).json({ success: true, data: {} });
     } catch (err) {

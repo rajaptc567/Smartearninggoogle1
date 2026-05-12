@@ -106,7 +106,7 @@ export const createTransfer = async (req, res) => {
         });
         
         await sender.save();
-
+        await Setting.bumpVersion();
         res.status(201).json({ success: true, data: { transfer, user: sender, transaction }});
 
     } catch (err) {
@@ -242,7 +242,7 @@ export const updateTransfer = async (req, res) => {
         transfer.status = status;
         transfer.adminNotes = adminNotes;
         await transfer.save();
-        
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: { transfer, sender, recipient }});
 
     } catch (err) {

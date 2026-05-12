@@ -1,6 +1,7 @@
 
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 
 // @desc    Get notifications scoped by user role
 // @route   GET /api/v1/notifications
@@ -89,6 +90,7 @@ export const createNotification = async (req, res) => {
 
         if (notificationsToCreate.length > 0) {
             const created = await Notification.insertMany(notificationsToCreate);
+            await Setting.bumpVersion();
             // Return all newly created notifications so frontend state can be updated
             return res.status(201).json({ success: true, count: created.length, data: created });
         }
@@ -108,6 +110,7 @@ export const markAsRead = async (req, res) => {
             { userId: req.params.userId, read: false },
             { $set: { read: true } }
         );
+        await Setting.bumpVersion();
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
         const query = isAdmin ? {} : { userId: req.user?.id };
         const updatedNotifications = await Notification.find(query).sort({ date: -1 });
@@ -127,6 +130,7 @@ export const updateNotification = async (req, res) => {
             { new: true }
         );
         if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: notification });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -139,6 +143,7 @@ export const deleteNotification = async (req, res) => {
     try {
         const notification = await Notification.findByIdAndDelete(req.params.id);
         if (!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -155,6 +160,8 @@ export const markPopupShown = async (req, res) => {
             { new: true }
         );
         if(!notification) return res.status(404).json({ success: false, error: "Notification not found" });
+        
+        await Setting.bumpVersion();
         
         // Return updated list for frontend sync
         const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
