@@ -108,6 +108,8 @@ const initialState: AppState = {
         homepageVideoUrl: 'https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&loop=1&playlist=LXb3EKWsInQ&controls=0&showinfo=0&autohide=1',
         homepageContent: defaultHomepageContent,
         featuredPlanIds: [],
+        faqs: [],
+        homepagePaymentLogos: [],
     },
     notifications: [],
     logs: [],
@@ -179,6 +181,8 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.showRejectedCommissionTransaction === undefined) newSettings.showRejectedCommissionTransaction = true;
         if (newSettings.notifySponsorOnCommissionLimit === undefined) newSettings.notifySponsorOnCommissionLimit = true;
         if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
+        if (newSettings.faqs === undefined) newSettings.faqs = [];
+        if (newSettings.homepagePaymentLogos === undefined) newSettings.homepagePaymentLogos = [];
         return newSettings;
     };
 
@@ -361,36 +365,52 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
         const fetchData = async () => {
-            try {
-                const results = await Promise.allSettled([
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                    getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(),
-                    getDataVersion()
-                ]);
-                
-                const getValue = (idx: number, fallback: any) => 
-                    results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+            const token = localStorage.getItem('authToken');
+            const isLoggedIn = !!token;
 
-                const currentVersion = getValue(14, 0);
+            try {
+                // Public data always fetched
+                const publicPromises = [
+                    getPaymentMethods(),
+                    getInvestmentPlans(),
+                    getSettings(),
+                    getDataVersion()
+                ];
+
+                // Private data only fetched if logged in
+                const privatePromises = isLoggedIn ? [
+                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), 
+                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                ] : [];
+
+                const [publicResults, privateResults] = await Promise.all([
+                    Promise.allSettled(publicPromises),
+                    Promise.allSettled(privatePromises)
+                ]);
+
+                const getValue = (results: any[], idx: number, fallback: any) => 
+                    (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                const currentVersion = getValue(publicResults, 3, 0);
                 lastVersionRef.current = currentVersion;
 
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
-                        users: getValue(0, []),
-                        deposits: getValue(1, []),
-                        withdrawals: getValue(2, []),
-                        transactions: getValue(3, []),
-                        notifications: getValue(4, []),
-                        paymentMethods: getValue(5, []),
-                        investmentPlans: getValue(6, []),
-                        rules: getValue(7, []),
-                        settings: getValue(8, state.settings),
-                        transfers: getValue(9, []),
-                        logs: getValue(10, []),
-                        passwordResetRequests: getValue(11, []),
-                        disputes: getValue(12, []),
-                        tasks: getValue(13, [])
+                        paymentMethods: getValue(publicResults, 0, []),
+                        investmentPlans: getValue(publicResults, 1, []),
+                        settings: getValue(publicResults, 2, state.settings),
+                        users: getValue(privateResults, 0, []),
+                        deposits: getValue(privateResults, 1, []),
+                        withdrawals: getValue(privateResults, 2, []),
+                        transactions: getValue(privateResults, 3, []),
+                        notifications: getValue(privateResults, 4, []),
+                        rules: getValue(privateResults, 5, []),
+                        transfers: getValue(privateResults, 6, []),
+                        logs: getValue(privateResults, 7, []),
+                        passwordResetRequests: getValue(privateResults, 8, []),
+                        disputes: getValue(privateResults, 9, []),
+                        tasks: getValue(privateResults, 10, [])
                     } 
                 });
             } catch (error) {
