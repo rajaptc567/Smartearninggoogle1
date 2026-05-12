@@ -369,72 +369,72 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
 
-    // Initial Data Fetch with AllSettled for Resilience
+    // Consolidated Data Fetcher
+    const fetchData = async () => {
+        const token = localStorage.getItem('authToken');
+        const isLoggedIn = !!token;
+
+        try {
+            // Public data always fetched
+            const publicPromises = [
+                getPaymentMethods(),
+                getInvestmentPlans(),
+                getSettings(),
+                getDataVersion()
+            ];
+
+            // Private data only fetched if logged in
+            const privatePromises = isLoggedIn ? [
+                getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), 
+                getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+            ] : [];
+
+            const [publicResults, privateResults] = await Promise.all([
+                Promise.allSettled(publicPromises),
+                Promise.allSettled(privatePromises)
+            ]);
+
+            const getValue = (results: any[], idx: number, fallback: any) => 
+                (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+            const currentVersion = getValue(publicResults, 3, 0);
+            lastVersionRef.current = currentVersion;
+
+            dispatch({ 
+                type: 'SET_ALL_DATA', 
+                payload: { 
+                    paymentMethods: getValue(publicResults, 0, []),
+                    investmentPlans: getValue(publicResults, 1, []),
+                    settings: getValue(publicResults, 2, state.settings),
+                    users: getValue(privateResults, 0, []),
+                    deposits: getValue(privateResults, 1, []),
+                    withdrawals: getValue(privateResults, 2, []),
+                    transactions: getValue(privateResults, 3, []),
+                    notifications: getValue(privateResults, 4, []),
+                    rules: getValue(privateResults, 5, []),
+                    transfers: getValue(privateResults, 6, []),
+                    logs: getValue(privateResults, 7, []),
+                    passwordResetRequests: getValue(privateResults, 8, []),
+                    disputes: getValue(privateResults, 9, []),
+                    tasks: getValue(privateResults, 10, [])
+                } 
+            });
+            dispatch({ type: 'SET_LOADING', payload: false });
+        } catch (error) {
+            console.error("Critical error during initial data handshake:", error);
+            dispatch({ type: 'SET_LOADING', payload: false });
+        }
+    };
+
+    // Initial Data Fetch & Auth-State Change Sync
     useEffect(() => {
-        const fetchData = async () => {
-            const token = localStorage.getItem('authToken');
-            const isLoggedIn = !!token;
-
-            try {
-                // Public data always fetched
-                const publicPromises = [
-                    getPaymentMethods(),
-                    getInvestmentPlans(),
-                    getSettings(),
-                    getDataVersion()
-                ];
-
-                // Private data only fetched if logged in
-                const privatePromises = isLoggedIn ? [
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), 
-                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                ] : [];
-
-                const [publicResults, privateResults] = await Promise.all([
-                    Promise.allSettled(publicPromises),
-                    Promise.allSettled(privatePromises)
-                ]);
-
-                const getValue = (results: any[], idx: number, fallback: any) => 
-                    (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                const currentVersion = getValue(publicResults, 3, 0);
-                lastVersionRef.current = currentVersion;
-
-                dispatch({ 
-                    type: 'SET_ALL_DATA', 
-                    payload: { 
-                        paymentMethods: getValue(publicResults, 0, []),
-                        investmentPlans: getValue(publicResults, 1, []),
-                        settings: getValue(publicResults, 2, state.settings),
-                        users: getValue(privateResults, 0, []),
-                        deposits: getValue(privateResults, 1, []),
-                        withdrawals: getValue(privateResults, 2, []),
-                        transactions: getValue(privateResults, 3, []),
-                        notifications: getValue(privateResults, 4, []),
-                        rules: getValue(privateResults, 5, []),
-                        transfers: getValue(privateResults, 6, []),
-                        logs: getValue(privateResults, 7, []),
-                        passwordResetRequests: getValue(privateResults, 8, []),
-                        disputes: getValue(privateResults, 9, []),
-                        tasks: getValue(privateResults, 10, [])
-                    } 
-                });
-                dispatch({ type: 'SET_LOADING', payload: false });
-            } catch (error) {
-                console.error("Critical error during initial data handshake:", error);
-                dispatch({ type: 'SET_LOADING', payload: false });
-            }
-        };
-
         fetchData();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.currentUser?._id]);
 
     // --- REAL-TIME SYNC POLLING ---
     useEffect(() => {
         const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; 
-
             try {
                 const serverVersion = await getDataVersion();
                 
@@ -444,31 +444,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    const isAdmin = state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com';
-                    
-                    if (isAdmin) {
-                        lastVersionRef.current = serverVersion;
-                        const results = await Promise.allSettled([
-                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                        ]);
-                        
-                        const getValue = (idx: number, fallback: any) => 
-                            results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                        dispatch({ 
-                            type: 'SET_ALL_DATA', 
-                            payload: { 
-                                users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
-                                transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
-                                investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
-                                transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
-                                disputes: getValue(12, []), tasks: getValue(13, [])
-                            } 
-                        });
-                    } else {
-                        window.location.reload();
-                    }
+                    console.log(`Syncing data: current version ${lastVersionRef.current} -> ${serverVersion}`);
+                    lastVersionRef.current = serverVersion;
+                    await fetchData();
                 }
             } catch (err) {
                 // Silently ignore polling network errors
@@ -476,7 +454,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         }, 5000); 
 
         return () => clearInterval(pollInterval);
-    }, [state.currentUser]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div id="data-state-container">
