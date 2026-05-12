@@ -1,7 +1,7 @@
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
-// Production configuration: Uses current origin for local full-stack operation.
-const BASE_URL = window.location.origin;
+// Production configuration: Uses environment variable for backend routing.
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://smartearning-api.onrender.com';
 
 function getApiBaseUrl() {
   return `${BASE_URL}/api/v1`;

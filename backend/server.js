@@ -4,26 +4,6 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import mongoose from 'mongoose';
-import { createServer } from 'http';
-import { initSocket, emitDataUpdate } from './utils/socket.js';
-
-// Load env vars
-dotenv.config();
-
-// Global Mongoose Plugin for Real-time Updates
-// Applied BEFORE any models are imported
-mongoose.plugin((schema) => {
-    const broadcastChange = (doc) => {
-        const modelName = doc.constructor.modelName || 'System';
-        emitDataUpdate(modelName, { _id: doc._id });
-    };
-
-    schema.post('save', broadcastChange);
-    schema.post('findOneAndUpdate', (doc) => doc && broadcastChange(doc));
-    schema.post('findOneAndDelete', (doc) => doc && broadcastChange(doc));
-});
-
 import connectDB from './config/db.js';
 import User from './models/User.js'; 
 
@@ -47,11 +27,10 @@ import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import taskRoutes from './routes/taskRoutes.js'; 
 
-const app = express();
-const httpServer = createServer(app);
+// Load env vars
+dotenv.config();
 
-// Initialize Socket.io
-initSocket(httpServer);
+const app = express();
 
 /**
  * INFRASTRUCTURE SETTINGS
@@ -143,36 +122,17 @@ app.use((err, req, res, next) => {
     res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 /**
  * ASYNC STARTUP
  */
-
 const startServer = async () => {
     try {
         await connectDB();
         await seedAdminUser();
         
-        // --- VITE MIDDLEWARE FOR UNIFIED FULL-STACK ---
-        if (process.env.NODE_ENV !== 'production') {
-            const { createServer: createViteServer } = await import('vite');
-            const vite = await createViteServer({
-                server: { middlewareMode: true },
-                appType: 'spa',
-            });
-            app.use(vite.middlewares);
-        } else {
-            const distPath = path.join(process.cwd(), 'dist');
-            if (fs.existsSync(distPath)) {
-                app.use(express.static(distPath));
-                app.get('*', (req, res) => {
-                    res.sendFile(path.join(distPath, 'index.html'));
-                });
-            }
-        }
-        
-        httpServer.listen(PORT, '0.0.0.0', () => {
+        app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
