@@ -149,7 +149,6 @@ mongoose.plugin((schema) => {
     schema.post('findOneAndDelete', (doc) => doc && broadcastChange(doc));
 });
 
-import { createServer as createViteServer } from 'vite';
 
 const startServer = async () => {
     try {
@@ -158,6 +157,7 @@ const startServer = async () => {
         
         // --- VITE MIDDLEWARE FOR UNIFIED FULL-STACK ---
         if (process.env.NODE_ENV !== 'production') {
+            const { createServer: createViteServer } = await import('vite');
             const vite = await createViteServer({
                 server: { middlewareMode: true },
                 appType: 'spa',
