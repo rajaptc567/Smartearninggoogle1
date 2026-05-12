@@ -1,5 +1,4 @@
 import PaymentMethod from '../models/PaymentMethod.js';
-import Setting from '../models/Setting.js';
 
 export const getPaymentMethods = async (req, res) => {
     try {
@@ -139,7 +138,8 @@ export const createPaymentMethod = async (req, res) => {
 
         const method = await PaymentMethod.create(methodData);
         
-        await Setting.bumpVersion();
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
         
         res.status(201).json({ success: true, data: method });
     } catch (err) {
@@ -192,7 +192,8 @@ export const updatePaymentMethod = async (req, res) => {
         const method = await PaymentMethod.findByIdAndUpdate(req.params.id, methodData, { new: true, runValidators: true });
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
-        await Setting.bumpVersion();
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
         
         res.status(200).json({ success: true, data: method });
     } catch (err) {
@@ -205,7 +206,8 @@ export const deletePaymentMethod = async (req, res) => {
         const method = await PaymentMethod.findByIdAndDelete(req.params.id);
         if (!method) return res.status(404).json({ success: false, error: 'Payment method not found' });
         
-        await Setting.bumpVersion();
+        // Update version for real-time sync
+        global.appDataVersion = Date.now();
         
         res.status(200).json({ success: true, data: {} });
     } catch (err) {

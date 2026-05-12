@@ -1,6 +1,5 @@
 
 import Log from '../models/Log.js';
-import Setting from '../models/Setting.js';
 
 export const getLogs = async (req, res) => {
     try {
@@ -24,7 +23,6 @@ export const clearLogs = async (req, res) => {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
 
         await Log.deleteMany({});
-        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: [] });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

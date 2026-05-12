@@ -1,5 +1,4 @@
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
-import Setting from '../models/Setting.js';
 
 // @desc    Get all pending password reset requests
 // @route   GET /api/v1/password-reset-requests
@@ -20,7 +19,6 @@ export const deletePasswordResetRequest = async (req, res) => {
         if (!request) {
             return res.status(404).json({ success: false, error: 'Request not found' });
         }
-        await Setting.bumpVersion();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
