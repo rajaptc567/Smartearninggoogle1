@@ -4,6 +4,26 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import mongoose from 'mongoose';
+import { createServer } from 'http';
+import { initSocket, emitDataUpdate } from './utils/socket.js';
+
+// Load env vars
+dotenv.config();
+
+// Global Mongoose Plugin for Real-time Updates
+// Applied BEFORE any models are imported
+mongoose.plugin((schema) => {
+    const broadcastChange = (doc) => {
+        const modelName = doc.constructor.modelName || 'System';
+        emitDataUpdate(modelName, { _id: doc._id });
+    };
+
+    schema.post('save', broadcastChange);
+    schema.post('findOneAndUpdate', (doc) => doc && broadcastChange(doc));
+    schema.post('findOneAndDelete', (doc) => doc && broadcastChange(doc));
+});
+
 import connectDB from './config/db.js';
 import User from './models/User.js'; 
 
@@ -26,12 +46,6 @@ import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import taskRoutes from './routes/taskRoutes.js'; 
-
-// Load env vars
-dotenv.config();
-
-import { createServer } from 'http';
-import { initSocket } from './utils/socket.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -129,26 +143,11 @@ app.use((err, req, res, next) => {
     res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 /**
  * ASYNC STARTUP
  */
-import mongoose from 'mongoose';
-import { emitDataUpdate } from './utils/socket.js';
-
-// Global Mongoose Plugin for Real-time Updates
-mongoose.plugin((schema) => {
-    const broadcastChange = (doc) => {
-        const modelName = doc.constructor.modelName || 'System';
-        emitDataUpdate(modelName, { _id: doc._id });
-    };
-
-    schema.post('save', broadcastChange);
-    schema.post('findOneAndUpdate', (doc) => doc && broadcastChange(doc));
-    schema.post('findOneAndDelete', (doc) => doc && broadcastChange(doc));
-});
-
 
 const startServer = async () => {
     try {
@@ -173,7 +172,7 @@ const startServer = async () => {
             }
         }
         
-        httpServer.listen(PORT, () => {
+        httpServer.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
