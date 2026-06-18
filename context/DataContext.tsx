@@ -1,5 +1,6 @@
 
 import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
@@ -430,11 +431,39 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         fetchData();
     }, []);
 
-    // --- REAL-TIME SYNC POLLING ---
+    // --- REAL-TIME LIVE SYNCHRONIZATION WITH SOCKET.IO ---
     useEffect(() => {
-        const pollInterval = setInterval(async () => {
-            if (!state.currentUser) return; 
+        if (!state.currentUser) return;
 
+        const getSocketUrl = () => {
+            try {
+                // @ts-ignore
+                if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) {
+                    // @ts-ignore
+                    return process.env.REACT_APP_API_URL;
+                }
+            } catch (e) {}
+            return 'https://smartearning-api.onrender.com';
+        };
+
+        const socketUrl = getSocketUrl();
+        const token = localStorage.getItem('authToken');
+
+        // Connect with automatic reconnection controls optimized for Render free tier sleep cycles
+        const socket = io(socketUrl, {
+            transports: ['websocket', 'polling'],
+            reconnectionAttempts: 10,
+            reconnectionDelay: 3000,
+            auth: {
+                token: token
+            }
+        });
+
+        socket.on('connect', () => {
+            console.log(`Socket syncer successfully connected to server: ${socketUrl}`);
+        });
+
+        const masterDataSync = async () => {
             try {
                 const serverVersion = await getDataVersion();
                 
@@ -444,38 +473,47 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
 
                 if (serverVersion > lastVersionRef.current) {
-                    const isAdmin = state.currentUser.username === 'admin' || state.currentUser.email === 'studio56.pk@gmail.com';
+                    lastVersionRef.current = serverVersion;
                     
-                    if (isAdmin) {
-                        lastVersionRef.current = serverVersion;
-                        const results = await Promise.allSettled([
-                            getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                            getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
-                        ]);
-                        
-                        const getValue = (idx: number, fallback: any) => 
-                            results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+                    // Silent background fetch using Promise.allSettled to eliminate UI flicker
+                    const results = await Promise.allSettled([
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                    ]);
+                    
+                    const getValue = (idx: number, fallback: any) => 
+                        results[idx].status === 'fulfilled' ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
 
-                        dispatch({ 
-                            type: 'SET_ALL_DATA', 
-                            payload: { 
-                                users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
-                                transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
-                                investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
-                                transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
-                                disputes: getValue(12, []), tasks: getValue(13, [])
-                            } 
-                        });
-                    } else {
-                        window.location.reload();
-                    }
+                    dispatch({ 
+                        type: 'SET_ALL_DATA', 
+                        payload: { 
+                            users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
+                            transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
+                            investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
+                            transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
+                            disputes: getValue(12, []), tasks: getValue(13, [])
+                        } 
+                    });
                 }
             } catch (err) {
-                // Silently ignore polling network errors
+                console.error("Flicker-free live sync payload retrieval failed:", err);
             }
-        }, 5000); 
+        };
 
-        return () => clearInterval(pollInterval);
+        // Listen for the master real-time trigger event
+        socket.on('DATA_CHANGED', () => {
+            console.log('Real-time notification: DATA_CHANGED event received. Syncing states...');
+            masterDataSync();
+        });
+
+        socket.on('connect_error', (error) => {
+            console.warn("Connection difficulty detected. Socket-client will auto-retry.", error.message);
+        });
+
+        return () => {
+            console.log('Cleaning up active socket connection...');
+            socket.disconnect();
+        };
     }, [state.currentUser]);
 
     return (

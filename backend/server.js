@@ -4,6 +4,8 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import connectDB from './config/db.js';
 import User from './models/User.js'; 
 
@@ -31,6 +33,27 @@ import taskRoutes from './routes/taskRoutes.js';
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
+
+// Initialize Socket.io with robust CORS and transports for Render/Vercel environments
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*", // Secure and flexible for dynamic Vercel deployments
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'] // WebSocket native with polling fallback for stability
+});
+
+// Expose Socket.io instance on Express app
+app.set('io', io);
+
+io.on('connection', (socket) => {
+    console.log(`Socket connection established: ${socket.id}`);
+    socket.on('disconnect', () => {
+        console.log(`Socket connection closed: ${socket.id}`);
+    });
+});
 
 /**
  * INFRASTRUCTURE SETTINGS
@@ -132,7 +155,7 @@ const startServer = async () => {
         await connectDB();
         await seedAdminUser();
         
-        app.listen(PORT, () => {
+        httpServer.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
