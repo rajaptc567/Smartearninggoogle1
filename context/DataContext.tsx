@@ -429,7 +429,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         };
 
         fetchData();
-    }, []);
+    }, [state.currentUser?._id]);
 
     // --- REAL-TIME LIVE SYNCHRONIZATION WITH SOCKET.IO ---
     useEffect(() => {
