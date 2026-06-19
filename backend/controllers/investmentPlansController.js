@@ -27,6 +27,7 @@ export const createInvestmentPlan = async (req, res) => {
     try {
         const plan = await InvestmentPlan.create(req.body);
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(201).json({ success: true, data: plan });
     } catch (err) {
         if (err.code === 11000) {
@@ -46,6 +47,7 @@ export const updateInvestmentPlan = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: plan });
     } catch (err) {
          if (err.code === 11000) {
@@ -62,6 +64,7 @@ export const deleteInvestmentPlan = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });
         }
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

@@ -121,6 +121,7 @@ export const createWithdrawal = async (req, res) => {
         
         await user.save();
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -231,6 +232,7 @@ export const updateWithdrawal = async (req, res) => {
         await withdrawal.save();
         await user.save();
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: { withdrawal, user } });
 
     } catch (err) {
@@ -250,6 +252,7 @@ export const deleteWithdrawal = async (req, res) => {
         }
         
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

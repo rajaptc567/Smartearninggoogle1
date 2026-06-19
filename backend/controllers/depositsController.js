@@ -94,6 +94,7 @@ export const createDeposit = async (req, res) => {
         }
         
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(201).json({ success: true, data: { deposit, transaction } });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -118,6 +119,7 @@ export const updateDeposit = async (req, res) => {
         }
         await deposit.save();
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: { deposit, user } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -126,6 +128,7 @@ export const deleteDeposit = async (req, res) => {
     try {
         await Deposit.findByIdAndDelete(req.params.id);
         await Setting.bumpVersion();
+        req.app.get('io')?.emit('DATA_CHANGED');
         res.status(200).json({ success: true, data: {} });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };

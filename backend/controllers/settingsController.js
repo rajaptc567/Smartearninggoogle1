@@ -21,6 +21,12 @@ export const updateSettings = async (req, res) => {
             runValidators: true,
         });
         
+        // Notify all clients via socket.io for instant real-time reflections
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('DATA_CHANGED');
+        }
+        
         res.status(200).json({ success: true, data: settings });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

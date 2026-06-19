@@ -463,16 +463,15 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.log(`Socket syncer successfully connected to server: ${socketUrl}`);
         });
 
-        const masterDataSync = async () => {
+        const masterDataSync = async (force: boolean = false) => {
             try {
                 const serverVersion = await getDataVersion();
                 
                 if (lastVersionRef.current === 0) {
                     lastVersionRef.current = serverVersion;
-                    return;
                 }
 
-                if (serverVersion > lastVersionRef.current) {
+                if (force || serverVersion > lastVersionRef.current) {
                     lastVersionRef.current = serverVersion;
                     
                     // Silent background fetch using Promise.allSettled to eliminate UI flicker
@@ -503,7 +502,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         // Listen for the master real-time trigger event
         socket.on('DATA_CHANGED', () => {
             console.log('Real-time notification: DATA_CHANGED event received. Syncing states...');
-            masterDataSync();
+            masterDataSync(true);
         });
 
         socket.on('connect_error', (error) => {
