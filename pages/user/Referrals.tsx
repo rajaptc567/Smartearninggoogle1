@@ -7,7 +7,6 @@ import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
 import ShareButtons from '../../components/ui/ShareButtons';
-import FetchingInline from '../../components/FetchingInline';
 
 interface GenealogyNode {
     user: User;
@@ -654,10 +653,7 @@ const Referrals: React.FC = () => {
                 ))}
             </div>
 
-            <div className="min-h-[600px] animate-fade-in relative">
-                <FetchingInline messageType="Loading new referral data" />
-                <FetchingInline messageType="Referrals" customLabel="Reading referral rosters..." />
-                <FetchingInline messageType="Referral transactions" customLabel="Analyzing commission streams..." />
+            <div className="min-h-[600px] animate-fade-in">
                 {viewMode === 'earning' && (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
                         <div className="space-y-4 md:space-y-8">

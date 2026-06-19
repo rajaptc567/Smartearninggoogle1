@@ -3,7 +3,6 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import Button from '../components/ui/Button';
-import FetchingInline from '../components/FetchingInline';
 
 const FaqPage: React.FC = () => {
     const { state } = useData();
@@ -54,7 +53,6 @@ const FaqPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-8">
-                    <FetchingInline messageType="Faxes" customLabel="Updating faxes..." />
                     {filteredFaqs.length > 0 ? (
                         filteredFaqs.map((faq, index) => (
                             <div key={index} className="bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700/50 p-10 shadow-xl hover:shadow-2xl transition-all duration-300 group hover:-translate-y-1">

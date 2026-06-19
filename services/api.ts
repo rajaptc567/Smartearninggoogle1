@@ -3,35 +3,6 @@ import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, In
 // Production configuration: Uses environment variable for backend routing.
 const BASE_URL = process.env.REACT_APP_API_URL || 'https://smartearning-api.onrender.com';
 
-// Local shadow of fetch to track state safely without window.fetch mutation
-type FetchStateListener = (url: string, method: string, isStart: boolean) => void;
-const listeners = new Set<FetchStateListener>();
-
-export const subscribeToFetchState = (listener: FetchStateListener) => {
-    listeners.add(listener);
-    return () => {
-        listeners.delete(listener);
-    };
-};
-
-async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const url = typeof input === 'string' ? input : (input as any).url || String(input);
-    const method = init?.method || 'GET';
-    listeners.forEach(l => {
-        try { l(url, method, true); } catch (e) {}
-    });
-    try {
-        const response = await window.fetch(input, init);
-        return response;
-    } finally {
-        listeners.forEach(l => {
-            try { l(url, method, false); } catch (e) {}
-        });
-    }
-}
-
-const fetch = apiFetch;
-
 function getApiBaseUrl() {
   return `${BASE_URL}/api/v1`;
 }

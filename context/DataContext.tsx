@@ -1,11 +1,11 @@
 
-import React, { createContext, useReducer, ReactNode, useEffect, useRef, useState } from 'react';
+import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
     getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
-    getDataVersion, subscribeToFetchState
+    getDataVersion
 } from '../services/api';
 
 interface AppState {
@@ -324,14 +324,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     return newState;
 };
 
-export const DataContext = createContext<{ 
-    state: AppState; 
-    dispatch: React.Dispatch<Action>;
-    fetchingMessages: string[];
-}>({
+export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
     state: initialState,
     dispatch: () => null,
-    fetchingMessages: [],
 });
 
 const initializer = (initialState: AppState) => {
@@ -374,80 +369,6 @@ interface DataProviderProps {
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
-
-    const [fetchingMessages, setFetchingMessages] = useState<string[]>([]);
-
-    useEffect(() => {
-        const getFetchMessage = (url: string, method: string): string | null => {
-            const token = localStorage.getItem('authToken');
-            const isLoggedIn = !!token;
-
-            const normalizedUrl = url.toLowerCase();
-
-            // 1. Login after user login
-            if (normalizedUrl.includes('/users/login') || normalizedUrl.includes('/admin-login')) {
-                return "Login after user login";
-            }
-            // 2. Payment methods vs Payment method without user login
-            if (normalizedUrl.includes('/payment-methods')) {
-                 return isLoggedIn ? "Payment methods" : "Payment method without user login";
-            }
-            // 3. Withdraw method
-            if (normalizedUrl.includes('/withdrawals')) {
-                 return "Withdraw method";
-            }
-            // 4. Deposit funds
-            if (normalizedUrl.includes('/deposits')) {
-                 if (method === 'POST') {
-                     return "Payment deposit funds";
-                 }
-                 return "Deposit funds";
-            }
-            // 5. Referrals & Referral transactions
-            if (normalizedUrl.includes('/users') && (normalizedUrl.includes('refer') || normalizedUrl.includes('sponsor'))) {
-                 return "Loading new referral data";
-            }
-            if (normalizedUrl.includes('/transactions')) {
-                 const urlParams = new URLSearchParams(normalizedUrl.split('?')[1] || '');
-                 if (urlParams.get('type') === 'referral' || urlParams.get('category') === 'referral' || normalizedUrl.includes('referral')) {
-                     return "Referral transactions";
-                 }
-                 return "Fresh funds";
-            }
-            // 6. Referrals (plain user list / sponsor details query)
-            if (normalizedUrl.includes('/users') && method === 'GET') {
-                 return "Referrals";
-            }
-            // 7. Faxes
-            if (normalizedUrl.includes('/faqs') || (normalizedUrl.includes('/settings') && (normalizedUrl.includes('faq') || normalizedUrl.includes('homepage')))) {
-                 return "Faxes";
-            }
-            // 8. Details
-            if (normalizedUrl.includes('/settings') || normalizedUrl.includes('/settings/version')) {
-                 return "Details";
-            }
-            
-            return null;
-        };
-
-        const unsubscribe = subscribeToFetchState((url, method, isStart) => {
-            const message = getFetchMessage(url, method);
-            if (!message) return;
-
-            if (isStart) {
-                setFetchingMessages(prev => {
-                    if (prev.includes(message)) return prev;
-                    return [...prev, message];
-                });
-            } else {
-                setFetchingMessages(prev => prev.filter(m => m !== message));
-            }
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, []);
 
     // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
@@ -686,45 +607,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
     return (
         <div id="data-state-container">
-            <DataContext.Provider value={{ state, dispatch, fetchingMessages }}>
-                {state.isLoading && (
-                    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0B1528] px-4 select-none animate-fade-in">
-                        <div className="flex flex-col items-center justify-center space-y-6 max-w-lg w-full text-center">
-                            {/* Loader Circle */}
-                            <div className="relative flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32 mb-4">
-                                {/* Glowing background */}
-                                <div className="absolute inset-0 bg-orange-600/15 rounded-full blur-xl animate-pulse"></div>
-                                
-                                {/* Ring Container */}
-                                <div className="absolute inset-0 rounded-full border-4 border-slate-800/80"></div>
-                                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#f97316] border-r-[#f97316]/40 animate-spin" style={{ animationDuration: '0.8s' }}></div>
-                                
-                                {/* Inner Central Circle */}
-                                <div className="absolute inset-2 bg-[#121f35] rounded-full flex items-center justify-center shadow-lg border border-slate-700/30">
-                                    {/* Bold Orange Lightning Bolt matching user screenshot */}
-                                    <svg className="w-10 h-10 sm:w-12 sm:h-12 text-[#f97316] fill-current animate-pulse" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                                        <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                </div>
-                            </div>
-
-                            {/* Welcome Message */}
-                            <div className="space-y-1">
-                                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-wider text-white uppercase font-sans">
-                                    WELCOME TO <span className="text-[#f97316] drop-shadow-[0_0_12px_rgba(249,115,22,0.6)] animate-pulse">SMARTEARNING</span>
-                                </h1>
-                                <p className="text-sm sm:text-base font-bold tracking-widest text-slate-200 uppercase font-mono">
-                                    www.smartexn.com
-                                </p>
-                            </div>
-
-                            {/* Beautiful Slogan / Punch Line */}
-                            <p className="text-[10px] sm:text-xs text-slate-400 font-black tracking-[0.28em] leading-relaxed max-w-xs sm:max-w-md uppercase font-mono px-4">
-                                Invest in Your Future, Grow Your Network
-                            </p>
-                        </div>
-                    </div>
-                )}
+            <DataContext.Provider value={{ state, dispatch }}>
                 {children}
             </DataContext.Provider>
         </div>

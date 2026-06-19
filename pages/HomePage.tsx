@@ -5,7 +5,6 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
-import FetchingInline from '../components/FetchingInline';
 
 import { Loader2 } from 'lucide-react';
 
@@ -730,8 +729,6 @@ const HomePage: React.FC = () => {
                                 <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter mb-4 uppercase">Featured Support Queries</h2>
                                 <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
                             </div>
-
-                            <FetchingInline messageType="Faxes" customLabel="Updating faxes..." />
 
                             {state.isLoading ? (
                                 <SectionLoading text="Fresh data is loading." />
