@@ -509,11 +509,101 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             console.warn("Connection difficulty detected. Socket-client will auto-retry.", error.message);
         });
 
+        // Sync active data when tab is focused or became visible (different tabs/returned users)
+        const handleTabReturn = () => {
+            if (document.visibilityState === 'visible' || !document.hidden) {
+                console.log('User returned to tab. Syncing data to guarantee freshness...');
+                masterDataSync(true);
+            }
+        };
+
+        window.addEventListener('focus', handleTabReturn);
+        document.addEventListener('visibilitychange', handleTabReturn);
+
         return () => {
-            console.log('Cleaning up active socket connection...');
+            console.log('Cleaning up active socket connection and focus listeners...');
             socket.disconnect();
+            window.removeEventListener('focus', handleTabReturn);
+            document.removeEventListener('visibilitychange', handleTabReturn);
         };
     }, [state.currentUser]);
+
+    // --- CROSS-TAB AUTOMATIC LOGOUT AFTER 10-12 MINUTES OF INACTIVITY ---
+    useEffect(() => {
+        if (!state.currentUser) return;
+
+        // Set initial activity time when user session is active
+        localStorage.setItem('lastActivityTime', Date.now().toString());
+
+        let lastWrite = 0;
+        const handleUserActivity = () => {
+            const now = Date.now();
+            // Throttle storage writes to avoid unnecessary overhead
+            if (now - lastWrite > 1500) {
+                lastWrite = now;
+                localStorage.setItem('lastActivityTime', now.toString());
+            }
+        };
+
+        const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+        activityEvents.forEach(eventType => {
+            window.addEventListener(eventType, handleUserActivity, { passive: true });
+        });
+
+        const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes of inactivity
+
+        const checkInactivity = () => {
+            const storedTime = localStorage.getItem('lastActivityTime');
+            if (!storedTime) return;
+
+            const elapsedSinceActivity = Date.now() - Number(storedTime);
+            if (elapsedSinceActivity >= INACTIVITY_LIMIT) {
+                console.log("Inactivity limit exceeded (10 minutes). Logging out...");
+                localStorage.setItem('inactivityLogout', 'true');
+                dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+                window.location.hash = '#/login';
+            }
+        };
+
+        // Check inactivity status every 5 seconds
+        const checkInterval = setInterval(checkInactivity, 5000);
+
+        return () => {
+            activityEvents.forEach(eventType => {
+                window.removeEventListener(eventType, handleUserActivity);
+            });
+            clearInterval(checkInterval);
+        };
+    }, [state.currentUser]);
+
+    // --- CROSS-TAB AUTHENTICATION STATE SYNCHRONIZATION ---
+    useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'currentUser' || e.key === 'authToken') {
+                const updatedUser = localStorage.getItem('currentUser');
+                const token = localStorage.getItem('authToken');
+                
+                if (!updatedUser || !token) {
+                    // Session destroyed on another tab, align state & log out immediately
+                    console.log("Authentication credentials removed on another tab. Synchronizing logout...");
+                    dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+                    window.location.hash = '#/login';
+                } else {
+                    // Session created / updated on another tab, align state & resume
+                    try {
+                        const user = JSON.parse(updatedUser);
+                        if (user && user._id !== state.currentUser?._id) {
+                            console.log("Authentication credentials updated in another tab. Aligning session...");
+                            dispatch({ type: 'SET_CURRENT_USER', payload: { user, token } });
+                        }
+                    } catch (err) {}
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, [state.currentUser?._id]);
 
     return (
         <div id="data-state-container">

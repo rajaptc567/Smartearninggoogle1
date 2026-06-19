@@ -12,6 +12,15 @@ const AdminLogin: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Inactivity notice check
+    const [inactivityNotice, setInactivityNotice] = useState<boolean>(() => {
+        const flag = localStorage.getItem('inactivityLogout') === 'true';
+        if (flag) {
+            localStorage.removeItem('inactivityLogout');
+        }
+        return flag;
+    });
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -51,6 +60,18 @@ const AdminLogin: React.FC = () => {
                     <h2 className="mt-4 text-2xl font-bold text-white">Admin Panel Login</h2>
                     <p className="mt-2 text-sm text-gray-400">Restricted Access: Authorized Personnel Only</p>
                 </div>
+
+                {inactivityNotice && (
+                    <div className="p-4 text-sm text-amber-300 bg-amber-950/40 rounded-lg border border-amber-900/40 flex flex-col gap-1 shadow-md animate-shake" role="alert">
+                        <div className="flex items-center gap-2">
+                            <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span className="font-bold text-amber-200">Session Expired</span>
+                        </div>
+                        <p className="text-xs text-gray-300 font-medium">You have been logged out due to inactivity. Please sign in again to resume administrative operations.</p>
+                    </div>
+                )}
 
                 {error && (
                     <div className="p-3 text-sm text-red-400 bg-red-900/20 border border-red-900/50 rounded-lg animate-shake" role="alert">
