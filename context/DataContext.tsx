@@ -608,6 +608,44 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     return (
         <div id="data-state-container">
             <DataContext.Provider value={{ state, dispatch }}>
+                {state.isLoading && (
+                    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0B1528] px-4 select-none animate-fade-in">
+                        <div className="flex flex-col items-center justify-center space-y-6 max-w-lg w-full text-center">
+                            {/* Loader Circle */}
+                            <div className="relative flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32 mb-4">
+                                {/* Glowing background */}
+                                <div className="absolute inset-0 bg-orange-600/15 rounded-full blur-xl animate-pulse"></div>
+                                
+                                {/* Ring Container */}
+                                <div className="absolute inset-0 rounded-full border-4 border-slate-800/80"></div>
+                                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#f97316] border-r-[#f97316]/40 animate-spin" style={{ animationDuration: '0.8s' }}></div>
+                                
+                                {/* Inner Central Circle */}
+                                <div className="absolute inset-2 bg-[#121f35] rounded-full flex items-center justify-center shadow-lg border border-slate-700/30">
+                                    {/* Bold Orange Lightning Bolt matching user screenshot */}
+                                    <svg className="w-10 h-10 sm:w-12 sm:h-12 text-[#f97316] fill-current animate-pulse" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            {/* Welcome Message */}
+                            <div className="space-y-1">
+                                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-wider text-white uppercase font-sans">
+                                    WELCOME TO <span className="text-[#f97316] drop-shadow-[0_0_12px_rgba(249,115,22,0.6)] animate-pulse">SMARTEARNING</span>
+                                </h1>
+                                <p className="text-sm sm:text-base font-bold tracking-widest text-slate-200 uppercase font-mono">
+                                    www.smartexn.com
+                                </p>
+                            </div>
+
+                            {/* Beautiful Slogan / Punch Line */}
+                            <p className="text-[10px] sm:text-xs text-slate-400 font-black tracking-[0.28em] leading-relaxed max-w-xs sm:max-w-md uppercase font-mono px-4">
+                                Invest in Your Future, Grow Your Network
+                            </p>
+                        </div>
+                    </div>
+                )}
                 {children}
             </DataContext.Provider>
         </div>
