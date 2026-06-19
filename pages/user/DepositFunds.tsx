@@ -239,6 +239,8 @@ const DepositFunds: React.FC = () => {
                 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
                 .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; }
+                .scrollbar-none::-webkit-scrollbar { display: none; }
+                .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
 
             <div className="p-8 md:p-10 text-white shadow-2xl relative overflow-hidden mb-12 group transition-all" style={{ backgroundColor: pageConfig.primaryColor, borderRadius: pageConfig.cardRounding }}>
@@ -329,10 +331,10 @@ const DepositFunds: React.FC = () => {
                                         <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">
                                             {selectedMethod.customLabels?.accountNumberLabel || 'Account / Wallet Number'}
                                         </p>
-                                        <div className="flex items-center justify-between p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner">
-                                            <p className="text-2xl font-black font-mono text-blue-400 break-all select-all">{selectedMethod.accountNumber}</p>
-                                            <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 ml-4 shadow-lg">
-                                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                        <div className="flex items-center justify-between p-4 sm:p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner min-w-0 w-full">
+                                            <p className="text-base sm:text-2xl font-black font-mono text-blue-400 select-all whitespace-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 mr-2 sm:mr-4">{selectedMethod.accountNumber}</p>
+                                            <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-2 sm:p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 shadow-lg">
+                                                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                                             </button>
                                         </div>
                                     </div>
