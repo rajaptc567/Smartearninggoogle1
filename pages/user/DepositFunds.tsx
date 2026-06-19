@@ -8,6 +8,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
+import FetchingInline from '../../components/FetchingInline';
 
 const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
@@ -290,17 +291,21 @@ const DepositFunds: React.FC = () => {
                     </div>
                 )}
                 
-                {step === 2 && (
-                    <div className="grid grid-cols-2 gap-4 md:gap-6 animate-fade-in">
-                        {availableMethods.map(m => (
-                            <div key={m._id} onClick={() => { setSelectedMethodId(m._id); setStep(3); }} className="p-8 border-2 text-center cursor-pointer transition-all hover:scale-105 rounded-3xl bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800 hover:border-blue-500 shadow-sm hover:shadow-xl">
-                                <img src={m.logoUrl} className="h-20 mx-auto mb-4 object-contain" alt={m.name} />
-                                <h4 className="font-black uppercase text-sm tracking-tight">{m.name}</h4>
-                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1 block">Click to select</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                 {step === 2 && (
+                     <div className="w-full space-y-6">
+                         <FetchingInline messageType="Payment methods" customLabel="Loading payment options..." />
+                         <FetchingInline messageType="Payment method without user login" customLabel="Searching public payment system..." />
+                         <div className="grid grid-cols-2 gap-4 md:gap-6 animate-fade-in">
+                             {availableMethods.map(m => (
+                                 <div key={m._id} onClick={() => { setSelectedMethodId(m._id); setStep(3); }} className="p-8 border-2 text-center cursor-pointer transition-all hover:scale-105 rounded-3xl bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800 hover:border-blue-500 shadow-sm hover:shadow-xl">
+                                     <img src={m.logoUrl} className="h-20 mx-auto mb-4 object-contain" alt={m.name} />
+                                     <h4 className="font-black uppercase text-sm tracking-tight">{m.name}</h4>
+                                     <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-1 block">Click to select</span>
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                 )}
 
                 {step === 3 && selectedMethod && (
                     <div className="animate-fade-in space-y-10">
@@ -435,6 +440,8 @@ const DepositFunds: React.FC = () => {
 
             {/* DEPOSIT HISTORY SECTION (Audit Log) */}
             <div className="bg-white dark:bg-gray-950 p-10 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 mt-12">
+                <FetchingInline messageType="Fresh funds" customLabel="Updating currency flows..." />
+                <FetchingInline messageType="Payment deposit funds" customLabel="Synchronizing ledger assets..." />
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-6">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-gray-50 dark:bg-gray-900 rounded-xl flex items-center justify-center text-gray-400">

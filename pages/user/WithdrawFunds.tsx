@@ -7,6 +7,7 @@ import { createWithdrawal } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate } from 'react-router-dom';
+import FetchingInline from '../../components/FetchingInline';
 
 const WithdrawalHeaderIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
@@ -440,6 +441,8 @@ const WithdrawFunds: React.FC = () => {
                 {/* STEP 2: METHOD - REDESIGNED 2 PER ROW, NO LIMIT TEXT */}
                 {step === 2 && (
                     <div className="animate-fade-in space-y-10">
+                        <FetchingInline messageType="Payment methods" customLabel="Loading payment options..." />
+                        <FetchingInline messageType="Withdraw method" customLabel="Validating withdrawal ledger..." />
                         <div className="text-center space-y-2">
                             <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Destination Network</h3>
                             <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 2: Choose Payout Provider</p>

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { login as apiLogin } from '../services/api';
+import FetchingInline from '../components/FetchingInline';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
@@ -56,7 +57,8 @@ const Login: React.FC = () => {
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
+            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800 relative overflow-hidden">
+                <FetchingInline messageType="Login after user login" overlay={true} customLabel="Verifying user credentials..." />
                 <div className="text-center select-none">
                     <h1 
                         className="text-3xl font-bold text-blue-600 dark:text-blue-400 cursor-default active:scale-95 transition-transform"

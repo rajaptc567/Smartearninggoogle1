@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useData } from '../../hooks/useData';
 import Button from '../../components/ui/Button';
 import { User } from '../../types';
+import FetchingInline from '../../components/FetchingInline';
 
 const Profile: React.FC = () => {
     const { state, dispatch } = useData();
@@ -46,6 +47,7 @@ const Profile: React.FC = () => {
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
+            <FetchingInline messageType="Details" customLabel="Updating profile parameters..." />
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-white border-b dark:border-gray-700 pb-4">Personal Information</h2>
                 <form onSubmit={handleInfoSubmit} className="mt-4 space-y-4">
