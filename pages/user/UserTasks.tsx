@@ -4,7 +4,6 @@ import { useData } from '../../hooks/useData';
 import { formatCurrency, Task } from '../../types';
 import Button from '../../components/ui/Button';
 import { completeTask } from '../../services/api';
-import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const UserTasks: React.FC = () => {
     const { state, dispatch } = useData();
@@ -49,13 +48,7 @@ const UserTasks: React.FC = () => {
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
     }, [activeVideoTask, isTabVisible, timeLeft, isVideoComplete]);
 
-    if (!currentUser) {
-        return (
-            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
-                <LoadingCircle text="Fetching interactive monetization tasks..." />
-            </div>
-        );
-    }
+    if (!currentUser) return null;
 
     const visibleTasks = useMemo(() => {
         return tasks.filter(t => {

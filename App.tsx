@@ -54,9 +54,11 @@ const App: React.FC = () => {
   const { state } = useData();
   const [introFinished, setIntroFinished] = useState(false);
 
+  const showGlobalLoader = state.settings.isInitialPageLoaderEnabled !== false;
+
   return (
     <>
-      {(!introFinished || state.isLoading) && (
+      {showGlobalLoader && (!introFinished || state.isLoading) && (
         <FullPageLoader 
           isDataLoading={state.isLoading} 
           onFinished={() => setIntroFinished(true)} 

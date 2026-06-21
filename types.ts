@@ -202,6 +202,7 @@ export interface Settings {
     homepageVideoId?: string;
     homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
+    isInitialPageLoaderEnabled?: boolean;
 }
 
 export interface Task {

@@ -440,6 +440,24 @@ const Settings: React.FC = () => {
                                 <label htmlFor="restrictDepositAmount" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.restrictDepositAmount ? 'bg-blue-400' : 'bg-gray-300'}`}></label>
                             </div>
                         </div>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="isInitialPageLoaderEnabled" className="block text-sm font-medium text-gray-900 dark:text-gray-200">Enable Brand Full-Page Loading Sequence</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">If enabled, a colorful circular spinner and status bar with greetings, tagline, and domain name is displayed on first load.</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                <input 
+                                    id="isInitialPageLoaderEnabled"
+                                    name="isInitialPageLoaderEnabled"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.isInitialPageLoaderEnabled ?? true}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="isInitialPageLoaderEnabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.isInitialPageLoaderEnabled ?? true ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
                     </div>
 
                      {localSettings.transferConfig?.enabled && (

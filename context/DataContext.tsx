@@ -112,6 +112,7 @@ const initialState: AppState = {
         featuredPlanIds: [],
         faqs: [],
         homepagePaymentLogos: [],
+        isInitialPageLoaderEnabled: true,
     },
     notifications: [],
     logs: [],
@@ -187,6 +188,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
         if (newSettings.faqs === undefined) newSettings.faqs = [];
         if (newSettings.homepagePaymentLogos === undefined) newSettings.homepagePaymentLogos = [];
+        if (newSettings.isInitialPageLoaderEnabled === undefined) newSettings.isInitialPageLoaderEnabled = true;
         return newSettings;
     };
 

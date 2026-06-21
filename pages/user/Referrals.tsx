@@ -7,7 +7,6 @@ import Button from '../../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
 import ShareButtons from '../../components/ui/ShareButtons';
-import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 interface GenealogyNode {
     user: User;
@@ -472,13 +471,7 @@ const Referrals: React.FC = () => {
         );
     };
 
-    if (!currentUser) {
-        return (
-            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
-                <LoadingCircle text="Retrieving multi-level network referral tree..." />
-            </div>
-        );
-    }
+    if (!currentUser) return null;
 
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
