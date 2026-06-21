@@ -4,6 +4,7 @@ import { useData } from '../hooks/useData';
 import Button from '../components/ui/Button';
 import { User } from '../types';
 import { updateUser } from '../services/api';
+import { LoadingCircle } from '../components/ui/LoadingCircle';
 
 const AdminProfile: React.FC = () => {
     const { state, dispatch } = useData();
@@ -18,7 +19,11 @@ const AdminProfile: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
 
     if (!currentUser) {
-        return <div>Loading...</div>;
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Retrieving admin credentials..." />
+            </div>
+        );
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

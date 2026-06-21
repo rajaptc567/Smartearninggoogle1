@@ -5,6 +5,7 @@ import Table from '../../components/ui/Table';
 import { Status, Transaction, formatCurrency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const transactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
@@ -28,7 +29,11 @@ const Transactions: React.FC = () => {
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     
     if (!currentUser) {
-        return <div>Loading...</div>;
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Loading ledger and database transactions list..." />
+            </div>
+        );
     }
 
     const filteredUserTransactions = useMemo(() => {

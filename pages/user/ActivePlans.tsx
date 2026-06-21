@@ -6,6 +6,7 @@ import { useData } from '../../hooks/useData';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { Status, formatCurrency } from '../../types';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const ActivePlans: React.FC = () => {
     const { state } = useData();
@@ -14,7 +15,11 @@ const ActivePlans: React.FC = () => {
     const navigate = useNavigate();
 
     if (!currentUser) {
-        return <div>Loading...</div>;
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Aligning purchased subscription parameters..." />
+            </div>
+        );
     }
 
     const activePlans = currentUser.activePlans || [];

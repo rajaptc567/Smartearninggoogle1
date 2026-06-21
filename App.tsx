@@ -1,6 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
+import { useData } from './hooks/useData';
+import { FullPageLoader } from './components/ui/LoadingCircle';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
@@ -49,9 +51,19 @@ import UserTasks from './pages/user/UserTasks';
 
 
 const App: React.FC = () => {
+  const { state } = useData();
+  const [introFinished, setIntroFinished] = useState(false);
+
   return (
-    <HashRouter>
-      <Routes>
+    <>
+      {(!introFinished || state.isLoading) && (
+        <FullPageLoader 
+          isDataLoading={state.isLoading} 
+          onFinished={() => setIntroFinished(true)} 
+        />
+      )}
+      <HashRouter>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
@@ -102,6 +114,7 @@ const App: React.FC = () => {
         </Route>
       </Routes>
     </HashRouter>
+  </>
   );
 };
 

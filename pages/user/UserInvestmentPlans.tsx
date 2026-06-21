@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { purchasePlan as apiPurchasePlan } from '../../services/api';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 // --- Icon Components ---
 const CheckIcon = ({ className }: { className?: string }) => (
@@ -93,7 +94,11 @@ const UserInvestmentPlans: React.FC = () => {
   }, [currentUser, transactions, users]);
 
   if (!currentUser) {
-    return <div>Loading user data...</div>;
+    return (
+        <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+            <LoadingCircle text="Fetching investment portfolios and packages..." />
+        </div>
+    );
   }
   
   // Sorted and filtered plans based on Admin preferences

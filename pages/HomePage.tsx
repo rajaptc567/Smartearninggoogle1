@@ -5,16 +5,13 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
-
-import { Loader2 } from 'lucide-react';
+import { LoadingCircle } from '../components/ui/LoadingCircle';
 
 // --- Loading Component ---
-const SectionLoading: React.FC<{ text?: string }> = ({ text = "Waiting data is loading" }) => (
-    <div className="flex flex-col items-center justify-center py-20 w-full animate-pulse">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-        <p className="text-gray-500 font-medium tracking-wide">{text}</p>
-    </div>
+const SectionLoading: React.FC<{ text?: string }> = ({ text = "Fresh data is loading." }) => (
+    <LoadingCircle text={text} size="md" />
 );
+
 
 // --- Reusable Editable Text Component ---
 interface EditableTextProps {

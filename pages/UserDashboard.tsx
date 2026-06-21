@@ -7,6 +7,7 @@ import { useData } from '../hooks/useData';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../components/ui/Badge';
 import ShareButtons from '../components/ui/ShareButtons';
+import { LoadingCircle } from '../components/ui/LoadingCircle';
 
 // Icons
 const WalletIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
@@ -72,7 +73,13 @@ const UserDashboard: React.FC = () => {
     });
     const [showCustomize, setShowCustomize] = useState(false);
 
-    if (!currentUser) return <div>Loading user data...</div>;
+    if (!currentUser) {
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Syncing user profile and platform parameters..." />
+            </div>
+        );
+    }
 
     const userTransactions = useMemo(() => transactions.filter(t => t.userId === currentUser._id), [transactions, currentUser._id]);
 

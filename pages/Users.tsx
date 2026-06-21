@@ -5,6 +5,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import Modal from '../components/ui/Modal';
+import { LoadingCircle } from '../components/ui/LoadingCircle';
 import { updateUser as apiUpdateUser, createUser as apiCreateUser, adminInitiatePasswordReset, deleteUser, bulkDeleteUsers, sendAdminNotification, bulkUpdateUserRestrictions, adjustUserWallet, getUsers, adminActivatePlan, createBulkDummyUsers, getUploadsBaseUrl } from '../services/api';
 
 const transactionTypes = [
@@ -368,7 +369,7 @@ const Users: React.FC = () => {
             </div>
 
              {isLoading ? (
-                <div className="py-20 text-center text-gray-500 italic">Loading user directory...</div>
+                <LoadingCircle text="Loading user directory..." />
              ) : (
                  <div className="w-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
                     <div className="w-full overflow-x-auto">

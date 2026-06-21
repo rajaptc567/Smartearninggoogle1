@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { createDispute, updateDispute, markDisputeAsRead } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const ShieldExclamationIcon = () => (
     <svg className="w-20 h-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -58,7 +59,13 @@ const UserDisputes: React.FC = () => {
     };
 
 
-    if (!currentUser) return <div>Loading...</div>;
+    if (!currentUser) {
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Opening secure conflict management portal..." />
+            </div>
+        );
+    }
 
     // --- INSTANT RESTRICTION CHECK ---
     if (currentUser.restrictions?.dispute) {
