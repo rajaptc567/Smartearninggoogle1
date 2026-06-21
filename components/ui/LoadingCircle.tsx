@@ -15,6 +15,21 @@ export const LoadingCircle: React.FC<LoadingCircleProps> = ({
     size = 'md',
     className = "" 
 }) => {
+    // Unique gradient ID per instance to enforce localized SVG settings and prevent defs clashing
+    const [gradientId] = useState(() => `local-spinner-grad-${Math.floor(Math.random() * 1000000)}`);
+    const [progress, setProgress] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setProgress((prev) => {
+                if (prev >= 95) return prev;
+                const step = prev < 40 ? 5 : prev < 75 ? 3 : 1;
+                return Math.min(prev + step, 95);
+            });
+        }, 60);
+        return () => clearInterval(interval);
+    }, []);
+
     const sizeClasses = {
         sm: {
             spinner: "w-8 h-8",
@@ -69,8 +84,8 @@ export const LoadingCircle: React.FC<LoadingCircleProps> = ({
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
-                        <linearGradient id="spinnerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="#3b82f6" />      {/* Blue */}
+                        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#3b82f6" strokeLinecap="round" />      {/* Blue */}
                             <stop offset="50%" stopColor="#8b5cf6" />     {/* Purple */}
                             <stop offset="100%" stopColor="#ec4899" />    {/* Pink */}
                         </linearGradient>
@@ -90,7 +105,7 @@ export const LoadingCircle: React.FC<LoadingCircleProps> = ({
                         cx="50" 
                         cy="50" 
                         r="40" 
-                        stroke="url(#spinnerGradient)" 
+                        stroke={`url(#${gradientId})`} 
                         strokeWidth="8" 
                         strokeLinecap="round"
                     />
@@ -99,12 +114,15 @@ export const LoadingCircle: React.FC<LoadingCircleProps> = ({
 
             {/* Glowing Text */}
             <p className="text-sm md:text-base font-semibold text-gray-700 dark:text-gray-300 tracking-wide mb-3 animate-pulse" id="loading-text-label">
-                {text}
+                {text} {progress}%
             </p>
 
             {/* Glowing Localized Status/Progress Bar */}
             <div className="w-44 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner relative" id="progressbar-container">
-                <div className="absolute top-0 left-0 h-full w-full loader-bar-glow rounded-full opacity-90 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                <div 
+                    className="absolute top-0 left-0 h-full loader-bar-glow rounded-full opacity-90 shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-300" 
+                    style={{ width: `${progress}%` }}
+                />
             </div>
         </div>
     );

@@ -7,6 +7,7 @@ import { formatCurrency, User, currencySymbols, Currency, Transfer, Status } fro
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate } from 'react-router-dom';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const ShieldExclamationIcon = () => (
     <svg className="w-20 h-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -291,7 +292,13 @@ const TransferFunds: React.FC = () => {
         return filteredHistory.slice(start, start + itemsPerPage);
     }, [filteredHistory, currentPage, itemsPerPage]);
 
-    if (!currentUser) return null;
+    if (!currentUser) {
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Opening secure inter-account fund transfers lobby..." />
+            </div>
+        );
+    }
 
     if (currentUser.restrictions?.transfer) {
         return (

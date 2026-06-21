@@ -7,6 +7,7 @@ import { createWithdrawal } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate } from 'react-router-dom';
+import { LoadingCircle } from '../../components/ui/LoadingCircle';
 
 const WithdrawalHeaderIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
@@ -245,7 +246,13 @@ const WithdrawFunds: React.FC = () => {
         }
     };
 
-    if (!currentUser) return null;
+    if (!currentUser) {
+        return (
+            <div className="flex items-center justify-center p-12 bg-white dark:bg-slate-900 rounded-3xl min-h-[400px]">
+                <LoadingCircle text="Opening secure payout and withdrawal registry..." />
+            </div>
+        );
+    }
 
     // --- INSTANT RESTRICTION CHECK ---
     if (currentUser.restrictions?.withdrawal) {
