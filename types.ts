@@ -294,6 +294,7 @@ export interface PaymentMethod {
     };
     howToDeposit?: {
         enabled: boolean;
+        showBeforePayment?: boolean;
         steps: {
             title: string;
             description: string;
@@ -301,6 +302,8 @@ export interface PaymentMethod {
         }[];
     };
     gatewayMode?: 'manual' | 'paynow';
+    gatewayTitle?: string;
+    gatewayDescription?: string;
     payNowUrl?: string;
     payNowButtonText?: string;
     isPopupViewEnabled?: boolean;

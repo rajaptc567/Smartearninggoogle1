@@ -31,6 +31,14 @@ const PaymentMethodSchema = new mongoose.Schema({
         enum: ['manual', 'paynow'],
         default: 'manual',
     },
+    gatewayTitle: {
+        type: String,
+        default: 'Checkout Payment Gateway',
+    },
+    gatewayDescription: {
+        type: String,
+        default: 'Click below to pay safely using your PayPal, Stripe checkout system, or Credit Card.',
+    },
     payNowUrl: {
         type: String,
         default: '',
@@ -89,6 +97,7 @@ const PaymentMethodSchema = new mongoose.Schema({
     },
     howToDeposit: {
         enabled: { type: Boolean, default: false },
+        showBeforePayment: { type: Boolean, default: false },
         steps: [{
             title: String,
             description: String,

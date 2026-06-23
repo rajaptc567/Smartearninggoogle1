@@ -109,6 +109,7 @@ const DepositFunds: React.FC = () => {
     // Guide State
     const [isGuideOpen, setIsGuideOpen] = useState(false);
     const [scrollProgress, setScrollProgress] = useState(0);
+    const [lastAutoShownMethodId, setLastAutoShownMethodId] = useState<string | null>(null);
     const modalContentRef = useRef<HTMLDivElement>(null);
 
     // History Filter State (Audit Log)
@@ -146,6 +147,19 @@ const DepositFunds: React.FC = () => {
         availableMethods.find(method => method._id.toString() === selectedMethodId),
         [selectedMethodId, availableMethods]
     );
+
+    useEffect(() => {
+        if (step === 3 && selectedMethod) {
+            if (selectedMethod.howToDeposit?.enabled && selectedMethod.howToDeposit?.showBeforePayment) {
+                if (lastAutoShownMethodId !== selectedMethod._id) {
+                    setIsGuideOpen(true);
+                    setLastAutoShownMethodId(selectedMethod._id);
+                }
+            }
+        } else if (step !== 3) {
+            setLastAutoShownMethodId(null);
+        }
+    }, [step, selectedMethodId, selectedMethod, lastAutoShownMethodId]);
 
     const filteredDeposits = useMemo(() => {
         if (!currentUser) return [];
@@ -314,9 +328,17 @@ const DepositFunds: React.FC = () => {
                             <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-8 shadow-2xl border border-white/5 text-center flex flex-col items-center">
                                 <div className="w-20 h-20 bg-gradient-to-tr from-emerald-400 to-teal-500 rounded-3xl flex items-center justify-center text-4xl shadow-2xl shadow-emerald-500/10 mb-2">⚡</div>
                                 <div className="space-y-2">
-                                    <h3 className="text-2xl font-black uppercase tracking-tight">Checkout Payment Gateway</h3>
+                                    <h3 className="text-2xl font-black uppercase tracking-tight">
+                                        {selectedMethod.gatewayTitle || 'Checkout Payment Gateway'}
+                                    </h3>
                                     <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
-                                        Click below to pay safely using your <strong>PayPal</strong>, <strong>Stripe</strong> checkout system, or <strong>Credit Card</strong>.
+                                        {selectedMethod.gatewayDescription ? (
+                                            <Linkify text={selectedMethod.gatewayDescription} primaryColor={pageConfig.primaryColor} />
+                                        ) : (
+                                            <>
+                                                Click below to pay safely using your <strong>PayPal</strong>, <strong>Stripe</strong> checkout system, or <strong>Credit Card</strong>.
+                                            </>
+                                        )}
                                     </p>
                                 </div>
 

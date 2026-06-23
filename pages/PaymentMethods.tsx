@@ -242,6 +242,8 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         maxAmount: 1000,
         feePercent: 0,
         gatewayMode: 'manual',
+        gatewayTitle: 'Checkout Payment Gateway',
+        gatewayDescription: 'Click below to pay safely using your PayPal, Stripe checkout system, or Credit Card.',
         payNowUrl: '',
         payNowButtonText: 'Pay Now',
         isPopupViewEnabled: false,
@@ -261,6 +263,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
     // How To Deposit State
     const [howToEnabled, setHowToEnabled] = useState(false);
+    const [howToShowBeforePayment, setHowToShowBeforePayment] = useState(false);
     const [howToSteps, setHowToSteps] = useState<Step[]>([]);
 
     const [isSaving, setIsSaving] = useState(false);
@@ -271,12 +274,14 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             if (method.customLabels) setCustomLabels(method.customLabels);
             if (method.howToDeposit) {
                 setHowToEnabled(method.howToDeposit.enabled);
+                setHowToShowBeforePayment(!!method.howToDeposit.showBeforePayment);
                 setHowToSteps(method.howToDeposit.steps.map(s => ({ ...s })));
             }
         } else {
             setCustomFields([]);
             setCustomLabels({ providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
             setHowToEnabled(false);
+            setHowToShowBeforePayment(false);
             setHowToSteps([]);
         }
     }, [method]);
@@ -436,6 +441,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
         const howToDepositData = {
             enabled: howToEnabled,
+            showBeforePayment: howToShowBeforePayment,
             steps: processedSteps
         };
         
@@ -625,6 +631,30 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-400 dark:text-gray-400 uppercase mb-1">Custom Checkout Title</label>
+                                        <input 
+                                            name="gatewayTitle" 
+                                            value={formData.gatewayTitle || ''} 
+                                            onChange={handleChange} 
+                                            placeholder="e.g. Checkout Payment Gateway" 
+                                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 font-bold" 
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-400 dark:text-gray-400 uppercase mb-1">Custom Checkout Subheading / Detailed description text</label>
+                                        <textarea 
+                                            name="gatewayDescription" 
+                                            value={formData.gatewayDescription || ''} 
+                                            onChange={handleChange} 
+                                            placeholder="e.g. Click below to pay safely using your PayPal, Stripe..." 
+                                            rows={2}
+                                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-xs" 
+                                        />
+                                        <span className="text-[10px] text-gray-400 mt-1 block">Specify the instructions and accepted payment channels. You can write anything you want within it.</span>
+                                    </div>
+
+                                    <div className="md:col-span-2">
                                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Pay Now Destination Link (URL)</label>
                                         <input 
                                             name="payNowUrl" 
@@ -758,6 +788,15 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
                     {howToEnabled && (
                         <div className="space-y-4 bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border dark:border-gray-600">
+                            {/* POPUP BEFORE PAYMENT OPTION */}
+                            <div className="p-4 bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/10 rounded-2xl flex items-center justify-between gap-4 mb-2 shadow-sm">
+                                <div>
+                                    <span className="font-bold text-xs uppercase text-slate-850 dark:text-slate-150 block">⚡ Show Guide first as a Pop-up modal</span>
+                                    <span className="text-[10px] text-gray-500 block">Displays this guide sequence automatically to the customer first before Step 3 checkout</span>
+                                </div>
+                                <ToggleSwitch checked={howToShowBeforePayment} onChange={() => setHowToShowBeforePayment(!howToShowBeforePayment)} />
+                            </div>
+
                             {howToSteps.map((step, index) => (
                                 <div key={index} className="border dark:border-gray-600 p-3 rounded-md bg-white dark:bg-gray-800 shadow-sm relative">
                                     <div className="flex justify-between items-center mb-2">
@@ -777,6 +816,18 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                         className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-500 mb-2"
                                         rows={2}
                                     />
+
+                                    {/* WORKSPACE DIRECT SCREENSHOT IMAGE/URL EDIT */}
+                                    <div className="mb-2">
+                                        <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Screenshot / Guide Image URL (Editable)</label>
+                                        <input 
+                                            placeholder="Paste custom hosted image/screenshot URL or write base64" 
+                                            value={step.imageUrl || ''} 
+                                            onChange={(e) => handleStepChange(index, 'imageUrl', e.target.value)}
+                                            className="w-full text-xs font-mono rounded-md dark:bg-gray-700 dark:border-gray-500"
+                                        />
+                                    </div>
+
                                     <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
                                         <input 
                                             type="file" 
