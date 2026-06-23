@@ -527,7 +527,7 @@ const DepositFunds: React.FC = () => {
                                             onClick={() => setIsPayNowModalOpen(true)}
                                             className="flex-1 py-5 rounded-[1.8rem] bg-slate-800 text-slate-300 border border-slate-700/50 hover:bg-slate-700 hover:text-white hover:scale-[1.03] active:scale-95 transition-all text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
                                         >
-                                            <span>💡</span> How to verify & proceed
+                                            <span>💡</span> How to Verify and proceed
                                         </button>
                                     )}
                                 </div>

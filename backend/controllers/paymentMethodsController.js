@@ -128,13 +128,35 @@ export const createPaymentMethod = async (req, res) => {
             }
         }
 
-        // Parse confirmationFields if it comes as a string
-        if (methodData.confirmationFields && typeof methodData.confirmationFields === 'string') {
-            try {
-                methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
-            } catch (e) {
-                console.error("Failed to parse confirmationFields", e);
-                methodData.confirmationFields = [];
+        // Parse confirmationFields if it comes as a string or array
+        if (methodData.confirmationFields) {
+            if (typeof methodData.confirmationFields === 'string') {
+                try {
+                    methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
+                } catch (e) {
+                    console.error("Failed to parse confirmationFields string", e);
+                    methodData.confirmationFields = [];
+                }
+            } else if (Array.isArray(methodData.confirmationFields)) {
+                let parsedList = [];
+                for (const item of methodData.confirmationFields) {
+                    if (typeof item === 'string') {
+                        if (item === '[object Object]') continue;
+                        try {
+                            const parsed = JSON.parse(item);
+                            if (Array.isArray(parsed)) {
+                                parsedList = parsedList.concat(parsed);
+                            } else if (parsed && typeof parsed === 'object') {
+                                parsedList.push(parsed);
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse confirmationFields item", e);
+                        }
+                    } else if (item && typeof item === 'object') {
+                        parsedList.push(item);
+                    }
+                }
+                methodData.confirmationFields = parsedList;
             }
         }
 
@@ -204,13 +226,35 @@ export const updatePaymentMethod = async (req, res) => {
             }
         }
 
-        // Parse confirmationFields if it comes as a string
-        if (methodData.confirmationFields && typeof methodData.confirmationFields === 'string') {
-            try {
-                methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
-            } catch (e) {
-                console.error("Failed to parse confirmationFields", e);
-                methodData.confirmationFields = [];
+        // Parse confirmationFields if it comes as a string or array
+        if (methodData.confirmationFields) {
+            if (typeof methodData.confirmationFields === 'string') {
+                try {
+                    methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
+                } catch (e) {
+                    console.error("Failed to parse confirmationFields string", e);
+                    methodData.confirmationFields = [];
+                }
+            } else if (Array.isArray(methodData.confirmationFields)) {
+                let parsedList = [];
+                for (const item of methodData.confirmationFields) {
+                    if (typeof item === 'string') {
+                        if (item === '[object Object]') continue;
+                        try {
+                            const parsed = JSON.parse(item);
+                            if (Array.isArray(parsed)) {
+                                parsedList = parsedList.concat(parsed);
+                            } else if (parsed && typeof parsed === 'object') {
+                                parsedList.push(parsed);
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse confirmationFields item", e);
+                        }
+                    } else if (item && typeof item === 'object') {
+                        parsedList.push(item);
+                    }
+                }
+                methodData.confirmationFields = parsedList;
             }
         }
 

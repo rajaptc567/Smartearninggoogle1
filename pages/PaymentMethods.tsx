@@ -424,7 +424,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
 
         const data = new FormData();
         Object.entries(formData).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit' && key !== 'customLabels') {
+            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit' && key !== 'customLabels' && key !== 'confirmationFields') {
                 data.append(key, String(value));
             }
         });
@@ -710,15 +710,15 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Popup Verification Tab ("How to View")</label>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">"How to Verify and proceed" Button (On Step 3)</label>
                                         <select 
                                             name="isPopupViewEnabled" 
                                             value={String(formData.isPopupViewEnabled)} 
                                             onChange={e => setFormData(prev => ({ ...prev, isPopupViewEnabled: e.target.value === 'true' }))}
                                             className="w-full rounded-md dark:bg-gray-700"
                                         >
-                                            <option value="false">Disabled (Show instructions directly on page)</option>
-                                            <option value="true">Enabled (Use detailed pop-up tab instructions)</option>
+                                            <option value="false">Disabled (Hide "How to Verify and proceed" button)</option>
+                                            <option value="true">Enabled (Show "How to Verify and proceed" button)</option>
                                         </select>
                                     </div>
 
