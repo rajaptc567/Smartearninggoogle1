@@ -295,6 +295,7 @@ export interface PaymentMethod {
     howToDeposit?: {
         enabled: boolean;
         showBeforePayment?: boolean;
+        dropdownMode?: boolean;
         steps: {
             title: string;
             description: string;

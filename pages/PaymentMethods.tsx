@@ -264,6 +264,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     // How To Deposit State
     const [howToEnabled, setHowToEnabled] = useState(false);
     const [howToShowBeforePayment, setHowToShowBeforePayment] = useState(false);
+    const [howToDropdownMode, setHowToDropdownMode] = useState(false);
     const [howToSteps, setHowToSteps] = useState<Step[]>([]);
 
     const [isSaving, setIsSaving] = useState(false);
@@ -275,6 +276,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             if (method.howToDeposit) {
                 setHowToEnabled(method.howToDeposit.enabled);
                 setHowToShowBeforePayment(!!method.howToDeposit.showBeforePayment);
+                setHowToDropdownMode(!!method.howToDeposit.dropdownMode);
                 setHowToSteps(method.howToDeposit.steps.map(s => ({ ...s })));
             }
         } else {
@@ -282,6 +284,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             setCustomLabels({ providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
             setHowToEnabled(false);
             setHowToShowBeforePayment(false);
+            setHowToDropdownMode(false);
             setHowToSteps([]);
         }
     }, [method]);
@@ -442,6 +445,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         const howToDepositData = {
             enabled: howToEnabled,
             showBeforePayment: howToShowBeforePayment,
+            dropdownMode: howToDropdownMode,
             steps: processedSteps
         };
         
@@ -795,6 +799,15 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                     <span className="text-[10px] text-gray-500 block">Displays this guide sequence automatically to the customer first before Step 3 checkout</span>
                                 </div>
                                 <ToggleSwitch checked={howToShowBeforePayment} onChange={() => setHowToShowBeforePayment(!howToShowBeforePayment)} />
+                            </div>
+
+                            {/* DROPDOWN ACCORDION OPTION */}
+                            <div className="p-4 bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/10 rounded-2xl flex items-center justify-between gap-4 mb-2 shadow-sm">
+                                <div>
+                                    <span className="font-bold text-xs uppercase text-slate-850 dark:text-slate-150 block">⚡ Allow Collapsible Dropdown Menu</span>
+                                    <span className="text-[10px] text-gray-500 block">Enables customer to minimize/maximize the step-by-step visual guide on the deposit page</span>
+                                </div>
+                                <ToggleSwitch checked={howToDropdownMode} onChange={() => setHowToDropdownMode(!howToDropdownMode)} />
                             </div>
 
                             {howToSteps.map((step, index) => (

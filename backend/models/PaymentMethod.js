@@ -98,6 +98,7 @@ const PaymentMethodSchema = new mongoose.Schema({
     howToDeposit: {
         enabled: { type: Boolean, default: false },
         showBeforePayment: { type: Boolean, default: false },
+        dropdownMode: { type: Boolean, default: false },
         steps: [{
             title: String,
             description: String,

@@ -81,6 +81,143 @@ const StepIndicator: React.FC<{ currentStep: number; primaryColor?: string }> = 
     );
 };
 
+const HowToDepositSlider: React.FC<{
+    steps: { title: string; description: string; imageUrl?: string }[];
+    primaryColor: string;
+    onFinish: () => void;
+}> = ({ steps, primaryColor, onFinish }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    const nextStep = () => {
+        if (currentIndex < steps.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+        } else {
+            onFinish();
+        }
+    };
+
+    const prevStep = () => {
+        if (currentIndex > 0) {
+            setCurrentIndex(prev => prev - 1);
+        }
+    };
+
+    const currentStep = steps[currentIndex];
+    if (!currentStep) return null;
+
+    return (
+        <div className="w-full flex flex-col gap-6 bg-slate-50 dark:bg-slate-900/60 p-6 md:p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-850 shadow-md">
+            {/* Top Indicator & Step Dot Progress */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-gray-150 dark:border-slate-800 pb-5 gap-3">
+                <div>
+                     <span className="text-[9px] font-black uppercase text-blue-500 tracking-[0.2em] block">Method Guide</span>
+                     <h4 className="text-xl font-black uppercase text-slate-800 dark:text-slate-100 tracking-tight">
+                         Step {currentIndex + 1} of {steps.length}
+                     </h4>
+                </div>
+                
+                {/* Steps Quick Selector Tabbed Row (dots below pictures are supported but the top row adds elite scannability) */}
+                <div className="flex flex-wrap gap-2">
+                    {steps.map((_, idx) => (
+                        <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setCurrentIndex(idx)}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${idx === currentIndex ? 'text-white' : 'bg-slate-200/60 dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:opacity-85'}`}
+                            style={idx === currentIndex ? { backgroundColor: primaryColor } : {}}
+                        >
+                            Step {idx + 1}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Split Visual Grid Area */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch pt-2">
+                {/* Pictorial Frame on Left / Top */}
+                <div className="flex flex-col items-center justify-center bg-gray-100/50 dark:bg-slate-950/80 p-4 rounded-3xl border border-dashed border-gray-200 dark:border-slate-800/80 shadow-inner overflow-hidden relative group min-h-[250px]">
+                    {currentStep.imageUrl ? (
+                        <>
+                            <img
+                                src={currentStep.imageUrl}
+                                alt={currentStep.title}
+                                className="object-contain max-h-[260px] max-w-full rounded-2xl transition-all duration-500 ease-out transform group-hover:scale-[1.03] active:scale-95 cursor-zoom-in shadow-lg"
+                                onClick={() => window.open(currentStep.imageUrl, '_blank')}
+                                referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-x-0 bottom-3 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                <span className="text-[9px] uppercase font-black bg-black/70 text-white px-3 py-1 rounded-full backdrop-blur-md tracking-wider">Click to Zoom View</span>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+                            <span className="text-5xl animate-pulse">📝</span>
+                            <div>
+                                <h5 className="text-xs font-black uppercase text-slate-500 dark:text-slate-400">Written Instructions</h5>
+                                <p className="text-[10px] text-gray-400 mt-1">Please reference guidelines on the side</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Content Details on Right / Bottom */}
+                <div className="flex flex-col justify-between h-full space-y-8 min-h-[250px]">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <span 
+                                className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest text-white shadow-sm"
+                                style={{ backgroundColor: primaryColor }}
+                            >
+                                Guide Phase {currentIndex + 1}
+                            </span>
+                        </div>
+                        <h4 className="text-2xl font-black uppercase tracking-tight text-slate-950 dark:text-white">
+                            {currentStep.title}
+                        </h4>
+                        <div className="text-sm text-gray-600 dark:text-gray-300 font-bold leading-relaxed pr-2">
+                            <Linkify text={currentStep.description} primaryColor={primaryColor} />
+                        </div>
+                    </div>
+
+                    {/* Bottom controls of individual tutorial panel */}
+                    <div className="flex gap-4 pt-4 border-t border-gray-150 dark:border-slate-850">
+                        <button
+                            type="button"
+                            onClick={prevStep}
+                            disabled={currentIndex === 0}
+                            className={`flex-1 py-4 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${currentIndex === 0 ? 'opacity-40 pointer-events-none' : 'hover:bg-gray-50 active:scale-95'}`}
+                        >
+                            &larr; Prev
+                        </button>
+                        <Button
+                            type="button"
+                            onClick={nextStep}
+                            className="flex-[2] py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-white shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all text-center"
+                            style={{ backgroundColor: primaryColor }}
+                        >
+                            {currentIndex === steps.length - 1 ? 'Finish Tutorial ✓' : 'Next Step &rarr;'}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Slider Dots below picture and details */}
+            <div className="flex items-center justify-center gap-2.5 pt-2">
+                {steps.map((_, idx) => (
+                    <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setCurrentIndex(idx)}
+                        className={`w-3 h-3 rounded-full transition-all duration-300 border-2 ${idx === currentIndex ? 'scale-125 border-transparent' : 'border-slate-300 dark:border-slate-700 hover:opacity-100 opacity-50'}`}
+                        style={idx === currentIndex ? { backgroundColor: primaryColor } : {}}
+                        title={`Go to Step ${idx + 1}`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const DepositFunds: React.FC = () => {
     const { state, dispatch } = useData();
     const { paymentMethods, currentUser, investmentPlans, deposits, settings } = state;
@@ -108,6 +245,7 @@ const DepositFunds: React.FC = () => {
     
     // Guide State
     const [isGuideOpen, setIsGuideOpen] = useState(false);
+    const [isGuideExpanded, setIsGuideExpanded] = useState(true);
     const [scrollProgress, setScrollProgress] = useState(0);
     const [lastAutoShownMethodId, setLastAutoShownMethodId] = useState<string | null>(null);
     const modalContentRef = useRef<HTMLDivElement>(null);
@@ -160,6 +298,20 @@ const DepositFunds: React.FC = () => {
             setLastAutoShownMethodId(null);
         }
     }, [step, selectedMethodId, selectedMethod, lastAutoShownMethodId]);
+
+    useEffect(() => {
+        if (selectedMethod) {
+            if (selectedMethod.howToDeposit?.dropdownMode) {
+                if (selectedMethod.howToDeposit?.showBeforePayment) {
+                    setIsGuideExpanded(false);
+                } else {
+                    setIsGuideExpanded(true);
+                }
+            } else {
+                setIsGuideExpanded(true);
+            }
+        }
+    }, [selectedMethodId, selectedMethod]);
 
     const filteredDeposits = useMemo(() => {
         if (!currentUser) return [];
@@ -440,22 +592,82 @@ const DepositFunds: React.FC = () => {
                             </div>
                         )}
 
-                        {/* HOW TO GUIDE TRIGGER */}
+                        {/* HOW TO GUIDE INNER SLIDER */}
                         {selectedMethod.howToDeposit?.enabled && selectedMethod.howToDeposit.steps?.length > 0 && (
-                            <div className="p-8 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/40 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-                                <div className="flex items-center gap-6">
-                                    <div className="w-16 h-16 rounded-[1.5rem] bg-white dark:bg-gray-800 flex items-center justify-center text-3xl shadow-sm border border-blue-100 dark:border-blue-800">📖</div>
-                                    <div>
-                                        <h4 className="font-black text-lg uppercase tracking-tight text-gray-900 dark:text-white">Visual How-To Guide</h4>
-                                        <p className="text-sm text-gray-500 font-medium">New member? Walk through the step-by-step tutorial.</p>
+                            <div className="space-y-6">
+                                {selectedMethod.howToDeposit?.dropdownMode ? (
+                                    /* Collapsible Dropdown Mode */
+                                    <div className="border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-2 bg-slate-50/40 dark:bg-slate-950/20 overflow-hidden shadow-sm transition-all pb-4">
+                                        <div 
+                                            onClick={() => setIsGuideExpanded(!isGuideExpanded)}
+                                            className="flex items-center justify-between p-5 bg-white dark:bg-slate-900 rounded-[2rem] cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-850/60 transition-all select-none shadow-sm"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-3xl">📖</span>
+                                                <div className="text-left">
+                                                    <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                                                        Step-by-Step Process Guide
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 dark:bg-blue-500/10">dropdown</span>
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                                                        {isGuideExpanded ? 'Click to minimize/collapse tutorial guidelines' : 'Click to maximize/expand tutorial guidelines'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsGuideOpen(true);
+                                                    }}
+                                                    className="hidden sm:inline-flex px-3 py-1.5 rounded-xl border border-gray-150 dark:border-slate-800 text-[9px] uppercase font-black tracking-wider text-slate-500 hover:text-blue-500 transition-colors bg-white dark:bg-slate-900 shadow-sm"
+                                                >
+                                                    🔎 Fullscreen
+                                                </button>
+                                                <div className={`p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 transition-transform duration-300 ${isGuideExpanded ? 'rotate-180' : 'rotate-0'}`}>
+                                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {isGuideExpanded && (
+                                            <div className="p-4 pt-6 animate-fade-in">
+                                                <HowToDepositSlider 
+                                                    steps={selectedMethod.howToDeposit.steps} 
+                                                    primaryColor={pageConfig.primaryColor}
+                                                    onFinish={() => setStep(4)}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                                <button 
-                                    onClick={() => setIsGuideOpen(true)}
-                                    className="px-10 py-4 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all active:scale-95"
-                                >
-                                    Open Step-by-Step Guide
-                                </button>
+                                ) : (
+                                    /* Traditional Fully Shown Mode */
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between px-2">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-3xl">📖</span>
+                                                <div>
+                                                    <h3 className="text-xl font-black uppercase tracking-tight text-slate-905 dark:text-white-100">Step-by-Step Process Guide</h3>
+                                                    <p className="text-xs text-slate-400 font-semibold">Slide through the direct visual guidelines to transfer correctly.</p>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                type="button"
+                                                onClick={() => setIsGuideOpen(true)}
+                                                className="hidden sm:inline-flex px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 text-[10px] uppercase font-black tracking-wider text-slate-500 hover:text-blue-500 transition-colors bg-white dark:bg-slate-900 shadow-sm"
+                                            >
+                                                🔎 Fullscreen Mode
+                                            </button>
+                                        </div>
+                                        
+                                        <HowToDepositSlider 
+                                            steps={selectedMethod.howToDeposit.steps} 
+                                            primaryColor={pageConfig.primaryColor}
+                                            onFinish={() => setStep(4)}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -733,78 +945,27 @@ const DepositFunds: React.FC = () => {
             )}
 
             {/* HOW TO GUIDE MODAL */}
-            {isGuideOpen && selectedMethod?.howToDeposit && (
+            {isGuideOpen && selectedMethod?.howToDeposit?.steps && (
                 <Modal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)}>
-                    <div className="relative w-[95vw] max-w-4xl h-[85vh] flex flex-col bg-white dark:bg-gray-950 rounded-[3rem] overflow-hidden">
-                        {/* Progress Bar */}
-                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gray-100 dark:bg-gray-900 z-50">
-                            <div 
-                                className="h-full transition-all duration-300 ease-out" 
-                                style={{ width: `${scrollProgress}%`, backgroundColor: pageConfig.primaryColor }}
-                            />
-                        </div>
-
-                        {/* Modal Header */}
-                        <div className="p-8 md:p-12 border-b dark:border-gray-800 flex justify-between items-center bg-white/80 dark:bg-gray-950/80 backdrop-blur-md z-40">
+                    <div className="relative w-[95vw] max-w-4xl bg-white dark:bg-gray-950 rounded-[3rem] p-6 md:p-10 shadow-2xl border border-slate-150 dark:border-slate-800 flex flex-col gap-6 overflow-hidden select-none animate-fade-in">
+                        <div className="flex justify-between items-center border-b dark:border-slate-800 pb-4">
                             <div>
-                                <h3 className="text-3xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">Instructional Sequence</h3>
-                                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mt-2">Completing transfer via {selectedMethod.name}</p>
+                                <h3 className="text-2xl font-black uppercase tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
+                                    <span className="p-2.5 bg-blue-500/10 text-blue-500 text-lg rounded-2xl flex items-center justify-center">📖</span>
+                                    How To Transfer Guide
+                                </h3>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Completing transfer via {selectedMethod.name}</p>
                             </div>
-                            <button onClick={() => setIsGuideOpen(false)} className="p-3 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <button onClick={() => setIsGuideOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
 
-                        {/* Scrollable Content */}
-                        <div 
-                            ref={modalContentRef}
-                            onScroll={handleScroll}
-                            className="flex-grow overflow-y-auto p-8 md:p-12 custom-scrollbar space-y-16"
-                        >
-                            {selectedMethod.howToDeposit.steps.map((step, idx) => (
-                                <div key={idx} className="relative pl-16 md:pl-24 guide-item animate-fade-in" style={{ animationDelay: `${idx * 0.1}s` }}>
-                                    {/* Number Indicator */}
-                                    <div 
-                                        className="absolute left-0 top-0 w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-3xl flex items-center justify-center text-xl md:text-2xl font-black text-white shadow-2xl transition-transform hover:scale-110"
-                                        style={{ backgroundColor: pageConfig.primaryColor }}
-                                    >
-                                        {idx + 1}
-                                    </div>
-
-                                    <div className="space-y-6">
-                                        <h4 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{step.title}</h4>
-                                        <div className="text-gray-600 dark:text-gray-400 font-medium text-lg leading-relaxed max-w-2xl">
-                                            <Linkify text={step.description} primaryColor={pageConfig.primaryColor} />
-                                        </div>
-                                        
-                                        {step.imageUrl && (
-                                            <div className="mt-8 rounded-[2.5rem] overflow-hidden border-8 border-gray-100 dark:border-gray-900 shadow-2xl bg-white dark:bg-gray-900 group relative">
-                                                <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/5 transition-all duration-500" />
-                                                <img 
-                                                    src={step.imageUrl} 
-                                                    alt={step.title} 
-                                                    className="w-full h-auto max-h-[500px] object-contain transition-transform duration-700 group-hover:scale-[1.02] cursor-zoom-in"
-                                                    onClick={() => window.open(step.imageUrl, '_blank')}
-                                                />
-                                                <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white text-[9px] font-black uppercase px-4 py-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    Click to Zoom
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-
-                            <div className="pt-10 pb-6 text-center">
-                                <Button 
-                                    onClick={() => setIsGuideOpen(false)}
-                                    className="px-16 py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all"
-                                    style={{ backgroundColor: pageConfig.primaryColor }}
-                                >
-                                    I Understand, Proceed to Transfer
-                                </Button>
-                            </div>
-                        </div>
+                        <HowToDepositSlider
+                            steps={selectedMethod.howToDeposit.steps}
+                            primaryColor={pageConfig.primaryColor}
+                            onFinish={() => setIsGuideOpen(false)}
+                        />
                     </div>
                 </Modal>
             )}
