@@ -46,6 +46,11 @@ const DepositSchema = new mongoose.Schema({
     userNotes: {
         type: String,
     },
+    confirmationAnswers: {
+        type: Map,
+        of: String,
+        default: {},
+    },
     matchedWithdrawalId: {
         type: String, // Can be ObjectId if Withdrawal model is fully implemented
     },

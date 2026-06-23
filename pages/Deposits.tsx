@@ -272,6 +272,20 @@ const Deposits: React.FC = () => {
                             <div className="md:col-span-2"><span className="font-semibold">Sender Account:</span> {selectedDeposit.senderAccountTitle || 'N/A'}</div>
                         </div>
 
+                        {selectedDeposit.confirmationAnswers && Object.keys(selectedDeposit.confirmationAnswers).length > 0 && (
+                            <div className="mt-6 border-t dark:border-gray-800 pt-4 md:col-span-2">
+                                <h4 className="font-bold text-xs uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-3">Submitted Verification Answers</h4>
+                                <div className="bg-gray-50 dark:bg-gray-800/40 p-4 rounded-2xl border dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {Object.entries(selectedDeposit.confirmationAnswers).map(([label, value]) => (
+                                        <div key={label} className="text-xs">
+                                            <span className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 block mb-1">{label}:</span>
+                                            <span className="font-semibold text-gray-800 dark:text-gray-150 font-mono break-all">{String(value)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                          {selectedDeposit.userNotes && (
                              <div className="mt-6">
                                 <h4 className="font-semibold mb-2">User Notes:</h4>

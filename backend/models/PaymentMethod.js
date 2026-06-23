@@ -90,6 +90,12 @@ const PaymentMethodSchema = new mongoose.Schema({
         title: { type: String, required: true },
         value: { type: String, required: true }
     }],
+    confirmationFields: [{
+        label: { type: String, required: true },
+        placeholder: { type: String },
+        type: { type: String, default: 'text' },
+        required: { type: Boolean, default: true }
+    }],
     customLabels: {
         providerLabel: { type: String },
         accountTitleLabel: { type: String },

@@ -255,6 +255,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
     const [qrCodeRemoved, setQrCodeRemoved] = useState(false);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [confirmationFields, setConfirmationFields] = useState<{ label: string; placeholder?: string; type?: 'text' | 'number' | 'email'; required?: boolean }[]>([]);
     const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
     const [saveToLibrary, setSaveToLibrary] = useState(false);
     
@@ -272,6 +273,11 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     useEffect(() => {
         if (method) {
             if (method.customFields) setCustomFields(method.customFields);
+            if (method.confirmationFields) {
+                setConfirmationFields(method.confirmationFields);
+            } else {
+                setConfirmationFields([]);
+            }
             if (method.customLabels) setCustomLabels(method.customLabels);
             if (method.howToDeposit) {
                 setHowToEnabled(method.howToDeposit.enabled);
@@ -281,6 +287,7 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             }
         } else {
             setCustomFields([]);
+            setConfirmationFields([]);
             setCustomLabels({ providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
             setHowToEnabled(false);
             setHowToShowBeforePayment(false);
@@ -337,6 +344,21 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const handleRemoveCustomField = (index: number) => {
         const updatedFields = customFields.filter((_, i) => i !== index);
         setCustomFields(updatedFields);
+    };
+
+    // --- Confirmation / Verification Fields Logics ---
+    const handleAddConfirmationField = () => {
+        setConfirmationFields([...confirmationFields, { label: '', placeholder: '', type: 'text', required: true }]);
+    };
+
+    const handleConfirmationFieldChange = (index: number, field: 'label' | 'placeholder' | 'type' | 'required', value: any) => {
+        const updated = [...confirmationFields];
+        (updated[index] as any)[field] = value;
+        setConfirmationFields(updated);
+    };
+
+    const handleRemoveConfirmationField = (index: number) => {
+        setConfirmationFields(confirmationFields.filter((_, i) => i !== index));
     };
 
     // --- How To Steps Logic ---
@@ -428,6 +450,11 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
         // Clean empty custom fields
         const cleanedCustomFields = customFields.filter(f => f.title.trim() !== '');
         data.append('customFields', JSON.stringify(cleanedCustomFields));
+        
+        // Clean empty confirmation fields
+        const cleanedConfirmationFields = confirmationFields.filter(f => f.label.trim() !== '');
+        data.append('confirmationFields', JSON.stringify(cleanedConfirmationFields));
+
         data.append('customLabels', JSON.stringify(customLabels));
 
         const processedSteps = await Promise.all(howToSteps.map(async (step) => {
@@ -778,6 +805,89 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                                     <button type="button" onClick={() => handleRemoveCustomField(index)} className="text-red-500 hover:text-red-700 p-2 font-bold text-xl">×</button>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                 </div>
+
+                 {/* USER DYNAMIC CONFIRMATION FIELDS SECTION */}
+                 <div className="border-t dark:border-gray-700 pt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tighter">✅ Step 4: Checkout Confirmation Fields</h3>
+                            <p className="text-[10px] text-gray-400">Ask users for specific proof info (e.g. PayPal Email, CashApp Tag, Transaction ID)</p>
+                        </div>
+                        <Button type="button" size="sm" variant="secondary" onClick={handleAddConfirmationField}>+ Add User Input Field</Button>
+                    </div>
+                    
+                    {confirmationFields.length > 0 ? (
+                        <div className="space-y-3 bg-indigo-50/20 dark:bg-slate-900/40 p-4 rounded-2xl border border-dashed border-indigo-200 dark:border-slate-800">
+                            {confirmationFields.map((field, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-white dark:bg-slate-850 p-3 rounded-xl border dark:border-slate-800 shadow-sm relative">
+                                    {/* Label Title of User Input */}
+                                    <div className="md:col-span-4">
+                                        <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Field Label / Name</label>
+                                        <input 
+                                            placeholder="e.g. PayPal Email Address" 
+                                            value={field.label} 
+                                            onChange={(e) => handleConfirmationFieldChange(index, 'label', e.target.value)}
+                                            className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600 font-bold"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Input Placeholder of User Input */}
+                                    <div className="md:col-span-4">
+                                        <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Input Placeholder</label>
+                                        <input 
+                                            placeholder="e.g. user@example.com" 
+                                            value={field.placeholder || ''} 
+                                            onChange={(e) => handleConfirmationFieldChange(index, 'placeholder', e.target.value)}
+                                            className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600"
+                                        />
+                                    </div>
+
+                                    {/* Input Field Type */}
+                                    <div className="md:col-span-2">
+                                         <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Field Type</label>
+                                         <select
+                                             value={field.type || 'text'}
+                                             onChange={(e) => handleConfirmationFieldChange(index, 'type', e.target.value)}
+                                             className="w-full text-xs rounded-md py-1 dark:bg-gray-700 dark:border-gray-600 focus:outline-none"
+                                         >
+                                             <option value="text">Plain Text</option>
+                                             <option value="email">Email</option>
+                                             <option value="number">Number</option>
+                                         </select>
+                                    </div>
+
+                                    {/* Mandatory / Required Checkbox */}
+                                    <div className="md:col-span-1 flex flex-col items-center justify-center">
+                                        <span className="block text-[9px] font-black uppercase text-gray-400 mb-1">Required</span>
+                                        <input 
+                                            type="checkbox"
+                                            checked={!!field.required}
+                                            onChange={(e) => handleConfirmationFieldChange(index, 'required', e.target.checked)}
+                                            className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 dark:bg-gray-700 dark:border-gray-600"
+                                        />
+                                    </div>
+
+                                    {/* Remove Field Button */}
+                                    <div className="md:col-span-1 flex justify-end">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleRemoveConfirmationField(index)} 
+                                            className="text-red-500 hover:text-white hover:bg-red-550 border border-transparent hover:border-red-650 p-2 rounded-xl transition-all font-bold text-xl h-9 w-9 flex items-center justify-center"
+                                            title="Delete input field"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-4 text-center border border-dashed border-gray-200 dark:border-slate-800 rounded-2xl bg-gray-50/40 dark:bg-slate-900/10">
+                             <p className="text-xs text-gray-400 font-medium font-mono">No custom user confirmation fields. Users will only provide amount and transaction ID.</p>
                         </div>
                     )}
                  </div>

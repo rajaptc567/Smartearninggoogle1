@@ -249,6 +249,7 @@ export interface Deposit {
     date: string;
     adminNotes?: string;
     userNotes?: string;
+    confirmationAnswers?: Record<string, string>;
     matchedWithdrawalId?: string;
 }
 
@@ -287,6 +288,12 @@ export interface PaymentMethod {
     qrCodeUrl?: string;
     p2pWithdrawalId?: string;
     customFields?: { title: string; value: string }[];
+    confirmationFields?: {
+        label: string;
+        placeholder?: string;
+        type?: 'text' | 'number' | 'email';
+        required?: boolean;
+    }[];
     customLabels?: {
         providerLabel?: string;
         accountTitleLabel?: string;

@@ -44,6 +44,14 @@ export const getDeposit = async (req, res) => {
 export const createDeposit = async (req, res) => {
     try {
         const depositData = { ...req.body };
+        if (depositData.confirmationAnswers && typeof depositData.confirmationAnswers === 'string') {
+            try {
+                depositData.confirmationAnswers = JSON.parse(depositData.confirmationAnswers);
+            } catch (e) {
+                console.error("Failed to parse confirmationAnswers", e);
+                depositData.confirmationAnswers = {};
+            }
+        }
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         

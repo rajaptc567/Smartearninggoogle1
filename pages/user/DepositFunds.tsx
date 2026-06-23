@@ -238,6 +238,7 @@ const DepositFunds: React.FC = () => {
     const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
     const [senderAccountTitle, setSenderAccountTitle] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
+    const [confirmationAnswers, setConfirmationAnswers] = useState<Record<string, string>>({});
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -313,6 +314,20 @@ const DepositFunds: React.FC = () => {
         }
     }, [selectedMethodId, selectedMethod]);
 
+    useEffect(() => {
+        if (selectedMethod) {
+            const initialMap: Record<string, string> = {};
+            if (selectedMethod.confirmationFields) {
+                selectedMethod.confirmationFields.forEach(f => {
+                    initialMap[f.label] = '';
+                });
+            }
+            setConfirmationAnswers(initialMap);
+        } else {
+            setConfirmationAnswers({});
+        }
+    }, [selectedMethodId, selectedMethod]);
+
     const filteredDeposits = useMemo(() => {
         if (!currentUser) return [];
         return deposits.filter(d => {
@@ -360,6 +375,7 @@ const DepositFunds: React.FC = () => {
         formData.append('transactionId', transactionId);
         formData.append('senderAccountTitle', senderAccountTitle);
         formData.append('receipt', receipt);
+        formData.append('confirmationAnswers', JSON.stringify(confirmationAnswers));
         if(userNotes) formData.append('userNotes', userNotes);
         if(selectedMethod.p2pWithdrawalId) formData.append('matchedWithdrawalId', selectedMethod.p2pWithdrawalId);
         try {
@@ -687,6 +703,31 @@ const DepositFunds: React.FC = () => {
                         <div className="space-y-6">
                             <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Sender Account Name</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="TITLE OF YOUR SENDER ACCOUNT" value={senderAccountTitle} onChange={e => setSenderAccountTitle(e.target.value)} required /></div>
                             <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Digital ID (Transaction ID)</label><input className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-mono font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="REFERENCE NUMBER FROM SLIP" value={transactionId} onChange={e => setTransactionId(e.target.value)} required /></div>
+                            
+                            {/* Dynamic Confirmation Fields */}
+                            {selectedMethod?.confirmationFields && selectedMethod.confirmationFields.length > 0 && (
+                                <div className="space-y-6 pt-2">
+                                    <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                                        <span className="text-xs font-black uppercase tracking-wider text-blue-500 block mb-1">Additional Information Required</span>
+                                    </div>
+                                    {selectedMethod.confirmationFields.map((field, idx) => (
+                                        <div key={idx}>
+                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">
+                                                {field.label} {field.required && <span className="text-red-500">*</span>}
+                                            </label>
+                                            <input 
+                                                type={field.type || 'text'}
+                                                className="w-full p-5 rounded-2xl dark:bg-gray-900 border-gray-100 dark:border-gray-800 font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
+                                                placeholder={field.placeholder || `ENTER YOUR ${field.label.toUpperCase()}`}
+                                                value={confirmationAnswers[field.label] || ''}
+                                                onChange={e => setConfirmationAnswers(prev => ({ ...prev, [field.label]: e.target.value }))}
+                                                required={!!field.required}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-2">Verification Proof (Screenshot)</label>
                                 <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-[2rem] p-10 text-center bg-gray-50 dark:bg-gray-900/30 group hover:border-blue-500 transition-colors">
@@ -803,6 +844,23 @@ const DepositFunds: React.FC = () => {
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Transaction ID</p>
                                                     <p className="text-xs font-mono font-bold text-blue-500 break-all select-all">{deposit.transactionId}</p>
                                                 </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Sender Account</p>
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{deposit.senderAccountTitle || 'Pending Data'}</p>
+                                                </div>
+                                                {deposit.confirmationAnswers && Object.keys(deposit.confirmationAnswers).length > 0 && (
+                                                    <div className="col-span-2 pt-2 border-t dark:border-gray-800 space-y-2">
+                                                        <p className="text-[9px] font-black uppercase tracking-widest text-indigo-500">Submitted Proof Details</p>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-2xl border dark:border-slate-800">
+                                                            {Object.entries(deposit.confirmationAnswers).map(([label, value]) => (
+                                                                <div key={label}>
+                                                                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+                                                                    <p className="text-xs font-bold text-gray-750 dark:text-gray-200 break-all font-sans">{String(value)}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 {deposit.notes && (
                                                     <div className="col-span-2 pt-2 border-t dark:border-gray-800">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Admin Notes</p>

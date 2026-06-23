@@ -128,6 +128,25 @@ export const createPaymentMethod = async (req, res) => {
             }
         }
 
+        // Parse confirmationFields if it comes as a string
+        if (methodData.confirmationFields && typeof methodData.confirmationFields === 'string') {
+            try {
+                methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
+            } catch (e) {
+                console.error("Failed to parse confirmationFields", e);
+                methodData.confirmationFields = [];
+            }
+        }
+
+        // Parse customLabels if it comes as a string
+        if (methodData.customLabels && typeof methodData.customLabels === 'string') {
+            try {
+                methodData.customLabels = JSON.parse(methodData.customLabels);
+            } catch (e) {
+                console.error("Failed to parse customLabels", e);
+            }
+        }
+
         // Parse howToDeposit if it comes as a string
         if (methodData.howToDeposit && typeof methodData.howToDeposit === 'string') {
             try {
@@ -182,6 +201,25 @@ export const updatePaymentMethod = async (req, res) => {
             } catch (e) {
                 console.error("Failed to parse customFields", e);
                 methodData.customFields = [];
+            }
+        }
+
+        // Parse confirmationFields if it comes as a string
+        if (methodData.confirmationFields && typeof methodData.confirmationFields === 'string') {
+            try {
+                methodData.confirmationFields = JSON.parse(methodData.confirmationFields);
+            } catch (e) {
+                console.error("Failed to parse confirmationFields", e);
+                methodData.confirmationFields = [];
+            }
+        }
+
+        // Parse customLabels if it comes as a string
+        if (methodData.customLabels && typeof methodData.customLabels === 'string') {
+            try {
+                methodData.customLabels = JSON.parse(methodData.customLabels);
+            } catch (e) {
+                console.error("Failed to parse customLabels", e);
             }
         }
 
