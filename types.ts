@@ -300,6 +300,12 @@ export interface PaymentMethod {
             imageUrl?: string;
         }[];
     };
+    gatewayMode?: 'manual' | 'paynow';
+    payNowUrl?: string;
+    payNowButtonText?: string;
+    isPopupViewEnabled?: boolean;
+    popupViewTitle?: string;
+    popupViewInstructions?: string;
 }
 
 export type CommissionType = 'percentage' | 'fixed';

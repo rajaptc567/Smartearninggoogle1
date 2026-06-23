@@ -19,14 +19,37 @@ const PaymentMethodSchema = new mongoose.Schema({
     },
     accountTitle: {
         type: String,
-        required: true,
     },
     accountNumber: {
         type: String,
-        required: true,
     },
     instructions: {
         type: String,
+    },
+    gatewayMode: {
+        type: String,
+        enum: ['manual', 'paynow'],
+        default: 'manual',
+    },
+    payNowUrl: {
+        type: String,
+        default: '',
+    },
+    payNowButtonText: {
+        type: String,
+        default: 'Pay Now',
+    },
+    isPopupViewEnabled: {
+        type: Boolean,
+        default: false,
+    },
+    popupViewTitle: {
+        type: String,
+        default: 'Verify & Proceed',
+    },
+    popupViewInstructions: {
+        type: String,
+        default: '',
     },
     minAmount: {
         type: Number,

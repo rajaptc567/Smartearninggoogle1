@@ -233,9 +233,22 @@ interface Step {
 
 const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method, onClose, onSave, savedLogos, currentSettings }) => {
     const { dispatch } = useData();
-    const [formData, setFormData] = useState<Partial<PaymentMethod>>(
-        method || { name: '', currency: 'PKR', type: 'Deposit', status: 'Enabled', minAmount: 0, maxAmount: 1000, feePercent: 0 }
-    );
+    const [formData, setFormData] = useState<Partial<PaymentMethod>>({
+        name: '',
+        currency: 'PKR',
+        type: 'Deposit',
+        status: 'Enabled',
+        minAmount: 0,
+        maxAmount: 1000,
+        feePercent: 0,
+        gatewayMode: 'manual',
+        payNowUrl: '',
+        payNowButtonText: 'Pay Now',
+        isPopupViewEnabled: false,
+        popupViewTitle: 'Verify & Proceed',
+        popupViewInstructions: 'Please complete your payment on the primary checkout window, then input your email below, capture a verification screenshot, and select the next step to confirm.',
+        ...method
+    });
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
     const [qrCodeRemoved, setQrCodeRemoved] = useState(false);
@@ -503,75 +516,181 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                          </label>
                     </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Title</label>
-                        <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="e.g. Smart Support" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account / Wallet Number</label>
-                        <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="e.g. 03001234567" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
-                    </div>
-
-                    {/* LABEL OVERRIDES SECTION */}
-                    <div className="md:col-span-2 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                        <h3 className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 mb-3 tracking-widest">UI Label Customization (Frontend)</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div>
-                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Method Name Label</label>
-                                <input 
-                                    value={customLabels.providerLabel} 
-                                    onChange={e => handleLabelChange('providerLabel', e.target.value)} 
-                                    placeholder="Default: Method Name" 
-                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account Title Label</label>
-                                <input 
-                                    value={customLabels.accountTitleLabel} 
-                                    onChange={e => handleLabelChange('accountTitleLabel', e.target.value)} 
-                                    placeholder="Default: Account Title" 
-                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account No. Label</label>
-                                <input 
-                                    value={customLabels.accountNumberLabel} 
-                                    onChange={e => handleLabelChange('accountNumberLabel', e.target.value)} 
-                                    placeholder="Default: Acc / Wallet No" 
-                                    className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
-                                />
-                            </div>
+                    {/* GATEWAY MODE SELECTION CONTAINER */}
+                    <div className="md:col-span-2 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <label className="block text-xs font-black uppercase text-slate-500 dark:text-slate-400 mb-3 tracking-widest">Gateway Configuration Mode</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, gatewayMode: 'manual' }))}
+                                className={`p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${formData.gatewayMode !== 'paynow' ? 'border-primary bg-white dark:bg-slate-800 ring-4 ring-primary/10' : 'border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/30'}`}
+                            >
+                                <span className="text-2xl">💰</span>
+                                <div>
+                                    <span className="font-black text-xs uppercase text-slate-900 dark:text-white tracking-tight block">Use Existing Settings</span>
+                                    <span className="text-[10px] text-gray-500 block">Manual transfer info: Title, Number, QR Code</span>
+                                </div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, gatewayMode: 'paynow' }))}
+                                className={`p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3 ${formData.gatewayMode === 'paynow' ? 'border-primary bg-white dark:bg-slate-800 ring-4 ring-primary/10' : 'border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/30'}`}
+                            >
+                                <span className="text-2xl">⚡</span>
+                                <div>
+                                    <span className="font-black text-xs uppercase text-slate-900 dark:text-white tracking-tight block">Use New "Pay Now" settings</span>
+                                    <span className="text-[10px] text-gray-500 block">Digital checkout link (PayPal, Stripe, Card)</span>
+                                </div>
+                            </button>
                         </div>
-                        <p className="text-[9px] text-gray-500 mt-2 italic">Leave blank to use system defaults (Method Name, Account Title, Account / Wallet Number).</p>
                     </div>
 
-                    {formData.type === 'Deposit' && (
-                        <div className="md:col-span-2 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-                            <label className="block text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 mb-3 tracking-widest">QR Code (Scan to Pay)</label>
-                            <div className="flex items-center gap-4">
-                                {method?.qrCodeUrl && !qrCodeFile && !qrCodeRemoved ? (
-                                    <div className="relative group">
-                                        <img src={method.qrCodeUrl} className="h-20 w-20 object-contain rounded-lg bg-white p-1 shadow-sm" alt="QR Preview" />
-                                        <button 
-                                            type="button" 
-                                            onClick={handleRemoveQrCode}
-                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Remove QR Code"
+                    {formData.gatewayMode !== 'paynow' ? (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Title</label>
+                                <input name="accountTitle" value={formData.accountTitle || ''} onChange={handleChange} placeholder="e.g. Smart Support" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required={formData.gatewayMode !== 'paynow'} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account / Wallet Number</label>
+                                <input name="accountNumber" value={formData.accountNumber || ''} onChange={handleChange} placeholder="e.g. 03001234567" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required={formData.gatewayMode !== 'paynow'} />
+                            </div>
+
+                            {/* LABEL OVERRIDES SECTION */}
+                            <div className="md:col-span-2 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                                <h3 className="text-xs font-black uppercase text-gray-500 dark:text-gray-400 mb-3 tracking-widest">UI Label Customization (Frontend)</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Method Name Label</label>
+                                        <input 
+                                            value={customLabels.providerLabel} 
+                                            onChange={e => handleLabelChange('providerLabel', e.target.value)} 
+                                            placeholder="Default: Method Name" 
+                                            className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account Title Label</label>
+                                        <input 
+                                            value={customLabels.accountTitleLabel} 
+                                            onChange={e => handleLabelChange('accountTitleLabel', e.target.value)} 
+                                            placeholder="Default: Account Title" 
+                                            className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">Account No. Label</label>
+                                        <input 
+                                            value={customLabels.accountNumberLabel} 
+                                            onChange={e => handleLabelChange('accountNumberLabel', e.target.value)} 
+                                            placeholder="Default: Acc / Wallet No" 
+                                            className="w-full rounded-md text-xs dark:bg-gray-800 dark:border-gray-600" 
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[9px] text-gray-500 mt-2 italic">Leave blank to use system defaults (Method Name, Account Title, Account / Wallet Number).</p>
+                            </div>
+
+                            {formData.type === 'Deposit' && (
+                                <div className="md:col-span-2 p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                                    <label className="block text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 mb-3 tracking-widest">QR Code (Scan to Pay)</label>
+                                    <div className="flex items-center gap-4">
+                                        {method?.qrCodeUrl && !qrCodeFile && !qrCodeRemoved ? (
+                                            <div className="relative group">
+                                                <img src={method.qrCodeUrl} className="h-20 w-20 object-contain rounded-lg bg-white p-1 shadow-sm" alt="QR Preview" />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleRemoveQrCode}
+                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Remove QR Code"
+                                                >
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-2 w-full">
+                                                <input type="file" accept="image/*" onChange={handleQrCodeChange} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                                                {qrCodeRemoved && <span className="text-[10px] text-red-500 font-bold italic">QR code marked for deletion. Save to confirm.</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-2">Upload a QR code image to help users pay faster in the deposit form.</p>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <div className="md:col-span-2 p-5 bg-gradient-to-tr from-emerald-500/10 to-teal-500/5 border border-emerald-500/20 rounded-2xl space-y-4">
+                                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">⚡ New Integration Settings</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Pay Now Destination Link (URL)</label>
+                                        <input 
+                                            name="payNowUrl" 
+                                            value={formData.payNowUrl || ''} 
+                                            onChange={handleChange} 
+                                            placeholder="https://checkout.stripe.com/... or https://paypal.me/..." 
+                                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                                            required={formData.gatewayMode === 'paynow'} 
+                                        />
+                                        <span className="text-[10px] text-gray-400 mt-1 block">The Paypal, Stripe checkout or credit card merchant page where users will complete payment.</span>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Pay Button Text</label>
+                                        <input 
+                                            name="payNowButtonText" 
+                                            value={formData.payNowButtonText || ''} 
+                                            onChange={handleChange} 
+                                            placeholder="e.g. Pay Now" 
+                                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Popup Verification Tab ("How to View")</label>
+                                        <select 
+                                            name="isPopupViewEnabled" 
+                                            value={String(formData.isPopupViewEnabled)} 
+                                            onChange={e => setFormData(prev => ({ ...prev, isPopupViewEnabled: e.target.value === 'true' }))}
+                                            className="w-full rounded-md dark:bg-gray-700"
                                         >
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                        </button>
+                                            <option value="false">Disabled (Show instructions directly on page)</option>
+                                            <option value="true">Enabled (Use detailed pop-up tab instructions)</option>
+                                        </select>
                                     </div>
-                                ) : (
-                                    <div className="flex flex-col gap-2 w-full">
-                                        <input type="file" accept="image/*" onChange={handleQrCodeChange} className="w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
-                                        {qrCodeRemoved && <span className="text-[10px] text-red-500 font-bold italic">QR code marked for deletion. Save to confirm.</span>}
-                                    </div>
-                                )}
+
+                                    {formData.isPopupViewEnabled && (
+                                        <div className="md:col-span-2 border-t border-emerald-500/10 pt-4 space-y-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Popup Tab Title</label>
+                                                <input 
+                                                    name="popupViewTitle" 
+                                                    value={formData.popupViewTitle || ''} 
+                                                    onChange={handleChange} 
+                                                    placeholder="e.g. Payment Verification instructions" 
+                                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" 
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Instructions Displayed inside Pop-up tab</label>
+                                                <textarea 
+                                                    name="popupViewInstructions" 
+                                                    value={formData.popupViewInstructions || ''} 
+                                                    onChange={handleChange} 
+                                                    placeholder="Guide users through completed steps, entering email and taking/uploading screenshot" 
+                                                    rows={3}
+                                                    className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-xs" 
+                                                />
+                                                <span className="text-[10px] text-gray-400 mt-1 block">These instructions guide the user on entering their email, other actions, and moving to the next step.</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-2">Upload a QR code image to help users pay faster in the deposit form.</p>
-                        </div>
+                        </>
                     )}
 
                     <div>

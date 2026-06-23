@@ -104,6 +104,7 @@ const DepositFunds: React.FC = () => {
     const [userNotes, setUserNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isPayNowModalOpen, setIsPayNowModalOpen] = useState(false);
     
     // Guide State
     const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -309,66 +310,100 @@ const DepositFunds: React.FC = () => {
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Payment Destination Instructions</p>
                         </div>
 
-                        <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-10 shadow-2xl border border-white/5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-                                {/* ACCOUNT MAIN INFO */}
-                                <div className="space-y-10 flex-grow w-full">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                                        <div>
-                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
-                                                {selectedMethod.customLabels?.providerLabel || 'Method Name'}
-                                            </p>
-                                            <p className="text-xl font-bold">{selectedMethod.name}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
-                                                {selectedMethod.customLabels?.accountTitleLabel || 'Account Title'}
-                                            </p>
-                                            <p className="text-xl font-bold">{selectedMethod.accountTitle}</p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">
-                                            {selectedMethod.customLabels?.accountNumberLabel || 'Account / Wallet Number'}
-                                        </p>
-                                        <div className="flex items-center justify-between p-4 sm:p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner min-w-0 w-full">
-                                            <p className="text-base sm:text-2xl font-black font-mono text-blue-400 select-all whitespace-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 mr-2 sm:mr-4">{selectedMethod.accountNumber}</p>
-                                            <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-2 sm:p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 shadow-lg">
-                                                <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                            </button>
-                                        </div>
-                                    </div>
+                        {selectedMethod.gatewayMode === 'paynow' ? (
+                            <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-8 shadow-2xl border border-white/5 text-center flex flex-col items-center">
+                                <div className="w-20 h-20 bg-gradient-to-tr from-emerald-400 to-teal-500 rounded-3xl flex items-center justify-center text-4xl shadow-2xl shadow-emerald-500/10 mb-2">⚡</div>
+                                <div className="space-y-2">
+                                    <h3 className="text-2xl font-black uppercase tracking-tight">Checkout Payment Gateway</h3>
+                                    <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
+                                        Click below to pay safely using your <strong>PayPal</strong>, <strong>Stripe</strong> checkout system, or <strong>Credit Card</strong>.
+                                    </p>
+                                </div>
 
-                                    {/* DYNAMIC EXTRA FIELDS */}
-                                    {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
-                                        <div className="pt-4 space-y-6">
-                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest border-b border-white/5 pb-2">Required Supplementary Details</p>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                                {selectedMethod.customFields.map((field, idx) => (
-                                                    <div key={idx} className="group">
-                                                        <p className="text-[9px] uppercase text-gray-500 font-black tracking-widest mb-1 opacity-80 group-hover:text-blue-400 transition-colors">{field.title}</p>
-                                                        <div className="flex items-center justify-between bg-black/30 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all">
-                                                            <p className="text-base font-bold text-gray-100 truncate pr-2">{field.value}</p>
-                                                            <button onClick={() => handleCopy(field.value)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors">
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg pt-4 justify-center">
+                                    <a
+                                        href={selectedMethod.payNowUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex-1 font-black uppercase tracking-[0.1em] text-xs text-center py-5 rounded-[1.8rem] text-white hover:scale-[1.03] active:scale-95 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 bg-[#10b981]"
+                                    >
+                                        <span>💳</span> {selectedMethod.payNowButtonText || 'Pay Now'}
+                                        <ExternalLinkIcon />
+                                    </a>
+
+                                    {selectedMethod.isPopupViewEnabled && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPayNowModalOpen(true)}
+                                            className="flex-1 py-5 rounded-[1.8rem] bg-slate-800 text-slate-300 border border-slate-700/50 hover:bg-slate-700 hover:text-white hover:scale-[1.03] active:scale-95 transition-all text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
+                                        >
+                                            <span>💡</span> How to verify & proceed
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-10 bg-[#0f172a] rounded-[2.5rem] text-white space-y-10 shadow-2xl border border-white/5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
+                                    {/* ACCOUNT MAIN INFO */}
+                                    <div className="space-y-10 flex-grow w-full">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                            <div>
+                                                <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
+                                                    {selectedMethod.customLabels?.providerLabel || 'Method Name'}
+                                                </p>
+                                                <p className="text-xl font-bold">{selectedMethod.name}</p>
                                             </div>
+                                            <div>
+                                                <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-1">
+                                                    {selectedMethod.customLabels?.accountTitleLabel || 'Account Title'}
+                                                </p>
+                                                <p className="text-xl font-bold">{selectedMethod.accountTitle}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest mb-2">
+                                                {selectedMethod.customLabels?.accountNumberLabel || 'Account / Wallet Number'}
+                                            </p>
+                                            <div className="flex items-center justify-between p-4 sm:p-6 bg-black/50 rounded-3xl border border-white/5 shadow-inner min-w-0 w-full">
+                                                <p className="text-base sm:text-2xl font-black font-mono text-blue-400 select-all whitespace-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 mr-2 sm:mr-4">{selectedMethod.accountNumber}</p>
+                                                <button onClick={() => handleCopy(selectedMethod.accountNumber)} className="p-2 sm:p-3 bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shrink-0 shadow-lg">
+                                                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* DYNAMIC EXTRA FIELDS */}
+                                        {selectedMethod.customFields && selectedMethod.customFields.length > 0 && (
+                                            <div className="pt-4 space-y-6">
+                                                <p className="text-[10px] uppercase text-gray-500 font-black tracking-widest border-b border-white/5 pb-2">Required Supplementary Details</p>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                    {selectedMethod.customFields.map((field, idx) => (
+                                                        <div key={idx} className="group">
+                                                            <p className="text-[9px] uppercase text-gray-500 font-black tracking-widest mb-1 opacity-80 group-hover:text-blue-400 transition-colors">{field.title}</p>
+                                                            <div className="flex items-center justify-between bg-black/30 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-all">
+                                                                <p className="text-base font-bold text-gray-100 truncate pr-2">{field.value}</p>
+                                                                <button onClick={() => handleCopy(field.value)} className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* QR CODE (IF AVAILABLE) */}
+                                    {selectedMethod.qrCodeUrl && (
+                                        <div className="shrink-0 flex flex-col items-center gap-4 bg-white p-6 rounded-[2.5rem] shadow-xl border-4 border-blue-500/10">
+                                            <img src={selectedMethod.qrCodeUrl} alt="Scan to Pay" className="w-48 h-48 object-contain" />
+                                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">Scan to Pay</span>
                                         </div>
                                     )}
                                 </div>
-                                
-                                {/* QR CODE (IF AVAILABLE) */}
-                                {selectedMethod.qrCodeUrl && (
-                                    <div className="shrink-0 flex flex-col items-center gap-4 bg-white p-6 rounded-[2.5rem] shadow-xl border-4 border-blue-500/10">
-                                        <img src={selectedMethod.qrCodeUrl} alt="Scan to Pay" className="w-48 h-48 object-contain" />
-                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-[0.3em]">Scan to Pay</span>
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        )}
 
                         {/* SPECIAL INSTRUCTIONS WITH LINK DETECTION */}
                         {selectedMethod.instructions && (
@@ -404,7 +439,7 @@ const DepositFunds: React.FC = () => {
 
                         <div className="pt-6 flex flex-col sm:flex-row gap-4">
                             <button onClick={() => setStep(2)} className="flex-1 py-5 rounded-2xl font-black uppercase text-xs text-gray-400 hover:text-blue-600 transition-colors">Return to Methods</button>
-                            <Button className="flex-[2] py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" onClick={() => setStep(4)} style={{ backgroundColor: pageConfig.primaryColor }}>I have transferred funds &rarr;</Button>
+                            <Button className="flex-[2] py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20" onClick={() => setStep(4)} style={{ backgroundColor: pageConfig.primaryColor }}>I have completed payment &rarr;</Button>
                         </div>
                     </div>
                 )}
@@ -603,6 +638,77 @@ const DepositFunds: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* PAY NOW POPUP INSTRUCTIONS MODAL */}
+            {isPayNowModalOpen && selectedMethod && (
+                <Modal isOpen={isPayNowModalOpen} onClose={() => setIsPayNowModalOpen(false)}>
+                    <div className="relative w-[95vw] max-w-lg bg-white dark:bg-gray-950 rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-slate-100 dark:border-slate-800 animate-fade-in select-none">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black uppercase tracking-tight text-gray-900 dark:text-white flex items-center gap-3">
+                                <span className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-500 text-lg flex items-center justify-center">💡</span>
+                                {selectedMethod.popupViewTitle || 'Payment Instructions'}
+                            </h3>
+                            <button onClick={() => setIsPayNowModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* ILLUSTRATIVE TRANSACT RECEIPT BOX */}
+                        <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-center flex flex-col items-center gap-2 mb-6">
+                            <div className="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-2xl">📸</div>
+                            <h4 className="text-xs font-black uppercase tracking-tight text-slate-800 dark:text-slate-200">Screenshot Proof Expected</h4>
+                            <p className="text-[11px] text-gray-400 max-w-xs leading-normal">
+                                First click the main green <strong>"{selectedMethod.payNowButtonText || 'Pay Now'}"</strong> button to complete checkout, then snap a screenshot of our merchant's receipt.
+                            </p>
+                        </div>
+
+                        {/* ENTER EMAIL INPUT */}
+                        <div className="space-y-2 mb-6">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                Your PayPal / Stripe registered email
+                            </label>
+                            <input
+                                type="email"
+                                value={senderAccountTitle}
+                                onChange={(e) => setSenderAccountTitle(e.target.value)}
+                                placeholder="e.g. name@example.com"
+                                className="w-full px-5 py-4 rounded-xl text-sm border border-slate-200 dark:border-slate-800 dark:bg-slate-900 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none font-bold transition-all text-gray-900 dark:text-white"
+                            />
+                            <span className="text-[10px] text-gray-400 block leading-normal pt-1">
+                                We will pre-populate your auditing sender field with this email address.
+                            </span>
+                        </div>
+
+                        {/* ADVISORY STEPS */}
+                        <div className="p-5 bg-blue-50 dark:bg-blue-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/30 mb-6 text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-bold space-y-2">
+                            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 uppercase font-black text-[10px] tracking-widest mb-1">
+                                <span>📋 Instruction steps</span>
+                            </div>
+                            <Linkify text={selectedMethod.popupViewInstructions || 'Please complete checkout payment, input your email, capture proof and proceed.'} primaryColor={pageConfig.primaryColor} />
+                        </div>
+
+                        {/* ACTIONS */}
+                        <div className="flex gap-4 pt-2">
+                            <button 
+                                onClick={() => setIsPayNowModalOpen(false)} 
+                                className="flex-1 py-4 bg-slate-100 dark:bg-slate-900 rounded-xl text-slate-500 dark:text-slate-400 text-xs font-black uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <Button
+                                onClick={() => {
+                                    setIsPayNowModalOpen(false);
+                                    setStep(4);
+                                }}
+                                className="flex-[2] py-4 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:scale-[1.02] active:scale-95 transition-all text-white"
+                                style={{ backgroundColor: pageConfig.primaryColor }}
+                            >
+                                I Have Paid, Next Step &rarr;
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
 
             {/* HOW TO GUIDE MODAL */}
             {isGuideOpen && selectedMethod?.howToDeposit && (
