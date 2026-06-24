@@ -525,10 +525,11 @@ export const currencySymbols: Record<string, string> = {
 export const formatCurrency = (amount: number | undefined | null, currency: string = 'USD') => {
     if (amount === undefined || amount === null || isNaN(amount)) {
         const symbol = currencySymbols[currency] || currency || '$';
-        return `${symbol} 0.00`;
+        return `${symbol} 0`;
     }
     const symbol = currencySymbols[currency] || currency;
-    return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fractionDigits = amount % 1 === 0 ? 0 : 2;
+    return `${symbol} ${amount.toLocaleString(undefined, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`;
 };
 
 export const countries = [
