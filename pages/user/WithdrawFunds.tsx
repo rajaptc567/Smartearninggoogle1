@@ -439,14 +439,14 @@ const WithdrawFunds: React.FC = () => {
 
                 {/* STEP 2: METHOD - REDESIGNED 2 PER ROW, NO LIMIT TEXT */}
                 {step === 2 && (
-                    <div className="animate-fade-in space-y-10">
-                        <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Destination Network</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 2: Choose Payout Provider</p>
+                    <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
+                        <div className="text-center space-y-1 mb-2 sm:mb-4">
+                            <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Destination Network</h3>
+                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest opacity-60">Step 2: Choose Payout Provider</p>
                         </div>
 
                         {withdrawalMethods.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-4 md:gap-6">
+                            <div className="grid grid-cols-2 gap-2 sm:gap-4 animate-fade-in">
                                 {withdrawalMethods.map(method => {
                                     const numAmount = parseFloat(amount);
                                     const isInvalid = numAmount < method.minAmount || numAmount > method.maxAmount;
@@ -462,36 +462,41 @@ const WithdrawFunds: React.FC = () => {
                                                 setSelectedMethodId(method._id);
                                                 setStep(3);
                                             }}
-                                            className={`relative cursor-pointer p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border-2 transition-all duration-500 flex flex-col items-center text-center bg-white dark:bg-gray-900 group transform hover:-translate-y-1 active:scale-95 shadow-sm ${
+                                            className={`relative cursor-pointer p-2 sm:p-3 border-2 transition-all duration-300 flex flex-col sm:flex-row items-center text-center sm:text-left gap-1.5 sm:gap-3 bg-white dark:bg-gray-900 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md ${
                                                 isInvalid 
                                                 ? 'opacity-40 border-gray-100 dark:border-gray-800 grayscale cursor-not-allowed'
-                                                : 'border-gray-50 dark:border-gray-800 hover:border-teal-500 dark:hover:border-teal-600 hover:shadow-2xl'
+                                                : 'border-gray-150/50 dark:border-gray-800 hover:border-teal-500 dark:hover:border-teal-600 hover:scale-[1.02] active:scale-98'
                                             }`}
                                         >
-                                            <div className="w-16 h-16 md:w-20 md:h-20 bg-gray-50 dark:bg-black rounded-2xl md:rounded-3xl flex items-center justify-center p-2.5 md:p-3 shadow-inner border border-gray-100 dark:border-gray-800 transition-transform group-hover:scale-105">
+                                            <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 bg-white border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-center p-0.5 shadow-sm">
                                                 {method.logoUrl ? (
                                                     <img src={method.logoUrl} alt={method.name} className="max-w-full max-h-full object-contain" />
                                                 ) : (
-                                                    <div className="text-teal-600 dark:text-teal-400 font-black text-2xl md:text-3xl uppercase">{method.name.substring(0,1)}</div>
+                                                    <div className="text-teal-600 dark:text-teal-400 font-black text-xl sm:text-2xl uppercase">{method.name.substring(0,1)}</div>
                                                 )}
                                             </div>
                                             
-                                            <div className="mt-4 md:mt-6 space-y-1">
-                                                <h4 className="text-sm md:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-tight">{method.name}</h4>
-                                                <span className="inline-block px-2 md:px-3 py-0.5 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest rounded-full border border-teal-200 dark:border-teal-800/30">Instant</span>
+                                            <div className="flex-grow min-w-0 w-full">
+                                                <h4 className="font-black uppercase text-xs sm:text-base tracking-tight text-gray-950 dark:text-white truncate leading-tight">{method.name}</h4>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 mt-0.5 sm:mt-1">
+                                                    {method.feePercent > 0 && (
+                                                        <span className="text-[8px] sm:text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mx-auto sm:mx-0">Fee: {method.feePercent}%</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[8px] sm:text-[9px] font-black text-teal-500 uppercase tracking-widest mt-0.5 sm:mt-1 block">Click to select &rarr;</span>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
                         ) : (
-                            <div className="text-center py-20 bg-gray-50 dark:bg-gray-900/50 rounded-[2.5rem] border-2 border-dashed border-gray-100 dark:border-gray-800 max-w-lg mx-auto">
-                                <p className="text-gray-400 font-black uppercase tracking-[0.2em] text-[10px]">No payout providers currently active in your region.</p>
+                            <div className="text-center py-10 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border-2 border-dashed border-gray-100 dark:border-gray-800 max-w-lg mx-auto">
+                                <p className="text-gray-400 font-black uppercase tracking-widest text-[9px]">No payout providers currently active in your region.</p>
                             </div>
                         )}
 
-                        <div className="pt-6 flex justify-start">
-                            <button onClick={() => setStep(1)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-teal-500 transition-colors">
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-800 text-center">
+                            <button onClick={() => setStep(1)} className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-400 hover:text-teal-500 transition-colors">
                                 &larr; Return to Step 1
                             </button>
                         </div>
@@ -500,72 +505,105 @@ const WithdrawFunds: React.FC = () => {
 
                 {/* STEP 3: DETAILS */}
                 {step === 3 && selectedMethod && (
-                    <div className="animate-fade-in space-y-10 max-w-2xl mx-auto">
-                        <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Address</h3>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 3: Financial Routing</p>
+                    <div className="animate-fade-in space-y-4 max-w-2xl mx-auto">
+                        <div className="text-center space-y-1">
+                            <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Settlement Address</h3>
+                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest opacity-60">Step 3: Financial Routing</p>
                         </div>
 
-                        <div className="bg-[#0f172a] p-10 rounded-[2.5rem] border border-gray-800 shadow-2xl relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-40 h-40 bg-teal-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8 text-center sm:text-left">
-                                <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
-                                    <span className="block text-gray-500 text-[9px] font-black uppercase tracking-widest mb-1">Gross Allocation</span>
-                                    <span className="text-xl font-black text-white">{formatCurrency(parseFloat(amount), currentUser.currency)}</span>
+                        {/* ENLARGED LOGO AND PROVIDER NAME & DETAILS */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-center bg-[#0f172a] p-3.5 rounded-2xl border border-gray-800 shadow-xl">
+                            <div className="flex items-center gap-3.5">
+                                <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 bg-white rounded-xl flex items-center justify-center p-1.5 shadow-md">
+                                    {selectedMethod.logoUrl ? (
+                                        <img src={selectedMethod.logoUrl} className="max-w-full max-h-full object-contain" alt={selectedMethod.name} />
+                                    ) : (
+                                        <div className="text-teal-600 dark:text-teal-400 font-black text-lg sm:text-2xl uppercase">{selectedMethod.name.substring(0,1)}</div>
+                                    )}
                                 </div>
-                                <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
-                                    <span className="block text-gray-500 text-[9px] font-black uppercase tracking-widest mb-1">Service Fee ({selectedMethod.feePercent}%)</span>
-                                    <span className="text-xl font-black text-red-400">-{formatCurrency(fee, currentUser.currency)}</span>
+                                <div className="min-w-0 text-left">
+                                    <p className="text-[8px] sm:text-[9px] uppercase text-gray-400 font-black tracking-widest mb-0.5">
+                                        Chosen Payout Network
+                                    </p>
+                                    <h3 className="text-sm sm:text-lg font-black text-white leading-tight truncate">{selectedMethod.name}</h3>
+                                    <p className="text-[8px] sm:text-[9px] text-teal-400 font-black uppercase tracking-widest mt-0.5">Instant Network Settlement</p>
+                                </div>
+                            </div>
+                            <div className="bg-black/20 p-2.5 rounded-xl border border-white/5 text-left">
+                                <p className="text-[8px] sm:text-[9px] uppercase text-gray-400 font-black tracking-widest mb-0.5">
+                                    Withdrawal Amount
+                                </p>
+                                <p className="text-sm sm:text-base font-black text-white leading-tight">{formatCurrency(parseFloat(amount), currentUser.currency)}</p>
+                            </div>
+                        </div>
+
+                        {/* HIGHLY CLEAR PAYMENT MESSAGE */}
+                        <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 p-3 sm:p-4 rounded-xl sm:rounded-2xl text-center">
+                            <p className="text-[11px] sm:text-sm font-bold text-amber-700 dark:text-amber-400 leading-normal">
+                                📢 <strong>Payout Order:</strong> You are requesting to withdraw <strong className="text-xs sm:text-base font-black text-teal-600 dark:text-teal-400 underline">{formatCurrency(parseFloat(amount), currentUser.currency)}</strong> to your <strong>{selectedMethod.name}</strong> account. Please provide precise details below.
+                            </p>
+                        </div>
+
+                        <div className="bg-[#0f172a] p-4 sm:p-6 rounded-xl sm:rounded-3xl border border-gray-800 shadow-xl relative overflow-hidden space-y-4">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-teal-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+
+                            <div className="grid grid-cols-2 gap-3 text-left">
+                                <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span className="block text-gray-400 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-1">Gross Allocation</span>
+                                    <span className="text-sm sm:text-base font-black text-white">{formatCurrency(parseFloat(amount), currentUser.currency)}</span>
+                                </div>
+                                <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                                    <span className="block text-gray-400 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-1">Service Fee ({selectedMethod.feePercent}%)</span>
+                                    <span className="text-sm sm:text-base font-black text-red-400">-{formatCurrency(fee, currentUser.currency)}</span>
                                 </div>
                             </div>
 
-                            <div className="text-center p-8 bg-teal-600 rounded-[2rem] shadow-xl">
-                                <p className="text-[10px] text-teal-100 uppercase tracking-[0.3em] font-black mb-1">Net Credited Amount</p>
-                                <p className="text-4xl font-black text-white tracking-tighter">{formatCurrency(finalAmount, currentUser.currency)}</p>
+                            <div className="text-center p-4 sm:p-5 bg-teal-600 rounded-xl sm:rounded-2xl shadow-md">
+                                <p className="text-[8px] sm:text-[9px] text-teal-100 uppercase tracking-widest font-black mb-0.5">Net Credited Amount</p>
+                                <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">{formatCurrency(finalAmount, currentUser.currency)}</p>
                             </div>
                         </div>
 
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Receiving Account Holder Name</label>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Receiving Account Holder Name</label>
                                 <input 
                                     type="text" 
                                     value={accountTitle}
                                     onChange={e => setAccountTitle(e.target.value)}
-                                    className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none font-bold"
+                                    className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none font-bold text-xs sm:text-sm"
                                     placeholder="TITLE AS PER BANK"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Receiving Account / Wallet ID</label>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Receiving Account / Wallet ID</label>
                                 <input 
                                     type="text" 
                                     value={accountNumber}
                                     onChange={e => setAccountNumber(e.target.value)}
-                                    className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none font-mono font-bold tracking-widest"
+                                    className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none font-mono font-bold tracking-widest text-xs sm:text-sm"
                                     placeholder="IBAN OR WALLET ID"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Technical Remarks (Optional)</label>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Technical Remarks (Optional)</label>
                                 <textarea 
                                     value={userNotes}
                                     onChange={e => setUserNotes(e.target.value)}
                                     rows={2}
-                                    className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none text-sm"
+                                    className="w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-teal-500/10 focus:border-teal-600 outline-none text-xs sm:text-sm"
                                     placeholder="Any routing instructions..."
                                 />
                             </div>
                         </div>
 
-                        <div className="pt-8 flex flex-col sm:flex-row justify-between items-center gap-6">
-                            <button onClick={() => setStep(2)} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-teal-500 transition-colors">
+                        <div className="pt-4 border-t border-gray-150 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <button onClick={() => setStep(2)} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-teal-500 transition-colors">
                                 &larr; Return to Step 2
                             </button>
-                            <Button onClick={() => setStep(4)} disabled={!accountTitle || !accountNumber} className="w-full sm:w-auto px-12 py-5 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl shadow-teal-600/30 bg-teal-600 hover:bg-teal-700 border-0">
+                            <Button onClick={() => setStep(4)} disabled={!accountTitle || !accountNumber} className="w-full sm:w-auto px-12 py-3.5 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-teal-600/20 bg-teal-600 hover:bg-teal-700 border-0 text-white">
                                 Review Payout Path &rarr;
                             </Button>
                         </div>

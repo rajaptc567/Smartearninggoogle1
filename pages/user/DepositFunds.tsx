@@ -490,21 +490,18 @@ const DepositFunds: React.FC = () => {
                                 <button onClick={() => setStep(1)} className="mt-3 px-4 py-2 bg-blue-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:bg-blue-700 transition-colors">Adjust Amount</button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 animate-fade-in">
+                            <div className="grid grid-cols-2 gap-2 sm:gap-4 animate-fade-in">
                                 {availableMethods.map(m => (
                                     <div 
                                         key={m._id} 
                                         onClick={() => { setSelectedMethodId(m._id); setStep(3); }} 
-                                        className="p-3.5 sm:p-4 border-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-98 rounded-xl sm:rounded-2xl bg-white dark:bg-gray-900 border-gray-150/50 dark:border-gray-800 hover:border-blue-500 shadow-sm hover:shadow-md flex items-center gap-3.5"
+                                        className="p-2 sm:p-4 border-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-98 rounded-xl sm:rounded-2xl bg-white dark:bg-gray-900 border-gray-150/50 dark:border-gray-800 hover:border-blue-500 shadow-sm hover:shadow-md flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-3.5"
                                     >
-                                        <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 bg-white border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-center p-1.5 shadow-sm">
+                                        <div className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-white border border-gray-100 dark:border-gray-800 rounded-xl flex items-center justify-center p-1 sm:p-1.5 shadow-sm">
                                             <img src={m.logoUrl} className="max-w-full max-h-full object-contain" alt={m.name} />
                                         </div>
-                                        <div className="flex-grow min-w-0 text-left">
-                                            <h4 className="font-black uppercase text-xs sm:text-sm tracking-tight text-gray-950 dark:text-white truncate">{m.name}</h4>
-                                            <p className="text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">
-                                                Limit: {formatCurrency(m.minAmount, m.currency)} - {formatCurrency(m.maxAmount, m.currency)}
-                                            </p>
+                                        <div className="flex-grow min-w-0 w-full">
+                                            <h4 className="font-black uppercase text-[10px] sm:text-sm tracking-tight text-gray-950 dark:text-white truncate">{m.name}</h4>
                                             {m.feePercent > 0 && (
                                                 <p className="text-[8px] sm:text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mt-0.5">
                                                     Fee: {m.feePercent}%

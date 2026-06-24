@@ -35,14 +35,25 @@ const PaymentMethods: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleSave = async (formData: FormData, id?: string) => {
+    const handleSave = async (formDataList: FormData[], id?: string) => {
         try {
             if (id) {
-                const updatedMethod = await updatePaymentMethod(id, formData);
-                dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
+                if (formDataList.length > 0) {
+                    const updatedMethod = await updatePaymentMethod(id, formDataList[0]);
+                    dispatch({ type: 'UPDATE_PAYMENT_METHOD', payload: updatedMethod });
+                    
+                    // If multiple currencies or categories were selected during editing,
+                    // create new payment methods for the extra combinations
+                    for (let i = 1; i < formDataList.length; i++) {
+                        const newMethod = await createPaymentMethod(formDataList[i]);
+                        dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
+                    }
+                }
             } else {
-                const newMethod = await createPaymentMethod(formData);
-                dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
+                for (const formData of formDataList) {
+                    const newMethod = await createPaymentMethod(formData);
+                    dispatch({ type: 'ADD_PAYMENT_METHOD', payload: newMethod });
+                }
             }
             handleCloseModal();
         } catch (error) {
@@ -214,7 +225,7 @@ const PaymentMethods: React.FC = () => {
 interface PaymentMethodFormModalProps {
     method: PaymentMethod | null;
     onClose: () => void;
-    onSave: (formData: FormData, id?: string) => void;
+    onSave: (formDataList: FormData[], id?: string) => void;
     savedLogos: HomepagePaymentLogo[];
     currentSettings: any;
 }
@@ -259,6 +270,10 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
     const [logoUrlOverride, setLogoUrlOverride] = useState<string | null>(null);
     const [saveToLibrary, setSaveToLibrary] = useState(false);
     
+    // Multiple selection states
+    const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>(['PKR']);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>(['Deposit']);
+
     // Label Customization
     const [customLabels, setCustomLabels] = useState(method?.customLabels || { providerLabel: '', accountTitleLabel: '', accountNumberLabel: '' });
 
@@ -285,6 +300,8 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                 setHowToDropdownMode(!!method.howToDeposit.dropdownMode);
                 setHowToSteps(method.howToDeposit.steps.map(s => ({ ...s })));
             }
+            setSelectedCurrencies(method.currency ? [method.currency] : ['PKR']);
+            setSelectedCategories(method.type ? [method.type] : ['Deposit']);
         } else {
             setCustomFields([]);
             setConfirmationFields([]);
@@ -293,6 +310,8 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             setHowToShowBeforePayment(false);
             setHowToDropdownMode(false);
             setHowToSteps([]);
+            setSelectedCurrencies(['PKR']);
+            setSelectedCategories(['Deposit']);
         }
     }, [method]);
 
@@ -422,40 +441,11 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             }
         }
 
-        const data = new FormData();
-        Object.entries(formData).forEach(([key, value]) => {
-            if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit' && key !== 'customLabels' && key !== 'confirmationFields') {
-                data.append(key, String(value));
-            }
-        });
-        
-        if (logoFile) {
-            data.append('logo', logoFile);
-        } else if (logoUrlOverride) {
-            data.append('logoUrl', logoUrlOverride);
-        } else if (method?.logoUrl) {
-            data.append('logoUrl', method.logoUrl);
-        }
-
-        if (qrCodeFile) {
-            data.append('qrCode', qrCodeFile);
-        } else if (method?.qrCodeUrl && !qrCodeRemoved) {
-            data.append('qrCodeUrl', method.qrCodeUrl);
-        }
-
-        if (qrCodeRemoved) {
-            data.append('removeQrCode', 'true');
-        }
-
         // Clean empty custom fields
         const cleanedCustomFields = customFields.filter(f => f.title.trim() !== '');
-        data.append('customFields', JSON.stringify(cleanedCustomFields));
         
         // Clean empty confirmation fields
         const cleanedConfirmationFields = confirmationFields.filter(f => f.label.trim() !== '');
-        data.append('confirmationFields', JSON.stringify(cleanedConfirmationFields));
-
-        data.append('customLabels', JSON.stringify(customLabels));
 
         const processedSteps = await Promise.all(howToSteps.map(async (step) => {
             if (step.imageFile && !step.imageUrl?.startsWith('data:')) {
@@ -475,10 +465,50 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
             dropdownMode: howToDropdownMode,
             steps: processedSteps
         };
-        
-        data.append('howToDeposit', JSON.stringify(howToDepositData));
 
-        await onSave(data, method?._id);
+        const formDataList: FormData[] = [];
+
+        // For each combination of selected currencies and categories, create a FormData
+        for (const curr of selectedCurrencies) {
+            for (const cat of selectedCategories) {
+                const data = new FormData();
+                Object.entries(formData).forEach(([key, value]) => {
+                    if (value !== undefined && value !== null && key !== 'logoUrl' && key !== 'qrCodeUrl' && key !== '_id' && key !== 'customFields' && key !== 'howToDeposit' && key !== 'customLabels' && key !== 'confirmationFields' && key !== 'currency' && key !== 'type') {
+                        data.append(key, String(value));
+                    }
+                });
+
+                data.append('currency', curr);
+                data.append('type', cat);
+                
+                if (logoFile) {
+                    data.append('logo', logoFile);
+                } else if (logoUrlOverride) {
+                    data.append('logoUrl', logoUrlOverride);
+                } else if (method?.logoUrl) {
+                    data.append('logoUrl', method.logoUrl);
+                }
+
+                if (qrCodeFile) {
+                    data.append('qrCode', qrCodeFile);
+                } else if (method?.qrCodeUrl && !qrCodeRemoved) {
+                    data.append('qrCodeUrl', method.qrCodeUrl);
+                }
+
+                if (qrCodeRemoved) {
+                    data.append('removeQrCode', 'true');
+                }
+
+                data.append('customFields', JSON.stringify(cleanedCustomFields));
+                data.append('confirmationFields', JSON.stringify(cleanedConfirmationFields));
+                data.append('customLabels', JSON.stringify(customLabels));
+                data.append('howToDeposit', JSON.stringify(howToDepositData));
+
+                formDataList.push(data);
+            }
+        }
+
+        await onSave(formDataList, method?._id);
         setIsSaving(false);
     };
     
@@ -513,25 +543,53 @@ const PaymentMethodFormModal: React.FC<PaymentMethodFormModalProps> = ({ method,
                         <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="e.g. Easypaisa" className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600" required />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Currency</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Account Currency (Select Multiple)</label>
                         <select
                             name="currency"
-                            value={formData.currency || 'PKR'}
-                            onChange={handleChange}
-                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600"
+                            multiple
+                            value={selectedCurrencies}
+                            onChange={(e) => {
+                                const options = e.target.options;
+                                const values: string[] = [];
+                                for (let i = 0; i < options.length; i++) {
+                                    if (options[i].selected) {
+                                        values.push(options[i].value);
+                                    }
+                                }
+                                setSelectedCurrencies(values);
+                            }}
+                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 h-24"
                             required
                         >
                             <option value="PKR">PKR (Rs)</option>
                             <option value="EUR">EUR (€)</option>
                             <option value="USD">USD ($)</option>
                         </select>
+                        <span className="text-[10px] text-gray-400 mt-1 block">Hold Ctrl (Windows) / Command (Mac) to select multiple.</span>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction Category</label>
-                        <select name="type" value={formData.type} onChange={handleChange} className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600">
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Transaction Category (Select Multiple)</label>
+                        <select
+                            name="type"
+                            multiple
+                            value={selectedCategories}
+                            onChange={(e) => {
+                                const options = e.target.options;
+                                const values: string[] = [];
+                                for (let i = 0; i < options.length; i++) {
+                                    if (options[i].selected) {
+                                        values.push(options[i].value);
+                                    }
+                                }
+                                setSelectedCategories(values);
+                            }}
+                            className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 h-24"
+                            required
+                        >
                             <option value="Deposit">Deposit</option>
                             <option value="Withdrawal">Withdrawal</option>
                         </select>
+                        <span className="text-[10px] text-gray-400 mt-1 block">Hold Ctrl (Windows) / Command (Mac) to select multiple.</span>
                     </div>
                     <div className="md:col-span-1">
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Visual Branding (Logo)</label>
