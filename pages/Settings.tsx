@@ -75,7 +75,8 @@ const Settings: React.FC = () => {
         },
         homepagePaymentLogos: settings.homepagePaymentLogos || [],
         featuredPlanIds: settings.featuredPlanIds || [],
-        faqs: settings.faqs || []
+        faqs: settings.faqs || [],
+        whatsappNumber: settings.whatsappNumber || ''
     }));
     setIsDirty(false);
   }, [settings]);
@@ -460,7 +461,7 @@ const Settings: React.FC = () => {
                         </div>
                     </div>
 
-                     {localSettings.transferConfig?.enabled && (
+                      {localSettings.transferConfig?.enabled && (
                         <div className="pl-8 mt-2 animate-fade-in">
                             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
                                 <div>
@@ -487,6 +488,25 @@ const Settings: React.FC = () => {
                             </div>
                         </div>
                     )}
+                </div>
+
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className="text-md font-bold text-gray-800 dark:text-white mb-4">WhatsApp Integration</h4>
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                        <div>
+                            <label htmlFor="whatsappNumber" className="block text-sm font-medium text-gray-900 dark:text-gray-200">WhatsApp Support Number</label>
+                            <input 
+                                id="whatsappNumber"
+                                name="whatsappNumber"
+                                type="text"
+                                placeholder="e.g. 923001234567"
+                                value={localSettings.whatsappNumber || ''}
+                                onChange={handleTextChange}
+                                className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Provide the WhatsApp number including country code (without spaces, leading zeros, or '+') where customers can submit deposit screenshots for fast approval.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}

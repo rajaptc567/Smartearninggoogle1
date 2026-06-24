@@ -203,6 +203,7 @@ export interface Settings {
     homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
     isInitialPageLoaderEnabled?: boolean;
+    whatsappNumber?: string;
 }
 
 export interface Task {

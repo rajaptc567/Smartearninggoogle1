@@ -203,6 +203,7 @@ const SettingSchema = new mongoose.Schema({
     homepageContent: { type: HomepageContentSchema, default: () => ({}) },
     homepagePaymentLogos: { type: [HomepagePaymentLogoSchema], default: [] },
     featuredPlanIds: { type: [String], default: [] },
+    whatsappNumber: { type: String, default: "" },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {
