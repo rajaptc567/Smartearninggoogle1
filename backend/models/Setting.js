@@ -204,6 +204,8 @@ const SettingSchema = new mongoose.Schema({
     homepagePaymentLogos: { type: [HomepagePaymentLogoSchema], default: [] },
     featuredPlanIds: { type: [String], default: [] },
     whatsappNumber: { type: String, default: "" },
+    whatsappFloatingEnabled: { type: Boolean, default: true },
+    whatsappDepositProofEnabled: { type: Boolean, default: true },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {

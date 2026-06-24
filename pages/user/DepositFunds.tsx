@@ -249,6 +249,7 @@ const DepositFunds: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [isPayNowModalOpen, setIsPayNowModalOpen] = useState(false);
+    const [showWhatsAppPopup, setShowWhatsAppPopup] = useState(false);
     
     // Guide State
     const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -389,6 +390,9 @@ const DepositFunds: React.FC = () => {
             dispatch({ type: 'ADD_DEPOSIT', payload: deposit });
             dispatch({ type: 'ADD_TRANSACTION', payload: transaction });
             setIsSubmitted(true);
+            if (whatsappLink && settings?.whatsappDepositProofEnabled !== false) {
+                setShowWhatsAppPopup(true);
+            }
         } catch (error) {
             alert(`Error: ${error instanceof Error ? error.message : 'Submit failure'}`);
         } finally { setIsSubmitting(false); }
@@ -404,39 +408,91 @@ const DepositFunds: React.FC = () => {
 
     if (isSubmitted) {
         return (
-            <div className="max-w-xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl text-center border border-gray-100 dark:border-gray-800 animate-fade-in">
-                <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-green-400 to-green-600 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-green-500/30">
-                    <CheckCircleIcon className="h-12 w-12 text-white" />
-                </div>
-                <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tighter">Deposit Transmitted!</h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 leading-relaxed font-medium">Your request has been securely received. Auditors will confirm your transaction shortly.</p>
-                
-                {whatsappLink && (
-                    <div className="mb-8 p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-2xl text-center">
-                        <div className="flex items-center justify-center gap-2 mb-2 text-emerald-600 dark:text-emerald-400">
-                            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.019-5.101-2.871-6.955C16.6 1.93 14.124.912 11.493.912c-5.438 0-9.863 4.42-9.866 9.865-.001 1.745.457 3.447 1.328 4.966L1.93 21.054l5.428-1.424-.711-.476zm11.01-6.17c-.31-.156-1.84-.908-2.126-1.012-.287-.104-.496-.156-.705.156-.209.312-.81 1.012-.992 1.22-.183.208-.365.234-.675.078-.31-.156-1.31-.48-2.493-1.537-.92-.818-1.54-1.83-1.72-2.14-.18-.31-.019-.477.136-.631.14-.139.31-.362.465-.544.155-.181.206-.31.31-.518.104-.208.052-.389-.026-.544-.078-.156-.705-1.7-.966-2.327-.254-.61-.514-.528-.705-.528-.183 0-.391-.012-.6-.012s-.548.078-.835.39c-.287.313-1.096 1.072-1.096 2.614 0 1.54 1.121 3.03 1.277 3.238.156.208 2.207 3.37 5.348 4.729.747.323 1.33.516 1.784.66.751.238 1.436.204 1.977.123.602-.09 1.84-.753 2.1-1.443.26-.69.26-1.282.182-1.403-.078-.12-.286-.19-.597-.346z" />
-                            </svg>
-                            <span className="font-black text-xs uppercase tracking-wider">Super Fast Approval</span>
+            <div className="relative">
+                <div className="max-w-xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl text-center border border-gray-100 dark:border-gray-800 animate-fade-in">
+                    <div className="mx-auto w-24 h-24 bg-gradient-to-tr from-green-400 to-green-600 rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-green-500/30">
+                        <CheckCircleIcon className="h-12 w-12 text-white" />
+                    </div>
+                    <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tighter">Deposit Transmitted!</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 leading-relaxed font-medium">Your request has been securely received. Auditors will confirm your transaction shortly.</p>
+                    
+                    {whatsappLink && settings?.whatsappDepositProofEnabled !== false && (
+                        <div className="mb-8 p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-2xl text-center">
+                            <div className="flex items-center justify-center gap-2 mb-2 text-emerald-600 dark:text-emerald-400">
+                                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.019-5.101-2.871-6.955C16.6 1.93 14.124.912 11.493.912c-5.438 0-9.863 4.42-9.866 9.865-.001 1.745.457 3.447 1.328 4.966L1.93 21.054l5.428-1.424-.711-.476zm11.01-6.17c-.31-.156-1.84-.908-2.126-1.012-.287-.104-.496-.156-.705.156-.209.312-.81 1.012-.992 1.22-.183.208-.365.234-.675.078-.31-.156-1.31-.48-2.493-1.537-.92-.818-1.54-1.83-1.72-2.14-.18-.31-.019-.477.136-.631.14-.139.31-.362.465-.544.155-.181.206-.31.31-.518.104-.208.052-.389-.026-.544-.078-.156-.705-1.7-.966-2.327-.254-.61-.514-.528-.705-.528-.183 0-.391-.012-.6-.012s-.548.078-.835.39c-.287.313-1.096 1.072-1.096 2.614 0 1.54 1.121 3.03 1.277 3.238.156.208 2.207 3.37 5.348 4.729.747.323 1.33.516 1.784.66.751.238 1.436.204 1.977.123.602-.09 1.84-.753 2.1-1.443.26-.69.26-1.282.182-1.403-.078-.12-.286-.19-.597-.346z" />
+                                </svg>
+                                <span className="font-black text-xs uppercase tracking-wider">Super Fast Approval</span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
+                                For super fast approval, please upload the screenshot of your deposited funds to our official WhatsApp support number.
+                            </p>
+                            <a 
+                                href={whatsappLink} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.03]"
+                            >
+                                Upload Screenshot to WhatsApp &rarr;
+                            </a>
                         </div>
-                        <p className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
-                            For super fast approval, please upload the screenshot of your deposited funds to our official WhatsApp support number <strong>+{cleanedWhatsappNumber}</strong>.
-                        </p>
-                        <a 
-                            href={whatsappLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.03]"
-                        >
-                            Upload Screenshot to WhatsApp &rarr;
-                        </a>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <Button onClick={() => window.location.reload()} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transaction</Button>
+                        <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">Back to Hub</Button>
+                    </div>
+                </div>
+
+                {/* Beautiful Modal Overlay for WhatsApp Screenshot Prompt */}
+                {showWhatsAppPopup && whatsappLink && settings?.whatsappDepositProofEnabled !== false && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+                        <div className="bg-white dark:bg-gray-950 rounded-[2rem] max-w-md w-full p-6 sm:p-8 shadow-2xl border-4 border-emerald-500 text-center relative overflow-hidden transform transition-all duration-300 scale-100">
+                            {/* Close Button */}
+                            <button 
+                                onClick={() => setShowWhatsAppPopup(false)}
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+
+                            {/* WhatsApp Vibrating Icon */}
+                            <div className="mx-auto w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-xl shadow-emerald-500/30 animate-pulse">
+                                <svg className="w-10 h-10 text-white fill-current" viewBox="0 0 24 24">
+                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.019-5.101-2.871-6.955C16.6 1.93 14.124.912 11.493.912c-5.438 0-9.863 4.42-9.866 9.865-.001 1.745.457 3.447 1.328 4.966L1.93 21.054l5.428-1.424-.711-.476zm11.01-6.17c-.31-.156-1.84-.908-2.126-1.012-.287-.104-.496-.156-.705.156-.209.312-.81 1.012-.992 1.22-.183.208-.365.234-.675.078-.31-.156-1.31-.48-2.493-1.537-.92-.818-1.54-1.83-1.72-2.14-.18-.31-.019-.477.136-.631.14-.139.31-.362.465-.544.155-.181.206-.31.31-.518.104-.208.052-.389-.026-.544-.078-.156-.705-1.7-.966-2.327-.254-.61-.514-.528-.705-.528-.183 0-.391-.012-.6-.012s-.548.078-.835.39c-.287.313-1.096 1.072-1.096 2.614 0 1.54 1.121 3.03 1.277 3.238.156.208 2.207 3.37 5.348 4.729.747.323 1.33.516 1.784.66.751.238 1.436.204 1.977.123.602-.09 1.84-.753 2.1-1.443.26-.69.26-1.282.182-1.403-.078-.12-.286-.19-.597-.346z" />
+                                </svg>
+                            </div>
+
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-2 uppercase tracking-tighter">Fast Approval Required</h3>
+                            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-1 uppercase tracking-widest text-[11px]">Upload Screenshot to WhatsApp</p>
+                            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed font-medium">
+                                To complete your request and get super fast approval, please upload a screenshot of your payment transfer transaction to our official WhatsApp support number.
+                            </p>
+
+                            <div className="space-y-3">
+                                <a 
+                                    href={whatsappLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                                >
+                                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.63-1.019-5.101-2.871-6.955C16.6 1.93 14.124.912 11.493.912c-5.438 0-9.863 4.42-9.866 9.865-.001 1.745.457 3.447 1.328 4.966L1.93 21.054l5.428-1.424-.711-.476zm11.01-6.17c-.31-.156-1.84-.908-2.126-1.012-.287-.104-.496-.156-.705.156-.209.312-.81 1.012-.992 1.22-.183.208-.365.234-.675.078-.31-.156-1.31-.48-2.493-1.537-.92-.818-1.54-1.83-1.72-2.14-.18-.31-.019-.477.136-.631.14-.139.31-.362.465-.544.155-.181.206-.31.31-.518.104-.208.052-.389-.026-.544-.078-.156-.705-1.7-.966-2.327-.254-.61-.514-.528-.705-.528-.183 0-.391-.012-.6-.012s-.548.078-.835.39c-.287.313-1.096 1.072-1.096 2.614 0 1.54 1.121 3.03 1.277 3.238.156.208 2.207 3.37 5.348 4.729.747.323 1.33.516 1.784.66.751.238 1.436.204 1.977.123.602-.09 1.84-.753 2.1-1.443.26-.69.26-1.282.182-1.403-.078-.12-.286-.19-.597-.346z" />
+                                    </svg>
+                                    Open WhatsApp Now &rarr;
+                                </a>
+                                <button 
+                                    onClick={() => setShowWhatsAppPopup(false)}
+                                    className="w-full py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/80 text-gray-500 dark:text-gray-400 font-black uppercase text-[10px] tracking-widest transition-colors"
+                                >
+                                    Done, I've Uploaded It
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
-
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button onClick={() => window.location.reload()} className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">New Transaction</Button>
-                    <Button onClick={() => navigate('/member')} variant="secondary" className="rounded-2xl py-4 font-black uppercase tracking-widest text-xs">Back to Hub</Button>
-                </div>
             </div>
         );
     }
@@ -839,7 +895,7 @@ const DepositFunds: React.FC = () => {
                                 </div>
                             </div>
                             
-                            {whatsappLink && (
+                            {whatsappLink && settings?.whatsappDepositProofEnabled !== false && (
                                 <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/10 border border-emerald-500/20 rounded-xl space-y-2">
                                     <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                                         <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">

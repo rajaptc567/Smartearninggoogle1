@@ -204,6 +204,8 @@ export interface Settings {
     featuredPlanIds?: string[];
     isInitialPageLoaderEnabled?: boolean;
     whatsappNumber?: string;
+    whatsappFloatingEnabled?: boolean;
+    whatsappDepositProofEnabled?: boolean;
 }
 
 export interface Task {

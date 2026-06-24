@@ -76,7 +76,9 @@ const Settings: React.FC = () => {
         homepagePaymentLogos: settings.homepagePaymentLogos || [],
         featuredPlanIds: settings.featuredPlanIds || [],
         faqs: settings.faqs || [],
-        whatsappNumber: settings.whatsappNumber || ''
+        whatsappNumber: settings.whatsappNumber || '',
+        whatsappFloatingEnabled: settings.whatsappFloatingEnabled !== false,
+        whatsappDepositProofEnabled: settings.whatsappDepositProofEnabled !== false
     }));
     setIsDirty(false);
   }, [settings]);
@@ -505,6 +507,21 @@ const Settings: React.FC = () => {
                                 className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white"
                             />
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Provide the WhatsApp number including country code (without spaces, leading zeros, or '+') where customers can submit deposit screenshots for fast approval.</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <ToggleSection 
+                                name="whatsappFloatingEnabled" 
+                                label="Enable Floating WhatsApp Icon" 
+                                checked={localSettings.whatsappFloatingEnabled !== false} 
+                                onChange={handleCheckboxChange} 
+                            />
+                            <ToggleSection 
+                                name="whatsappDepositProofEnabled" 
+                                label="Enable WhatsApp Deposit Proof Pop-up" 
+                                checked={localSettings.whatsappDepositProofEnabled !== false} 
+                                onChange={handleCheckboxChange} 
+                            />
                         </div>
                     </div>
                 </div>

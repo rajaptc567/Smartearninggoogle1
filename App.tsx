@@ -126,7 +126,8 @@ const WhatsAppFloatingButton: React.FC = () => {
     const location = useLocation();
     
     const whatsappNumber = state.settings?.whatsappNumber;
-    if (!whatsappNumber) return null;
+    const whatsappFloatingEnabled = state.settings?.whatsappFloatingEnabled;
+    if (!whatsappNumber || whatsappFloatingEnabled === false) return null;
     
     // Hide floating widget on admin pages
     if (location.pathname.startsWith('/admin')) return null;
