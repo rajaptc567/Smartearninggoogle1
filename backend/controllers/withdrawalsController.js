@@ -48,6 +48,14 @@ export const getWithdrawal = async (req, res) => {
 
 export const createWithdrawal = async (req, res) => {
     try {
+        const loggedInUserId = req.user?.id;
+        const requestedUserId = req.body.userId;
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot withdraw on behalf of other users.' });
+        }
+
         const user = await User.findById(req.body.userId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found' });

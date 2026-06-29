@@ -1,5 +1,6 @@
 
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getRules,
     createRule,
@@ -11,10 +12,10 @@ const router = express.Router();
 
 router.route('/')
     .get(getRules)
-    .post(createRule);
+    .post(authorize(['admin']), createRule);
 
 router.route('/:id')
-    .put(updateRule)
-    .delete(deleteRule);
+    .put(authorize(['admin']), updateRule)
+    .delete(authorize(['admin']), deleteRule);
 
 export default router;

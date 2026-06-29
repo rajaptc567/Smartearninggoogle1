@@ -214,6 +214,14 @@ export const getUser = async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(200).json({ success: false, data: {} });
+
+        const loggedInUserId = req.user?.id;
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(user._id)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot access other users profiles.' });
+        }
+
         res.status(200).json({ success: true, data: user });
     } catch (err) { res.status(200).json({ success: false, data: {} }); }
 };
@@ -256,9 +264,17 @@ export const updateUser = async (req, res) => {
         const userToUpdate = await User.findById(req.params.id);
         if (!userToUpdate) return res.status(404).json({ success: false, error: `User not found` });
 
-        // SECURITY: Role-aware field whitelisting
+        // SECURITY: Verify that logged-in user matches target user, or is an admin
+        const loggedInUserId = req.user?.id;
+        const targetUserId = req.params.id;
         const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
         const isAdmin = isMasterAdmin || req.user?.role === 'admin' || req.user?.role === 'finance' || req.user?.role === 'support';
+
+        if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users profiles.' });
+        }
+
+        // SECURITY: Role-aware field whitelisting
         
         // Fields standard users are allowed to modify
         const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
@@ -340,6 +356,14 @@ export const adminActivatePlan = async (req, res) => {
 
 export const purchasePlan = async (req, res) => {
     try {
+        const loggedInUserId = req.user?.id;
+        const targetUserId = req.params.id;
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot purchase plan on behalf of other users.' });
+        }
+
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});

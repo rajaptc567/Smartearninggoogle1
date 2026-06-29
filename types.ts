@@ -206,6 +206,18 @@ export interface Settings {
     whatsappNumber?: string;
     whatsappFloatingEnabled?: boolean;
     whatsappDepositProofEnabled?: boolean;
+    seoTitle?: string;
+    seoDescription?: string;
+    seoKeywords?: string;
+    privacyPolicyTitle?: string;
+    privacyPolicyUpdated?: string;
+    privacyPolicyContent?: string;
+    refundPolicyTitle?: string;
+    refundPolicyUpdated?: string;
+    refundPolicyContent?: string;
+    termsOfUseTitle?: string;
+    termsOfUseUpdated?: string;
+    termsOfUseContent?: string;
 }
 
 export interface Task {

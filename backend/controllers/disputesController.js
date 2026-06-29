@@ -6,7 +6,14 @@ import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 export const getDisputes = async (req, res) => {
     try {
-        const disputes = await Dispute.find().sort({ date: -1 });
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const query = isAdmin ? {} : { userId: req.user?.id };
+
+        if (!isAdmin && !req.user?.id) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const disputes = await Dispute.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, data: disputes });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -16,6 +23,14 @@ export const createDispute = async (req, res) => {
         const disputeData = { ...req.body };
         const user = await User.findById(disputeData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const loggedInUserId = req.user.id;
+        const requestedUserId = disputeData.userId;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot submit dispute on behalf of other users.' });
+        }
 
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.dispute)) {
             return res.status(403).json({ success: false, error: 'Restricted.' });
@@ -44,6 +59,13 @@ export const updateDispute = async (req, res) => {
         const { status, newMessage, sender } = req.body;
         const dispute = await Dispute.findById(req.params.id);
         if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
+
+        const loggedInUserId = req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(dispute.userId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users disputes.' });
+        }
 
         if (newMessage || req.file) {
             const messageData = { sender: sender || 'Admin', message: newMessage || '' };
@@ -80,6 +102,15 @@ export const markAsRead = async (req, res) => {
     try {
         const { role } = req.body;
         const dispute = await Dispute.findById(req.params.id);
+        if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
+
+        const loggedInUserId = req.user.id;
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(dispute.userId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users disputes.' });
+        }
+
         if (role === 'admin') dispute.adminUnread = false;
         else dispute.userUnread = false;
         await dispute.save();

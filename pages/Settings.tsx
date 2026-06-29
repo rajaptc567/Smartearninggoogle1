@@ -4,6 +4,17 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
 import { updateSettings } from '../services/api';
+import { 
+    defaultPrivacyPolicyTitle, 
+    defaultPrivacyPolicyUpdated, 
+    defaultPrivacyPolicyContent,
+    defaultRefundPolicyTitle,
+    defaultRefundPolicyUpdated,
+    defaultRefundPolicyContent,
+    defaultTermsOfUseTitle,
+    defaultTermsOfUseUpdated,
+    defaultTermsOfUseContent 
+} from '../data/legalDefaults';
 
 // --- Icons ---
 const StarIcon = ({ filled = false, className = "" }) => (
@@ -18,7 +29,7 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -78,7 +89,19 @@ const Settings: React.FC = () => {
         faqs: settings.faqs || [],
         whatsappNumber: settings.whatsappNumber || '',
         whatsappFloatingEnabled: settings.whatsappFloatingEnabled !== false,
-        whatsappDepositProofEnabled: settings.whatsappDepositProofEnabled !== false
+        whatsappDepositProofEnabled: settings.whatsappDepositProofEnabled !== false,
+        seoTitle: settings.seoTitle || '',
+        seoDescription: settings.seoDescription || '',
+        seoKeywords: settings.seoKeywords || '',
+        privacyPolicyTitle: settings.privacyPolicyTitle || defaultPrivacyPolicyTitle,
+        privacyPolicyUpdated: settings.privacyPolicyUpdated || defaultPrivacyPolicyUpdated,
+        privacyPolicyContent: settings.privacyPolicyContent || defaultPrivacyPolicyContent,
+        refundPolicyTitle: settings.refundPolicyTitle || defaultRefundPolicyTitle,
+        refundPolicyUpdated: settings.refundPolicyUpdated || defaultRefundPolicyUpdated,
+        refundPolicyContent: settings.refundPolicyContent || defaultRefundPolicyContent,
+        termsOfUseTitle: settings.termsOfUseTitle || defaultTermsOfUseTitle,
+        termsOfUseUpdated: settings.termsOfUseUpdated || defaultTermsOfUseUpdated,
+        termsOfUseContent: settings.termsOfUseContent || defaultTermsOfUseContent,
     }));
     setIsDirty(false);
   }, [settings]);
@@ -374,6 +397,7 @@ const Settings: React.FC = () => {
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto no-scrollbar">
           <TabButton id="general" label="General" />
           <TabButton id="homepage" label="Homepage" />
+          <TabButton id="legal" label="Legal Pages" />
           <TabButton id="faqs" label="FAQs" />
           <TabButton id="transfers" label="Transfers & Fees" />
           <TabButton id="withdrawals" label="Withdrawals" />
@@ -772,6 +796,104 @@ const Settings: React.FC = () => {
                             <label className="text-sm font-medium">CTA Description</label>
                             <textarea name="homepageContent.ctaDesc" value={localSettings.homepageContent?.ctaDesc || ''} onChange={handleTextChange} rows={2} className="w-full mt-1 rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
+                    </div>
+                </div>
+
+                {/* Homepage SEO Metadata */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 space-y-4">
+                    <h4 className="font-semibold text-gray-800 dark:text-white uppercase tracking-tight text-sm">Homepage SEO Metadata Settings</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Configure search engine titles and descriptors specifically for smartexn.com.</p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium">SEO Title Tag (e.g. Meta Title)</label>
+                            <input name="seoTitle" value={localSettings.seoTitle || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" placeholder="SmartEarning - Invest & Grow Your Network" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">SEO Description Tag (e.g. Meta Description)</label>
+                            <textarea name="seoDescription" value={localSettings.seoDescription || ''} onChange={handleTextChange} rows={3} className="w-full mt-1 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" placeholder="SmartEarning is a premier Multi-Level Marketing and passive investment ecosystem designed to help you secure stable growth." />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">SEO Keywords Tag (Comma-separated)</label>
+                            <input name="seoKeywords" value={localSettings.seoKeywords || ''} onChange={handleTextChange} className="w-full mt-1 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white" placeholder="SmartEarning, investment, MLM, multi-level marketing, passive income" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* LEGAL PAGES TAB */}
+        {activeTab === 'legal' && (
+            <div className="space-y-6 animate-fade-in">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                    <h4 className="font-bold text-gray-800 dark:text-white uppercase tracking-tight text-base mb-2">Legal Page Content Editors</h4>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Customize titles, updated dates, and full clause contents for the Privacy Policy, Refund Policy, and Terms of Use.
+                    </p>
+                </div>
+
+                {/* Privacy Policy Panel */}
+                <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-md space-y-4">
+                    <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                        <h5 className="font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-tight text-sm">1. Privacy Policy Customizer</h5>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full dark:bg-blue-900/40 dark:text-blue-300">smartexn.com</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Page Header Title</label>
+                            <input name="privacyPolicyTitle" value={localSettings.privacyPolicyTitle || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Privacy Policy" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Last Updated Descriptor</label>
+                            <input name="privacyPolicyUpdated" value={localSettings.privacyPolicyUpdated || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Last updated: June 28, 2026" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-1.5">Detailed Page Content (Markdown / Text supported)</label>
+                        <textarea name="privacyPolicyContent" value={localSettings.privacyPolicyContent || ''} onChange={handleTextChange} rows={12} className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm font-mono leading-relaxed" placeholder="Write Privacy Policy clauses..." />
+                    </div>
+                </div>
+
+                {/* Refund Policy Panel */}
+                <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-md space-y-4">
+                    <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                        <h5 className="font-extrabold text-red-600 dark:text-red-400 uppercase tracking-tight text-sm">2. Refund Policy Customizer</h5>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 px-2.5 py-1 rounded-full dark:bg-red-900/40 dark:text-red-300">smartexn.com</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Page Header Title</label>
+                            <input name="refundPolicyTitle" value={localSettings.refundPolicyTitle || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Refund Policy" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Last Updated Descriptor</label>
+                            <input name="refundPolicyUpdated" value={localSettings.refundPolicyUpdated || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Last updated: June 28, 2026" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-1.5">Detailed Page Content (Markdown / Text supported)</label>
+                        <textarea name="refundPolicyContent" value={localSettings.refundPolicyContent || ''} onChange={handleTextChange} rows={12} className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm font-mono leading-relaxed" placeholder="Write Refund Policy clauses..." />
+                    </div>
+                </div>
+
+                {/* Terms of Use Panel */}
+                <div className="p-5 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 shadow-md space-y-4">
+                    <div className="flex items-center justify-between border-b dark:border-gray-700 pb-3">
+                        <h5 className="font-extrabold text-teal-600 dark:text-teal-400 uppercase tracking-tight text-sm">3. Terms of Use Customizer</h5>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-teal-100 text-teal-800 px-2.5 py-1 rounded-full dark:bg-teal-900/40 dark:text-teal-300">smartexn.com</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Page Header Title</label>
+                            <input name="termsOfUseTitle" value={localSettings.termsOfUseTitle || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Terms of Use" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400">Last Updated Descriptor</label>
+                            <input name="termsOfUseUpdated" value={localSettings.termsOfUseUpdated || ''} onChange={handleTextChange} className="w-full mt-1.5 rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" placeholder="Last updated: June 28, 2026" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-1.5">Detailed Page Content (Markdown / Text supported)</label>
+                        <textarea name="termsOfUseContent" value={localSettings.termsOfUseContent || ''} onChange={handleTextChange} rows={12} className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm font-mono leading-relaxed" placeholder="Write Terms of Use clauses..." />
                     </div>
                 </div>
             </div>

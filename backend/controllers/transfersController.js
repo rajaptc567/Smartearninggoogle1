@@ -29,6 +29,14 @@ export const getTransfers = async (req, res) => {
 export const createTransfer = async (req, res) => {
     const { senderId, recipientId, amount } = req.body;
     try {
+        const loggedInUserId = req.user?.id;
+        const requestedSenderId = senderId;
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(requestedSenderId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot initiate transfer on behalf of other users.' });
+        }
+
         const sender = await User.findById(senderId);
         const recipient = await User.findById(recipientId);
         const settings = await Setting.getSettings();

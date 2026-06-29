@@ -6,6 +6,11 @@ import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
+import { 
+    defaultPrivacyPolicyContent, defaultPrivacyPolicyTitle, defaultPrivacyPolicyUpdated, 
+    defaultRefundPolicyContent, defaultRefundPolicyTitle, defaultRefundPolicyUpdated, 
+    defaultTermsOfUseContent, defaultTermsOfUseTitle, defaultTermsOfUseUpdated 
+} from '../data/legalDefaults';
 
 // --- Loading Component ---
 const SectionLoading: React.FC<{ text?: string }> = ({ text = "Fresh data is loading." }) => (
@@ -196,6 +201,7 @@ const HomePage: React.FC = () => {
     const [videoUrl, setVideoUrl] = useState(settings.homepageVideoUrl || '');
     const [localFaqs, setLocalFaqs] = useState<FaqItem[]>([]);
     const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+    const [activePolicyModal, setActivePolicyModal] = useState<'privacy' | 'refund' | 'terms' | null>(null);
 
     useEffect(() => {
         const hash = window.location.hash;
@@ -214,6 +220,30 @@ const HomePage: React.FC = () => {
         setLocalFaqs(settings.faqs || []);
         setIsDirty(false);
     }, [settings]);
+
+    useEffect(() => {
+        const defaultTitle = "SmartEarning - Network & Investment Ecosystem";
+        const seoTitle = settings.seoTitle || defaultTitle;
+        document.title = seoTitle;
+
+        let metaDescription = document.querySelector('meta[name="description"]');
+        if (!metaDescription) {
+            metaDescription = document.createElement('meta');
+            metaDescription.setAttribute('name', 'description');
+            document.head.appendChild(metaDescription);
+        }
+        const defaultDesc = "SmartEarning is a premier Multi-Level Marketing and passive investment ecosystem designed to help you secure stable growth.";
+        metaDescription.setAttribute('content', settings.seoDescription || defaultDesc);
+
+        let metaKeywords = document.querySelector('meta[name="keywords"]');
+        if (!metaKeywords) {
+            metaKeywords = document.createElement('meta');
+            metaKeywords.setAttribute('name', 'keywords');
+            document.head.appendChild(metaKeywords);
+        }
+        const defaultKeywords = "SmartEarning, investment, MLM, multi-level marketing, passive income";
+        metaKeywords.setAttribute('content', settings.seoKeywords || defaultKeywords);
+    }, [settings.seoTitle, settings.seoDescription, settings.seoKeywords]);
 
     const handleContentChange = (field: keyof HomepageContent) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setPageContent(prev => ({ ...prev, [field]: e.target.value }));
@@ -421,7 +451,10 @@ const HomePage: React.FC = () => {
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900"></div>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                            <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h2" className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight" />
+                            <div className="text-xs sm:text-sm font-black tracking-[0.2em] text-blue-600 dark:text-blue-400 uppercase mb-4">
+                                Secure Network Marketing Platform • Multi-Currency Wallet Investment System
+                            </div>
+                            <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h1" className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight" />
                             <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
                             <div className="mt-10 flex justify-center gap-4">
                                 <Button size="lg" onClick={() => navigate('/register')} className="shadow-xl shadow-blue-500/20 px-8 py-4 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
@@ -437,22 +470,25 @@ const HomePage: React.FC = () => {
                         {editMode && !showFeatures && <div className="absolute top-0 right-0 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-blue-500 mb-2 block">Secure Network Marketing Platform</span>
                                     <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-xl font-bold mb-3" />
                                     <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
                                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-purple-500 mb-2 block">Peer-to-Peer Ledger Investment Portal</span>
                                     <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-xl font-bold mb-3" />
                                     <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
                                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-green-500 mb-2 block">Real-Time MLM Earning Dashboard</span>
                                     <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-xl font-bold mb-3" />
                                     <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
-                            </div>
+                             </div>
                         </div>
                     </section>
                 )}
@@ -493,9 +529,9 @@ const HomePage: React.FC = () => {
                                     <div className="w-20 h-20 bg-teal-900/30 rounded-full flex items-center justify-center mb-6 text-teal-400">
                                         <PkrIcon />
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR)</h3>
+                                    <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR) - Local Channels</h3>
                                     <p className="text-sm text-gray-400 leading-relaxed">
-                                        We offer dedicated plans and local payment methods for our members in Pakistan. Invest and withdraw in PKR, while still earning from referrals using any currency on the platform.
+                                        We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>Easypaisa</strong>, <strong>JazzCash</strong>, and <strong>SadaPay</strong>, you can instantly subscribe to high-performing options like our <strong>Pehla Qadam Plan</strong> and withdraw your earnings directly to your mobile wallet.
                                     </p>
                                 </div>
                             </div>
@@ -508,8 +544,12 @@ const HomePage: React.FC = () => {
                     <section id="plans" className={`py-20 bg-white dark:bg-gray-900 ${!showInvestmentPlans && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showInvestmentPlans && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                            <h3 className="text-3xl md:text-4xl font-bold text-center mb-4">Investment Plans</h3>
-                            <p className="text-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-12">Choose the plan that suits your financial goals. Transparent pricing with high returns.</p>
+                            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-center mb-4 text-gray-900 dark:text-white">
+                                High-Yield Crypto Investment Plans & Passive Earnings
+                            </h2>
+                            <p className="text-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-12">
+                                Discover highly lucrative financial packages tailored for maximum return. From the budget-friendly <strong>Pehla Qadam Plan</strong> in PKR to globally scalable options, we make wealth generation simple and secure.
+                            </p>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                 {featuredPlans.map(plan => (
@@ -547,23 +587,25 @@ const HomePage: React.FC = () => {
                             <div className="flex flex-col lg:flex-row items-center gap-12">
                                 {/* Text Content */}
                                 <div className="lg:w-1/2 space-y-6">
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">How It Works</h3>
+                                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white uppercase tracking-tight">
+                                        Multi-Tier Referral Commission System
+                                    </h3>
                                     <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                                        Think of it like building a team. Your network has multiple levels, and you earn commissions from each:
+                                        Our platform acts as a powerful <strong>transparent referral income generator</strong>. Build your network, unlock tiers, and earn through our structural levels managed by automated MLM affiliate software:
                                     </p>
                                     
                                     <div className="space-y-4">
                                         <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 1 (Direct Referrals)</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">You earn a commission when you personally invite someone to join.</p>
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 1 - Direct Earnings</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">Directly refer partners to earn immediate commissions. Your portfolio works as a transparent referral income generator.</p>
                                         </div>
                                         <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 2 (Indirect Referrals)</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">When your Level 1 referral invites a new member, you also earn a commission.</p>
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 2 - Passive Network Expansion</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">When your direct members refer others, you earn secondary rewards within our passive earning network ecosystem.</p>
                                         </div>
                                         <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Deeper Levels (3, 4, etc.)</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">The process continues. You earn a commission when your Level 2 referrals bring in new members (your Level 3), and so on.</p>
+                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 3+ - Fully Automated MLM Affiliate Software</h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">Commission flows effortlessly down multiple levels of depth, completely managed by our robust automated MLM affiliate software.</p>
                                         </div>
                                     </div>
 
@@ -840,16 +882,87 @@ const HomePage: React.FC = () => {
             <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
                     <div className="flex flex-col md:flex-row justify-between items-center">
-                        <div className="mb-4 md:mb-0">
+                        <div className="mb-6 md:mb-0">
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">SmartEarning</h2>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Empowering financial growth globally.</p>
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                            &copy; {new Date().getFullYear()} SmartEarning. All rights reserved.
+                        <div className="flex flex-col items-center md:items-end gap-3 text-center md:text-right">
+                            <div className="flex flex-wrap gap-4 justify-center md:justify-end text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                <Link to="/privacy-policy" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
+                                    Privacy Policy
+                                </Link>
+                                <span className="text-gray-300 dark:text-gray-700 select-none">•</span>
+                                <Link to="/refund-policy" className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer">
+                                    Refund Policy
+                                </Link>
+                                <span className="text-gray-300 dark:text-gray-700 select-none">•</span>
+                                <Link to="/terms-of-use" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
+                                    Terms of Use
+                                </Link>
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                &copy; {new Date().getFullYear()} SmartEarning. All rights reserved.
+                            </div>
                         </div>
                     </div>
                 </div>
             </footer>
+
+            {/* Policy Modals */}
+            {activePolicyModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm transition-all animate-fade-in" onClick={() => setActivePolicyModal(null)}>
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative transition-transform transform scale-100" onClick={(e) => e.stopPropagation()}>
+                        {/* Close Button */}
+                        <button 
+                            onClick={() => setActivePolicyModal(null)} 
+                            className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-all cursor-pointer"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                        
+                        {/* Modal Content */}
+                        {activePolicyModal === 'privacy' && (
+                            <div>
+                                <span className="text-xs font-black tracking-widest text-blue-500 uppercase block mb-2">Security & Data Safeguards</span>
+                                <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.privacyPolicyTitle || defaultPrivacyPolicyTitle}</h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.privacyPolicyUpdated || defaultPrivacyPolicyUpdated}</p>
+                                <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                    {settings.privacyPolicyContent || defaultPrivacyPolicyContent}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {activePolicyModal === 'refund' && (
+                            <div>
+                                <span className="text-xs font-black tracking-widest text-red-500 uppercase block mb-2">Important Financial Notice</span>
+                                <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.refundPolicyTitle || defaultRefundPolicyTitle}</h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.refundPolicyUpdated || defaultRefundPolicyUpdated}</p>
+                                <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                    {settings.refundPolicyContent || defaultRefundPolicyContent}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {activePolicyModal === 'terms' && (
+                            <div>
+                                <span className="text-xs font-black tracking-widest text-blue-500 uppercase block mb-2">Rules & Guidelines</span>
+                                <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.termsOfUseTitle || defaultTermsOfUseTitle}</h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.termsOfUseUpdated || defaultTermsOfUseUpdated}</p>
+                                <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                    {settings.termsOfUseContent || defaultTermsOfUseContent}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Close Button at bottom */}
+                        <div className="mt-8 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                            <Button onClick={() => setActivePolicyModal(null)} className="rounded-xl px-6 py-2">
+                                Acknowledge & Close
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

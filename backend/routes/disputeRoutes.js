@@ -2,6 +2,7 @@
 
 import express from 'express';
 import multer from 'multer';
+import { authorize } from '../middleware/authMiddleware.js';
 import { getDisputes, createDispute, updateDispute, markAsRead } from '../controllers/disputesController.js';
 
 // Multer for memory storage (Base64)
@@ -14,13 +15,13 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(getDisputes)
-    .post(upload.single('proof'), createDispute);
+    .get(authorize(['user', 'admin']), getDisputes)
+    .post(upload.single('proof'), authorize(['user', 'admin']), createDispute);
 
 router.route('/:id')
-    .put(upload.single('file'), updateDispute); // Add multer for file attachments in chat
+    .put(upload.single('file'), authorize(['user', 'admin']), updateDispute); // Add multer for file attachments in chat
 
 router.route('/:id/read')
-    .put(markAsRead);
+    .put(authorize(['user', 'admin']), markAsRead);
 
 export default router;

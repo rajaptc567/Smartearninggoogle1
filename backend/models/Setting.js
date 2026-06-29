@@ -206,6 +206,18 @@ const SettingSchema = new mongoose.Schema({
     whatsappNumber: { type: String, default: "" },
     whatsappFloatingEnabled: { type: Boolean, default: true },
     whatsappDepositProofEnabled: { type: Boolean, default: true },
+    seoTitle: { type: String, default: "SmartEarning - Invest & Grow Your Network" },
+    seoDescription: { type: String, default: "SmartEarning is a premier Multi-Level Marketing and passive investment ecosystem designed to help you secure stable growth." },
+    seoKeywords: { type: String, default: "SmartEarning, investment, MLM, multi-level marketing, passive income" },
+    privacyPolicyTitle: { type: String, default: "Privacy Policy" },
+    privacyPolicyUpdated: { type: String, default: "Last updated: June 28, 2026" },
+    privacyPolicyContent: { type: String, default: "" },
+    refundPolicyTitle: { type: String, default: "Refund Policy" },
+    refundPolicyUpdated: { type: String, default: "Last updated: June 28, 2026" },
+    refundPolicyContent: { type: String, default: "" },
+    termsOfUseTitle: { type: String, default: "Terms of Use" },
+    termsOfUseUpdated: { type: String, default: "Last updated: June 28, 2026" },
+    termsOfUseContent: { type: String, default: "" },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {

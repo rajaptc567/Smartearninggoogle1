@@ -1,6 +1,7 @@
 
 import express from 'express';
 import multer from 'multer';
+import { authorize } from '../middleware/authMiddleware.js';
 import {
     getTasks,
     createTask,
@@ -20,16 +21,16 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(getTasks)
-    .post(createTask);
+    .get(authorize(['user', 'admin']), getTasks)
+    .post(authorize(['admin']), createTask);
 
-router.get('/pending-verifications', getPendingVerifications);
-router.put('/verify/:userId/:taskId', verifyTaskSubmission);
+router.get('/pending-verifications', authorize(['admin']), getPendingVerifications);
+router.put('/verify/:userId/:taskId', authorize(['admin']), verifyTaskSubmission);
 
 router.route('/:id')
-    .put(updateTask)
-    .delete(deleteTask);
+    .put(authorize(['admin']), updateTask)
+    .delete(authorize(['admin']), deleteTask);
 
-router.post('/:id/complete', upload.single('proof'), completeTask);
+router.post('/:id/complete', upload.single('proof'), authorize(['user', 'admin']), completeTask);
 
 export default router;

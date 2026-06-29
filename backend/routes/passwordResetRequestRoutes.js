@@ -1,12 +1,13 @@
 import express from 'express';
+import { authorize } from '../middleware/authMiddleware.js';
 import { getPasswordResetRequests, deletePasswordResetRequest } from '../controllers/passwordResetRequestsController.js';
 
 const router = express.Router();
 
 router.route('/')
-    .get(getPasswordResetRequests);
+    .get(authorize(['admin']), getPasswordResetRequests);
 
 router.route('/:id')
-    .delete(deletePasswordResetRequest);
+    .delete(authorize(['admin']), deletePasswordResetRequest);
 
 export default router;

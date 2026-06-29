@@ -52,6 +52,15 @@ export const createDeposit = async (req, res) => {
                 depositData.confirmationAnswers = {};
             }
         }
+
+        const loggedInUserId = req.user?.id;
+        const requestedUserId = depositData.userId;
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+
+        if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
+            return res.status(403).json({ success: false, error: 'Access denied: Cannot submit deposit on behalf of other users.' });
+        }
+
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
