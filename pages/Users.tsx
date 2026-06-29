@@ -574,6 +574,8 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
     // Security State
     const [resetLink, setResetLink] = useState('');
     const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+    const [selectedChannels, setSelectedChannels] = useState<string[]>(['email', 'whatsapp']);
+    const [customMessage, setCustomMessage] = useState('');
 
     // Network Tab Advanced State (The member-side view logic)
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
@@ -631,6 +633,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
             const { resetToken } = await adminInitiatePasswordReset(user._id);
             const link = `${window.location.origin}${window.location.pathname}#/reset-password?token=${resetToken}`;
             setResetLink(link);
+            setCustomMessage(`Hello ${formData.fullName || formData.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`);
         } catch (error) {
             console.error(error);
             alert(`Failed to generate reset link: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1067,18 +1070,135 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                 {isGeneratingLink ? 'Generating...' : 'Generate Reset Link'}
                                             </Button>
                                         ) : (
-                                            <div className="space-y-3 animate-slide-up">
-                                                <div className="flex gap-2">
-                                                    <input 
-                                                        type="text" 
-                                                        readOnly 
-                                                        value={resetLink} 
-                                                        className="flex-grow text-xs font-mono p-3 bg-gray-50 dark:bg-gray-900 border dark:border-gray-600 rounded-xl"
-                                                    />
-                                                    <Button size="sm" onClick={() => { navigator.clipboard.writeText(resetLink); alert('Copied!'); }}>Copy</Button>
+                                            <div className="space-y-4 animate-slide-up">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Generated Reset Link</label>
+                                                    <div className="flex gap-2">
+                                                        <input 
+                                                            type="text" 
+                                                            readOnly 
+                                                            value={resetLink} 
+                                                            className="flex-grow text-xs font-mono p-3 bg-gray-50 dark:bg-gray-900 border dark:border-gray-600 rounded-xl"
+                                                        />
+                                                        <Button size="sm" onClick={() => { navigator.clipboard.writeText(resetLink); alert('Reset link copied!'); }}>Copy</Button>
+                                                    </div>
                                                 </div>
-                                                <p className="text-[10px] text-amber-600 font-bold uppercase italic">* Send this link to the user. Valid for 48 hours.</p>
-                                                <Button variant="secondary" size="sm" onClick={() => setResetLink('')}>Generate New</Button>
+
+                                                {/* Dispatch channels selection */}
+                                                <div className="space-y-2 border-t dark:border-gray-700 pt-3">
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Choose Send Channels (Select Multiple)</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {[
+                                                            { id: 'email', label: 'Email', value: formData.email, placeholder: 'No Email' },
+                                                            { id: 'whatsapp', label: 'WhatsApp', value: formData.whatsapp || formData.phone, placeholder: 'No WhatsApp' },
+                                                            { id: 'whatsapp_business', label: 'WhatsApp Business', value: formData.whatsapp || formData.phone, placeholder: 'No WA Business' }
+                                                        ].map((ch) => {
+                                                            const isSelected = selectedChannels.includes(ch.id);
+                                                            return (
+                                                                <button
+                                                                    key={ch.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isSelected) {
+                                                                            setSelectedChannels(selectedChannels.filter(c => c !== ch.id));
+                                                                        } else {
+                                                                            setSelectedChannels([...selectedChannels, ch.id]);
+                                                                        }
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                                                                        isSelected 
+                                                                            ? 'bg-blue-500/10 border-blue-500 text-blue-600 dark:text-blue-400' 
+                                                                            : 'bg-transparent border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300'
+                                                                    }`}
+                                                                >
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={isSelected}
+                                                                        readOnly
+                                                                        className="rounded text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                                                                    />
+                                                                    <span>{ch.label}</span>
+                                                                    {ch.value ? (
+                                                                        <span className="opacity-60 text-[10px] font-mono font-medium">({ch.value})</span>
+                                                                    ) : (
+                                                                        <span className="text-amber-500 text-[9px] font-medium font-mono">({ch.placeholder})</span>
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* Customizable message preview */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Custom Message Template</label>
+                                                    <textarea
+                                                        value={customMessage}
+                                                        onChange={(e) => setCustomMessage(e.target.value)}
+                                                        rows={4}
+                                                        className="w-full text-xs p-3 rounded-xl dark:bg-gray-900 border dark:border-gray-600 font-sans leading-relaxed focus:ring-0"
+                                                        placeholder="Write password reset notification message here..."
+                                                    />
+                                                </div>
+
+                                                {/* Send Actions */}
+                                                <div className="space-y-2 border-t dark:border-gray-700 pt-3">
+                                                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Action Center</label>
+                                                    <div className="flex flex-col gap-2">
+                                                        {selectedChannels.includes('email') && (
+                                                            <a 
+                                                                href={`mailto:${formData.email || ''}?subject=${encodeURIComponent('Password Reset Request - SmartEarning')}&body=${encodeURIComponent(customMessage)}`}
+                                                                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white shadow-md transition-colors text-center"
+                                                            >
+                                                                📬 Send via Email
+                                                            </a>
+                                                        )}
+                                                        {selectedChannels.includes('whatsapp') && (
+                                                            <a 
+                                                                href={`https://api.whatsapp.com/send?phone=${(() => {
+                                                                    const phoneStr = formData.whatsapp || formData.phone || '';
+                                                                    const digits = phoneStr.replace(/\D/g, '');
+                                                                    return digits.startsWith('0') && digits.length === 11 ? '92' + digits.slice(1) : digits;
+                                                                })()}&text=${encodeURIComponent(customMessage)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-colors text-center"
+                                                            >
+                                                                💬 Send via WhatsApp
+                                                            </a>
+                                                        )}
+                                                        {selectedChannels.includes('whatsapp_business') && (
+                                                            <a 
+                                                                href={`https://wa.me/${(() => {
+                                                                    const phoneStr = formData.whatsapp || formData.phone || '';
+                                                                    const digits = phoneStr.replace(/\D/g, '');
+                                                                    return digits.startsWith('0') && digits.length === 11 ? '92' + digits.slice(1) : digits;
+                                                                })()}/?text=${encodeURIComponent(customMessage)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-colors text-center"
+                                                            >
+                                                                💼 Send via WhatsApp Business
+                                                            </a>
+                                                        )}
+                                                        <Button 
+                                                            type="button" 
+                                                            variant="secondary"
+                                                            className="w-full py-2 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(customMessage);
+                                                                alert('Message text copied to clipboard!');
+                                                            }}
+                                                        >
+                                                            📋 Copy Message Text
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex justify-between items-center pt-2">
+                                                    <p className="text-[9px] text-amber-600 font-bold uppercase italic">* Valid for 48 hours.</p>
+                                                    <Button variant="secondary" size="sm" onClick={() => setResetLink('')}>Generate New</Button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
