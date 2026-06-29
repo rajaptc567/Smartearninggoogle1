@@ -531,7 +531,7 @@ const HomePage: React.FC = () => {
                                     </div>
                                     <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR) - Local Channels</h3>
                                     <p className="text-sm text-gray-400 leading-relaxed">
-                                        We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>Easypaisa</strong>, <strong>JazzCash</strong>, and <strong>SadaPay</strong>, you can instantly subscribe to high-performing options like our <strong>Pehla Qadam Plan</strong> and withdraw your earnings directly to your mobile wallet.
+                                        We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>our secure local channels</strong>, you can instantly subscribe to high-performing options like our <strong>premium plans</strong> and withdraw your earnings directly to your mobile wallet.
                                     </p>
                                 </div>
                             </div>
@@ -548,7 +548,7 @@ const HomePage: React.FC = () => {
                                 High-Yield Crypto Investment Plans & Passive Earnings
                             </h2>
                             <p className="text-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-12">
-                                Discover highly lucrative financial packages tailored for maximum return. From the budget-friendly <strong>Pehla Qadam Plan</strong> in PKR to globally scalable options, we make wealth generation simple and secure.
+                                Discover highly lucrative financial packages tailored for maximum return. From budget-friendly <strong>plans</strong> in PKR to globally scalable options, we make wealth generation simple and secure.
                             </p>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
