@@ -56,7 +56,14 @@ const AdminLogin: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
             <div className="w-full max-w-md p-8 space-y-6 bg-[#111827] rounded-xl shadow-2xl border border-gray-800/50">
                 <div className="text-center">
-                    <h1 className="text-4xl font-black text-blue-500 tracking-tight">SmartEarning</h1>
+                    <div className="flex justify-center mb-4">
+                        <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg"></div>
+                            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
+                                SmartEarning
+                            </span>
+                        </Link>
+                    </div>
                     <h2 className="mt-4 text-2xl font-bold text-white">Admin Panel Login</h2>
                     <p className="mt-2 text-sm text-gray-400">Restricted Access: Authorized Personnel Only</p>
                 </div>

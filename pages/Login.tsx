@@ -58,14 +58,21 @@ const Login: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
                 <div className="text-center select-none">
-                    <h1 
-                        className="text-3xl font-bold text-blue-600 dark:text-blue-400 cursor-default active:scale-95 transition-transform"
+                    <div className="flex justify-center mb-4">
+                        <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg"></div>
+                            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
+                                SmartEarning
+                            </span>
+                        </Link>
+                    </div>
+                    <h2 
+                        className="mt-2 text-2xl font-bold text-gray-800 dark:text-white cursor-default active:scale-95 transition-transform"
                         onClick={handleSecretClick}
                         title="Member Login"
                     >
-                        SmartEarning
-                    </h1>
-                    <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Member Login</h2>
+                        Member Login
+                    </h2>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to access your member dashboard.</p>
                 </div>
 

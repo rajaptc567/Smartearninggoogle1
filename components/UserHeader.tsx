@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import NotificationBell from './ui/NotificationBell';
 import { currencySymbols, Currency } from '../types';
@@ -29,7 +29,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
   const userNotifications = notifications.filter(n => n.userId === currentUser?._id);
 
   return (
-    <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <header className="relative flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center">
         <button
           onClick={() => setSidebarOpen(true)}
@@ -41,15 +41,26 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
           </svg>
         </button>
         <div className="flex items-center space-x-3 sm:space-x-4 ml-2 lg:ml-0">
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white">{getTitle()}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white max-w-[120px] xs:max-w-none truncate">{getTitle()}</h1>
             {currentUser && (
-                <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
+                <div className="hidden xs:flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
                     <MapPinIcon />
                     <span>{currentUser.country} ({currencySymbols[(currentUser.currency || 'USD').toUpperCase() as Currency] || '$'})</span>
                 </div>
             )}
         </div>
       </div>
+
+      {/* Top Center Logo */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+        <Link to="/" className="flex items-center gap-1.5 hover:opacity-90 transition-all active:scale-95" title="Go to Home">
+          <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg shrink-0"></div>
+          <span className="hidden sm:inline-block text-lg sm:text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 tracking-tight">
+            SmartEarning
+          </span>
+        </Link>
+      </div>
+
       <div className="flex items-center space-x-4">
         <NotificationBell notifications={userNotifications} userId={currentUser?._id} />
         <div className="relative">
