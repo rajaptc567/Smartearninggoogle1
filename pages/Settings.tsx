@@ -29,7 +29,7 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal' | 'automation'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -102,14 +102,6 @@ const Settings: React.FC = () => {
         termsOfUseTitle: settings.termsOfUseTitle || defaultTermsOfUseTitle,
         termsOfUseUpdated: settings.termsOfUseUpdated || defaultTermsOfUseUpdated,
         termsOfUseContent: settings.termsOfUseContent || defaultTermsOfUseContent,
-        emailAutomationEnabled: settings.emailAutomationEnabled || false,
-        emailSenderAddress: settings.emailSenderAddress || 'studio56.pk@gmail.com',
-        emailSenderPassword: settings.emailSenderPassword || 'zakr ambh tnsp mrzf',
-        whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
-        whatsappInstanceId: settings.whatsappInstanceId || 'instance183081',
-        whatsappToken: settings.whatsappToken || '1q22bd6hwo7rc2ub',
-        autoWelcomeEnabled: settings.autoWelcomeEnabled || false,
-        autoPasswordResetEnabled: settings.autoPasswordResetEnabled || false,
     }));
     setIsDirty(false);
   }, [settings]);
@@ -411,7 +403,6 @@ const Settings: React.FC = () => {
           <TabButton id="withdrawals" label="Withdrawals" />
           <TabButton id="commissions" label="Commissions" />
           <TabButton id="exchange_rates" label="Exchange Rates" />
-          <TabButton id="automation" label="📬 Auto Messaging" />
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 min-h-[400px]">
@@ -1286,163 +1277,6 @@ const Settings: React.FC = () => {
                             </select>
                         </div>
                     )}
-                </div>
-            </div>
-        )}
-
-        {/* AUTOMATION TAB */}
-        {activeTab === 'automation' && (
-            <div className="space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Free Automated Messaging & Dispatch</h3>
-                        <p className="text-xs text-gray-500">Configure free automation setups for Gmail and WhatsApp API (UltraMsg) to handle client onboarding and security alerts automatically.</p>
-                    </div>
-                </div>
-
-                {/* EMAIL CONFIGURATION (GMAIL) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                    <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xl">📧</span>
-                            <div>
-                                <h4 className="font-bold text-gray-900 dark:text-white">Gmail Free SMTP Automation</h4>
-                                <p className="text-[10px] text-gray-400">Uses Gmail Secure App Password credentials for automated mailing</p>
-                            </div>
-                        </div>
-                        <div className="relative inline-block w-10 h-5">
-                            <input 
-                                id="emailAutomationEnabled"
-                                name="emailAutomationEnabled"
-                                type="checkbox" 
-                                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
-                                checked={localSettings.emailAutomationEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <label htmlFor="emailAutomationEnabled" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.emailAutomationEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
-                        </div>
-                    </div>
-
-                    {localSettings.emailAutomationEnabled && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Sender Gmail Address</label>
-                                <input 
-                                    type="email"
-                                    name="emailSenderAddress"
-                                    value={localSettings.emailSenderAddress || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
-                                    placeholder="your-email@gmail.com"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Gmail App Password (16-char)</label>
-                                <input 
-                                    type="text"
-                                    name="emailSenderPassword"
-                                    value={localSettings.emailSenderPassword || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
-                                    placeholder="xxxx xxxx xxxx xxxx"
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* WHATSAPP CONFIGURATION (ULTRAMSG) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                    <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xl">💬</span>
-                            <div>
-                                <h4 className="font-bold text-gray-900 dark:text-white">WhatsApp Free Automation (UltraMsg)</h4>
-                                <p className="text-[10px] text-gray-400">Uses Ultramsg testing instances for free API message dispatches</p>
-                            </div>
-                        </div>
-                        <div className="relative inline-block w-10 h-5">
-                            <input 
-                                id="whatsappAutomationEnabled"
-                                name="whatsappAutomationEnabled"
-                                type="checkbox" 
-                                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
-                                checked={localSettings.whatsappAutomationEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <label htmlFor="whatsappAutomationEnabled" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.whatsappAutomationEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
-                        </div>
-                    </div>
-
-                    {localSettings.whatsappAutomationEnabled && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">UltraMsg Instance ID</label>
-                                <input 
-                                    type="text"
-                                    name="whatsappInstanceId"
-                                    value={localSettings.whatsappInstanceId || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
-                                    placeholder="instancexxxx"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">UltraMsg Token</label>
-                                <input 
-                                    type="text"
-                                    name="whatsappToken"
-                                    value={localSettings.whatsappToken || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
-                                    placeholder="your_token"
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* AUTOMATION TRIGGER TRIGGERS */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                    <h4 className="font-bold text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">
-                        <span className="text-base">⚡</span> Active Automation Trigger Centers
-                    </h4>
-                    
-                    <div className="space-y-4">
-                        <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800">
-                            <input 
-                                id="autoWelcomeEnabled"
-                                name="autoWelcomeEnabled"
-                                type="checkbox" 
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={localSettings.autoWelcomeEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <div>
-                                <label htmlFor="autoWelcomeEnabled" className="block font-semibold text-gray-900 dark:text-white text-sm">Automated Welcome Messages</label>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    When new members sign up on SmartEarning, automatically deliver a gorgeous, structured welcome letter/receipt to their Email and/or WhatsApp.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800">
-                            <input 
-                                id="autoPasswordResetEnabled"
-                                name="autoPasswordResetEnabled"
-                                type="checkbox" 
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={localSettings.autoPasswordResetEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <div>
-                                <label htmlFor="autoPasswordResetEnabled" className="block font-semibold text-gray-900 dark:text-white text-sm">Automated Password Reset Delivery</label>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    When users request a password reset, instantly generate their unique 48-hour secure token link and dispatch it directly to their email or WhatsApp without admin manual action.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         )}

@@ -1846,16 +1846,7 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
         if (!message) return alert('Message is required');
         setIsSending(true);
         try {
-            const result = await sendAdminNotification({ 
-                userId: targetType === 'single' ? targetIds[0] : undefined, 
-                targetType: targetType !== 'single' ? targetType : undefined, 
-                targetIds: targetType === 'plan' ? targetIds : undefined, 
-                subject, 
-                message, 
-                isPopup, 
-                randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined,
-                selectedChannels
-            });
+            const result = await sendAdminNotification({ userId: targetType === 'single' ? targetIds[0] : undefined, targetType: targetType !== 'single' ? targetType : undefined, targetIds: targetType === 'plan' ? targetIds : undefined, subject, message, isPopup, randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined });
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
             alert(`Message sent successfully.`);
             onClose();

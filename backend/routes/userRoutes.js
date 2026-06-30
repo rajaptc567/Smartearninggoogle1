@@ -18,8 +18,7 @@ import {
     userRequestPasswordReset,
     verifyAndStartResetTimer,
     bulkUpdateRestrictions,
-    createBulkDummyUsers,
-    sendCustomAdminMessage
+    createBulkDummyUsers
 } from '../controllers/usersController.js';
 
 const router = express.Router();
@@ -39,7 +38,6 @@ router.route('/')
 router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);
 
 // Admin-Only actions
-router.post('/send-custom-message', authorize(['admin']), sendCustomAdminMessage);
 router.put('/bulk-restrictions', authorize(['admin']), bulkUpdateRestrictions);
 router.post('/bulk-dummy', authorize(['admin']), createBulkDummyUsers);
 router.delete('/bulk', authorize(['admin']), bulkDeleteUsers);

@@ -1,39 +1,7 @@
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
-// Production configuration: Uses environment variable for backend routing with robust fallbacks.
-const getBaseUrl = (): string => {
-    // 1. Check window.location to see if we are in an AI Studio / Cloud Run preview environment
-    if (typeof window !== 'undefined' && window.location) {
-        const hostname = window.location.hostname;
-        // If we are running in the AI Studio preview/dev environment (Google / Cloud Run domains),
-        // we must fallback to the active Render backend since no local MongoDB is provisioned in this container.
-        if (hostname.includes('.run.app') || hostname.includes('aistudio') || hostname.includes('google')) {
-            return 'https://smartearning-api.onrender.com';
-        }
-        
-        // Localhost fallback for local development
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
-            return 'http://localhost:5000'; // Default local backend port
-        }
-    }
-
-    // 2. Try environment variables next, ensuring they are not empty or root paths
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
-        const url = import.meta.env.VITE_API_URL;
-        if (url && url !== '/' && url !== '') return url;
-    }
-    
-    try {
-        // @ts-ignore
-        const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
-        if (envUrl && envUrl !== '/' && envUrl !== '') return envUrl;
-    } catch (e) {}
-
-    // 3. Fallback to production backend
-    return 'https://smartearning-api.onrender.com';
-};
-
-const BASE_URL = getBaseUrl();
+// Production configuration: Uses environment variable for backend routing.
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://smartearning-api.onrender.com';
 
 function getApiBaseUrl() {
   return `${BASE_URL}/api/v1`;
@@ -659,13 +627,4 @@ export const verifyTask = async (userId: string, taskId: string, status: 'Approv
     });
     const result = await handleResponse(response);
     return result.data;
-};
-
-export const sendCustomAdminMessage = async (msgData: { toEmail?: string; toPhone?: string; subject?: string; messageText: string }): Promise<{ success: boolean; message: string }> => {
-    const response = await fetch(`${API_BASE_URL}/users/send-custom-message`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(msgData)
-    });
-    return await handleResponse(response);
 };

@@ -4,7 +4,7 @@ import { PasswordResetRequest } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { adminInitiatePasswordReset, deletePasswordResetRequest, sendCustomAdminMessage } from '../services/api';
+import { adminInitiatePasswordReset, deletePasswordResetRequest } from '../services/api';
 
 const PasswordResets: React.FC = () => {
     const { state, dispatch } = useData();
@@ -16,33 +16,6 @@ const PasswordResets: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedChannels, setSelectedChannels] = useState<string[]>(['email', 'whatsapp']);
     const [customMessage, setCustomMessage] = useState('');
-    const [isSendingServer, setIsSendingServer] = useState(false);
-    const [serverSendStatus, setServerSendStatus] = useState<string>('');
-
-    const handleSendViaServer = async () => {
-        if (!selectedRequest) return;
-        const targetUser = users?.find(u => u._id === selectedRequest.userId);
-        const userEmail = targetUser?.email || selectedRequest.userEmail;
-        const userPhone = targetUser?.whatsapp || targetUser?.phone || '';
-
-        setIsSendingServer(true);
-        setServerSendStatus('');
-        try {
-            await sendCustomAdminMessage({
-                toEmail: selectedChannels.includes('email') ? userEmail : undefined,
-                toPhone: (selectedChannels.includes('whatsapp') || selectedChannels.includes('whatsapp_business')) ? userPhone : undefined,
-                subject: 'Password Reset Request - SmartEarning',
-                messageText: customMessage
-            });
-            setServerSendStatus('dispatched');
-            alert('Password reset message dispatched automatically via server SMTP/WhatsApp.');
-        } catch (err: any) {
-            setServerSendStatus('failed');
-            alert(err.message || 'Failed to dispatch via server.');
-        } finally {
-            setIsSendingServer(false);
-        }
-    };
 
     const handleGenerateLink = async (request: PasswordResetRequest) => {
         setSelectedRequest(request);
@@ -83,7 +56,6 @@ const PasswordResets: React.FC = () => {
         setIsModalOpen(false);
         setSelectedRequest(null);
         setResetLink('');
-        setServerSendStatus('');
     };
 
     const tableHeaders = ['User', 'Email', 'Request Date', 'Actions'];
@@ -201,22 +173,6 @@ const PasswordResets: React.FC = () => {
                                     <div className="space-y-2 border-t dark:border-gray-700 pt-3">
                                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Action Center</label>
                                         <div className="flex flex-col gap-2">
-                                            <Button
-                                                type="button"
-                                                variant="primary"
-                                                onClick={handleSendViaServer}
-                                                disabled={isSendingServer}
-                                                className="w-full py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all flex items-center justify-center gap-2"
-                                            >
-                                                {isSendingServer ? '⏳ Dispatches in Progress...' : '🚀 Dispatch Automatically via Server'}
-                                            </Button>
-                                            
-                                            {serverSendStatus === 'dispatched' && (
-                                                <p className="text-[10px] text-green-600 font-bold text-center uppercase tracking-wider">
-                                                    ✓ Dispatched successfully via SMTP/Ultramsg
-                                                </p>
-                                            )}
-
                                             {selectedChannels.includes('email') && (
                                                 <a 
                                                     href={`mailto:${userEmail || ''}?subject=${encodeURIComponent('Password Reset Request - SmartEarning')}&body=${encodeURIComponent(customMessage)}`}
