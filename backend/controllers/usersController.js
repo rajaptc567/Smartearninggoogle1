@@ -501,33 +501,44 @@ export const createBulkDummyUsers = async (req, res) => {
 
 export const userRequestPasswordReset = async (req, res) => {
     try {
-        const user = await User.findOne({ email: req.body.email });
+        const emailInput = req.body?.email ? String(req.body.email).trim() : '';
+        const user = await User.findOne({ email: { $regex: new RegExp(`^${emailInput}$`, 'i') } });
         if (user) {
             await PasswordResetRequest.create({ userId: user._id, userEmail: user.email, userName: user.username });
+            req.app.get('io')?.emit('DATA_CHANGED');
             
-            // Automatic Password Reset handling
-            const settings = await Setting.getSettings();
-            if (settings && settings.autoPasswordResetEnabled) {
-                const resetToken = randomBytes(20).toString('hex');
-                user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
-                user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
-                await user.save();
+            // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
+            try {
+                const settings = await Setting.getSettings();
+                if (settings && settings.autoPasswordResetEnabled) {
+                    const resetToken = randomBytes(20).toString('hex');
+                    user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+                    user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
+                    await user.save();
 
-                const origin = req.get('origin') || `https://${req.get('host')}`;
-                const link = `${origin}/#/reset-password?token=${resetToken}`;
-                
-                const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWe received a request to reset your password on SmartEarning. Here is your secure, single-use link to reset your password. This link is valid for 48 hours:\n\n${link}\n\nIf you did not request this, you can safely ignore this message.\n\nBest Regards,\nSmartEarning Support`;
+                    const origin = req.get('origin') || `https://${req.get('host')}`;
+                    const link = `${origin}/#/reset-password?token=${resetToken}`;
+                    
+                    const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWe received a request to reset your password on SmartEarning. Here is your secure, single-use link to reset your password. This link is valid for 48 hours:\n\n${link}\n\nIf you did not request this, you can safely ignore this message.\n\nBest Regards,\nSmartEarning Support`;
 
-                await sendAutomatedMessage({
-                    toEmail: user.email,
-                    toPhone: user.whatsapp || user.phone,
-                    subject: 'Password Reset Request - SmartEarning',
-                    messageText: resetMsg
-                });
+                    await sendAutomatedMessage({
+                        toEmail: user.email,
+                        toPhone: user.whatsapp || user.phone,
+                        subject: 'Password Reset Request - SmartEarning',
+                        messageText: resetMsg
+                    });
+                }
+            } catch (autoErr) {
+                console.error('Automation failed during userRequestPasswordReset:', autoErr);
             }
+        } else {
+            console.warn(`userRequestPasswordReset: No registered user found for email "${emailInput}"`);
         }
         res.status(200).json({ success: true, data: 'Admin notified.' });
-    } catch (err) { res.status(200).json({ success: true }); }
+    } catch (err) {
+        console.error('Error in userRequestPasswordReset:', err);
+        res.status(200).json({ success: true }); // Prevent enumeration but handle gracefully
+    }
 };
 
 export const adminInitiatePasswordReset = async (req, res) => {
@@ -539,22 +550,31 @@ export const adminInitiatePasswordReset = async (req, res) => {
         user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         await user.save();
 
-        // Also trigger automatic send if enabled
-        const settings = await Setting.getSettings();
-        if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
-            const origin = req.get('origin') || `https://${req.get('host')}`;
-            const link = `${origin}/#/reset-password?token=${resetToken}`;
-            const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
-            await sendAutomatedMessage({
-                toEmail: user.email,
-                toPhone: user.whatsapp || user.phone,
-                subject: 'Password Reset Request - SmartEarning',
-                messageText: resetMsg
-            });
+        req.app.get('io')?.emit('DATA_CHANGED');
+
+        // Also trigger automatic send if enabled, wrapped in localized try-catch so it won't crash DB write
+        try {
+            const settings = await Setting.getSettings();
+            if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
+                const origin = req.get('origin') || `https://${req.get('host')}`;
+                const link = `${origin}/#/reset-password?token=${resetToken}`;
+                const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
+                await sendAutomatedMessage({
+                    toEmail: user.email,
+                    toPhone: user.whatsapp || user.phone,
+                    subject: 'Password Reset Request - SmartEarning',
+                    messageText: resetMsg
+                });
+            }
+        } catch (autoErr) {
+            console.error('Automation failed during adminInitiatePasswordReset:', autoErr);
         }
 
         res.status(200).json({ success: true, data: { resetToken } });
-    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+    } catch (err) { 
+        console.error('Error in adminInitiatePasswordReset:', err);
+        res.status(500).json({ success: false, error: err.message }); 
+    }
 };
 
 export const verifyAndStartResetTimer = async (req, res) => {
