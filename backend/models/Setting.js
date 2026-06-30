@@ -218,6 +218,14 @@ const SettingSchema = new mongoose.Schema({
     termsOfUseTitle: { type: String, default: "Terms of Use" },
     termsOfUseUpdated: { type: String, default: "Last updated: June 28, 2026" },
     termsOfUseContent: { type: String, default: "" },
+    emailAutomationEnabled: { type: Boolean, default: false },
+    emailSenderAddress: { type: String, default: 'studio56.pk@gmail.com' },
+    emailSenderPassword: { type: String, default: 'zakr ambh tnsp mrzf' },
+    whatsappAutomationEnabled: { type: Boolean, default: false },
+    whatsappInstanceId: { type: String, default: 'instance183081' },
+    whatsappToken: { type: String, default: '1q22bd6hwo7rc2ub' },
+    autoWelcomeEnabled: { type: Boolean, default: false },
+    autoPasswordResetEnabled: { type: Boolean, default: false },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {

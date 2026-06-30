@@ -218,6 +218,14 @@ export interface Settings {
     termsOfUseTitle?: string;
     termsOfUseUpdated?: string;
     termsOfUseContent?: string;
+    emailAutomationEnabled?: boolean;
+    emailSenderAddress?: string;
+    emailSenderPassword?: string;
+    whatsappAutomationEnabled?: boolean;
+    whatsappInstanceId?: string;
+    whatsappToken?: string;
+    autoWelcomeEnabled?: boolean;
+    autoPasswordResetEnabled?: boolean;
 }
 
 export interface Task {

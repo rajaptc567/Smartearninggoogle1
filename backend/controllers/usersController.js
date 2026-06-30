@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js'; 
+import { sendAutomatedMessage } from '../utils/automation.js';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
@@ -242,6 +243,19 @@ export const createUser = async (req, res) => {
         const user = await User.create(req.body);
         if (sponsorUser) await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
+        
+        // Automated welcome notifications
+        const settings = await Setting.getSettings();
+        if (settings && settings.autoWelcomeEnabled) {
+            const welcomeMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWelcome to SmartEarning! Your account has been registered successfully.\n\nUsername: ${user.username}\nEmail: ${user.email}\nSponsor: ${user.sponsor || 'None'}\n\nWe are excited to have you on board. Start growing your network and earning today!\n\nBest Regards,\nSmartEarning Team`;
+            sendAutomatedMessage({
+                toEmail: user.email,
+                toPhone: user.whatsapp || user.phone,
+                subject: 'Welcome to SmartEarning!',
+                messageText: welcomeMsg
+            });
+        }
+
         res.status(201).json({ success: true, data: user });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
@@ -488,7 +502,30 @@ export const createBulkDummyUsers = async (req, res) => {
 export const userRequestPasswordReset = async (req, res) => {
     try {
         const user = await User.findOne({ email: req.body.email });
-        if (user) await PasswordResetRequest.create({ userId: user._id, userEmail: user.email, userName: user.username });
+        if (user) {
+            await PasswordResetRequest.create({ userId: user._id, userEmail: user.email, userName: user.username });
+            
+            // Automatic Password Reset handling
+            const settings = await Setting.getSettings();
+            if (settings && settings.autoPasswordResetEnabled) {
+                const resetToken = randomBytes(20).toString('hex');
+                user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+                user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
+                await user.save();
+
+                const origin = req.get('origin') || `https://${req.get('host')}`;
+                const link = `${origin}/#/reset-password?token=${resetToken}`;
+                
+                const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWe received a request to reset your password on SmartEarning. Here is your secure, single-use link to reset your password. This link is valid for 48 hours:\n\n${link}\n\nIf you did not request this, you can safely ignore this message.\n\nBest Regards,\nSmartEarning Support`;
+
+                await sendAutomatedMessage({
+                    toEmail: user.email,
+                    toPhone: user.whatsapp || user.phone,
+                    subject: 'Password Reset Request - SmartEarning',
+                    messageText: resetMsg
+                });
+            }
+        }
         res.status(200).json({ success: true, data: 'Admin notified.' });
     } catch (err) { res.status(200).json({ success: true }); }
 };
@@ -501,6 +538,21 @@ export const adminInitiatePasswordReset = async (req, res) => {
         user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
         user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         await user.save();
+
+        // Also trigger automatic send if enabled
+        const settings = await Setting.getSettings();
+        if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
+            const origin = req.get('origin') || `https://${req.get('host')}`;
+            const link = `${origin}/#/reset-password?token=${resetToken}`;
+            const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
+            await sendAutomatedMessage({
+                toEmail: user.email,
+                toPhone: user.whatsapp || user.phone,
+                subject: 'Password Reset Request - SmartEarning',
+                messageText: resetMsg
+            });
+        }
+
         res.status(200).json({ success: true, data: { resetToken } });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 };
