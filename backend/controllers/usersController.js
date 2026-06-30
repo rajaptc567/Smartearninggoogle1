@@ -559,11 +559,15 @@ export const adminInitiatePasswordReset = async (req, res) => {
                 const origin = req.get('origin') || `https://${req.get('host')}`;
                 const link = `${origin}/#/reset-password?token=${resetToken}`;
                 const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
-                await sendAutomatedMessage({
+                
+                // Dispatched asynchronously in background so link is generated instantly
+                sendAutomatedMessage({
                     toEmail: user.email,
                     toPhone: user.whatsapp || user.phone,
                     subject: 'Password Reset Request - SmartEarning',
                     messageText: resetMsg
+                }).catch(autoErr => {
+                    console.error('Automation background send failed during adminInitiatePasswordReset:', autoErr);
                 });
             }
         } catch (autoErr) {
@@ -598,4 +602,20 @@ export const resetPasswordWithToken = async (req, res) => {
         await user.save();
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
+};
+
+export const sendCustomAdminMessage = async (req, res) => {
+    try {
+        const { toEmail, toPhone, subject, messageText } = req.body;
+        await sendAutomatedMessage({
+            toEmail,
+            toPhone,
+            subject: subject || 'Message - SmartEarning',
+            messageText
+        });
+        res.status(200).json({ success: true, message: 'Message sent successfully.' });
+    } catch (err) {
+        console.error('sendCustomAdminMessage failed:', err);
+        res.status(400).json({ success: false, error: err.message });
+    }
 };

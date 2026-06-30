@@ -1,7 +1,27 @@
 import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
 
-// Production configuration: Uses environment variable for backend routing.
-const BASE_URL = process.env.REACT_APP_API_URL || 'https://smartearning-api.onrender.com';
+// Production configuration: Uses environment variable for backend routing with robust fallbacks.
+const getBaseUrl = (): string => {
+    // 1. Check process.env.REACT_APP_API_URL or VITE_API_URL (which will be injected by vite.config.ts if set)
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env) {
+        // @ts-ignore
+        const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
+        if (envUrl) return envUrl;
+    }
+    
+    // 2. Check window.location to see if we can fallback to localhost for development
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'http://localhost:5000'; // Default local backend port
+        }
+    }
+
+    return 'https://smartearning-api.onrender.com';
+};
+
+const BASE_URL = getBaseUrl();
 
 function getApiBaseUrl() {
   return `${BASE_URL}/api/v1`;
@@ -627,4 +647,13 @@ export const verifyTask = async (userId: string, taskId: string, status: 'Approv
     });
     const result = await handleResponse(response);
     return result.data;
+};
+
+export const sendCustomAdminMessage = async (msgData: { toEmail?: string; toPhone?: string; subject?: string; messageText: string }): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/send-custom-message`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(msgData)
+    });
+    return await handleResponse(response);
 };
