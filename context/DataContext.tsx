@@ -439,20 +439,27 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
         const getSocketUrl = () => {
             try {
-                // @ts-ignore
-                if (typeof process !== 'undefined' && process.env) {
+                // 1. Try Vite's modern env configuration first
+                if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+                    return import.meta.env.VITE_API_URL;
+                }
+                
+                // 2. Safely check process.env which is replaced at compile time
+                try {
                     // @ts-ignore
                     const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
                     if (envUrl) return envUrl;
-                }
+                } catch (e) {}
                 
-                if (typeof window !== 'undefined') {
+                // 3. Check window.location to see if we can fallback to localhost for development
+                if (typeof window !== 'undefined' && window.location) {
                     const hostname = window.location.hostname;
-                    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                        return 'http://localhost:5000';
+                    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
+                        return 'http://localhost:5000'; // Default local backend port
                     }
                 }
             } catch (e) {}
+            // 4. Default production backend
             return 'https://smartearning-api.onrender.com';
         };
 

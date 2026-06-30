@@ -552,32 +552,38 @@ export const adminInitiatePasswordReset = async (req, res) => {
 
         req.app.get('io')?.emit('DATA_CHANGED');
 
-        // Also trigger automatic send if enabled, wrapped in localized try-catch so it won't crash DB write
-        try {
-            const settings = await Setting.getSettings();
-            if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
-                const origin = req.get('origin') || `https://${req.get('host')}`;
-                const link = `${origin}/#/reset-password?token=${resetToken}`;
-                const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
-                
-                // Dispatched asynchronously in background so link is generated instantly
-                sendAutomatedMessage({
-                    toEmail: user.email,
-                    toPhone: user.whatsapp || user.phone,
-                    subject: 'Password Reset Request - SmartEarning',
-                    messageText: resetMsg
-                }).catch(autoErr => {
-                    console.error('Automation background send failed during adminInitiatePasswordReset:', autoErr);
-                });
-            }
-        } catch (autoErr) {
-            console.error('Automation failed during adminInitiatePasswordReset:', autoErr);
-        }
-
+        // Respond instantly with the token
         res.status(200).json({ success: true, data: { resetToken } });
+
+        // Run settings check and notification dispatch asynchronously in background
+        (async () => {
+            try {
+                const settings = await Setting.getSettings();
+                if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
+                    const origin = req.get('origin') || `https://${req.get('host')}`;
+                    const link = `${origin}/#/reset-password?token=${resetToken}`;
+                    const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
+                    
+                    await sendAutomatedMessage({
+                        toEmail: user.email,
+                        toPhone: user.whatsapp || user.phone,
+                        subject: 'Password Reset Request - SmartEarning',
+                        messageText: resetMsg
+                    });
+                }
+            } catch (autoErr) {
+                console.error('Background automation failed during adminInitiatePasswordReset:', autoErr);
+            }
+        })().catch(err => {
+            console.error('Fatal background process error in adminInitiatePasswordReset:', err);
+        });
+
     } catch (err) { 
         console.error('Error in adminInitiatePasswordReset:', err);
-        res.status(500).json({ success: false, error: err.message }); 
+        // Only attempt to respond if headers have not been sent yet
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: err.message }); 
+        }
     }
 };
 
