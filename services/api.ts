@@ -2,27 +2,34 @@ import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, In
 
 // Production configuration: Uses environment variable for backend routing with robust fallbacks.
 const getBaseUrl = (): string => {
-    // 1. Try Vite's modern env configuration first
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
-    }
-    
-    // 2. Safely check process.env which is replaced at compile time
-    try {
-        // @ts-ignore
-        const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
-        if (envUrl) return envUrl;
-    } catch (e) {}
-    
-    // 3. Check window.location to see if we can fallback to localhost for development
+    // 1. Check window.location to see if we are in an AI Studio / Cloud Run preview environment
     if (typeof window !== 'undefined' && window.location) {
         const hostname = window.location.hostname;
+        // If we are running in the AI Studio preview/dev environment (Google / Cloud Run domains),
+        // we must fallback to the active Render backend since no local MongoDB is provisioned in this container.
+        if (hostname.includes('.run.app') || hostname.includes('aistudio') || hostname.includes('google')) {
+            return 'https://smartearning-api.onrender.com';
+        }
+        
+        // Localhost fallback for local development
         if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
             return 'http://localhost:5000'; // Default local backend port
         }
     }
 
-    // 4. Default production backend
+    // 2. Try environment variables next, ensuring they are not empty or root paths
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
+        const url = import.meta.env.VITE_API_URL;
+        if (url && url !== '/' && url !== '') return url;
+    }
+    
+    try {
+        // @ts-ignore
+        const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
+        if (envUrl && envUrl !== '/' && envUrl !== '') return envUrl;
+    } catch (e) {}
+
+    // 3. Fallback to production backend
     return 'https://smartearning-api.onrender.com';
 };
 
