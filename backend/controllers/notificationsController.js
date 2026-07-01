@@ -1,6 +1,7 @@
 
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import { sendAutomatedMessage } from '../utils/automation.js';
 
 // @desc    Get notifications scoped by user role
 // @route   GET /api/v1/notifications
@@ -24,7 +25,7 @@ export const getNotifications = async (req, res) => {
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {
     try {
-        const { userId, message, subject, isPopup, targetType, targetIds, randomCount } = req.body;
+        const { userId, message, subject, isPopup, targetType, targetIds, randomCount, selectedChannels } = req.body;
         
         let notificationsToCreate = [];
         const senderType = 'Admin'; // Messages sent via this endpoint are always from an Admin
@@ -89,6 +90,34 @@ export const createNotification = async (req, res) => {
 
         if (notificationsToCreate.length > 0) {
             const created = await Notification.insertMany(notificationsToCreate);
+
+            // Dynamically query full user objects to fetch email and phone numbers for email/WhatsApp dispatch
+            if (selectedChannels && selectedChannels.length > 0) {
+                const recipientIds = notificationsToCreate.map(n => n.userId);
+                const fullUsers = await User.find({ _id: { $in: recipientIds } }).select('email whatsapp phone username fullName');
+                
+                // Fire and forget background worker to send actual emails/WhatsApp messages via server configured channels
+                (async () => {
+                    for (const u of fullUsers) {
+                        try {
+                            const hasEmail = selectedChannels.includes('email') && u.email;
+                            const hasWhatsApp = (selectedChannels.includes('whatsapp') || selectedChannels.includes('whatsapp_business')) && (u.whatsapp || u.phone);
+                            
+                            if (hasEmail || hasWhatsApp) {
+                                await sendAutomatedMessage({
+                                    toEmail: hasEmail ? u.email : undefined,
+                                    toPhone: hasWhatsApp ? (u.whatsapp || u.phone) : undefined,
+                                    subject: subject || 'Announcement - SmartEarning',
+                                    messageText: message
+                                });
+                            }
+                        } catch (err) {
+                            console.error(`Automation dispatch failed for announcement to @${u.username}:`, err);
+                        }
+                    }
+                })().catch(err => console.error('Bulk announcement processing failed:', err));
+            }
+
             // Return all newly created notifications so frontend state can be updated
             return res.status(201).json({ success: true, count: created.length, data: created });
         }
