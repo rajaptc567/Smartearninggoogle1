@@ -514,6 +514,13 @@ export interface PasswordResetRequest {
     userName: string;
     status: 'Pending' | 'Handled';
     requestDate: string;
+    process?: string;
+    sendType?: 'None' | 'Automatic' | 'Manual';
+    channel?: string;
+    sentAt?: string;
+    resetToken?: string;
+    resetLink?: string;
+    handledAt?: string;
 }
 
 export interface Message {

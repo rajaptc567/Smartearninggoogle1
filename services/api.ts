@@ -10,11 +10,19 @@ const getBaseUrl = (): string => {
         if (envUrl) return envUrl;
     }
     
-    // 2. Check window.location to see if we can fallback to localhost for development
+    // 2. Check window.location to dynamically use proxying in dev/container environments
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost:5000'; // Default local backend port
+        
+        // Local development or AI Studio preview container
+        if (
+            hostname === 'localhost' || 
+            hostname === '127.0.0.1' || 
+            hostname.includes('run.app') || 
+            hostname.includes('googleusercontent.com') || 
+            hostname.includes('aistudio')
+        ) {
+            return window.location.origin; // Routes through Vite's local dev server proxy
         }
     }
 
@@ -523,6 +531,16 @@ export const clearLogs = async (): Promise<{}> => {
 export const getPasswordResetRequests = async (): Promise<PasswordResetRequest[]> => {
     const response = await fetch(`${API_BASE_URL}/password-reset-requests`, {
         headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updatePasswordResetRequest = async (id: string, updates: Partial<PasswordResetRequest>): Promise<PasswordResetRequest> => {
+    const response = await fetch(`${API_BASE_URL}/password-reset-requests/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(updates)
     });
     const result = await handleResponse(response);
     return result.data;

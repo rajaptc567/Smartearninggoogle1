@@ -161,6 +161,7 @@ type Action =
     | { type: 'MARK_NOTIFICATIONS_AS_READ'; payload: Notification[] }
     | { type: 'DELETE_NOTIFICATIONS'; payload: string[] }
     | { type: 'SET_PASSWORD_RESET_REQUESTS'; payload: PasswordResetRequest[] }
+    | { type: 'UPDATE_PASSWORD_RESET_REQUEST'; payload: PasswordResetRequest }
     | { type: 'DELETE_PASSWORD_RESET_REQUEST'; payload: string }
     | { type: 'SET_DISPUTES'; payload: Dispute[] }
     | { type: 'ADD_DISPUTE'; payload: Dispute }
@@ -287,6 +288,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
 
         case 'SET_PASSWORD_RESET_REQUESTS':
             newState = { ...state, passwordResetRequests: action.payload || [] };
+            break;
+        case 'UPDATE_PASSWORD_RESET_REQUEST':
+            newState = { ...state, passwordResetRequests: state.passwordResetRequests.map(req => req._id === action.payload._id ? action.payload : req) };
             break;
         case 'DELETE_PASSWORD_RESET_REQUEST':
             newState = { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => req._id !== action.payload) };

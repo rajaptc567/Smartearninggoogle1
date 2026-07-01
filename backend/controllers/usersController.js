@@ -504,7 +504,46 @@ export const userRequestPasswordReset = async (req, res) => {
         const emailInput = req.body?.email ? String(req.body.email).trim() : '';
         const user = await User.findOne({ email: { $regex: new RegExp(`^${emailInput}$`, 'i') } });
         if (user) {
-            await PasswordResetRequest.create({ userId: user._id, userEmail: user.email, userName: user.username });
+            // Create a default password reset request log
+            const resetRequest = await PasswordResetRequest.create({ 
+                userId: user._id, 
+                userEmail: user.email, 
+                userName: user.username,
+                process: 'User submitted request; awaiting admin response',
+                sendType: 'None',
+                channel: 'None',
+                status: 'Pending'
+            });
+
+            // Create system bell notification for admin
+            try {
+                const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
+                const notificationMsg = `User @${user.username} (${user.email}) requested a password reset.`;
+                if (admins.length > 0) {
+                    for (const admin of admins) {
+                        await Notification.create({
+                            userId: admin._id,
+                            senderType: 'System',
+                            subject: 'Password Reset Request',
+                            message: notificationMsg,
+                            isPopup: false
+                        });
+                    }
+                } else {
+                    // Fallback to creating a notification for the requesting user itself
+                    // (since admin retrieves all notifications with query = {}, this works perfectly too)
+                    await Notification.create({
+                        userId: user._id,
+                        senderType: 'System',
+                        subject: 'Password Reset Request',
+                        message: notificationMsg,
+                        isPopup: false
+                    });
+                }
+            } catch (notifErr) {
+                console.error('Failed to dispatch password reset admin notifications:', notifErr);
+            }
+
             req.app.get('io')?.emit('DATA_CHANGED');
             
             // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
@@ -527,10 +566,20 @@ export const userRequestPasswordReset = async (req, res) => {
                         subject: 'Password Reset Request - SmartEarning',
                         messageText: resetMsg
                     });
+
+                    // Update request details as auto-sent
+                    resetRequest.process = 'Auto-sent reset link to user';
+                    resetRequest.sendType = 'Automatic';
+                    resetRequest.channel = 'Email & WhatsApp';
+                    resetRequest.sentAt = new Date();
+                    resetRequest.resetLink = link;
+                    resetRequest.resetToken = resetToken;
+                    await resetRequest.save();
                 }
             } catch (autoErr) {
                 console.error('Automation failed during userRequestPasswordReset:', autoErr);
             }
+            req.app.get('io')?.emit('DATA_CHANGED');
         } else {
             console.warn(`userRequestPasswordReset: No registered user found for email "${emailInput}"`);
         }

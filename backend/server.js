@@ -29,6 +29,13 @@ import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import taskRoutes from './routes/taskRoutes.js'; 
 
+// Import password reset actions directly for backward compatibility
+import {
+    userRequestPasswordReset,
+    verifyAndStartResetTimer,
+    resetPasswordWithToken
+} from './controllers/usersController.js'; 
+
 // Load env vars
 dotenv.config();
 
@@ -124,6 +131,12 @@ app.get('/', (req, res) => {
 
 // Mount routers
 app.use('/api/v1/users', userRoutes);
+
+// Direct password reset routes for backward-compatibility with older frontends
+app.post('/api/v1/request-password-reset', globalLimiter, userRequestPasswordReset);
+app.post('/api/v1/verify-reset-token/:token', globalLimiter, verifyAndStartResetTimer);
+app.put('/api/v1/reset-password/:token', globalLimiter, resetPasswordWithToken);
+
 app.use('/api/v1/deposits', depositRoutes);
 app.use('/api/v1/withdrawals', withdrawalRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
@@ -145,7 +158,11 @@ app.use((err, req, res, next) => {
     res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-const PORT = process.env.PORT || 5000;
+let PORT = process.env.PORT || 5000;
+// In AI Studio workspace environment, port 8080/3000 are reserved, so we bind the backend to 5000 and proxy to it
+if (process.env.APPLET_ID) {
+    PORT = 5000;
+}
 
 /**
  * ASYNC STARTUP
