@@ -263,13 +263,7 @@ export const createUser = async (req, res) => {
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const inputVal = email ? String(email).trim() : '';
-        const user = await User.findOne({
-            $or: [
-                { email: { $regex: new RegExp(`^${inputVal}$`, 'i') } },
-                { username: { $regex: new RegExp(`^${inputVal}$`, 'i') } }
-            ]
-        }).select('+password');
+        const user = await User.findOne({ email }).select('+password');
         if (!user || !(await user.matchPassword(password))) return res.status(401).json({ success: false, error: 'Invalid credentials' });
         if (user.status === 'Blocked' || user.restrictions?.loginBlocked) return res.status(403).json({ success: false, error: 'Account restricted.' });
         
@@ -287,7 +281,7 @@ export const updateUser = async (req, res) => {
         // SECURITY: Verify that logged-in user matches target user, or is an admin
         const loggedInUserId = req.user?.id;
         const targetUserId = req.params.id;
-        const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com' || req.user?.email === 'smartexn.com@gmail.com';
+        const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
         const isAdmin = isMasterAdmin || req.user?.role === 'admin' || req.user?.role === 'finance' || req.user?.role === 'support';
 
         if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
@@ -378,7 +372,7 @@ export const purchasePlan = async (req, res) => {
     try {
         const loggedInUserId = req.user?.id;
         const targetUserId = req.params.id;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com' || req.user?.email === 'smartexn.com@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
 
         if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot purchase plan on behalf of other users.' });
@@ -570,9 +564,7 @@ export const userRequestPasswordReset = async (req, res) => {
                         toEmail: user.email,
                         toPhone: user.whatsapp || user.phone,
                         subject: 'Password Reset Request - SmartEarning',
-                        messageText: resetMsg,
-                        forceEmail: true,
-                        forceWhatsApp: true
+                        messageText: resetMsg
                     });
 
                     // Update request details as auto-sent
@@ -622,9 +614,7 @@ export const adminInitiatePasswordReset = async (req, res) => {
                     toEmail: user.email,
                     toPhone: user.whatsapp || user.phone,
                     subject: 'Password Reset Request - SmartEarning',
-                    messageText: resetMsg,
-                    forceEmail: true,
-                    forceWhatsApp: true
+                    messageText: resetMsg
                 }).catch(autoErr => {
                     console.error('Automation background send failed during adminInitiatePasswordReset:', autoErr);
                 });
@@ -670,9 +660,7 @@ export const sendCustomAdminMessage = async (req, res) => {
             toEmail,
             toPhone,
             subject: subject || 'Message - SmartEarning',
-            messageText,
-            forceEmail: true,
-            forceWhatsApp: true
+            messageText
         });
         res.status(200).json({ success: true, message: 'Message sent successfully.' });
     } catch (err) {

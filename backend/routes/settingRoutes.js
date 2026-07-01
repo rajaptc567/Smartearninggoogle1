@@ -4,16 +4,13 @@ import { authorize } from '../middleware/authMiddleware.js';
 import {
     getSettings,
     updateSettings,
-    getDataVersion,
-    testEmailSettings
+    getDataVersion
 } from '../controllers/settingsController.js';
 
 const router = express.Router();
 
 // Version polling is public for real-time sync
 router.get('/version', getDataVersion);
-
-router.post('/test-email', authorize(['super_admin']), testEmailSettings);
 
 router.route('/')
     .get(getSettings) // Removed authorize requirement for GET. Public needs rates/ticker settings.

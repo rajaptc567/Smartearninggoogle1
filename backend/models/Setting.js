@@ -219,7 +219,7 @@ const SettingSchema = new mongoose.Schema({
     termsOfUseUpdated: { type: String, default: "Last updated: June 28, 2026" },
     termsOfUseContent: { type: String, default: "" },
     emailAutomationEnabled: { type: Boolean, default: false },
-    emailSenderAddress: { type: String, default: 'smartexn.com@gmail.com' },
+    emailSenderAddress: { type: String, default: 'studio56.pk@gmail.com' },
     emailSenderPassword: { type: String, default: 'zakr ambh tnsp mrzf' },
     whatsappAutomationEnabled: { type: Boolean, default: false },
     whatsappInstanceId: { type: String, default: 'instance183081' },
@@ -234,10 +234,6 @@ SettingSchema.statics.getSettings = async function() {
     if (!settings) {
         settings = await this.create({});
         return settings;
-    }
-    if (!settings.emailSenderAddress || settings.emailSenderAddress === 'studio56.pk@gmail.com') {
-        settings.emailSenderAddress = 'smartexn.com@gmail.com';
-        needsSave = true;
     }
     if (!settings.faqs || settings.faqs.length === 0) {
         settings.faqs = defaultFaqs;

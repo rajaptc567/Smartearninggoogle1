@@ -99,21 +99,13 @@ app.use('/uploads', express.static(uploadsDir));
 const seedAdminUser = async () => {
     try {
         const adminEmail = 'studio56.pk@gmail.com';
-        const adminEmail2 = 'smartexn.com@gmail.com';
-        const adminPassword = '123456'; 
+        const adminPassword = 'raja5207901@'; 
         
-        // Seed first admin
-        let existingUser = await User.findOne({ email: adminEmail });
+        const existingUser = await User.findOne({ email: adminEmail });
+        
         if (!existingUser) {
             const anyAdmin = await User.findOne({ username: 'admin' });
-            if (anyAdmin) {
-                anyAdmin.email = adminEmail;
-                anyAdmin.password = adminPassword;
-                anyAdmin.role = 'super_admin';
-                if (!anyAdmin.currency) anyAdmin.currency = 'PKR';
-                await anyAdmin.save();
-                console.log('Admin account with username "admin" updated to email studio56.pk@gmail.com and password 123456.');
-            } else {
+            if (!anyAdmin) {
                 await User.create({
                     username: 'admin',
                     fullName: 'System Admin',
@@ -122,52 +114,12 @@ const seedAdminUser = async () => {
                     role: 'super_admin',
                     phone: '0000000000',
                     country: 'Pakistan',
-                    currency: 'PKR',
                     status: 'Active',
                     restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
                 });
-                console.log('Admin account (studio56.pk@gmail.com) seeded successfully.');
+                console.log('Admin account seeded successfully.');
             }
-        } else {
-            existingUser.password = adminPassword;
-            existingUser.role = 'super_admin';
-            await existingUser.save();
-            console.log('Admin account (studio56.pk@gmail.com) password updated to 123456.');
-        }
-
-        // Seed second admin
-        let existingUser2 = await User.findOne({ email: adminEmail2 });
-        if (!existingUser2) {
-            const username2 = 'smartexn_admin';
-            const existingUname2 = await User.findOne({ username: username2 });
-            if (existingUname2) {
-                existingUname2.email = adminEmail2;
-                existingUname2.password = adminPassword;
-                existingUname2.role = 'super_admin';
-                if (!existingUname2.currency) existingUname2.currency = 'PKR';
-                await existingUname2.save();
-                console.log('Admin account with username "smartexn_admin" updated to email smartexn.com@gmail.com and password 123456.');
-            } else {
-                await User.create({
-                    username: username2,
-                    fullName: 'SmartEarning Admin',
-                    email: adminEmail2,
-                    password: adminPassword,
-                    role: 'super_admin',
-                    phone: '0000000000',
-                    country: 'Pakistan',
-                    currency: 'PKR',
-                    status: 'Active',
-                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
-                });
-                console.log('Admin account (smartexn.com@gmail.com) seeded successfully.');
-            }
-        } else {
-            existingUser2.password = adminPassword;
-            existingUser2.role = 'super_admin';
-            await existingUser2.save();
-            console.log('Admin account (smartexn.com@gmail.com) password updated to 123456.');
-        }
+        } 
     } catch (error) {
         console.error('Admin Seeding Error:', error.message);
     }
