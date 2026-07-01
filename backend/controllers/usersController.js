@@ -585,23 +585,23 @@ export const verifyAndStartResetTimer = async (req, res) => {
     try {
         const hashedToken = createHash('sha256').update(req.params.token).digest('hex');
         const user = await User.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() } });
-        if (!user) return res.status(404).json({ success: false, error: 'Invalid token.' });
+        if (!user) return res.status(404).json({ success: false, error: 'Your password reset link is invalid or has expired. Please request a new link.' });
         user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
         await user.save();
         res.status(200).json({ success: true });
-    } catch (err) { res.status(500).json({ success: false }); }
+    } catch (err) { res.status(500).json({ success: false, error: err.message || 'Server error verifying reset token.' }); }
 };
 
 export const resetPasswordWithToken = async (req, res) => {
     try {
         const hashedToken = createHash('sha256').update(req.params.token).digest('hex');
         const user = await User.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() } });
-        if (!user) return res.status(400).json({ success: false, error: 'Invalid token.' });
+        if (!user) return res.status(400).json({ success: false, error: 'Your password reset link has expired or is invalid. Please request a new one.' });
         user.password = req.body.password;
         user.passwordResetToken = undefined; user.passwordResetExpires = undefined;
         await user.save();
         res.status(200).json({ success: true });
-    } catch (err) { res.status(500).json({ success: false }); }
+    } catch (err) { res.status(500).json({ success: false, error: err.message || 'Server error during password reset.' }); }
 };
 
 export const sendCustomAdminMessage = async (req, res) => {

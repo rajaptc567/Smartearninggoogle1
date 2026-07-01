@@ -17,19 +17,28 @@ const ResetPassword = () => {
 
     // 1. Parse token from URL on initial mount
     useEffect(() => {
+        let parsedToken = null;
+        
+        // Try parsing from hash
         const hash = window.location.hash;
-        const queryIndex = hash.indexOf('?');
-        if (queryIndex !== -1) {
-            const queryString = hash.substring(queryIndex + 1);
+        const hashQueryIndex = hash.indexOf('?');
+        if (hashQueryIndex !== -1) {
+            const queryString = hash.substring(hashQueryIndex + 1);
             const params = new URLSearchParams(queryString);
-            const parsedToken = params.get('token');
-            if (parsedToken) {
-                setToken(parsedToken);
-            } else {
-                setStatus('invalid');
-            }
+            parsedToken = params.get('token');
+        }
+        
+        // Try parsing from standard search query parameters
+        if (!parsedToken && window.location.search) {
+            const params = new URLSearchParams(window.location.search);
+            parsedToken = params.get('token');
+        }
+
+        if (parsedToken) {
+            setToken(parsedToken);
         } else {
             setStatus('invalid');
+            setError('The security token is missing from the link. Please request a new password reset link.');
         }
     }, []);
 
