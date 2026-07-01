@@ -5,6 +5,7 @@ import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
+import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getWithdrawals = async (req, res) => {
     try {
@@ -220,6 +221,16 @@ export const updateWithdrawal = async (req, res) => {
                 userId: user._id,
                 message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
             });
+
+            // Send dynamic templated notification in the background
+            const variables = {
+                amount: withdrawal.amount,
+                currency: withdrawal.currency,
+                txId: withdrawal._id,
+                notes: adminNotes || ''
+            };
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_email', variables }).catch(err => console.error(err));
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_whatsapp', variables }).catch(err => console.error(err));
         }
         
         if (status === 'Paid' || status === 'Approved') {
@@ -232,6 +243,16 @@ export const updateWithdrawal = async (req, res) => {
                 ? `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been successfully paid.`
                 : `Your withdrawal for ${user.currency}${withdrawal.finalAmount.toFixed(2)} has been approved.`;
             await Notification.create({ userId: user._id, message });
+
+            // Send dynamic templated notification in the background
+            const variables = {
+                amount: withdrawal.finalAmount !== undefined ? withdrawal.finalAmount : withdrawal.amount,
+                currency: withdrawal.currency,
+                txId: withdrawal._id,
+                notes: adminNotes || ''
+            };
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_success_email', variables }).catch(err => console.error(err));
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_success_whatsapp', variables }).catch(err => console.error(err));
         }
         
         withdrawal.status = status;

@@ -24,6 +24,7 @@ import SentMessages from './pages/SentMessages';
 import TickerSettings from './pages/TickerSettings';
 import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
+import AdminTemplates from './pages/AdminTemplates';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -102,6 +103,7 @@ const App: React.FC = () => {
           <Route path="logs" element={<Logs />} />
           <Route path="disputes" element={<AdminDisputes />} />
           <Route path="sent-messages" element={<SentMessages />} />
+          <Route path="templates" element={<AdminTemplates />} />
           <Route path="profile" element={<AdminProfile />} />
         </Route>
 

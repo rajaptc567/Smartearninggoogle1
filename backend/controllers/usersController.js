@@ -4,7 +4,7 @@ import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js'; 
-import { sendAutomatedMessage } from '../utils/automation.js';
+import { sendAutomatedMessage, sendTemplateNotification } from '../utils/automation.js';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
 import Deposit from '../models/Deposit.js';
@@ -146,6 +146,18 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
             await uplineUser.save();
             await Notification.create({ userId: uplineUser._id, subject: 'Commission Received!', message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.` });
+            
+            // Trigger Referral Commission Template Notifications
+            const commissionVars = {
+                amount: finalAmount.toFixed(2),
+                currency: uplineUser.currency,
+                referralUsername: user.username,
+                referralFullName: user.fullName || '',
+                planName: plan.name,
+                level: String(level + 1)
+            };
+            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_email', variables: commissionVars });
+            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_whatsapp', variables: commissionVars });
             if (level === 0 && plan.directReferralLimit > 0) {
                 const equivIds = [plan._id.toString()];
                 if (settings.planEquivalencyGroups) {
@@ -241,7 +253,18 @@ export const createUser = async (req, res) => {
         req.body.activePlans = [];
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
         const user = await User.create(req.body);
-        if (sponsorUser) await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
+        if (sponsorUser) {
+            await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
+            
+            // Trigger Referral Signup Template Notifications for Sponsor
+            const signupVars = {
+                referralUsername: user.username,
+                referralFullName: user.fullName || '',
+                date: new Date().toLocaleString()
+            };
+            sendTemplateNotification({ userId: sponsorUser._id, templateKey: 'referral_signup_email', variables: signupVars });
+            sendTemplateNotification({ userId: sponsorUser._id, templateKey: 'referral_signup_whatsapp', variables: signupVars });
+        }
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
         
         // Automated welcome notifications
@@ -348,6 +371,17 @@ export const adminActivatePlan = async (req, res) => {
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         let updatedUser = await user.save();
+
+        // Trigger Plan Activation Notifications
+        const planVars = {
+            planName: plan.name,
+            price: plan.price.toFixed(2),
+            currency: updatedUser.currency,
+            purchaseDate: new Date().toLocaleString()
+        };
+        sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_email', variables: planVars });
+        sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_whatsapp', variables: planVars });
+
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         await distributeCommissions(updatedUser, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
@@ -386,6 +420,17 @@ export const purchasePlan = async (req, res) => {
         user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         let updatedUser = await user.save();
+
+        // Trigger Plan Activation Notifications
+        const planVars = {
+            planName: plan.name,
+            price: plan.price.toFixed(2),
+            currency: updatedUser.currency,
+            purchaseDate: new Date().toLocaleString()
+        };
+        sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_email', variables: planVars });
+        sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_whatsapp', variables: planVars });
+
         await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: 'Plan Purchase', amount: -plan.price, description: `Purchased ${plan.name} plan`, status: 'Approved' });
         const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();

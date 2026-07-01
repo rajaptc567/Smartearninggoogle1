@@ -7,6 +7,7 @@ import Withdrawal from '../models/Withdrawal.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
+import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getDeposits = async (req, res) => {
     try {
@@ -133,6 +134,28 @@ export const updateDeposit = async (req, res) => {
             user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
             await user.save();
             await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
+            
+            // Send dynamic templated notification in the background
+            const variables = {
+                amount: deposit.amount,
+                currency: deposit.currency,
+                txId: deposit.transactionId || deposit._id,
+                notes: adminNotes || ''
+            };
+            sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_success_email', variables }).catch(err => console.error(err));
+            sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_success_whatsapp', variables }).catch(err => console.error(err));
+        } else if (originalStatus !== 'Rejected' && status === 'Rejected') {
+            await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Rejected' });
+            
+            // Send dynamic templated notification in the background
+            const variables = {
+                amount: deposit.amount,
+                currency: deposit.currency,
+                txId: deposit.transactionId || deposit._id,
+                notes: adminNotes || ''
+            };
+            sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_rejected_email', variables }).catch(err => console.error(err));
+            sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_rejected_whatsapp', variables }).catch(err => console.error(err));
         }
         await deposit.save();
         await Setting.bumpVersion();

@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, Template } from '../types';
 
 // Production configuration: Uses environment variable for backend routing with robust fallbacks.
 const getBaseUrl = (): string => {
@@ -674,4 +674,41 @@ export const sendCustomAdminMessage = async (msgData: { toEmail?: string; toPhon
         body: JSON.stringify(msgData)
     });
     return await handleResponse(response);
+};
+
+export const getTemplates = async (): Promise<Template[]> => {
+    const response = await fetch(`${API_BASE_URL}/templates`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateTemplate = async (key: string, templateData: Partial<Template>): Promise<Template> => {
+    const response = await fetch(`${API_BASE_URL}/templates/${key}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(templateData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const resetTemplatesToDefault = async (): Promise<Template[]> => {
+    const response = await fetch(`${API_BASE_URL}/templates/reset`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const bulkUpdateTemplates = async (keys: string[], isEnabled: boolean): Promise<Template[]> => {
+    const response = await fetch(`${API_BASE_URL}/templates/bulk`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ keys, isEnabled }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
 };

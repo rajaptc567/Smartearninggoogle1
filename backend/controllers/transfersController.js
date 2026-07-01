@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
+import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getTransfers = async (req, res) => {
     try {
@@ -115,6 +116,18 @@ export const createTransfer = async (req, res) => {
         
         await sender.save();
 
+        // Trigger Template Notifications for Transfer Request
+        const transferVariables = {
+            amount: amount.toFixed(2),
+            currency: sender.currency,
+            recipientUsername: recipient.username,
+            fee: fee.toFixed(2),
+            totalDeducted: totalDeduction.toFixed(2),
+            txId: String(transfer._id)
+        };
+        sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_request_email', variables: transferVariables });
+        sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_request_whatsapp', variables: transferVariables });
+
         res.status(201).json({ success: true, data: { transfer, user: sender, transaction }});
 
     } catch (err) {
@@ -220,6 +233,29 @@ export const updateTransfer = async (req, res) => {
             
             await Notification.create({ userId: recipient._id, message: `You received ${recipient.currency}${receivedAmount.toFixed(2)} from ${sender.username}.` });
 
+            // Trigger Template Notifications for Approved Transfer
+            const approvedSenderVars = {
+                amount: transfer.amount.toFixed(2),
+                currency: sender.currency,
+                recipientUsername: recipient.username,
+                recipientFullName: recipient.fullName || '',
+                fee: (transfer.fee || 0).toFixed(2),
+                totalDeducted: (transfer.totalDeducted || (transfer.amount + (transfer.fee || 0))).toFixed(2),
+                txId: String(transfer._id)
+            };
+            sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_sent_email', variables: approvedSenderVars });
+            sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_sent_whatsapp', variables: approvedSenderVars });
+
+            const approvedRecipientVars = {
+                amount: receivedAmount.toFixed(2),
+                currency: recipient.currency,
+                senderUsername: sender.username,
+                senderFullName: sender.fullName || '',
+                txId: String(transfer._id)
+            };
+            sendTemplateNotification({ userId: recipient._id, templateKey: 'transfer_received_email', variables: approvedRecipientVars });
+            sendTemplateNotification({ userId: recipient._id, templateKey: 'transfer_received_whatsapp', variables: approvedRecipientVars });
+
         } else if (status === 'Rejected') {
             if (!sender) return res.status(404).json({success: false, error: "Sender not found"});
 
@@ -245,6 +281,17 @@ export const updateTransfer = async (req, res) => {
             });
 
             await Notification.create({ userId: sender._id, message: `Your transfer to ${recipient ? recipient.username : 'User'} was rejected and funds (${sender.currency}${refundAmount.toFixed(2)}) returned.` });
+
+            // Trigger Template Notifications for Rejected Transfer
+            const rejectedSenderVars = {
+                amount: transfer.amount.toFixed(2),
+                currency: sender.currency,
+                recipientUsername: recipient ? recipient.username : 'User',
+                notes: adminNotes || 'Verification failed',
+                txId: String(transfer._id)
+            };
+            sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_rejected_email', variables: rejectedSenderVars });
+            sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_rejected_whatsapp', variables: rejectedSenderVars });
         }
         
         transfer.status = status;

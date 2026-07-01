@@ -565,3 +565,16 @@ export const formatCurrency = (amount: number | undefined | null, currency: stri
 export const countries = [
     "United States", "United Kingdom", "Canada", "Australia", "Germany", "France", "Italy", "Spain", "Pakistan", "India", "China", "Japan", "Brazil", "Russia", "Mexico", "Indonesia", "Turkey", "Saudi Arabia", "United Arab Emirates", "South Africa", "Nigeria", "Egypt", "Bangladesh", "Vietnam", "Thailand", "Malaysia", "Singapore", "New Zealand", "Netherlands", "Belgium", "Switzerland", "Sweden", "Norway", "Denmark", "Finland", "Poland", "Austria", "Greece", "Portugal", "Ireland", "Czech Republic", "Hungary", "Romania"
 ];
+
+export interface Template {
+    _id: string;
+    key: string;
+    name: string;
+    type: 'email' | 'whatsapp';
+    subject: string;
+    body: string;
+    isEnabled: boolean;
+    graphicTheme: 'default' | 'minimalist' | 'cosmic' | 'emerald_success' | 'coral_danger';
+    createdAt?: string;
+    updatedAt?: string;
+}

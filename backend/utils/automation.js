@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import axios from 'axios';
 import Setting from '../models/Setting.js';
+import Template from '../models/Template.js';
+import User from '../models/User.js';
 
 export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageText }) => {
     try {
@@ -25,7 +27,8 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
                     from: `"SmartEarning Support" <${settings.emailSenderAddress || 'studio56.pk@gmail.com'}>`,
                     to: toEmail,
                     subject: subject || 'SmartEarning Notification',
-                    text: messageText
+                    text: messageText.replace(/<[^>]*>/g, ''), // Strip tags for text fallback
+                    html: messageText
                 };
 
                 await transporter.sendMail(mailOptions);
@@ -61,5 +64,65 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
         }
     } catch (globalError) {
         console.error('Automation error:', globalError);
+    }
+};
+
+export const sendTemplateNotification = async ({ userId, templateKey, variables }) => {
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            console.error(`sendTemplateNotification: User with ID ${userId} not found`);
+            return;
+        }
+
+        const template = await Template.findOne({ key: templateKey });
+        if (!template) {
+            console.error(`sendTemplateNotification: Template with key ${templateKey} not found`);
+            return;
+        }
+
+        if (!template.isEnabled) {
+            console.log(`sendTemplateNotification: Template ${templateKey} is disabled`);
+            return;
+        }
+
+        // Variable substitution helper
+        const replaceVariables = (text) => {
+            if (!text) return '';
+            let result = text;
+            const allVars = {
+                username: user.username || '',
+                fullName: user.fullName || '',
+                email: user.email || '',
+                phone: user.phone || '',
+                whatsapp: user.whatsapp || '',
+                date: new Date().toLocaleString(),
+                ...variables
+            };
+
+            for (const [key, val] of Object.entries(allVars)) {
+                const regex = new RegExp(`{${key}}`, 'g');
+                result = result.replace(regex, String(val));
+            }
+            return result;
+        };
+
+        const replacedSubject = replaceVariables(template.subject);
+        const replacedBody = replaceVariables(template.body);
+
+        if (template.type === 'email') {
+            await sendAutomatedMessage({
+                toEmail: user.email,
+                subject: replacedSubject || 'Notification from SmartEarning',
+                messageText: replacedBody
+            });
+        } else if (template.type === 'whatsapp') {
+            await sendAutomatedMessage({
+                toPhone: user.whatsapp || user.phone,
+                messageText: replacedBody
+            });
+        }
+    } catch (err) {
+        console.error('Failed to send template notification:', err);
     }
 };

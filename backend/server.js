@@ -28,6 +28,7 @@ import logRoutes from './routes/logRoutes.js';
 import passwordResetRequestRoutes from './routes/passwordResetRequestRoutes.js';
 import disputeRoutes from './routes/disputeRoutes.js';
 import taskRoutes from './routes/taskRoutes.js'; 
+import templateRoutes from './routes/templateRoutes.js';
 
 // Import password reset actions directly for backward compatibility
 import {
@@ -150,6 +151,7 @@ app.use('/api/v1/logs', logRoutes);
 app.use('/api/v1/password-reset-requests', passwordResetRequestRoutes);
 app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes); 
+app.use('/api/v1/templates', templateRoutes);
 
 // Custom Error Handler
 app.use((err, req, res, next) => {
