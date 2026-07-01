@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
-import { updateSettings } from '../services/api';
+import { updateSettings, testSMTPApiCall } from '../services/api';
 import { 
     defaultPrivacyPolicyTitle, 
     defaultPrivacyPolicyUpdated, 
@@ -45,6 +45,37 @@ const Settings: React.FC = () => {
   const [newLogoName, setNewLogoName] = useState('');
   const [newLogoUrl, setNewLogoUrl] = useState(''); // Text input for URL
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
+
+  // SMTP Testing State
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [isTestingSMTP, setIsTestingSMTP] = useState(false);
+  const [testSMTPResult, setTestSMTPResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+
+  const handleTestSMTP = async () => {
+    if (!localSettings.emailSenderAddress || !localSettings.emailSenderPassword) {
+      alert('Please fill in both the Sender Gmail Address and Gmail App Password first.');
+      return;
+    }
+    if (!testEmailRecipient) {
+      alert('Please enter a recipient email address to send the test email to.');
+      return;
+    }
+
+    setIsTestingSMTP(true);
+    setTestSMTPResult(null);
+    try {
+      const result = await testSMTPApiCall(
+        localSettings.emailSenderAddress,
+        localSettings.emailSenderPassword,
+        testEmailRecipient
+      );
+      setTestSMTPResult(result);
+    } catch (err: any) {
+      setTestSMTPResult({ success: false, error: err.message || 'An unexpected error occurred.' });
+    } finally {
+      setIsTestingSMTP(false);
+    }
+  };
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
@@ -103,7 +134,7 @@ const Settings: React.FC = () => {
         termsOfUseUpdated: settings.termsOfUseUpdated || defaultTermsOfUseUpdated,
         termsOfUseContent: settings.termsOfUseContent || defaultTermsOfUseContent,
         emailAutomationEnabled: settings.emailAutomationEnabled || false,
-        emailSenderAddress: settings.emailSenderAddress || 'studio56.pk@gmail.com',
+        emailSenderAddress: settings.emailSenderAddress || 'smartexn.com@gmail.com',
         emailSenderPassword: settings.emailSenderPassword || 'zakr ambh tnsp mrzf',
         whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
         whatsappInstanceId: settings.whatsappInstanceId || 'instance183081',
@@ -1324,28 +1355,69 @@ const Settings: React.FC = () => {
                     </div>
 
                     {localSettings.emailAutomationEnabled && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Sender Gmail Address</label>
-                                <input 
-                                    type="email"
-                                    name="emailSenderAddress"
-                                    value={localSettings.emailSenderAddress || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
-                                    placeholder="your-email@gmail.com"
-                                />
+                        <div className="space-y-4 animate-slide-up">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Sender Gmail Address</label>
+                                    <input 
+                                        type="email"
+                                        name="emailSenderAddress"
+                                        value={localSettings.emailSenderAddress || ''}
+                                        onChange={handleTextChange}
+                                        className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                                        placeholder="your-email@gmail.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Gmail App Password (16-char)</label>
+                                    <input 
+                                        type="text"
+                                        name="emailSenderPassword"
+                                        value={localSettings.emailSenderPassword || ''}
+                                        onChange={handleTextChange}
+                                        className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
+                                        placeholder="xxxx xxxx xxxx xxxx"
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Gmail App Password (16-char)</label>
-                                <input 
-                                    type="text"
-                                    name="emailSenderPassword"
-                                    value={localSettings.emailSenderPassword || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
-                                    placeholder="xxxx xxxx xxxx xxxx"
-                                />
+
+                            <div className="pt-4 border-t dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Test SMTP Connection</label>
+                                <p className="text-[10px] text-gray-400 mb-2">Send a test email to verify your SMTP settings before saving. Make sure your Gmail account has 2-Step Verification turned on and you generated a 16-character App Password.</p>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="email"
+                                        placeholder="recipient@example.com"
+                                        value={testEmailRecipient}
+                                        onChange={(e) => setTestEmailRecipient(e.target.value)}
+                                        className="text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 flex-1 max-w-xs"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleTestSMTP}
+                                        disabled={isTestingSMTP}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-3 rounded-xl transition disabled:opacity-50"
+                                    >
+                                        {isTestingSMTP ? 'Testing...' : 'Send Test Email'}
+                                    </button>
+                                </div>
+                                {testSMTPResult && (
+                                    <div className={`text-xs p-4 rounded-xl mt-2 ${testSMTPResult.success ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'}`}>
+                                        {testSMTPResult.success ? (
+                                            <p className="font-semibold">✓ {testSMTPResult.message}</p>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                <p className="font-bold">✗ SMTP Configuration Failed:</p>
+                                                <p className="font-mono bg-black/5 dark:bg-black/30 p-2 rounded text-[11px] whitespace-pre-wrap">{testSMTPResult.error}</p>
+                                                <div className="mt-2 text-gray-500 dark:text-gray-400 text-[10px] space-y-1 pt-1">
+                                                    <p>• <strong>Check Address:</strong> Ensure the Sender Gmail matches the one that generated the App Password.</p>
+                                                    <p>• <strong>2-Step Verification:</strong> Must be turned on inside your Google Account Security settings.</p>
+                                                    <p>• <strong>App Password (16 Letters):</strong> Must be generated at <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">myaccount.google.com/apppasswords</a>. Standard passwords are blocked.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

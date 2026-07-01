@@ -675,3 +675,12 @@ export const sendCustomAdminMessage = async (msgData: { toEmail?: string; toPhon
     });
     return await handleResponse(response);
 };
+
+export const testSMTPApiCall = async (emailSenderAddress: string, emailSenderPassword: string, testRecipient: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const response = await fetch(`${API_BASE_URL}/settings/test-email`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ emailSenderAddress, emailSenderPassword, testRecipient })
+    });
+    return await handleResponse(response);
+};
