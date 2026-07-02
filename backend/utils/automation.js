@@ -82,16 +82,27 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
         if (settings.emailAutomationEnabled && toEmail) {
             emailAttempted = true;
             try {
+                // Safely determine auth credentials. If sender address is custom but password remains the default,
+                // we fall back to studio56.pk@gmail.com with its matching default app password.
+                const authUser = settings.emailSenderAddress && settings.emailSenderPassword && settings.emailSenderPassword !== 'zakr ambh tnsp mrzf'
+                    ? settings.emailSenderAddress
+                    : 'studio56.pk@gmail.com';
+                
+                const authPass = settings.emailSenderAddress && settings.emailSenderPassword && settings.emailSenderPassword !== 'zakr ambh tnsp mrzf'
+                    ? settings.emailSenderPassword
+                    : 'zakr ambh tnsp mrzf';
+
                 const transporter = nodemailer.createTransport({
                     service: 'gmail',
                     auth: {
-                        user: settings.emailSenderAddress || 'studio56.pk@gmail.com',
-                        pass: settings.emailSenderPassword || 'zakr ambh tnsp mrzf'
+                        user: authUser,
+                        pass: authPass
                     }
                 });
 
                 const mailOptions = {
-                    from: `"SmartEarning Support" <${settings.emailSenderAddress || 'studio56.pk@gmail.com'}>`,
+                    from: `"SmartEarning Support" <${authUser}>`,
+                    replyTo: settings.emailSenderAddress || authUser,
                     to: toEmail,
                     subject: subject || 'SmartEarning Notification',
                     text: messageText.replace(/<[^>]*>/g, ''), // Strip tags for text fallback
