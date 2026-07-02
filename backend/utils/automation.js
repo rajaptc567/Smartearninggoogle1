@@ -3,17 +3,26 @@ import axios from 'axios';
 import Setting from '../models/Setting.js';
 import Template from '../models/Template.js';
 import User from '../models/User.js';
+import TemplateLog from '../models/TemplateLog.js';
 
 export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageText }) => {
     try {
         const settings = await Setting.getSettings();
         if (!settings) {
             console.error('Automation: Settings not found.');
-            return;
+            return {
+                email: { attempted: false, success: false, error: 'Settings not found' },
+                whatsapp: { attempted: false, success: false, error: 'Settings not found' }
+            };
         }
+
+        let emailSuccess = false;
+        let emailError = null;
+        let emailAttempted = false;
 
         // 1. Email Sending
         if (settings.emailAutomationEnabled && toEmail) {
+            emailAttempted = true;
             try {
                 const transporter = nodemailer.createTransport({
                     service: 'gmail',
@@ -33,13 +42,20 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
 
                 await transporter.sendMail(mailOptions);
                 console.log(`Automation: Email successfully sent to ${toEmail}`);
-            } catch (emailError) {
-                console.error('Automation: Failed to send email:', emailError.message);
+                emailSuccess = true;
+            } catch (emailErrorCaptured) {
+                console.error('Automation: Failed to send email:', emailErrorCaptured.message);
+                emailError = emailErrorCaptured.message;
             }
         }
 
+        let waSuccess = false;
+        let waError = null;
+        let waAttempted = false;
+
         // 2. WhatsApp Sending
         if (settings.whatsappAutomationEnabled && toPhone) {
+            waAttempted = true;
             try {
                 // Format number: remove non-digits, and convert leading 0 to 92 for Pakistan
                 let formattedPhone = toPhone.replace(/\D/g, '');
@@ -58,16 +74,29 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
                     body: messageText
                 });
                 console.log(`Automation: WhatsApp message successfully sent to ${formattedPhone}`);
-            } catch (waError) {
-                console.error('Automation: Failed to send WhatsApp:', waError.response?.data || waError.message);
+                waSuccess = true;
+            } catch (waErrorCaptured) {
+                const errMsg = waErrorCaptured.response?.data?.error?.message || waErrorCaptured.response?.data || waErrorCaptured.message;
+                console.error('Automation: Failed to send WhatsApp:', errMsg);
+                waError = typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg);
             }
         }
+
+        return {
+            email: { attempted: emailAttempted, success: emailSuccess, error: emailError },
+            whatsapp: { attempted: waAttempted, success: waSuccess, error: waError }
+        };
     } catch (globalError) {
         console.error('Automation error:', globalError);
+        return {
+            error: globalError.message,
+            email: { attempted: false, success: false, error: globalError.message },
+            whatsapp: { attempted: false, success: false, error: globalError.message }
+        };
     }
 };
 
-export const sendTemplateNotification = async ({ userId, templateKey, variables }) => {
+export const sendTemplateNotification = async ({ userId, templateKey, variables, sentBy = 'System' }) => {
     try {
         const user = await User.findById(userId);
         if (!user) {
@@ -83,6 +112,26 @@ export const sendTemplateNotification = async ({ userId, templateKey, variables 
 
         if (!template.isEnabled) {
             console.log(`sendTemplateNotification: Template ${templateKey} is disabled`);
+            // Log that the sending was skipped because template is disabled
+            try {
+                await TemplateLog.create({
+                    userId: user._id,
+                    username: user.username,
+                    userEmail: user.email,
+                    userPhone: user.phone || user.whatsapp,
+                    templateKey: template.key,
+                    templateName: template.name,
+                    type: template.type,
+                    recipient: template.type === 'email' ? user.email : (user.whatsapp || user.phone || 'N/A'),
+                    subject: template.subject,
+                    body: template.body,
+                    status: 'Failed',
+                    error: 'Template is disabled by Admin',
+                    sentBy
+                });
+            } catch (logErr) {
+                console.error('Failed to create disabled TemplateLog:', logErr);
+            }
             return;
         }
 
@@ -110,17 +159,73 @@ export const sendTemplateNotification = async ({ userId, templateKey, variables 
         const replacedSubject = replaceVariables(template.subject);
         const replacedBody = replaceVariables(template.body);
 
+        let recipient = '';
+        let sendResult = null;
+        let status = 'Success';
+        let error = null;
+
         if (template.type === 'email') {
-            await sendAutomatedMessage({
+            recipient = user.email || 'N/A';
+            sendResult = await sendAutomatedMessage({
                 toEmail: user.email,
                 subject: replacedSubject || 'Notification from SmartEarning',
                 messageText: replacedBody
             });
+            if (sendResult.email) {
+                if (sendResult.email.attempted) {
+                    if (!sendResult.email.success) {
+                        status = 'Failed';
+                        error = sendResult.email.error || 'Failed to send email';
+                    }
+                } else {
+                    status = 'Failed';
+                    error = 'Email automation is disabled in settings';
+                }
+            } else {
+                status = 'Failed';
+                error = sendResult.error || 'Unknown email sending error';
+            }
         } else if (template.type === 'whatsapp') {
-            await sendAutomatedMessage({
-                toPhone: user.whatsapp || user.phone,
+            recipient = user.whatsapp || user.phone || 'N/A';
+            sendResult = await sendAutomatedMessage({
+                toPhone: recipient,
                 messageText: replacedBody
             });
+            if (sendResult.whatsapp) {
+                if (sendResult.whatsapp.attempted) {
+                    if (!sendResult.whatsapp.success) {
+                        status = 'Failed';
+                        error = sendResult.whatsapp.error || 'Failed to send WhatsApp';
+                    }
+                } else {
+                    status = 'Failed';
+                    error = 'WhatsApp automation is disabled in settings';
+                }
+            } else {
+                status = 'Failed';
+                error = sendResult.error || 'Unknown WhatsApp sending error';
+            }
+        }
+
+        // Create log entry
+        try {
+            await TemplateLog.create({
+                userId: user._id,
+                username: user.username,
+                userEmail: user.email,
+                userPhone: user.phone || user.whatsapp,
+                templateKey: template.key,
+                templateName: template.name,
+                type: template.type,
+                recipient,
+                subject: template.type === 'email' ? (replacedSubject || 'No Subject') : undefined,
+                body: replacedBody,
+                status,
+                error,
+                sentBy
+            });
+        } catch (logErr) {
+            console.error('Failed to create TemplateLog:', logErr);
         }
     } catch (err) {
         console.error('Failed to send template notification:', err);

@@ -3,9 +3,13 @@ import {
     getTemplates, 
     updateTemplate, 
     resetTemplatesToDefault,
-    bulkUpdateTemplates
+    bulkUpdateTemplates,
+    getUsers,
+    getTemplatesHistory,
+    deleteTemplatesHistoryBulk,
+    manualSendTemplate
 } from '../services/api';
-import { Template } from '../types';
+import { Template, TemplateLog, User } from '../types';
 import { 
     Mail, 
     MessageSquare, 
@@ -52,6 +56,39 @@ const AdminTemplates: React.FC = () => {
     const [editorTheme, setEditorTheme] = useState<Template['graphicTheme']>('default');
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+    // New Tabs state
+    const [activeTab, setActiveTab] = useState<'editor' | 'history' | 'manual'>('editor');
+
+    // Users and history states
+    const [users, setUsers] = useState<User[]>([]);
+    const [historyLogs, setHistoryLogs] = useState<TemplateLog[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+    const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
+
+    // Selected items for bulk history delete
+    const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
+    const [deletingHistory, setDeletingHistory] = useState<boolean>(false);
+
+    // Manual send states
+    const [manualSelectedUserIds, setManualSelectedUserIds] = useState<string[]>([]);
+    const [manualSelectedTemplateKey, setManualSelectedTemplateKey] = useState<string>('');
+    const [manualUserSearch, setManualUserSearch] = useState<string>('');
+    const [sendingManual, setSendingManual] = useState<boolean>(false);
+    const [manualVars, setManualVars] = useState({
+        amount: '',
+        txId: '',
+        notes: ''
+    });
+
+    // History filter states
+    const [historySearch, setHistorySearch] = useState<string>('');
+    const [historyStatusFilter, setHistoryStatusFilter] = useState<'all' | 'Success' | 'Failed'>('all');
+    const [historyTypeFilter, setHistoryTypeFilter] = useState<'all' | 'email' | 'whatsapp'>('all');
+    const [historySentByFilter, setHistorySentByFilter] = useState<'all' | 'System' | 'Admin'>('all');
+
+    // Expanded log details for history panel (optional popup/accordion)
+    const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
     // Sample placeholders reference
     const placeholderVars = [
@@ -129,6 +166,156 @@ The SmartEarning Desk
     useEffect(() => {
         fetchTemplatesData();
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'history') {
+            fetchHistoryData();
+        } else if (activeTab === 'manual') {
+            fetchUsersData();
+            fetchTemplatesData();
+        }
+    }, [activeTab]);
+
+    const fetchHistoryData = async () => {
+        setLoadingHistory(true);
+        try {
+            const logs = await getTemplatesHistory();
+            setHistoryLogs(logs);
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch history logs');
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
+
+    const fetchUsersData = async () => {
+        setLoadingUsers(true);
+        try {
+            const allUsers = await getUsers();
+            setUsers(allUsers);
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch users');
+        } finally {
+            setLoadingUsers(false);
+        }
+    };
+
+    const handleToggleSelectHistoryId = (id: string) => {
+        setSelectedHistoryIds(prev => 
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAllHistoryVisible = (visibleIds: string[]) => {
+        const allSelected = visibleIds.every(id => selectedHistoryIds.includes(id));
+        if (allSelected) {
+            setSelectedHistoryIds(prev => prev.filter(id => !visibleIds.includes(id)));
+        } else {
+            setSelectedHistoryIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+        }
+    };
+
+    const handleBulkDeleteHistory = async () => {
+        if (selectedHistoryIds.length === 0) return;
+        if (!window.confirm(`Are you sure you want to permanently delete ${selectedHistoryIds.length} history log(s)?`)) {
+            return;
+        }
+        setDeletingHistory(true);
+        try {
+            await deleteTemplatesHistoryBulk(selectedHistoryIds);
+            setSuccessMsg(`Successfully deleted ${selectedHistoryIds.length} history logs.`);
+            setSelectedHistoryIds([]);
+            fetchHistoryData();
+            setTimeout(() => setSuccessMsg(null), 3000);
+        } catch (err: any) {
+            alert(`Failed to delete history logs: ${err.message || err}`);
+        } finally {
+            setDeletingHistory(false);
+        }
+    };
+
+    const handleManualSend = async () => {
+        if (manualSelectedUserIds.length === 0) {
+            alert('Please select at least one user.');
+            return;
+        }
+        if (!manualSelectedTemplateKey) {
+            alert('Please select a template to send.');
+            return;
+        }
+
+        const template = templates.find(t => t.key === manualSelectedTemplateKey);
+        if (!template) {
+            alert('Selected template not found.');
+            return;
+        }
+
+        const confirmMsg = `Are you sure you want to manually send the "${template.name}" (${template.type}) template to ${manualSelectedUserIds.length} user(s)?`;
+        if (!window.confirm(confirmMsg)) {
+            return;
+        }
+
+        setSendingManual(true);
+        try {
+            await manualSendTemplate(manualSelectedUserIds, manualSelectedTemplateKey, {
+                amount: manualVars.amount,
+                txId: manualVars.txId,
+                notes: manualVars.notes
+            });
+            setSuccessMsg(`Successfully sent template to ${manualSelectedUserIds.length} users!`);
+            setManualSelectedUserIds([]);
+            setTimeout(() => setSuccessMsg(null), 3500);
+        } catch (err: any) {
+            alert(`Failed to send manual templates: ${err.message}`);
+        } finally {
+            setSendingManual(false);
+        }
+    };
+
+    const handleToggleSelectUser = (id: string) => {
+        setManualSelectedUserIds(prev => 
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAllUsersVisible = () => {
+        const visibleIds = filteredUsers.map(u => u._id);
+        const allSelected = visibleIds.every(id => manualSelectedUserIds.includes(id));
+        if (allSelected) {
+            setManualSelectedUserIds(prev => prev.filter(id => !visibleIds.includes(id)));
+        } else {
+            setManualSelectedUserIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+        }
+    };
+
+    // Filtered users for manual send selector
+    const filteredUsers = useMemo(() => {
+        return users.filter(user => {
+            return user.username.toLowerCase().includes(manualUserSearch.toLowerCase()) ||
+                   user.fullName.toLowerCase().includes(manualUserSearch.toLowerCase()) ||
+                   user.email.toLowerCase().includes(manualUserSearch.toLowerCase()) ||
+                   (user.phone && user.phone.includes(manualUserSearch)) ||
+                   (user.country && user.country.toLowerCase().includes(manualUserSearch.toLowerCase()));
+        });
+    }, [users, manualUserSearch]);
+
+    // Filtered history logs
+    const filteredHistoryLogs = useMemo(() => {
+        return historyLogs.filter(log => {
+            const matchesSearch = 
+                log.username.toLowerCase().includes(historySearch.toLowerCase()) ||
+                log.recipient.toLowerCase().includes(historySearch.toLowerCase()) ||
+                log.templateName.toLowerCase().includes(historySearch.toLowerCase()) ||
+                (log.subject && log.subject.toLowerCase().includes(historySearch.toLowerCase())) ||
+                (log.body && log.body.toLowerCase().includes(historySearch.toLowerCase()));
+            
+            const matchesStatus = historyStatusFilter === 'all' ? true : log.status === historyStatusFilter;
+            const matchesType = historyTypeFilter === 'all' ? true : log.type === historyTypeFilter;
+            const matchesSentBy = historySentByFilter === 'all' ? true : log.sentBy === historySentByFilter;
+
+            return matchesSearch && matchesStatus && matchesType && matchesSentBy;
+        });
+    }, [historyLogs, historySearch, historyStatusFilter, historyTypeFilter, historySentByFilter]);
 
     const fetchTemplatesData = async () => {
         setLoading(true);
@@ -354,8 +541,49 @@ The SmartEarning Desk
                 </div>
             </div>
 
+            {/* Tab Switcher */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 gap-4 mb-2">
+                <button
+                    onClick={() => setActiveTab('editor')}
+                    id="btn-tab-editor"
+                    className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'editor'
+                            ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Template Editor & Rules</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    id="btn-tab-history"
+                    className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'history'
+                            ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Copy className="w-4 h-4" />
+                    <span>Sent History Logs</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('manual')}
+                    id="btn-tab-manual"
+                    className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'manual'
+                            ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Mail className="w-4 h-4" />
+                    <span>Manual Bulk Send</span>
+                </button>
+            </div>
+
             {/* Split Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            {activeTab === 'editor' && (
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                 
                 {/* Left Panel: Template List (Col Span 4) */}
                 <div className="xl:col-span-4 bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-[750px]">
@@ -821,6 +1049,445 @@ The SmartEarning Desk
                 </div>
 
             </div>
+            )}
+
+            {/* Sent History Logs Tab */}
+            {activeTab === 'history' && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                        {/* Filter controls */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Search Logs</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Search recipient, user, subject..."
+                                        value={historySearch}
+                                        onChange={(e) => setHistorySearch(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                    />
+                                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Status</label>
+                                <select
+                                    value={historyStatusFilter}
+                                    onChange={(e) => setHistoryStatusFilter(e.target.value as any)}
+                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="Success">Success Only</option>
+                                    <option value="Failed">Failed Only</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Type</label>
+                                <select
+                                    value={historyTypeFilter}
+                                    onChange={(e) => setHistoryTypeFilter(e.target.value as any)}
+                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="all">All Types</option>
+                                    <option value="email">Email</option>
+                                    <option value="whatsapp">WhatsApp</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Sent By</label>
+                                <select
+                                    value={historySentByFilter}
+                                    onChange={(e) => setHistorySentByFilter(e.target.value as any)}
+                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="all">All Senders</option>
+                                    <option value="System">System Automated</option>
+                                    <option value="Admin">Admin Manual</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Bulk delete panel */}
+                        <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-4 mb-4">
+                            <button
+                                onClick={() => handleSelectAllHistoryVisible(filteredHistoryLogs.map(l => l._id))}
+                                className="flex items-center gap-2 text-sm font-semibold text-gray-650 dark:text-gray-300 hover:text-blue-600 transition-colors"
+                            >
+                                {filteredHistoryLogs.length > 0 && filteredHistoryLogs.every(l => selectedHistoryIds.includes(l._id)) ? (
+                                    <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                ) : (
+                                    <Square className="w-4 h-4 text-gray-400" />
+                                )}
+                                <span>Select All Visible ({filteredHistoryLogs.length})</span>
+                            </button>
+
+                            {selectedHistoryIds.length > 0 && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-black text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300 px-2.5 py-1 rounded-lg">
+                                        {selectedHistoryIds.length} Logs Selected
+                                    </span>
+                                    <button
+                                        onClick={handleBulkDeleteHistory}
+                                        disabled={deletingHistory}
+                                        className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+                                    >
+                                        <X className="w-3.5 h-3.5 mr-1.5" />
+                                        Delete Selected
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* History Table */}
+                        {loadingHistory ? (
+                            <div className="flex justify-center items-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                            </div>
+                        ) : filteredHistoryLogs.length === 0 ? (
+                            <div className="text-center py-12 text-gray-400">
+                                <Mail className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                <p className="font-bold text-sm text-gray-600 dark:text-gray-400">No sent template logs found</p>
+                                <p className="text-xs text-gray-400 mt-1">Try modifying your filter options or search terms.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-gray-100 dark:border-gray-700 text-xs font-bold text-gray-400 uppercase">
+                                            <th className="py-3 px-4 w-10"></th>
+                                            <th className="py-3 px-4">User</th>
+                                            <th className="py-3 px-4">Template Name</th>
+                                            <th className="py-3 px-4">Recipient</th>
+                                            <th className="py-3 px-4">Type</th>
+                                            <th className="py-3 px-4">Sender</th>
+                                            <th className="py-3 px-4">Status</th>
+                                            <th className="py-3 px-4">Date</th>
+                                            <th className="py-3 px-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="text-xs font-medium">
+                                        {filteredHistoryLogs.map((log) => {
+                                            const isSelected = selectedHistoryIds.includes(log._id);
+                                            const isExpanded = expandedLogId === log._id;
+                                            return (
+                                                <React.Fragment key={log._id}>
+                                                    <tr className={`border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 ${isSelected ? 'bg-blue-50/20 dark:bg-blue-900/10' : ''}`}>
+                                                        <td className="py-3.5 px-4">
+                                                            <button
+                                                                onClick={() => handleToggleSelectHistoryId(log._id)}
+                                                                className="flex items-center justify-center"
+                                                            >
+                                                                {isSelected ? (
+                                                                    <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                                ) : (
+                                                                    <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                                )}
+                                                            </button>
+                                                        </td>
+                                                        <td className="py-3.5 px-4 font-bold text-gray-800 dark:text-gray-200">
+                                                            @{log.username}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-gray-700 dark:text-gray-300">
+                                                            <span className="font-semibold">{log.templateName}</span>
+                                                            <span className="block text-[10px] font-mono text-gray-400 mt-0.5">{log.templateKey}</span>
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-gray-500 font-mono">
+                                                            {log.recipient}
+                                                        </td>
+                                                        <td className="py-3.5 px-4">
+                                                            <span className={`inline-flex items-center gap-1 uppercase text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded ${
+                                                                log.type === 'email'
+                                                                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                                            }`}>
+                                                                {log.type === 'email' ? <Mail className="w-2.5 h-2.5" /> : <MessageSquare className="w-2.5 h-2.5" />}
+                                                                {log.type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-4">
+                                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                                log.sentBy === 'Admin'
+                                                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'
+                                                                    : 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-500'
+                                                            }`}>
+                                                                {log.sentBy}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-4">
+                                                            {log.status === 'Success' ? (
+                                                                <span className="inline-flex items-center gap-0.5 text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">
+                                                                    <Check className="w-2.5 h-2.5" /> Sent
+                                                                </span>
+                                                            ) : (
+                                                                <div>
+                                                                    <span className="inline-flex items-center gap-0.5 text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400 px-1.5 py-0.5 rounded font-bold">
+                                                                        <X className="w-2.5 h-2.5" /> Failed
+                                                                    </span>
+                                                                    {log.error && (
+                                                                        <span className="block text-[9px] text-red-500 dark:text-red-400 max-w-[150px] truncate mt-0.5" title={log.error}>
+                                                                            {log.error}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-gray-400">
+                                                            {log.date ? new Date(log.date).toLocaleString() : 'N/A'}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-right">
+                                                            <button
+                                                                onClick={() => setExpandedLogId(isExpanded ? null : log._id)}
+                                                                className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                                            >
+                                                                {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                                <span>{isExpanded ? 'Hide' : 'View Message'}</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && (
+                                                        <tr>
+                                                            <td colSpan={9} className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-100 dark:border-gray-800">
+                                                                <div className="bg-white dark:bg-gray-850 p-4 rounded-xl border border-gray-150 dark:border-gray-700 shadow-inner">
+                                                                    {log.subject && (
+                                                                        <div className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 pb-1 border-b dark:border-gray-700">
+                                                                            Subject: <span className="text-gray-800 dark:text-gray-100 font-medium">{log.subject}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="text-xs font-sans text-gray-800 dark:text-gray-200 break-words whitespace-pre-wrap">
+                                                                        {log.type === 'email' && log.body.includes('<') && log.body.includes('>') ? (
+                                                                            <div dangerouslySetInnerHTML={{ __html: log.body }} />
+                                                                        ) : (
+                                                                            log.body
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Send Tab */}
+            {activeTab === 'manual' && (
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                    {/* Left Panel: Configuration (Col Span 5) */}
+                    <div className="xl:col-span-5 space-y-6">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-5">
+                            <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                1. Select Template & Setup Parameters
+                            </h3>
+
+                            {/* Template Selection */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">
+                                    Message Template
+                                </label>
+                                <select
+                                    value={manualSelectedTemplateKey}
+                                    onChange={(e) => setManualSelectedTemplateKey(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="">-- Choose Template --</option>
+                                    {templates.map(tpl => (
+                                        <option key={tpl.key} value={tpl.key}>
+                                            {tpl.name} ({tpl.type === 'email' ? '✉️ Email' : '💬 WhatsApp'})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Variable inputs card */}
+                            <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-xl border border-gray-150 dark:border-gray-800 space-y-4">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+                                    <Info className="w-4 h-4 text-blue-500" />
+                                    <span>Optional Substitution Variables</span>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                        Amount value ({'{amount}'})
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 5,000"
+                                        value={manualVars.amount}
+                                        onChange={(e) => setManualVars(prev => ({ ...prev, amount: e.target.value }))}
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                        Transaction reference ID ({'{txId}'})
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. TXN-9274920"
+                                        value={manualVars.txId}
+                                        onChange={(e) => setManualVars(prev => ({ ...prev, txId: e.target.value }))}
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                        Remarks / Notes ({'{notes}'})
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        placeholder="e.g. Verified by accountant desk."
+                                        value={manualVars.notes}
+                                        onChange={(e) => setManualVars(prev => ({ ...prev, notes: e.target.value }))}
+                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none resize-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Dispatch Trigger Panel */}
+                            <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center justify-between mb-3 text-xs text-gray-500 dark:text-gray-400">
+                                    <span>Recipient Count:</span>
+                                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                                        {manualSelectedUserIds.length} User(s) selected
+                                    </span>
+                                </div>
+
+                                <button
+                                    onClick={handleManualSend}
+                                    id="btn-trigger-manual-send"
+                                    disabled={sendingManual || manualSelectedUserIds.length === 0 || !manualSelectedTemplateKey}
+                                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-bold rounded-xl transition-all shadow-sm gap-2"
+                                >
+                                    {sendingManual ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                                            <span>Sending Broadcast...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="w-4 h-4" />
+                                            <span>Manually Send Template ({manualSelectedUserIds.length})</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Panel: Recipient list (Col Span 7) */}
+                    <div className="xl:col-span-7 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-[700px]">
+                        <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
+                            2. Select Recipient Users ({manualSelectedUserIds.length} Selected)
+                        </h3>
+
+                        {/* Recipient Search */}
+                        <div className="relative mb-4">
+                            <input
+                                type="text"
+                                placeholder="Search users by name, email, or username..."
+                                value={manualUserSearch}
+                                onChange={(e) => setManualUserSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                        </div>
+
+                        {/* Selection Options Header */}
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <button
+                                onClick={handleSelectAllUsersVisible}
+                                className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                            >
+                                {filteredUsers.length > 0 && filteredUsers.every(u => manualSelectedUserIds.includes(u._id)) ? (
+                                    <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                ) : (
+                                    <Square className="w-4 h-4 text-gray-400" />
+                                )}
+                                <span>Select All Visible ({filteredUsers.length})</span>
+                            </button>
+
+                            {manualSelectedUserIds.length > 0 && (
+                                <button
+                                    onClick={() => setManualSelectedUserIds([])}
+                                    className="text-[11px] font-bold text-red-500 hover:underline"
+                                >
+                                    Clear Selection
+                    </button>
+                            )}
+                        </div>
+
+                        {/* User Selection table container */}
+                        <div className="flex-1 overflow-y-auto pr-1">
+                            {loadingUsers ? (
+                                <div className="flex justify-center items-center py-12">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                                </div>
+                            ) : filteredUsers.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                                    <p className="text-xs">No users match search query.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {filteredUsers.map(user => {
+                                        const isUserSelected = manualSelectedUserIds.includes(user._id);
+                                        return (
+                                            <div
+                                                key={user._id}
+                                                onClick={() => handleToggleSelectUser(user._id)}
+                                                className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${
+                                                    isUserSelected
+                                                        ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900'
+                                                        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-750'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-center">
+                                                    {isUserSelected ? (
+                                                        <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                    ) : (
+                                                        <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                    )}
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                                            {user.fullName} (@{user.username})
+                                                        </span>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
+                                                            user.status === 'Active' || user.status === 'Verified'
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+                                                                : 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-500'
+                                                        }`}>
+                                                            {user.status}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-mono truncate">
+                                                        <span>{user.email}</span>
+                                                        <span>{user.whatsapp || user.phone || 'No phone'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

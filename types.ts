@@ -578,3 +578,22 @@ export interface Template {
     createdAt?: string;
     updatedAt?: string;
 }
+
+export interface TemplateLog {
+    _id: string;
+    userId?: string;
+    username: string;
+    userEmail?: string;
+    userPhone?: string;
+    templateKey: string;
+    templateName: string;
+    type: 'email' | 'whatsapp';
+    recipient: string;
+    subject?: string;
+    body: string;
+    status: 'Success' | 'Failed';
+    error?: string;
+    sentBy: 'System' | 'Admin';
+    date?: string;
+    createdAt?: string;
+}

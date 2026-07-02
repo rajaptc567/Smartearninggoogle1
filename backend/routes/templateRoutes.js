@@ -1,6 +1,14 @@
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
-import { getTemplates, updateTemplate, resetTemplates, bulkUpdateTemplates } from '../controllers/templatesController.js';
+import { 
+    getTemplates, 
+    updateTemplate, 
+    resetTemplates, 
+    bulkUpdateTemplates,
+    getTemplatesHistory,
+    deleteTemplatesHistoryBulk,
+    manualSendTemplate
+} from '../controllers/templatesController.js';
 
 const router = express.Router();
 
@@ -12,6 +20,15 @@ router.route('/reset')
 
 router.route('/bulk')
     .put(authorize(['admin']), bulkUpdateTemplates);
+
+router.route('/history')
+    .get(authorize(['admin']), getTemplatesHistory);
+
+router.route('/history/bulk-delete')
+    .post(authorize(['admin']), deleteTemplatesHistoryBulk);
+
+router.route('/manual-send')
+    .post(authorize(['admin']), manualSendTemplate);
 
 router.route('/:key')
     .put(authorize(['admin']), updateTemplate);

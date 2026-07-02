@@ -1,4 +1,7 @@
 import Template from '../models/Template.js';
+import TemplateLog from '../models/TemplateLog.js';
+import User from '../models/User.js';
+import { sendTemplateNotification } from '../utils/automation.js';
 
 // @desc    Get all message templates (seeds if empty)
 // @route   GET /api/v1/templates
@@ -61,6 +64,67 @@ export const resetTemplates = async (req, res) => {
         await Template.deleteMany({});
         const templates = await Template.getTemplates();
         res.status(200).json({ success: true, message: 'All templates reset to defaults successfully', data: templates });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Get sent template history logs
+// @route   GET /api/v1/templates/history
+export const getTemplatesHistory = async (req, res) => {
+    try {
+        const logs = await TemplateLog.find().sort({ date: -1 });
+        res.status(200).json({ success: true, count: logs.length, data: logs });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Bulk delete sent template history logs
+// @route   POST /api/v1/templates/history/bulk-delete
+export const deleteTemplatesHistoryBulk = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please provide an array of log IDs to delete' });
+        }
+        await TemplateLog.deleteMany({ _id: { $in: ids } });
+        res.status(200).json({ success: true, message: `Successfully deleted ${ids.length} history log(s)` });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Manually send a template to bulk users
+// @route   POST /api/v1/templates/manual-send
+export const manualSendTemplate = async (req, res) => {
+    try {
+        const { userIds, templateKey, variables } = req.body;
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please provide an array of user IDs' });
+        }
+        if (!templateKey) {
+            return res.status(400).json({ success: false, error: 'Please provide a template key' });
+        }
+
+        // Verify template exists
+        const template = await Template.findOne({ key: templateKey });
+        if (!template) {
+            return res.status(404).json({ success: false, error: `Template with key '${templateKey}' not found` });
+        }
+
+        // Send to each user in a robust sequence/concurrent execution
+        const sendPromises = userIds.map(userId => 
+            sendTemplateNotification({ 
+                userId, 
+                templateKey, 
+                variables: variables || {}, 
+                sentBy: 'Admin' 
+            })
+        );
+        await Promise.all(sendPromises);
+
+        res.status(200).json({ success: true, message: `Successfully triggered sending template to ${userIds.length} user(s)` });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

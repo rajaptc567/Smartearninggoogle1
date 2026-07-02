@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, Template } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, Template, TemplateLog } from '../types';
 
 // Production configuration: Uses environment variable for backend routing with robust fallbacks.
 const getBaseUrl = (): string => {
@@ -711,4 +711,30 @@ export const bulkUpdateTemplates = async (keys: string[], isEnabled: boolean): P
     });
     const result = await handleResponse(response);
     return result.data;
+};
+
+export const getTemplatesHistory = async (): Promise<TemplateLog[]> => {
+    const response = await fetch(`${API_BASE_URL}/templates/history`, {
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteTemplatesHistoryBulk = async (ids: string[]): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/templates/history/bulk-delete`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ ids }),
+    });
+    await handleResponse(response);
+};
+
+export const manualSendTemplate = async (userIds: string[], templateKey: string, variables?: Record<string, string>): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/templates/manual-send`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ userIds, templateKey, variables }),
+    });
+    await handleResponse(response);
 };
