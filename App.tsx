@@ -25,6 +25,7 @@ import TickerSettings from './pages/TickerSettings';
 import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
 import AdminTemplates from './pages/AdminTemplates';
+import AdminNotifications from './pages/AdminNotifications';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -105,6 +106,7 @@ const App: React.FC = () => {
           <Route path="sent-messages" element={<SentMessages />} />
           <Route path="templates" element={<AdminTemplates />} />
           <Route path="profile" element={<AdminProfile />} />
+          <Route path="notifications" element={<AdminNotifications />} />
         </Route>
 
         {/* User Member Area Routes */}

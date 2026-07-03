@@ -329,6 +329,16 @@ export const deleteNotification = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+export const bulkDeleteNotifications = async (ids: string[]): Promise<{ message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/notifications/bulk-delete`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ ids })
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const markNotificationsAsRead = async (userId: string): Promise<Notification[]> => {
     const response = await fetch(`${API_BASE_URL}/notifications/read/${userId}`, {
         method: 'PUT',

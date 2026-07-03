@@ -4,6 +4,7 @@ import Setting from '../models/Setting.js';
 import Template from '../models/Template.js';
 import User from '../models/User.js';
 import TemplateLog from '../models/TemplateLog.js';
+import Notification from '../models/Notification.js';
 
 export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageText }) => {
     try {
@@ -76,9 +77,34 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
                 console.log(`Automation: WhatsApp message successfully sent to ${formattedPhone}`);
                 waSuccess = true;
             } catch (waErrorCaptured) {
-                const errMsg = waErrorCaptured.response?.data?.error?.message || waErrorCaptured.response?.data || waErrorCaptured.message;
+                const errMsg = waErrorCaptured.response?.data?.error?.message || waErrorCaptured.response?.data?.error || waErrorCaptured.response?.data || waErrorCaptured.message;
                 console.error('Automation: Failed to send WhatsApp:', errMsg);
                 waError = typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg);
+
+                // Auto-disable WhatsApp automation if instance is stopped or suspended
+                if (waError.includes('Stopped') || waError.includes('non-payment') || waError.includes('subscription')) {
+                    try {
+                        const settingsToUpdate = await Setting.findOne();
+                        if (settingsToUpdate && settingsToUpdate.whatsappAutomationEnabled) {
+                            settingsToUpdate.whatsappAutomationEnabled = false;
+                            await settingsToUpdate.save();
+                            console.warn('Automation: Auto-disabled WhatsApp automation because the UltraMsg instance is stopped/suspended due to non-payment.');
+
+                            // Notify the admin(s)
+                            const admins = await User.find({ role: 'admin' });
+                            for (const admin of admins) {
+                                await Notification.create({
+                                    userId: admin._id,
+                                    subject: '⚠️ WhatsApp Gateway Stopped',
+                                    message: 'WhatsApp automation has been automatically disabled because your UltraMsg instance is stopped due to non-payment. Please check your UltraMsg subscription and re-enable WhatsApp automation once active.',
+                                    isPopup: true
+                                });
+                            }
+                        }
+                    } catch (dbErr) {
+                        console.error('Failed to auto-disable WhatsApp settings:', dbErr);
+                    }
+                }
             }
         }
 

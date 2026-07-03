@@ -174,6 +174,21 @@ export const deleteNotification = async (req, res) => {
     }
 };
 
+// @desc    Bulk delete notifications
+// @route   POST /api/v1/notifications/bulk-delete
+export const bulkDeleteNotifications = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids)) {
+            return res.status(400).json({ success: false, error: "Invalid or missing notification IDs" });
+        }
+        await Notification.deleteMany({ _id: { $in: ids } });
+        res.status(200).json({ success: true, message: `${ids.length} notifications deleted successfully.` });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
 // @desc    Mark a popup notification as shown (closed by user)
 // @route   PUT /api/v1/notifications/popup-shown/:id
 export const markPopupShown = async (req, res) => {

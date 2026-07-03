@@ -47,7 +47,7 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
       </div>
 
       <div className="flex items-center space-x-4">
-        <NotificationBell notifications={state.notifications} />
+        <NotificationBell notifications={state.notifications} isAdmin={true} />
         <div className="relative">
           <button 
             className="flex items-center focus:outline-none hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full py-1 px-2 transition-colors"
