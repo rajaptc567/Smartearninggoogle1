@@ -16,6 +16,14 @@ export enum Status {
     Closed = 'Closed'
 }
 
+export interface CustomField {
+    id: string;
+    label: string;
+    type: 'text' | 'number' | 'select' | 'checkbox';
+    required: boolean;
+    options: string; // Comma-separated options for select
+}
+
 export interface UserRestrictions {
     deposit: boolean;
     withdrawal: boolean;
@@ -226,6 +234,26 @@ export interface Settings {
     whatsappToken?: string;
     autoWelcomeEnabled?: boolean;
     autoPasswordResetEnabled?: boolean;
+    signUpConfig?: {
+        customTitle?: string;
+        fullNameRule?: 'required' | 'optional' | 'hidden';
+        usernameRule?: 'required' | 'optional' | 'hidden';
+        phoneRule?: 'required' | 'optional' | 'hidden';
+        whatsappRule?: 'required' | 'optional' | 'hidden';
+        countryRule?: 'required' | 'optional' | 'hidden';
+        sponsorRule?: 'required' | 'optional' | 'hidden';
+        
+        addressRule?: 'required' | 'optional' | 'hidden';
+        cityRule?: 'required' | 'optional' | 'hidden';
+        postalCodeRule?: 'required' | 'optional' | 'hidden';
+        telegramRule?: 'required' | 'optional' | 'hidden';
+        genderRule?: 'required' | 'optional' | 'hidden';
+        dateOfBirthRule?: 'required' | 'optional' | 'hidden';
+
+        requireCountryCodeInPhone?: boolean;
+        requireCountryCodeInWhatsapp?: boolean;
+        customFields?: CustomField[];
+    };
 }
 
 export interface Task {

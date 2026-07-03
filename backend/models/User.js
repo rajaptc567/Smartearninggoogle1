@@ -13,7 +13,6 @@ const UserSchema = new mongoose.Schema({
     },
     fullName: {
         type: String,
-        required: [true, 'Please add a full name'],
     },
     email: {
         type: String,
@@ -37,14 +36,30 @@ const UserSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        required: [true, 'Please add a phone number'],
     },
     whatsapp: {
         type: String,
     },
     country: {
         type: String,
-        required: [true, 'Please add a country'],
+    },
+    address: {
+        type: String,
+    },
+    city: {
+        type: String,
+    },
+    postalCode: {
+        type: String,
+    },
+    telegram: {
+        type: String,
+    },
+    gender: {
+        type: String,
+    },
+    dateOfBirth: {
+        type: String,
     },
     currency: {
         type: String,
@@ -94,6 +109,10 @@ const UserSchema = new mongoose.Schema({
     }],
     sponsor: {
         type: String,
+    },
+    customFields: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {},
     },
     passwordResetToken: String,
     passwordResetExpires: Date,

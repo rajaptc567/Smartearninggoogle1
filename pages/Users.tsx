@@ -616,6 +616,16 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleCustomFieldChange = (fieldId: string, value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            customFields: {
+                ...(prev.customFields || {}),
+                [fieldId]: value
+            }
+        }));
+    };
+
     const handleRestrictionsChange = (key: keyof UserRestrictions) => {
         setFormData(prev => ({
             ...prev,
@@ -993,6 +1003,52 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         <div><label className="text-[10px] font-bold text-gray-400 uppercase">WhatsApp</label><input name="whatsapp" value={formData.whatsapp || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1" /></div>
                                     </div>
                                     <div><label className="text-[10px] font-bold text-gray-400 uppercase">Country</label><select name="country" value={formData.country || ''} onChange={handleFormChange} className="w-full rounded-md dark:bg-gray-700 mt-1">{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+
+                                    {/* Custom Fields */}
+                                    {settings?.signUpConfig?.customFields && settings.signUpConfig.customFields.length > 0 && (
+                                        <div className="border-t dark:border-gray-700 pt-3 mt-3 space-y-3">
+                                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Dynamic Form Custom Fields</p>
+                                            {settings.signUpConfig.customFields.map((field: any) => (
+                                                <div key={field.id}>
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase">{field.label}</label>
+                                                    {field.type === 'checkbox' ? (
+                                                        <label className="flex items-center gap-2 mt-1 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={formData.customFields?.[field.id] === 'true'}
+                                                                onChange={(e) => handleCustomFieldChange(field.id, e.target.checked ? 'true' : 'false')}
+                                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                            />
+                                                            <span>{field.label} {field.required && <span className="text-red-500">*</span>}</span>
+                                                        </label>
+                                                    ) : field.type === 'select' ? (
+                                                        <select
+                                                            value={formData.customFields?.[field.id] || ''}
+                                                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                                                            className="w-full rounded-md dark:bg-gray-700 mt-1 text-sm font-bold"
+                                                        >
+                                                            <option value="">Select Option</option>
+                                                            {(field.options || '').split(',').map((opt: string) => {
+                                                                const trimmedOpt = opt.trim();
+                                                                return (
+                                                                    <option key={trimmedOpt} value={trimmedOpt}>
+                                                                        {trimmedOpt}
+                                                                    </option>
+                                                                );
+                                                            })}
+                                                        </select>
+                                                    ) : (
+                                                        <input
+                                                            type={field.type}
+                                                            value={formData.customFields?.[field.id] || ''}
+                                                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                                                            className="w-full rounded-md dark:bg-gray-700 mt-1 text-sm"
+                                                        />
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                </div>
                             </div>
                             {user && (

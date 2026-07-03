@@ -48,6 +48,33 @@ const PlanEquivalencyGroupSchema = new mongoose.Schema({
     usdPlanId: { type: String },
 });
 
+const CustomFieldSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    label: { type: String, required: true },
+    type: { type: String, enum: ['text', 'number', 'select', 'checkbox'], default: 'text' },
+    required: { type: Boolean, default: false },
+    options: { type: String, default: '' } // Comma-separated options for selects
+}, { _id: false });
+
+const SignUpConfigSchema = new mongoose.Schema({
+    customTitle: { type: String, default: 'Create your Account' },
+    fullNameRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'required' },
+    usernameRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'required' },
+    phoneRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'required' },
+    whatsappRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'required' },
+    countryRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'required' },
+    sponsorRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'optional' },
+    addressRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    cityRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    postalCodeRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    telegramRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    genderRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    dateOfBirthRule: { type: String, enum: ['required', 'optional', 'hidden'], default: 'hidden' },
+    requireCountryCodeInPhone: { type: Boolean, default: false },
+    requireCountryCodeInWhatsapp: { type: Boolean, default: false },
+    customFields: { type: [CustomFieldSchema], default: [] }
+}, { _id: false });
+
 const FaqSchema = new mongoose.Schema({
     question: { type: String, required: true },
     answer: { type: String, required: true },
@@ -226,6 +253,7 @@ const SettingSchema = new mongoose.Schema({
     whatsappToken: { type: String, default: '1q22bd6hwo7rc2ub' },
     autoWelcomeEnabled: { type: Boolean, default: false },
     autoPasswordResetEnabled: { type: Boolean, default: false },
+    signUpConfig: { type: SignUpConfigSchema, default: () => ({}) },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {
@@ -237,6 +265,10 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.faqs || settings.faqs.length === 0) {
         settings.faqs = defaultFaqs;
+        needsSave = true;
+    }
+    if (!settings.signUpConfig) {
+        settings.signUpConfig = {};
         needsSave = true;
     }
     if (needsSave) { await settings.save(); }

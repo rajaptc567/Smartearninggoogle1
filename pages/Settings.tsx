@@ -29,7 +29,7 @@ const Settings: React.FC = () => {
 
   const [localSettings, setLocalSettings] = useState<SettingsType>(settings);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal' | 'automation'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'transfers' | 'withdrawals' | 'commissions' | 'exchange_rates' | 'homepage' | 'faqs' | 'legal' | 'automation' | 'signup_form'>('general');
   const [tierCurrencyFilter, setTierCurrencyFilter] = useState<Currency | ''>('');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -45,6 +45,12 @@ const Settings: React.FC = () => {
   const [newLogoName, setNewLogoName] = useState('');
   const [newLogoUrl, setNewLogoUrl] = useState(''); // Text input for URL
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
+
+  // Custom Fields Creator State
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [newFieldType, setNewFieldType] = useState<'text' | 'number' | 'select' | 'checkbox'>('text');
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldOptions, setNewFieldOptions] = useState('');
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
@@ -110,6 +116,24 @@ const Settings: React.FC = () => {
         whatsappToken: settings.whatsappToken || '1q22bd6hwo7rc2ub',
         autoWelcomeEnabled: settings.autoWelcomeEnabled || false,
         autoPasswordResetEnabled: settings.autoPasswordResetEnabled || false,
+        signUpConfig: {
+            customTitle: settings.signUpConfig?.customTitle || 'Create your Account',
+            fullNameRule: settings.signUpConfig?.fullNameRule || 'required',
+            usernameRule: settings.signUpConfig?.usernameRule || 'required',
+            phoneRule: settings.signUpConfig?.phoneRule || 'required',
+            whatsappRule: settings.signUpConfig?.whatsappRule || 'required',
+            countryRule: settings.signUpConfig?.countryRule || 'required',
+            sponsorRule: settings.signUpConfig?.sponsorRule || 'optional',
+            addressRule: settings.signUpConfig?.addressRule || 'hidden',
+            cityRule: settings.signUpConfig?.cityRule || 'hidden',
+            postalCodeRule: settings.signUpConfig?.postalCodeRule || 'hidden',
+            telegramRule: settings.signUpConfig?.telegramRule || 'hidden',
+            genderRule: settings.signUpConfig?.genderRule || 'hidden',
+            dateOfBirthRule: settings.signUpConfig?.dateOfBirthRule || 'hidden',
+            requireCountryCodeInPhone: settings.signUpConfig?.requireCountryCodeInPhone || false,
+            requireCountryCodeInWhatsapp: settings.signUpConfig?.requireCountryCodeInWhatsapp || false,
+            customFields: settings.signUpConfig?.customFields || []
+        }
     }));
     setIsDirty(false);
   }, [settings]);
@@ -332,6 +356,61 @@ const Settings: React.FC = () => {
       setIsDirty(true);
   };
   
+  const handleSignUpConfigChange = (field: string, value: string | boolean) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          signUpConfig: {
+              ...(prev.signUpConfig || {}),
+              [field]: value
+          }
+      }));
+      setIsDirty(true);
+  };
+
+  const handleAddCustomField = () => {
+      if (!newFieldLabel.trim()) return;
+      const newField = {
+          id: 'field_' + Math.random().toString(36).substr(2, 9),
+          label: newFieldLabel.trim(),
+          type: newFieldType,
+          required: newFieldRequired,
+          options: newFieldType === 'select' ? newFieldOptions : ''
+      };
+      
+      setLocalSettings(prev => {
+          const currentConfig = prev.signUpConfig || {};
+          const currentFields = currentConfig.customFields || [];
+          return {
+              ...prev,
+              signUpConfig: {
+                  ...currentConfig,
+                  customFields: [...currentFields, newField]
+              }
+          };
+      });
+      
+      setNewFieldLabel('');
+      setNewFieldType('text');
+      setNewFieldRequired(false);
+      setNewFieldOptions('');
+      setIsDirty(true);
+  };
+
+  const handleRemoveCustomField = (id: string) => {
+      setLocalSettings(prev => {
+          const currentConfig = prev.signUpConfig || {};
+          const currentFields = currentConfig.customFields || [];
+          return {
+              ...prev,
+              signUpConfig: {
+                  ...currentConfig,
+                  customFields: currentFields.filter(f => f.id !== id)
+              }
+          };
+      });
+      setIsDirty(true);
+  };
+  
   const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
       setIsSaving(true);
@@ -412,6 +491,7 @@ const Settings: React.FC = () => {
           <TabButton id="commissions" label="Commissions" />
           <TabButton id="exchange_rates" label="Exchange Rates" />
           <TabButton id="automation" label="📬 Auto Messaging" />
+          <TabButton id="signup_form" label="📋 Sign Up Form" />
       </div>
 
       <form onSubmit={handleSave} className="space-y-6 min-h-[400px]">
@@ -1492,6 +1572,351 @@ const Settings: React.FC = () => {
                                 <em>Example: If Referral buys Plan A, Sponsor gets paid only if they also have Plan A active.</em>
                             </p>
                         </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* SIGN UP FORM CUSTOMIZATION TAB */}
+        {activeTab === 'signup_form' && (
+            <div className="space-y-6 animate-fade-in">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">📋 Sign Up Form Settings</h3>
+                    <p className="text-xs text-gray-500">Configure visible fields, set validation rules (such as country code requirements), and make any options optional, required, or hidden.</p>
+                </div>
+
+                {/* Form Title Customization */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">Form Title Customization</h4>
+                    <div className="space-y-2">
+                        <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Registration Form Title</label>
+                        <input 
+                            type="text" 
+                            value={localSettings.signUpConfig?.customTitle || 'Create your Account'}
+                            onChange={(e) => handleSignUpConfigChange('customTitle', e.target.value)}
+                            className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 focus:border-blue-500"
+                            placeholder="e.g. Create your Account"
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                    <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">Field Rules & Requirements</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* FULL NAME */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Full Name Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.fullNameRule || 'required'}
+                                onChange={(e) => handleSignUpConfigChange('fullNameRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* USERNAME */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Username Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.usernameRule || 'required'}
+                                onChange={(e) => handleSignUpConfigChange('usernameRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* PHONE NUMBER */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Mobile Number Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.phoneRule || 'required'}
+                                onChange={(e) => handleSignUpConfigChange('phoneRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* WHATSAPP NUMBER */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">WhatsApp Number Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.whatsappRule || 'required'}
+                                onChange={(e) => handleSignUpConfigChange('whatsappRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* COUNTRY */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Country Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.countryRule || 'required'}
+                                onChange={(e) => handleSignUpConfigChange('countryRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* SPONSOR */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Sponsor Username Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.sponsorRule || 'optional'}
+                                onChange={(e) => handleSignUpConfigChange('sponsorRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* ADDRESS */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Residential Address Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.addressRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('addressRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* CITY */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">City Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.cityRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('cityRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* POSTAL CODE */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Postal/Zip Code Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.postalCodeRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('postalCodeRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* TELEGRAM */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Telegram Username Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.telegramRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('telegramRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* GENDER */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Gender Selection Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.genderRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('genderRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+
+                        {/* DATE OF BIRTH */}
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Date of Birth Field</label>
+                            <select 
+                                value={localSettings.signUpConfig?.dateOfBirthRule || 'hidden'}
+                                onChange={(e) => handleSignUpConfigChange('dateOfBirthRule', e.target.value)}
+                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
+                            >
+                                <option value="required">Required / Must</option>
+                                <option value="optional">Optional</option>
+                                <option value="hidden">Hidden / Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">Phone & WhatsApp Validation Rules</h4>
+                    
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <div>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Require Country Code in Mobile Number</p>
+                            <p className="text-xs text-gray-500 mt-1">If enabled, the customer must add a country code (e.g. starting with "+" or starting with a country prefix like "92", "33" without local zeroes).</p>
+                        </div>
+                        <div className="relative inline-block w-10 h-5">
+                            <input 
+                                id="requireCountryCodeInPhone"
+                                type="checkbox" 
+                                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
+                                checked={localSettings.signUpConfig?.requireCountryCodeInPhone || false}
+                                onChange={(e) => handleSignUpConfigChange('requireCountryCodeInPhone', e.target.checked)}
+                            />
+                            <label htmlFor="requireCountryCodeInPhone" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.signUpConfig?.requireCountryCodeInPhone ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <div>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white">Require Country Code in WhatsApp Number</p>
+                            <p className="text-xs text-gray-500 mt-1">If enabled, the customer must add a country code to their WhatsApp number (e.g. starting with "+" or starting with a country prefix like "92", "33" without local zeroes).</p>
+                        </div>
+                        <div className="relative inline-block w-10 h-5">
+                            <input 
+                                id="requireCountryCodeInWhatsapp"
+                                type="checkbox" 
+                                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
+                                checked={localSettings.signUpConfig?.requireCountryCodeInWhatsapp || false}
+                                onChange={(e) => handleSignUpConfigChange('requireCountryCodeInWhatsapp', e.target.checked)}
+                            />
+                            <label htmlFor="requireCountryCodeInWhatsapp" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.signUpConfig?.requireCountryCodeInWhatsapp ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Dynamic Custom Fields Section */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                    <div className="border-b dark:border-gray-700 pb-2 flex justify-between items-center">
+                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200">➕ Dynamic Custom Fields</h4>
+                        <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                            {(localSettings.signUpConfig?.customFields || []).length} Active Fields
+                        </span>
+                    </div>
+
+                    {/* Add Custom Field Form */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl space-y-4">
+                        <h5 className="font-bold text-xs text-gray-700 dark:text-gray-300 uppercase tracking-wider">Create New Custom Field</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="block text-xs text-gray-500 font-medium">Field Label / Name</label>
+                                <input 
+                                    type="text"
+                                    value={newFieldLabel}
+                                    onChange={(e) => setNewFieldLabel(e.target.value)}
+                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 focus:ring-0"
+                                    placeholder="e.g. National ID Number"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="block text-xs text-gray-500 font-medium">Field Type</label>
+                                <select
+                                    value={newFieldType}
+                                    onChange={(e) => setNewFieldType(e.target.value as any)}
+                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 focus:ring-0"
+                                >
+                                    <option value="text">Text Box</option>
+                                    <option value="number">Numeric Input</option>
+                                    <option value="select">Dropdown Menu (Select)</option>
+                                    <option value="checkbox">Checkbox (Yes/No)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {newFieldType === 'select' && (
+                            <div className="space-y-1">
+                                <label className="block text-xs text-gray-500 font-medium">Options (Comma separated)</label>
+                                <input 
+                                    type="text"
+                                    value={newFieldOptions}
+                                    onChange={(e) => setNewFieldOptions(e.target.value)}
+                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 focus:ring-0"
+                                    placeholder="e.g. Option A, Option B, Option C"
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2">
+                            <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                <input 
+                                    type="checkbox"
+                                    checked={newFieldRequired}
+                                    onChange={(e) => setNewFieldRequired(e.target.checked)}
+                                    className="rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500"
+                                />
+                                Make Field Required (Mandatory)
+                            </label>
+
+                            <button
+                                type="button"
+                                onClick={handleAddCustomField}
+                                disabled={!newFieldLabel.trim()}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition disabled:opacity-50"
+                            >
+                                Add Field to Form
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Existing Custom Fields List */}
+                    <div className="space-y-3">
+                        <h5 className="font-bold text-xs text-gray-700 dark:text-gray-300 uppercase tracking-wider">Active Custom Fields</h5>
+                        {(localSettings.signUpConfig?.customFields || []).length === 0 ? (
+                            <p className="text-xs text-gray-500 italic">No custom fields have been added yet. Form will only show default fields.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3">
+                                {(localSettings.signUpConfig?.customFields || []).map((field) => (
+                                    <div key={field.id} className="p-4 bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-xl flex items-center justify-between shadow-sm">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-sm text-gray-900 dark:text-white">{field.label}</span>
+                                                <span className={`text-[10px] uppercase px-2 py-0.5 rounded font-bold ${field.required ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                                    {field.required ? 'Required' : 'Optional'}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-500">
+                                                Type: <span className="font-mono text-gray-700 dark:text-gray-300">{field.type}</span>
+                                                {field.type === 'select' && ` • Options: [ ${field.options} ]`}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveCustomField(field.id)}
+                                            className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
