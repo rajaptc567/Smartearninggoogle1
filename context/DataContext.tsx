@@ -375,6 +375,7 @@ interface DataProviderProps {
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
+    const isSyncingRef = useRef<boolean>(false);
 
     // Initial Data Fetch with AllSettled for Resilience
     useEffect(() => {
@@ -411,20 +412,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 dispatch({ 
                     type: 'SET_ALL_DATA', 
                     payload: { 
-                        paymentMethods: getValue(publicResults, 0, []),
-                        investmentPlans: getValue(publicResults, 1, []),
+                        paymentMethods: getValue(publicResults, 0, state.paymentMethods),
+                        investmentPlans: getValue(publicResults, 1, state.investmentPlans),
                         settings: getValue(publicResults, 2, state.settings),
-                        users: getValue(privateResults, 0, []),
-                        deposits: getValue(privateResults, 1, []),
-                        withdrawals: getValue(privateResults, 2, []),
-                        transactions: getValue(privateResults, 3, []),
-                        notifications: getValue(privateResults, 4, []),
-                        rules: getValue(privateResults, 5, []),
-                        transfers: getValue(privateResults, 6, []),
-                        logs: getValue(privateResults, 7, []),
-                        passwordResetRequests: getValue(privateResults, 8, []),
-                        disputes: getValue(privateResults, 9, []),
-                        tasks: getValue(privateResults, 10, [])
+                        users: getValue(privateResults, 0, state.users),
+                        deposits: getValue(privateResults, 1, state.deposits),
+                        withdrawals: getValue(privateResults, 2, state.withdrawals),
+                        transactions: getValue(privateResults, 3, state.transactions),
+                        notifications: getValue(privateResults, 4, state.notifications),
+                        rules: getValue(privateResults, 5, state.rules),
+                        transfers: getValue(privateResults, 6, state.transfers),
+                        logs: getValue(privateResults, 7, state.logs),
+                        passwordResetRequests: getValue(privateResults, 8, state.passwordResetRequests),
+                        disputes: getValue(privateResults, 9, state.disputes),
+                        tasks: getValue(privateResults, 10, state.tasks)
                     } 
                 });
                 dispatch({ type: 'SET_LOADING', payload: false });
@@ -478,6 +479,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
 
         const masterDataSync = async (force: boolean = false) => {
+            if (isSyncingRef.current) return;
+            isSyncingRef.current = true;
             try {
                 const serverVersion = await getDataVersion();
                 
@@ -500,16 +503,27 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     dispatch({ 
                         type: 'SET_ALL_DATA', 
                         payload: { 
-                            users: getValue(0, []), deposits: getValue(1, []), withdrawals: getValue(2, []),
-                            transactions: getValue(3, []), notifications: getValue(4, []), paymentMethods: getValue(5, []),
-                            investmentPlans: getValue(6, []), rules: getValue(7, []), settings: getValue(8, state.settings),
-                            transfers: getValue(9, []), logs: getValue(10, []), passwordResetRequests: getValue(11, []),
-                            disputes: getValue(12, []), tasks: getValue(13, [])
+                            users: getValue(0, state.users), 
+                            deposits: getValue(1, state.deposits), 
+                            withdrawals: getValue(2, state.withdrawals),
+                            transactions: getValue(3, state.transactions), 
+                            notifications: getValue(4, state.notifications), 
+                            paymentMethods: getValue(5, state.paymentMethods),
+                            investmentPlans: getValue(6, state.investmentPlans), 
+                            rules: getValue(7, state.rules), 
+                            settings: getValue(8, state.settings),
+                            transfers: getValue(9, state.transfers), 
+                            logs: getValue(10, state.logs), 
+                            passwordResetRequests: getValue(11, state.passwordResetRequests),
+                            disputes: getValue(12, state.disputes), 
+                            tasks: getValue(13, state.tasks)
                         } 
                     });
                 }
             } catch (err) {
                 console.error("Flicker-free live sync payload retrieval failed:", err);
+            } finally {
+                isSyncingRef.current = false;
             }
         };
 
@@ -524,10 +538,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         });
 
         // Sync active data when tab is focused or became visible (different tabs/returned users)
+        // Throttled to prevent spamming the backend (at most once every 15 seconds)
+        let lastTabReturnTime = 0;
         const handleTabReturn = () => {
             if (document.visibilityState === 'visible' || !document.hidden) {
-                console.log('User returned to tab. Syncing data to guarantee freshness...');
-                masterDataSync(true);
+                const now = Date.now();
+                if (now - lastTabReturnTime > 15000) {
+                    lastTabReturnTime = now;
+                    console.log('User returned to tab. Checking server version for new updates...');
+                    masterDataSync(false); // Checks version first! Highly optimized.
+                }
             }
         };
 

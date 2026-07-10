@@ -126,21 +126,41 @@ export const FullPageLoader: React.FC<FullPageLoaderProps> = ({
     const [progress, setProgress] = useState<number>(0);
     const [statusText, setStatusText] = useState<string>("Initializing secure handshake...");
     const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
+    const [elapsedTime, setElapsedTime] = useState<number>(0);
 
-    // Progression timer to allow greeting and tagline to show beautifully
+    // Track elapsed time
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setElapsedTime((prev) => prev + 100);
+        }, 100);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Advance progress with capping
     useEffect(() => {
         const interval = setInterval(() => {
             setProgress((prev) => {
                 if (prev >= 100) {
+                    if (isDataLoading) {
+                        return 95; // Cap at 95% if background data is still loading
+                    }
                     clearInterval(interval);
                     return 100;
                 }
+
+                if (prev >= 95 && !isDataLoading) {
+                    clearInterval(interval);
+                    return 100;
+                }
+
                 // Vary speed step-by-step
                 const increment = prev < 30 ? 4 : prev < 70 ? 2 : prev < 90 ? 1 : 0.5;
-                const nextProgress = Math.min(prev + increment, 100);
+                const nextProgress = Math.min(prev + increment, isDataLoading ? 95 : 100);
 
-                // Update premium informational statuses based on loading steps
-                if (nextProgress < 25) {
+                // Update status messages dynamically
+                if (elapsedTime > 3500 && isDataLoading) {
+                    setStatusText("Secure cloud server is waking up (takes up to 45 seconds on first visit)...");
+                } else if (nextProgress < 25) {
                     setStatusText("Contacting decentralized nodes...");
                 } else if (nextProgress < 50) {
                     setStatusText("Verifying encrypted session layers...");
@@ -149,7 +169,11 @@ export const FullPageLoader: React.FC<FullPageLoaderProps> = ({
                 } else if (nextProgress < 95) {
                     setStatusText("Finalizing custom client workspace...");
                 } else {
-                    setStatusText("System ready.");
+                    if (isDataLoading) {
+                        setStatusText("Almost there! Synchronizing cloud database...");
+                    } else {
+                        setStatusText("System ready.");
+                    }
                 }
 
                 return nextProgress;
@@ -157,7 +181,14 @@ export const FullPageLoader: React.FC<FullPageLoaderProps> = ({
         }, 35);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [isDataLoading, elapsedTime]);
+
+    // Force completion if progress is capped but data load completes
+    useEffect(() => {
+        if (progress >= 95 && !isDataLoading) {
+            setProgress(100);
+        }
+    }, [isDataLoading, progress]);
 
     // Check complete state once progress is 100 AND real background API promises have settled
     useEffect(() => {
@@ -277,6 +308,13 @@ export const FullPageLoader: React.FC<FullPageLoaderProps> = ({
                     "Invest in Your Future, Grow Your Network"
                 </p>
 
+                {/* Cold Start Warning Notification */}
+                {elapsedTime > 3500 && isDataLoading && (
+                    <div className="mb-6 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold leading-relaxed animate-pulse max-w-sm" id="wakeup-notice">
+                        ⚠️ Our secure cloud host is currently waking up from sleep mode. This secure cold start takes about 30 to 45 seconds on your first visit. Sub-pages will load instantly after wakeup!
+                    </div>
+                )}
+
                 {/* Progress Indicators Container */}
                 <div className="w-64 flex flex-col items-center gap-2" id="loader-status-container">
                     <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase animate-pulse min-h-[16px] text-center">
@@ -295,6 +333,15 @@ export const FullPageLoader: React.FC<FullPageLoaderProps> = ({
                     <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase mt-1">
                         Secure Multi-Node Connection
                     </span>
+                </div>
+
+                {/* Safe Site Verification Badge */}
+                <div className="mt-8 flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest shadow-inner backdrop-blur-md" id="safe-site-badge">
+                    <svg className="w-4 h-4 text-emerald-400 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="m9 11 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>Safe Site Verified • 256-Bit SSL Secured</span>
                 </div>
             </div>
         </div>
