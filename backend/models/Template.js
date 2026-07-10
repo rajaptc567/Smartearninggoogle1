@@ -9,13 +9,16 @@ const TemplateSchema = new mongoose.Schema({
         enum: [
             'deposit_success_email', 'deposit_success_whatsapp',
             'deposit_rejected_email', 'deposit_rejected_whatsapp',
+            'deposit_pending_email', 'deposit_pending_whatsapp',
             'withdrawal_success_email', 'withdrawal_success_whatsapp',
             'withdrawal_rejected_email', 'withdrawal_rejected_whatsapp',
+            'withdrawal_pending_email', 'withdrawal_pending_whatsapp',
             'general_announcement_email', 'general_announcement_whatsapp',
             'transfer_sent_email', 'transfer_sent_whatsapp',
             'transfer_received_email', 'transfer_received_whatsapp',
             'transfer_request_email', 'transfer_request_whatsapp',
             'transfer_rejected_email', 'transfer_rejected_whatsapp',
+            'transfer_pending_email', 'transfer_pending_whatsapp',
             'plan_activated_email', 'plan_activated_whatsapp',
             'referral_signup_email', 'referral_signup_whatsapp',
             'referral_commission_email', 'referral_commission_whatsapp',
@@ -910,6 +913,186 @@ If you did not request this, please ignore this message.
 
 Regards,
 SmartEarning Support
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'deposit_pending_email',
+        name: 'Deposit Status Pending (Email)',
+        type: 'email',
+        subject: 'Deposit Request Received - Pending Review',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⏳</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Deposit Pending Review</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">We have received your deposit request of <strong>{currency}{amount}</strong>. It is currently pending review by our finance team.</p>
+        
+        <div style="background-color: #f9fafb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Amount:</strong> {currency}{amount}</p>
+            <p style="margin: 4px 0;"><strong>Transaction ID:</strong> {txId}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> Pending Approval</p>
+            <p style="margin: 4px 0;"><strong>Date:</strong> {date}</p>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">You will be notified once your deposit has been verified and credited to your wallet balance.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">This is an automated notification from SmartEarning support.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'deposit_pending_whatsapp',
+        name: 'Deposit Status Pending (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Deposit Pending Review* ⏳
+
+Hello @{username},
+
+We have received your deposit request of *{currency}{amount}*. It is currently pending review by our finance team.
+
+*Details:*
+🔹 Amount: {currency}{amount}
+🔹 Transaction ID: {txId}
+🔹 Status: Pending Approval
+🔹 Date: {date}
+
+We will notify you once verified and credited.
+
+Regards,
+SmartEarning Team
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'withdrawal_pending_email',
+        name: 'Withdrawal Status Pending (Email)',
+        type: 'email',
+        subject: 'Withdrawal Request Received - Pending Review',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⏳</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Withdrawal Pending Review</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">We have received your withdrawal request of <strong>{currency}{amount}</strong>. It is currently pending review and processing.</p>
+        
+        <div style="background-color: #f9fafb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Amount:</strong> {currency}{amount}</p>
+            <p style="margin: 4px 0;"><strong>Withdrawal ID:</strong> {txId}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> Pending Approval</p>
+            <p style="margin: 4px 0;"><strong>Date:</strong> {date}</p>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Funds will be sent to your specified destination once approved.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">This is an automated notification from SmartEarning support.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'withdrawal_pending_whatsapp',
+        name: 'Withdrawal Status Pending (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Withdrawal Pending Review* ⏳
+
+Hello @{username},
+
+Your withdrawal request of *{currency}{amount}* has been received and is currently pending approval.
+
+*Details:*
+🔹 Amount: {currency}{amount}
+🔹 Withdrawal ID: {txId}
+🔹 Status: Pending
+🔹 Date: {date}
+
+We will notify you once processed.
+
+Regards,
+SmartEarning Team
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'transfer_pending_email',
+        name: 'Transfer Status Pending (Email)',
+        type: 'email',
+        subject: 'Transfer Request Received - Pending Review',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⏳</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Transfer Pending Review</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your transfer request of <strong>{currency}{amount}</strong> to <strong>{recipientUsername}</strong> has been received and is pending review.</p>
+        
+        <div style="background-color: #f9fafb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Amount:</strong> {currency}{amount}</p>
+            <p style="margin: 4px 0;"><strong>Recipient:</strong> @{recipientUsername}</p>
+            <p style="margin: 4px 0;"><strong>Fee:</strong> {currency}{fee}</p>
+            <p style="margin: 4px 0;"><strong>Total Deducted:</strong> {currency}{totalDeducted}</p>
+            <p style="margin: 4px 0;"><strong>Transfer ID:</strong> {txId}</p>
+            <p style="margin: 4px 0;"><strong>Status:</strong> Pending Approval</p>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">We will notify you once the transfer is approved or processed.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">This is an automated notification from SmartEarning support.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'transfer_pending_whatsapp',
+        name: 'Transfer Status Pending (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Transfer Pending Review* ⏳
+
+Hello @{username},
+
+Your transfer of *{currency}{amount}* to @{recipientUsername} is currently pending review.
+
+*Details:*
+🔹 Amount: {currency}{amount}
+🔹 Recipient: @{recipientUsername}
+🔹 Fee: {currency}{fee}
+🔹 Total: {currency}{totalDeducted}
+🔹 Status: Pending
+
+We will notify you once processed.
+
+Regards,
+SmartEarning Team
         `.trim(),
         isEnabled: true,
         graphicTheme: 'default'

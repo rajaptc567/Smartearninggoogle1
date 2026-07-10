@@ -127,6 +127,19 @@ export const createWithdrawal = async (req, res) => {
             userId: user._id,
             message: `Your withdrawal request for ${user.currency}${withdrawal.amount.toFixed(2)} has been submitted for review.`
         });
+
+        try {
+            const withdrawalVars = {
+                amount: withdrawal.amount.toFixed(2),
+                currency: user.currency,
+                txId: String(withdrawal._id),
+                date: new Date().toLocaleString()
+            };
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_pending_email', variables: withdrawalVars });
+            sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_pending_whatsapp', variables: withdrawalVars });
+        } catch (wNotifErr) {
+            console.error('Failed to send withdrawal pending notifications:', wNotifErr);
+        }
         
         await user.save();
         await Setting.bumpVersion();

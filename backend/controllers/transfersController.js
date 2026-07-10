@@ -116,17 +116,20 @@ export const createTransfer = async (req, res) => {
         
         await sender.save();
 
-        // Trigger Template Notifications for Transfer Request
+        // Trigger Template Notifications for Transfer Request & Pending
         const transferVariables = {
             amount: amount.toFixed(2),
             currency: sender.currency,
             recipientUsername: recipient.username,
             fee: fee.toFixed(2),
             totalDeducted: totalDeduction.toFixed(2),
-            txId: String(transfer._id)
+            txId: String(transfer._id),
+            date: new Date().toLocaleString()
         };
         sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_request_email', variables: transferVariables });
         sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_request_whatsapp', variables: transferVariables });
+        sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_pending_email', variables: transferVariables });
+        sendTemplateNotification({ userId: sender._id, templateKey: 'transfer_pending_whatsapp', variables: transferVariables });
 
         res.status(201).json({ success: true, data: { transfer, user: sender, transaction }});
 

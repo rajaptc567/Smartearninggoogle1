@@ -96,6 +96,19 @@ export const createDeposit = async (req, res) => {
             message: `Your deposit request #${deposit._id} is pending review.`
         });
 
+        try {
+            const depositVars = {
+                amount: deposit.amount.toFixed(2),
+                currency: user.currency,
+                txId: String(deposit._id),
+                date: new Date().toLocaleString()
+            };
+            sendTemplateNotification({ userId: user._id, templateKey: 'deposit_pending_email', variables: depositVars });
+            sendTemplateNotification({ userId: user._id, templateKey: 'deposit_pending_whatsapp', variables: depositVars });
+        } catch (depNotifErr) {
+            console.error('Failed to send deposit pending notifications:', depNotifErr);
+        }
+
         if (deposit.matchedWithdrawalId) {
             const withdrawal = await Withdrawal.findById(deposit.matchedWithdrawalId);
             if (withdrawal) {
