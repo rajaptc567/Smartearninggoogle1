@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import { useData } from '../../hooks/useData';
 import { createTransfer } from '../../services/api';
 import { formatCurrency, User, currencySymbols, Currency, Transfer, Status } from '../../types';
@@ -108,6 +109,20 @@ const TransferFunds: React.FC = () => {
 
         return filteredDownline;
     }, [currentUser, users, settings.transferConfig]);
+
+    const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+    const [networkSearchQuery, setNetworkSearchQuery] = useState('');
+
+    const filteredNetworkRecipients = useMemo(() => {
+        if (!networkSearchQuery.trim()) return availableRecipients;
+        const q = networkSearchQuery.toLowerCase();
+        return availableRecipients.filter(item => 
+            item.user.fullName.toLowerCase().includes(q) ||
+            item.user.username.toLowerCase().includes(q) ||
+            item.user.country?.toLowerCase().includes(q) ||
+            item.level.toString().includes(q)
+        );
+    }, [availableRecipients, networkSearchQuery]);
     
     const recipientUser = useMemo(() => {
         if (!recipientIdentifier) return null;
@@ -365,35 +380,74 @@ const TransferFunds: React.FC = () => {
                         </div>
 
                         <div className="space-y-6">
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Secure Directory Search</label>
-                                <select
-                                    value={isManualEntry ? 'manual' : recipientIdentifier}
-                                    onChange={handleDropdownChange}
-                                    className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none font-bold text-base"
-                                >
-                                    <option value="">-- Browse your active network --</option>
-                                    {availableRecipients.map(({ user, level }) => (
-                                        <option key={user._id} value={user.username}>
-                                            {user.fullName} (@{user.username}) - Level {level}
-                                        </option>
-                                    ))}
-                                    <option value="manual">-- Manual ID Entry --</option>
-                                </select>
-                            </div>
+                            {recipientUser && !isManualEntry ? (
+                                <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 rounded-[2rem] border border-blue-200 dark:border-blue-800 flex items-center justify-between shadow-lg">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-md">
+                                            {recipientUser.fullName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Selected Recipient</p>
+                                            <p className="font-black text-gray-900 dark:text-white text-lg">{recipientUser.fullName}</p>
+                                            <p className="text-xs font-mono text-gray-500">@{recipientUser.username} • {recipientUser.currency}</p>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => setIsNetworkModalOpen(true)}
+                                        className="rounded-xl px-4 py-2 font-black uppercase text-xs"
+                                    >
+                                        Change
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsNetworkModalOpen(true)}
+                                        className="w-full p-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-[2rem] shadow-xl shadow-blue-500/20 flex items-center justify-between transition-all transform hover:-translate-y-0.5 group"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-xl">
+                                                🌐
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-xs font-black uppercase tracking-widest text-blue-100">Browse Active Network</p>
+                                                <p className="text-lg font-black tracking-tight">Select from {availableRecipients.length} Network Members</p>
+                                            </div>
+                                        </div>
+                                        <span className="text-xl font-bold bg-white/10 px-4 py-2 rounded-xl group-hover:bg-white/20 transition-colors">&rarr;</span>
+                                    </button>
+
+                                    <div className="flex items-center justify-between px-2 pt-2">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Or enter ID manually</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsManualEntry(!isManualEntry);
+                                                if (!isManualEntry) setRecipientIdentifier('');
+                                            }}
+                                            className="text-xs font-black text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wider"
+                                        >
+                                            {isManualEntry ? 'Close Manual Entry' : 'Manual Username / Email'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {isManualEntry && (
-                                <div className="animate-slide-up">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-2">Target Username / Email</label>
+                                <div className="animate-slide-up bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Target Username / Email</label>
                                     <input
                                         type="text"
                                         value={recipientIdentifier}
                                         onChange={(e) => setRecipientIdentifier(e.target.value)}
-                                        className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none font-bold"
+                                        className="w-full p-5 rounded-2xl border border-gray-100 dark:border-gray-800 dark:bg-gray-950 dark:text-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none font-bold"
                                         placeholder="e.g. member_alpha"
                                         autoComplete="off"
                                     />
-                                    <div className="mt-3 px-4 h-6">
+                                    <div className="px-2 h-6">
                                         {manualRecipientState.status === 'loading' && <p className="text-[10px] text-gray-400 font-black uppercase animate-pulse">{manualRecipientState.message}</p>}
                                         {manualRecipientState.status === 'invalid' && <p className="text-[10px] text-red-500 font-black uppercase tracking-widest">{manualRecipientState.message}</p>}
                                         {manualRecipientState.status === 'valid' && <p className="text-[10px] text-green-500 font-black uppercase tracking-widest">{manualRecipientState.message}</p>}
@@ -769,6 +823,80 @@ const TransferFunds: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* NETWORK MEMBER BROWSER MODAL */}
+            <Modal isOpen={isNetworkModalOpen} onClose={() => setIsNetworkModalOpen(false)}>
+                <div className="p-6 md:p-8 w-full max-w-3xl space-y-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b dark:border-gray-700 pb-4">
+                        <div>
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Active Network Directory</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Select a verified member from your downline network to initiate transfer.</p>
+                        </div>
+                        <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
+                            {availableRecipients.length} Members Available
+                        </span>
+                    </div>
+
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search by name, username, country, or level..."
+                            value={networkSearchQuery}
+                            onChange={(e) => setNetworkSearchQuery(e.target.value)}
+                            className="w-full p-4 pl-12 rounded-2xl border border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:text-white font-medium text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none"
+                        />
+                        <span className="absolute left-4 top-4 text-gray-400 text-lg">🔍</span>
+                    </div>
+
+                    <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+                        {filteredNetworkRecipients.length > 0 ? (
+                            filteredNetworkRecipients.map(({ user, level }) => (
+                                <div
+                                    key={user._id}
+                                    onClick={() => {
+                                        setRecipientIdentifier(user.username);
+                                        setIsManualEntry(false);
+                                        setIsNetworkModalOpen(false);
+                                        setNetworkSearchQuery('');
+                                    }}
+                                    className="p-4 bg-gray-50 dark:bg-gray-900/80 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-gray-100 dark:border-gray-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all group"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-base shadow-md group-hover:scale-105 transition-transform">
+                                            {user.fullName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-black text-gray-900 dark:text-white text-base">{user.fullName}</h4>
+                                                <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                                    Level {level}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs font-mono text-gray-500 dark:text-gray-400">@{user.username}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-200 dark:border-gray-800">
+                                        <div className="text-left sm:text-right">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Region</p>
+                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{user.country || 'Global'} ({user.currency})</p>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            className="rounded-xl px-4 py-2 font-black uppercase text-xs bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                                        >
+                                            Select &rarr;
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-16 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                                <p className="text-gray-400 font-black uppercase tracking-widest text-xs">No network members match your search criteria</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };
