@@ -18,7 +18,9 @@ const TemplateSchema = new mongoose.Schema({
             'transfer_rejected_email', 'transfer_rejected_whatsapp',
             'plan_activated_email', 'plan_activated_whatsapp',
             'referral_signup_email', 'referral_signup_whatsapp',
-            'referral_commission_email', 'referral_commission_whatsapp'
+            'referral_commission_email', 'referral_commission_whatsapp',
+            'welcome_message_email', 'welcome_message_whatsapp',
+            'password_reset_email', 'password_reset_whatsapp'
         ]
     },
     name: {
@@ -797,6 +799,117 @@ You have successfully received an affiliate commission of *{amount} {currency}*!
 🔹 Date: {date}
 
 Your affiliate team continues to grow. Keep it up!
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'welcome_message_email',
+        name: 'Automatic Welcome Message (Email)',
+        type: 'email',
+        subject: 'Welcome to SmartEarning, @{username}!',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">👋</span>
+        <h2 style="color: #3b82f6; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Welcome to SmartEarning!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong> ({fullName}),</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your account has been successfully registered and activated on SmartEarning.</p>
+        
+        <div style="background-color: #f9fafb; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 4px 0;"><strong>Username:</strong> @{username}</p>
+            <p style="margin: 4px 0;"><strong>Email:</strong> {email}</p>
+            <p style="margin: 4px 0;"><strong>Registration Date:</strong> {date}</p>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">We are excited to have you on board. Start growing your network and building your future today!</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">This is an automated welcome notification from SmartEarning support.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'welcome_message_whatsapp',
+        name: 'Automatic Welcome Message (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Welcome to SmartEarning!* 👋
+
+Hello @{username} ({fullName}),
+
+Your account has been successfully registered and activated! 🚀
+
+*Account Details:*
+🔹 Username: @{username}
+🔹 Email: {email}
+🔹 Date: {date}
+
+We are excited to have you on board. Start exploring investment plans and growing your network today!
+
+Best regards,
+SmartEarning Team
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'password_reset_email',
+        name: 'Automatic Password Reset Delivery (Email)',
+        type: 'email',
+        subject: 'Password Reset Request - SmartEarning',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🔒</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Password Reset Request</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong> ({fullName}),</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">We received a request to reset your password on SmartEarning. Click the secure button below to set a new password. This link is valid for 48 hours:</p>
+        
+        <div style="text-align: center; margin: 25px 0;">
+            <a href="{resetLink}" style="background-color: #3b82f6; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Reset Password</a>
+        </div>
+        
+        <p style="font-size: 13px; color: #6b7280; word-break: break-all;">Or copy and paste this link in your browser: <br/>{resetLink}</p>
+        
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">If you did not request a password reset, you can safely ignore this email.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">This is an automated security notification from SmartEarning support.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'password_reset_whatsapp',
+        name: 'Automatic Password Reset Delivery (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Password Reset* 🔐
+
+Hello @{username},
+
+We received a request to reset your password. Use the secure link below to reset your password (valid for 48 hours):
+
+🔗 {resetLink}
+
+If you did not request this, please ignore this message.
+
+Regards,
+SmartEarning Support
         `.trim(),
         isEnabled: true,
         graphicTheme: 'default'

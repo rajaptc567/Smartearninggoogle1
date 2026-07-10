@@ -98,7 +98,8 @@ const AdminTemplates: React.FC = () => {
         { name: '{currency}', desc: 'The wallet currency (e.g., PKR, USD, EUR)' },
         { name: '{txId}', desc: 'Transaction reference code or deposit ID' },
         { name: '{date}', desc: 'Current date and timestamp' },
-        { name: '{notes}', desc: 'Admin remarks, notes, or rejection comments' }
+        { name: '{notes}', desc: 'Admin remarks, notes, or rejection comments' },
+        { name: '{resetLink}', desc: 'Secure password reset URL link' }
     ];
 
     // Presets for the admin to select and load as samples
@@ -406,6 +407,8 @@ The SmartEarning Desk
         if (lowerKey.includes('transfer')) return 'Transfer';
         if (lowerKey.includes('plan')) return 'Plan';
         if (lowerKey.includes('referral')) return 'Referral';
+        if (lowerKey.includes('welcome')) return 'Welcome';
+        if (lowerKey.includes('password') || lowerKey.includes('reset')) return 'Password Reset';
         if (lowerKey.includes('announcement') || lowerKey.includes('general')) return 'Announcement';
         return 'Other';
     };

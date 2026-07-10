@@ -114,8 +114,6 @@ const Settings: React.FC = () => {
         whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
         whatsappInstanceId: settings.whatsappInstanceId || 'instance183081',
         whatsappToken: settings.whatsappToken || '1q22bd6hwo7rc2ub',
-        autoWelcomeEnabled: settings.autoWelcomeEnabled || false,
-        autoPasswordResetEnabled: settings.autoPasswordResetEnabled || false,
         signUpConfig: {
             customTitle: settings.signUpConfig?.customTitle || 'Create your Account',
             fullNameRule: settings.signUpConfig?.fullNameRule || 'required',
@@ -1480,49 +1478,6 @@ const Settings: React.FC = () => {
                             </div>
                         </div>
                     )}
-                </div>
-
-                {/* AUTOMATION TRIGGER TRIGGERS */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                    <h4 className="font-bold text-gray-900 dark:text-white border-b dark:border-gray-700 pb-2 flex items-center gap-2">
-                        <span className="text-base">⚡</span> Active Automation Trigger Centers
-                    </h4>
-                    
-                    <div className="space-y-4">
-                        <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800">
-                            <input 
-                                id="autoWelcomeEnabled"
-                                name="autoWelcomeEnabled"
-                                type="checkbox" 
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={localSettings.autoWelcomeEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <div>
-                                <label htmlFor="autoWelcomeEnabled" className="block font-semibold text-gray-900 dark:text-white text-sm">Automated Welcome Messages</label>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    When new members sign up on SmartEarning, automatically deliver a gorgeous, structured welcome letter/receipt to their Email and/or WhatsApp.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-800">
-                            <input 
-                                id="autoPasswordResetEnabled"
-                                name="autoPasswordResetEnabled"
-                                type="checkbox" 
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={localSettings.autoPasswordResetEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <div>
-                                <label htmlFor="autoPasswordResetEnabled" className="block font-semibold text-gray-900 dark:text-white text-sm">Automated Password Reset Delivery</label>
-                                <p className="text-xs text-gray-500 mt-0.5">
-                                    When users request a password reset, instantly generate their unique 48-hour secure token link and dispatch it directly to their email or WhatsApp without admin manual action.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         )}

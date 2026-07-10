@@ -267,16 +267,21 @@ export const createUser = async (req, res) => {
         }
         await Notification.create({ userId: user._id, message: `Welcome to SmartEarning, ${user.username}!` });
         
-        // Automated welcome notifications
-        const settings = await Setting.getSettings();
-        if (settings && settings.autoWelcomeEnabled) {
-            const welcomeMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWelcome to SmartEarning! Your account has been registered successfully.\n\nUsername: ${user.username}\nEmail: ${user.email}\nSponsor: ${user.sponsor || 'None'}\n\nWe are excited to have you on board. Start growing your network and earning today!\n\nBest Regards,\nSmartEarning Team`;
-            sendAutomatedMessage({
-                toEmail: user.email,
-                toPhone: user.whatsapp || user.phone,
-                subject: 'Welcome to SmartEarning!',
-                messageText: welcomeMsg
-            });
+        // Automated welcome notifications via message templates
+        try {
+            const welcomeVars = {
+                username: user.username,
+                fullName: user.fullName || '',
+                email: user.email,
+                phone: user.phone || '',
+                whatsapp: user.whatsapp || '',
+                sponsor: user.sponsor || 'None',
+                date: new Date().toLocaleString()
+            };
+            sendTemplateNotification({ userId: user._id, templateKey: 'welcome_message_email', variables: welcomeVars });
+            sendTemplateNotification({ userId: user._id, templateKey: 'welcome_message_whatsapp', variables: welcomeVars });
+        } catch (welcomeErr) {
+            console.error('Failed to dispatch welcome template notifications:', welcomeErr);
         }
 
         res.status(201).json({ success: true, data: user });
@@ -593,34 +598,32 @@ export const userRequestPasswordReset = async (req, res) => {
             
             // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
             try {
-                const settings = await Setting.getSettings();
-                if (settings && settings.autoPasswordResetEnabled) {
-                    const resetToken = randomBytes(20).toString('hex');
-                    user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
-                    user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
-                    await user.save();
+                const resetToken = randomBytes(20).toString('hex');
+                user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+                user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
+                await user.save();
 
-                    const origin = req.get('origin') || `https://${req.get('host')}`;
-                    const link = `${origin}/#/reset-password?token=${resetToken}`;
-                    
-                    const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nWe received a request to reset your password on SmartEarning. Here is your secure, single-use link to reset your password. This link is valid for 48 hours:\n\n${link}\n\nIf you did not request this, you can safely ignore this message.\n\nBest Regards,\nSmartEarning Support`;
+                const origin = req.get('origin') || `https://${req.get('host')}`;
+                const link = `${origin}/#/reset-password?token=${resetToken}`;
+                
+                const resetVars = {
+                    username: user.username,
+                    fullName: user.fullName || '',
+                    resetLink: link,
+                    date: new Date().toLocaleString()
+                };
 
-                    await sendAutomatedMessage({
-                        toEmail: user.email,
-                        toPhone: user.whatsapp || user.phone,
-                        subject: 'Password Reset Request - SmartEarning',
-                        messageText: resetMsg
-                    });
+                sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_email', variables: resetVars });
+                sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_whatsapp', variables: resetVars });
 
-                    // Update request details as auto-sent
-                    resetRequest.process = 'Auto-sent reset link to user';
-                    resetRequest.sendType = 'Automatic';
-                    resetRequest.channel = 'Email & WhatsApp';
-                    resetRequest.sentAt = new Date();
-                    resetRequest.resetLink = link;
-                    resetRequest.resetToken = resetToken;
-                    await resetRequest.save();
-                }
+                // Update request details as auto-sent
+                resetRequest.process = 'Auto-sent reset link to user';
+                resetRequest.sendType = 'Automatic';
+                resetRequest.channel = 'Email & WhatsApp';
+                resetRequest.sentAt = new Date();
+                resetRequest.resetLink = link;
+                resetRequest.resetToken = resetToken;
+                await resetRequest.save();
             } catch (autoErr) {
                 console.error('Automation failed during userRequestPasswordReset:', autoErr);
             }
@@ -646,24 +649,19 @@ export const adminInitiatePasswordReset = async (req, res) => {
 
         req.app.get('io')?.emit('DATA_CHANGED');
 
-        // Also trigger automatic send if enabled, wrapped in localized try-catch so it won't crash DB write
+        // Also trigger automatic send via templates, wrapped in localized try-catch so it won't crash DB write
         try {
-            const settings = await Setting.getSettings();
-            if (settings && (settings.emailAutomationEnabled || settings.whatsappAutomationEnabled)) {
-                const origin = req.get('origin') || `https://${req.get('host')}`;
-                const link = `${origin}/#/reset-password?token=${resetToken}`;
-                const resetMsg = `Hello ${user.fullName || user.username || 'User'},\n\nHere is your secure link to reset your password on SmartEarning. This link is valid for 48 hours:\n\n${link}\n\nRegards,\nSmartEarning Support`;
-                
-                // Dispatched asynchronously in background so link is generated instantly
-                sendAutomatedMessage({
-                    toEmail: user.email,
-                    toPhone: user.whatsapp || user.phone,
-                    subject: 'Password Reset Request - SmartEarning',
-                    messageText: resetMsg
-                }).catch(autoErr => {
-                    console.error('Automation background send failed during adminInitiatePasswordReset:', autoErr);
-                });
-            }
+            const origin = req.get('origin') || `https://${req.get('host')}`;
+            const link = `${origin}/#/reset-password?token=${resetToken}`;
+            const resetVars = {
+                username: user.username,
+                fullName: user.fullName || '',
+                resetLink: link,
+                date: new Date().toLocaleString()
+            };
+            
+            sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_email', variables: resetVars, sentBy: 'Admin' });
+            sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_whatsapp', variables: resetVars, sentBy: 'Admin' });
         } catch (autoErr) {
             console.error('Automation failed during adminInitiatePasswordReset:', autoErr);
         }
