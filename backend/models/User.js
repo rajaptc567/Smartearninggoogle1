@@ -110,6 +110,9 @@ const UserSchema = new mongoose.Schema({
     sponsor: {
         type: String,
     },
+    plannedActivationDate: {
+        type: Date,
+    },
     customFields: {
         type: mongoose.Schema.Types.Mixed,
         default: {},

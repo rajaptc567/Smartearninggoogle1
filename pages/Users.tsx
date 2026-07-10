@@ -281,7 +281,7 @@ const Users: React.FC = () => {
         }
     };
 
-    const tableHeaders = ['User', 'Contact', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
+    const tableHeaders = ['User', 'Contact', 'Sign Up & Activation', 'Wallet Balance', 'Active Plans', 'Status', 'Actions'];
     const areAllOnPageSelected = paginatedUsers.length > 0 && paginatedUsers.every(u => selectedUserIds.includes(u._id));
 
     return (
@@ -1070,6 +1070,29 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         <select name="status" value={formData.status} onChange={handleFormChange} className="w-full rounded-xl dark:bg-gray-800 dark:border-gray-700 font-bold">
                                             {Object.values(Status).filter(s => ['Active', 'Blocked', 'Pending', 'Paused'].includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
                                         </select>
+                                    </div>
+
+                                    <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/30 space-y-4">
+                                        <h3 className="font-black text-xs uppercase text-blue-600 dark:text-blue-400 tracking-widest">Sign Up & Activation Dates</h3>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Registration Date & Time (Sign Up)</label>
+                                            <input 
+                                                type="text" 
+                                                disabled 
+                                                value={user?.registrationDate ? new Date(user.registrationDate).toLocaleString() : 'N/A'} 
+                                                className="w-full rounded-md dark:bg-gray-800 dark:border-gray-700 mt-1 bg-gray-100 dark:bg-gray-800/50 cursor-not-allowed text-xs font-mono font-bold" 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Planned Activation Date & Time</label>
+                                            <input 
+                                                type="datetime-local" 
+                                                name="plannedActivationDate" 
+                                                value={formData.plannedActivationDate ? new Date(formData.plannedActivationDate).toISOString().slice(0, 16) : ''} 
+                                                onChange={handleFormChange} 
+                                                className="w-full rounded-md dark:bg-gray-700 dark:border-gray-600 mt-1 text-xs font-mono font-bold" 
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             )}

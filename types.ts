@@ -65,6 +65,7 @@ export interface User {
     activePlans?: ActivePlan[];
     status: Status | 'Active' | 'Blocked' | 'Pending' | 'Paused';
     registrationDate: string;
+    plannedActivationDate?: string;
     restrictions?: UserRestrictions;
     sponsor?: string;
     completedTasks?: CompletedTask[];
