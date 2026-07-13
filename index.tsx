@@ -7,6 +7,9 @@ if (typeof window !== 'undefined') {
   (window as any).closeSmartexnPopup = () => {
     window.dispatchEvent(new CustomEvent('close-smartexn-popup'));
   };
+  (window as any).closePopup = () => {
+    window.dispatchEvent(new CustomEvent('close-smartexn-popup'));
+  };
 }
 
 const rootElement = document.getElementById('root');

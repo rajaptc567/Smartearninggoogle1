@@ -5,7 +5,7 @@ import { Notification } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { deleteNotification, bulkDeleteNotifications, updateNotification, createNotification, getNotifications } from '../services/api';
+import { deleteNotification, bulkDeleteNotifications, updateNotification, createNotification, getNotifications, getBulkPopups, createBulkPopup as createBulkPopupApi, updateBulkPopup, deleteBulkPopup } from '../services/api';
 
 interface ResolvedNotificationInfo {
   notification: Notification;
@@ -39,6 +39,8 @@ const AdminNotifications: React.FC = () => {
 
   // Bulk Pop-up Form State
   const [activeTab, setActiveTab] = useState<'history' | 'bulk_popup'>('history');
+  const [bulkPopupSubTab, setBulkPopupSubTab] = useState<'send' | 'active' | 'history'>('send');
+  const [bulkPopupsList, setBulkPopupsList] = useState<any[]>([]);
   const [popupSubject, setPopupSubject] = useState('');
   const [popupMessage, setPopupMessage] = useState('');
   const [popupImageUrl, setPopupImageUrl] = useState('');
@@ -52,6 +54,19 @@ const AdminNotifications: React.FC = () => {
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [isSendingPopup, setIsSendingPopup] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchBulkPopups();
+  }, []);
+
+  const fetchBulkPopups = async () => {
+    try {
+      const data = await getBulkPopups();
+      setBulkPopupsList(data || []);
+    } catch (err) {
+      console.error('Failed to fetch bulk popups:', err);
+    }
+  };
 
   const filteredUsersForSelection = useMemo(() => {
     if (!userSearchTerm) return users.slice(0, 10);
@@ -79,30 +94,100 @@ const AdminNotifications: React.FC = () => {
         subject: popupSubject,
         message: popupMessage,
         imageUrl: popupImageUrl,
-        isPopup: true,
         targetType,
-        targetIds: targetType === 'plan' ? selectedPlanIds : targetType === 'single' ? selectedUserIds : undefined,
+        targetIds: targetType === 'single' ? selectedUserIds : undefined,
+        targetPlanIds: targetType === 'plan' ? selectedPlanIds : undefined,
         displayTrigger,
         frequency,
         actionButtonText,
         actionButtonLink,
         selectedChannels
       };
-      const result = await createNotification(payload);
+      const result = await createBulkPopupApi(payload);
       alert(`Successfully broadcasted pop-up notification to ${result.count} users!`);
-      const updatedNotifs = await getNotifications();
+      
+      const [updatedNotifs, updatedPopups] = await Promise.all([
+        getNotifications(),
+        getBulkPopups()
+      ]);
       dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifs });
+      setBulkPopupsList(updatedPopups || []);
+
       setPopupSubject('');
       setPopupMessage('');
       setPopupImageUrl('');
       setSelectedPlanIds([]);
       setSelectedUserIds([]);
-      setActiveTab('history');
+      setBulkPopupSubTab('history');
     } catch (err: any) {
       console.error('Failed to send bulk pop-up:', err);
       alert(err.message || 'Failed to send bulk pop-up notification.');
     } finally {
       setIsSendingPopup(false);
+    }
+  };
+
+  const handleEditAndResend = (broadcast: any) => {
+    setPopupSubject(broadcast.subject || '');
+    setPopupMessage(broadcast.message || '');
+    setPopupImageUrl(broadcast.imageUrl || '');
+    setTargetType(broadcast.targetType || 'all');
+    setSelectedPlanIds(broadcast.targetPlanIds || []);
+    setSelectedUserIds(broadcast.targetIds || []);
+    setDisplayTrigger(broadcast.displayTrigger || 'login');
+    setFrequency(broadcast.frequency || 'once_per_user');
+    setActionButtonText(broadcast.actionButtonText || '');
+    setActionButtonLink(broadcast.actionButtonLink || '');
+    setSelectedChannels(broadcast.selectedChannels || []);
+    setBulkPopupSubTab('send');
+  };
+
+  const handleResendQuick = async (broadcast: any) => {
+    if (!window.confirm(`Are you sure you want to resend broadcast "${broadcast.subject || 'Untitled'}" to all targeted users again?`)) return;
+    try {
+      const payload = {
+        subject: broadcast.subject,
+        message: broadcast.message,
+        imageUrl: broadcast.imageUrl,
+        targetType: broadcast.targetType,
+        targetIds: broadcast.targetIds,
+        targetPlanIds: broadcast.targetPlanIds,
+        displayTrigger: broadcast.displayTrigger,
+        frequency: broadcast.frequency,
+        actionButtonText: broadcast.actionButtonText,
+        actionButtonLink: broadcast.actionButtonLink,
+        selectedChannels: broadcast.selectedChannels
+      };
+      const result = await createBulkPopupApi(payload);
+      alert(`Successfully re-broadcasted to ${result.count} users!`);
+      const [updatedNotifs, updatedPopups] = await Promise.all([
+        getNotifications(),
+        getBulkPopups()
+      ]);
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifs });
+      setBulkPopupsList(updatedPopups || []);
+    } catch (err: any) {
+      alert(err.message || 'Failed to resend broadcast.');
+    }
+  };
+
+  const handleDeleteBroadcastItem = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this broadcast record from history?')) return;
+    try {
+      await deleteBulkPopup(id);
+      setBulkPopupsList(prev => prev.filter(b => b._id !== id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete broadcast.');
+    }
+  };
+
+  const handleToggleStatusItem = async (broadcast: any) => {
+    try {
+      const newStatus = broadcast.status === 'active' ? 'paused' : 'active';
+      const updated = await updateBulkPopup(broadcast._id, { status: newStatus });
+      setBulkPopupsList(prev => prev.map(b => b._id === broadcast._id ? updated : b));
+    } catch (err: any) {
+      alert(err.message || 'Failed to update status.');
     }
   };
 
@@ -507,325 +592,502 @@ const AdminNotifications: React.FC = () => {
       </div>
 
       {activeTab === 'bulk_popup' && (
-        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 shadow-xl max-w-4xl mx-auto">
-          <div className="mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
-            <h2 className="text-xl font-black text-gray-900 dark:text-white">🚀 Broadcast Bulk Pop-up Notification</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Configure targeted pop-up announcements with images, rich HTML descriptions, display triggers, and call-to-action buttons.
-            </p>
+        <div className="space-y-6">
+          {/* Sub-tabs header */}
+          <div className="flex bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl max-w-lg mx-auto mb-6">
+            <button
+              onClick={() => setBulkPopupSubTab('send')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all ${
+                bulkPopupSubTab === 'send'
+                  ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              🚀 Broadcast New
+            </button>
+            <button
+              onClick={() => setBulkPopupSubTab('active')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                bulkPopupSubTab === 'active'
+                  ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              ✨ Active ({bulkPopupsList.filter(b => b.status === 'active').length})
+            </button>
+            <button
+              onClick={() => setBulkPopupSubTab('history')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                bulkPopupSubTab === 'history'
+                  ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              📜 History ({bulkPopupsList.length})
+            </button>
           </div>
 
-          <form onSubmit={handleSendBulkPopup} className="space-y-6">
-            {/* Target Audience */}
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Target Audience</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { id: 'all', label: 'All Members', desc: 'Every registered user' },
-                  { id: 'plan', label: 'By Active Plans', desc: 'Users holding specific plans' },
-                  { id: 'single', label: 'Manual Selection', desc: 'Search & pick specific users' },
-                  { id: 'inactive', label: 'Inactive / No Plan', desc: 'Users without active plans' }
-                ].map(item => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => setTargetType(item.id as any)}
-                    className={`p-4 rounded-2xl border text-left transition-all ${
-                      targetType === item.id
-                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-200 shadow-sm'
-                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    <p className="font-bold text-sm">{item.label}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{item.desc}</p>
-                  </button>
-                ))}
+          {bulkPopupSubTab === 'send' && (
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 shadow-xl max-w-4xl mx-auto">
+              <div className="mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+                <h2 className="text-xl font-black text-gray-900 dark:text-white">🚀 Broadcast Bulk Pop-up Notification</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Configure targeted pop-up announcements with images, rich HTML descriptions, display triggers, and call-to-action buttons.
+                </p>
               </div>
-            </div>
 
-            {/* If Plan target type */}
-            {targetType === 'plan' && (
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
-                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Investment Plans:</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
-                  {state.investmentPlans.map(plan => {
-                    const isChecked = selectedPlanIds.includes(plan._id);
-                    return (
-                      <label 
-                        key={plan._id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                          isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+              <form onSubmit={handleSendBulkPopup} className="space-y-6">
+                {/* Target Audience */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Target Audience</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { id: 'all', label: 'All Members', desc: 'Every registered user' },
+                      { id: 'plan', label: 'By Active Plans', desc: 'Users holding specific plans' },
+                      { id: 'single', label: 'Manual Selection', desc: 'Search & pick specific users' },
+                      { id: 'inactive', label: 'Inactive / No Plan', desc: 'Users without active plans' }
+                    ].map(item => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => setTargetType(item.id as any)}
+                        className={`p-4 rounded-2xl border text-left transition-all ${
+                          targetType === item.id
+                            ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-200 shadow-sm'
+                            : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={e => {
-                            if (e.target.checked) setSelectedPlanIds(prev => [...prev, plan._id]);
-                            else setSelectedPlanIds(prev => prev.filter(id => id !== plan._id));
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <div className="truncate">
-                          <p className="text-xs font-bold truncate text-gray-900 dark:text-white">{plan.name}</p>
-                          <p className="text-[10px] text-gray-500">{plan.currency} {plan.price}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
+                        <p className="font-bold text-sm">{item.label}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{item.desc}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* If Manual Selection */}
-            {targetType === 'single' && (
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Specific Users ({selectedUserIds.length} selected):</label>
-                  <input
-                    type="text"
-                    placeholder="Search by username or email..."
-                    value={userSearchTerm}
-                    onChange={e => setUserSearchTerm(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs w-64"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
-                  {filteredUsersForSelection.map(user => {
-                    const isChecked = selectedUserIds.includes(user._id);
-                    return (
-                      <label
-                        key={user._id}
-                        className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                          isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={e => {
-                            if (e.target.checked) setSelectedUserIds(prev => [...prev, user._id]);
-                            else setSelectedUserIds(prev => prev.filter(id => id !== user._id));
-                          }}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <div className="truncate">
-                          <p className="text-xs font-bold truncate text-gray-900 dark:text-white">@{user.username}</p>
-                          <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Subject / Title */}
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Popup Title / Subject</label>
-              <input
-                type="text"
-                placeholder="e.g. 🎉 Special Bonus & Promotion Event!"
-                value={popupSubject}
-                onChange={e => setPopupSubject(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Banner Image URL */}
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Banner Image URL (Optional)</label>
-              <input
-                type="url"
-                placeholder="https://example.com/banner-image.jpg"
-                value={popupImageUrl}
-                onChange={e => setPopupImageUrl(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {popupImageUrl && (
-                <div className="mt-3 relative h-36 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                  <img src={popupImageUrl} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </div>
-              )}
-            </div>
-
-            {/* Description / HTML Content */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-xs font-black uppercase tracking-wider text-gray-500">Description & HTML Content</label>
-                <span className="text-[10px] text-gray-400 font-mono">Supports HTML tags (&lt;b&gt;, &lt;p&gt;, &lt;a&gt;, &lt;ul&gt;, etc.)</span>
-              </div>
-              <textarea
-                rows={5}
-                placeholder="<p>Dear Member,</p><p>We are thrilled to announce our new reward system. Check out your dashboard for details!</p>"
-                value={popupMessage}
-                onChange={e => setPopupMessage(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                required
-              />
-            </div>
-
-            {/* LIVE HTML PREVIEW CARD FOR ADMIN */}
-            <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-800/80 dark:to-gray-900/80 border border-blue-200 dark:border-blue-900/40 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  Live HTML Popup Preview (Admin View)
-                </span>
-                <span className="text-[10px] font-mono bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                  Realtime Render
-                </span>
-              </div>
-
-              {/* Simulated Popup Box */}
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 max-w-md mx-auto overflow-hidden">
-                {popupImageUrl && (
-                  <div className="relative h-36 bg-gray-100 dark:bg-gray-800">
-                    <img src={popupImageUrl} alt="Banner Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                {/* If Plan target type */}
+                {targetType === 'plan' && (
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Investment Plans:</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
+                      {state.investmentPlans.map(plan => {
+                        const isChecked = selectedPlanIds.includes(plan._id);
+                        return (
+                          <label 
+                            key={plan._id}
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                              isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={e => {
+                                if (e.target.checked) setSelectedPlanIds(prev => [...prev, plan._id]);
+                                else setSelectedPlanIds(prev => prev.filter(id => id !== plan._id));
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div className="truncate">
+                              <p className="text-xs font-bold truncate text-gray-900 dark:text-white">{plan.name}</p>
+                              <p className="text-[10px] text-gray-500">{plan.currency} {plan.price}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
-                <div className="p-5 space-y-3">
-                  {!popupImageUrl && (
-                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
-                      Announcement
-                    </span>
-                  )}
-                  {popupSubject ? (
-                    <h4 className="font-black text-gray-900 dark:text-white text-base">
-                      {popupSubject}
-                    </h4>
-                  ) : (
-                    <h4 className="font-black text-gray-400 text-sm italic">
-                      [Popup Title will appear here...]
-                    </h4>
-                  )}
 
-                  <div 
-                    className="rendered-html text-xs text-gray-700 dark:text-gray-300 leading-relaxed max-h-40 overflow-y-auto pr-1"
-                    dangerouslySetInnerHTML={{ 
-                      __html: popupMessage || '<p class="text-gray-400 italic">Your HTML description content will be rendered here...</p>' 
-                    }}
+                {/* If Manual Selection */}
+                {targetType === 'single' && (
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Specific Users ({selectedUserIds.length} selected):</label>
+                      <input
+                        type="text"
+                        placeholder="Search by username or email..."
+                        value={userSearchTerm}
+                        onChange={e => setUserSearchTerm(e.target.value)}
+                        className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs w-64"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
+                      {filteredUsersForSelection.map(user => {
+                        const isChecked = selectedUserIds.includes(user._id);
+                        return (
+                          <label
+                            key={user._id}
+                            className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                              isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={e => {
+                                if (e.target.checked) setSelectedUserIds(prev => [...prev, user._id]);
+                                else setSelectedUserIds(prev => prev.filter(id => id !== user._id));
+                              }}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div className="truncate">
+                              <p className="text-xs font-bold truncate text-gray-900 dark:text-white">@{user.username}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subject / Title */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Popup Title / Subject</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 🎉 Special Bonus & Promotion Event!"
+                    value={popupSubject}
+                    onChange={e => setPopupSubject(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
 
-                  <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
-                    {actionButtonText && (
-                      <div className="w-full py-2 px-4 bg-blue-600 text-white font-bold text-center rounded-xl text-xs uppercase tracking-wider">
-                        {actionButtonText}
+                {/* Banner Image URL */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Banner Image URL (Optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/banner-image.jpg"
+                    value={popupImageUrl}
+                    onChange={e => setPopupImageUrl(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {popupImageUrl && (
+                    <div className="mt-3 relative h-36 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                      <img src={popupImageUrl} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Description / HTML Content */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-500">Description & HTML Content</label>
+                    <span className="text-[10px] text-gray-400 font-mono">Supports HTML tags (&lt;b&gt;, &lt;p&gt;, &lt;a&gt;, &lt;ul&gt;, etc.)</span>
+                  </div>
+                  <textarea
+                    rows={5}
+                    placeholder="<p>Dear Member,</p><p>We are thrilled to announce our new reward system. Check out your dashboard for details!</p>"
+                    value={popupMessage}
+                    onChange={e => setPopupMessage(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    required
+                  />
+                </div>
+
+                {/* LIVE HTML PREVIEW CARD FOR ADMIN */}
+                <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-800/80 dark:to-gray-900/80 border border-blue-200 dark:border-blue-900/40 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Live HTML Popup Preview (Admin View)
+                    </span>
+                    <span className="text-[10px] font-mono bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      Realtime Render
+                    </span>
+                  </div>
+
+                  {/* Simulated Popup Box */}
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 max-w-md mx-auto overflow-hidden">
+                    {popupImageUrl && (
+                      <div className="relative h-36 bg-gray-100 dark:bg-gray-800">
+                        <img src={popupImageUrl} alt="Banner Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       </div>
                     )}
-                    <div className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-center rounded-xl text-[10px] uppercase tracking-wider">
-                      Got it / Dismiss
+                    <div className="p-5 space-y-3">
+                      {!popupImageUrl && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                          Announcement
+                        </span>
+                      )}
+                      {popupSubject ? (
+                        <h4 className="font-black text-gray-900 dark:text-white text-base">
+                          {popupSubject}
+                        </h4>
+                      ) : (
+                        <h4 className="font-black text-gray-400 text-sm italic">
+                          [Popup Title will appear here...]
+                        </h4>
+                      )}
+
+                      <div 
+                        className="rendered-html text-xs text-gray-700 dark:text-gray-300 leading-relaxed max-h-40 overflow-y-auto pr-1"
+                        dangerouslySetInnerHTML={{ 
+                          __html: popupMessage || '<p class="text-gray-400 italic">Your HTML description content will be rendered here...</p>' 
+                        }}
+                      />
+
+                      <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+                        {actionButtonText && (
+                          <div className="w-full py-2 px-4 bg-blue-600 text-white font-bold text-center rounded-xl text-xs uppercase tracking-wider">
+                            {actionButtonText}
+                          </div>
+                        )}
+                        <div className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-center rounded-xl text-[10px] uppercase tracking-wider">
+                          Got it / Dismiss
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Display Triggers & Frequency */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Trigger (When user visits/logs in)</label>
+                    <select
+                      value={displayTrigger}
+                      onChange={e => setDisplayTrigger(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
+                    >
+                      <option value="login">Every Time User Logs In (Upon Login)</option>
+                      <option value="homepage">On Homepage Whenever Any User Arrives</option>
+                      <option value="every_page">Show on Every Page Navigation</option>
+                      <option value="delay_30s">Show After 30 Seconds Delay</option>
+                      <option value="delay_2m">Show After 2 Minutes Delay</option>
+                      <option value="delay_10m">Show After 10 Minutes Delay</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Frequency</label>
+                    <select
+                      value={frequency}
+                      onChange={e => setFrequency(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
+                    >
+                      <option value="once_per_user">Once Per User (Until Dismissed)</option>
+                      <option value="every_visit">Every Time / Always Show (Ignore Previous Dismissals)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Action Button (Optional) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Text (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Deposit Now or Claim Bonus"
+                      value={actionButtonText}
+                      onChange={e => setActionButtonText(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Link / Route (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. /member/deposit or https://t.me/channel"
+                      value={actionButtonLink}
+                      onChange={e => setActionButtonLink(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Additional Channels */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Also Send Via (Optional Channels)</label>
+                  <div className="flex gap-4">
+                    {[
+                      { id: 'email', label: 'Email Notification' },
+                      { id: 'whatsapp', label: 'WhatsApp / SMS' }
+                    ].map(ch => {
+                      const isChecked = selectedChannels.includes(ch.id);
+                      return (
+                        <label key={ch.id} className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              if (e.target.checked) setSelectedChannels(prev => [...prev, ch.id]);
+                              else setSelectedChannels(prev => prev.filter(c => c !== ch.id));
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>{ch.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setBulkPopupSubTab('history')}
+                    className="rounded-2xl px-6"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSendingPopup}
+                    className="rounded-2xl px-8 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg shadow-blue-500/25"
+                  >
+                    {isSendingPopup ? 'Broadcasting...' : '🚀 Broadcast Pop-up Now'}
+                  </Button>
+                </div>
+              </form>
             </div>
+          )}
 
-            {/* Display Triggers & Frequency */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Trigger (When user visits/logs in)</label>
-                <select
-                  value={displayTrigger}
-                  onChange={e => setDisplayTrigger(e.target.value as any)}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
-                >
-                  <option value="login">Every Time User Logs In (Upon Login)</option>
-                  <option value="homepage">On Homepage Whenever Any User Arrives</option>
-                  <option value="every_page">Show on Every Page Navigation</option>
-                  <option value="delay_30s">Show After 30 Seconds Delay</option>
-                  <option value="delay_2m">Show After 2 Minutes Delay</option>
-                  <option value="delay_10m">Show After 10 Minutes Delay</option>
-                </select>
+          {bulkPopupSubTab === 'active' && (
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 shadow-xl max-w-4xl mx-auto space-y-4">
+              <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">✨ Active Bulk Pop-up Broadcasts</h3>
+                <span className="text-xs text-gray-500 font-medium">Currently deployed announcement popups</span>
               </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Frequency</label>
-                <select
-                  value={frequency}
-                  onChange={e => setFrequency(e.target.value as any)}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
-                >
-                  <option value="once_per_user">Once Per User (Until Dismissed)</option>
-                  <option value="every_visit">Every Time / Always Show (Ignore Previous Dismissals)</option>
-                </select>
-              </div>
+              {bulkPopupsList.filter(b => b.status === 'active').length === 0 ? (
+                <div className="text-center py-12 text-gray-400 text-sm">No active bulk pop-up broadcasts found.</div>
+              ) : (
+                <div className="space-y-4">
+                  {bulkPopupsList.filter(b => b.status === 'active').map(item => (
+                    <div key={item._id} className="p-5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-1.5 max-w-xl">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">Active</span>
+                          <span className="text-xs text-gray-400 font-mono">Target: {item.targetType}</span>
+                          <span className="text-xs text-gray-400 font-mono">Sent: {item.sentCount} users</span>
+                        </div>
+                        <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">{item.subject || 'Untitled Announcement'}</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{item.message?.replace(/<[^>]*>?/gm, '')}</p>
+                        <p className="text-[10px] text-gray-400">Created: {new Date(item.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => handleToggleStatusItem(item)}
+                          variant="outline"
+                          className="text-xs py-1.5 px-3"
+                        >
+                          Pause
+                        </Button>
+                        <Button
+                          onClick={() => handleEditAndResend(item)}
+                          variant="outline"
+                          className="text-xs py-1.5 px-3 text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                          Edit & Send Again
+                        </Button>
+                        <Button
+                          onClick={() => handleResendQuick(item)}
+                          className="text-xs py-1.5 px-3 bg-blue-600 text-white"
+                        >
+                          Resend Now
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Action Button (Optional) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Text (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Deposit Now or Claim Bonus"
-                  value={actionButtonText}
-                  onChange={e => setActionButtonText(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
-                />
+          {bulkPopupSubTab === 'history' && (
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 shadow-xl max-w-5xl mx-auto space-y-4">
+              <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-800">
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">📜 Bulk Pop-up Broadcast History & Management</h3>
+                <span className="text-xs text-gray-500 font-medium">Total historical broadcasts: {bulkPopupsList.length}</span>
               </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Link / Route (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. /member/deposit or https://t.me/channel"
-                  value={actionButtonLink}
-                  onChange={e => setActionButtonLink(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
-                />
-              </div>
+              {bulkPopupsList.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 text-sm">No historical bulk pop-up broadcasts recorded yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-400 uppercase font-bold text-[10px]">
+                        <th className="py-3 px-4">Subject & Content</th>
+                        <th className="py-3 px-4">Target</th>
+                        <th className="py-3 px-4">Trigger & Freq</th>
+                        <th className="py-3 px-4">Reach</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Date</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {bulkPopupsList.map(item => (
+                        <tr key={item._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <td className="py-3 px-4 max-w-xs">
+                            <p className="font-bold text-gray-900 dark:text-white truncate">{item.subject || 'Untitled'}</p>
+                            <p className="text-gray-500 truncate mt-0.5">{item.message?.replace(/<[^>]*>?/gm, '')}</p>
+                          </td>
+                          <td className="py-3 px-4 font-mono uppercase text-[11px] text-gray-600 dark:text-gray-400">
+                            {item.targetType}
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="font-medium text-gray-700 dark:text-gray-300">{item.displayTrigger}</p>
+                            <p className="text-[10px] text-gray-400">{item.frequency}</p>
+                          </td>
+                          <td className="py-3 px-4 font-black text-blue-600 dark:text-blue-400">
+                            {item.sentCount} users
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              item.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                            }`}>
+                              {item.status || 'active'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 whitespace-nowrap text-[11px]">
+                            {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap space-x-1.5">
+                            <button
+                              onClick={() => handleToggleStatusItem(item)}
+                              className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 text-gray-700 dark:text-gray-300 font-bold text-[10px]"
+                              title="Toggle Active / Paused"
+                            >
+                              {item.status === 'active' ? 'Pause' : 'Activate'}
+                            </button>
+                            <button
+                              onClick={() => handleEditAndResend(item)}
+                              className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 hover:bg-blue-100 font-bold text-[10px]"
+                              title="Edit parameters and broadcast again"
+                            >
+                              Edit & Resend
+                            </button>
+                            <button
+                              onClick={() => handleResendQuick(item)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-[10px]"
+                              title="Resend instantly with same settings"
+                            >
+                              Resend
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBroadcastItem(item._id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-300 hover:bg-red-100 font-bold text-[10px]"
+                              title="Delete from history"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-
-            {/* Additional Channels */}
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Also Send Via (Optional Channels)</label>
-              <div className="flex gap-4">
-                {[
-                  { id: 'email', label: 'Email Notification' },
-                  { id: 'whatsapp', label: 'WhatsApp / SMS' }
-                ].map(ch => {
-                  const isChecked = selectedChannels.includes(ch.id);
-                  return (
-                    <label key={ch.id} className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={e => {
-                          if (e.target.checked) setSelectedChannels(prev => [...prev, ch.id]);
-                          else setSelectedChannels(prev => prev.filter(c => c !== ch.id));
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span>{ch.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setActiveTab('history')}
-                className="rounded-2xl px-6"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSendingPopup}
-                className="rounded-2xl px-8 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg shadow-blue-500/25"
-              >
-                {isSendingPopup ? 'Broadcasting...' : '🚀 Broadcast Pop-up Now'}
-              </Button>
-            </div>
-          </form>
+          )}
         </div>
       )}
 

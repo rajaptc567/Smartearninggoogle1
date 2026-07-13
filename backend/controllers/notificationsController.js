@@ -84,6 +84,12 @@ export const createNotification = async (req, res) => {
                 } else {
                     users = inactiveUsers;
                 }
+            } else if (targetType === 'country' && targetIds && targetIds.length > 0) {
+                query = { country: { $in: targetIds } };
+                users = await User.find(query).select('_id');
+            } else if (targetType === 'currency' && targetIds && targetIds.length > 0) {
+                query = { currency: { $in: targetIds } };
+                users = await User.find(query).select('_id');
             } else {
                 return res.status(400).json({ success: false, error: 'Invalid target configuration' });
             }

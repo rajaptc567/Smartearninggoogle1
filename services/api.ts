@@ -842,3 +842,40 @@ export const resendTemplateLog = async (id: string): Promise<TemplateLog[]> => {
     const result = await handleResponse(response);
     return result.data;
 };
+
+// --- [Bulk Pop-ups API Functions] ---
+export const getBulkPopups = async (): Promise<any[]> => {
+    const response = await fetch(`${API_BASE_URL}/bulk-popups`, {
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createBulkPopup = async (data: any): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/bulk-popups`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+    });
+    const result = await handleResponse(response);
+    return result;
+};
+
+export const updateBulkPopup = async (id: string, data: any): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/bulk-popups/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteBulkPopup = async (id: string): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/bulk-popups/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+    });
+    await handleResponse(response);
+};

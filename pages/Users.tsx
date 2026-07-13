@@ -353,6 +353,7 @@ const Users: React.FC = () => {
                             </span>
                             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
                             <Button size="sm" variant="secondary" onClick={() => handleDownloadDossiers(selectedUserIds)}>Download Dossiers</Button>
+                            <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(null)}>Send Message ({selectedUserIds.length})</Button>
                             <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
                                 {isProcessing ? 'Processing...' : 'Delete Selected'}
                             </Button>
@@ -524,7 +525,7 @@ const Users: React.FC = () => {
                 <BulkDummyUserModal users={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isMessageModalOpen && (
-                <MessageUserModal user={managingUser} allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
+                <MessageUserModal user={managingUser} preSelectedUserIds={selectedUserIds} allUsers={users} investmentPlans={investmentPlans} onClose={handleCloseAllModals}/>
             )}
             {isDeleteModalOpen && userToDelete && (
                 <DeleteUserModal 
@@ -1889,31 +1890,42 @@ const BulkDummyUserModal: React.FC<BulkDummyUserModalProps> = ({ users, investme
 
 interface MessageUserModalProps {
     user: User | null;
+    preSelectedUserIds?: string[];
     allUsers: User[];
     investmentPlans: InvestmentPlan[];
     onClose: () => void;
 }
 
-const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, investmentPlans, onClose }) => {
+const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, preSelectedUserIds = [], allUsers, investmentPlans, onClose }) => {
     const { dispatch } = useData();
-    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all' | 'inactive'>(user ? 'single' : 'all');
-    const [targetIds, setTargetIds] = useState<string[]>(user ? [user._id] : []);
+    const hasPreSelected = preSelectedUserIds.length > 0;
+    const [targetType, setTargetType] = useState<'single' | 'plan' | 'all' | 'inactive' | 'country' | 'currency'>(
+        user ? 'single' : (hasPreSelected ? 'single' : 'all')
+    );
+    const [targetIds, setTargetIds] = useState<string[]>(
+        user ? [user._id] : (hasPreSelected ? preSelectedUserIds : [])
+    );
+    const [userSearch, setUserSearch] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isPopup, setIsPopup] = useState(false);
     const [isSending, setIsSending] = useState(false);
-    const [randomCount, setRandomCount] = useState('');
     const [selectedChannels, setSelectedChannels] = useState<string[]>(['email', 'whatsapp']);
 
     const getTargetUsers = () => {
         if (targetType === 'single') {
-            return user ? [user] : [];
+            if (user) return [user];
+            return allUsers.filter(u => targetIds.includes(u._id));
         }
         let matches = [...allUsers];
         if (targetType === 'plan') {
             matches = matches.filter(u => u.activePlans?.some(ap => targetIds.includes(ap.planId)) || (u.activePlan && targetIds.includes(u.activePlan)));
         } else if (targetType === 'inactive') {
             matches = matches.filter(u => !u.activePlan && (!u.activePlans || u.activePlans.length === 0));
+        } else if (targetType === 'country') {
+            matches = matches.filter(u => targetIds.includes(u.country));
+        } else if (targetType === 'currency') {
+            matches = matches.filter(u => targetIds.includes(u.currency));
         }
         return matches;
     };
@@ -1923,20 +1935,22 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!message) return alert('Message is required');
+        if (targetType !== 'all' && targetType !== 'inactive' && targetIds.length === 0) {
+            return alert('Please select at least one recipient, plan, country, or currency.');
+        }
         setIsSending(true);
         try {
             const result = await sendAdminNotification({ 
-                userId: targetType === 'single' ? targetIds[0] : undefined, 
-                targetType: targetType !== 'single' ? targetType : undefined, 
-                targetIds: targetType === 'plan' ? targetIds : undefined, 
+                userId: (targetType === 'single' && targetIds.length === 1 && !user && preSelectedUserIds.length <= 1) ? targetIds[0] : undefined, 
+                targetType: targetType !== 'single' || targetIds.length > 1 ? targetType : (targetIds.length === 1 ? 'single' : 'all'), 
+                targetIds: targetType !== 'all' && targetType !== 'inactive' ? targetIds : undefined, 
                 subject, 
                 message, 
                 isPopup, 
-                randomCount: targetType === 'inactive' && randomCount ? parseInt(randomCount) : undefined,
                 selectedChannels
             });
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
-            alert(`Message sent successfully.`);
+            alert(`Message sent successfully to ${targetUsers.length} user(s).`);
             onClose();
         } catch (err: any) {
             alert(err.message || 'Failed to send message');
@@ -1945,7 +1959,7 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
         }
     };
 
-    const togglePlan = (id: string) => {
+    const toggleId = (id: string) => {
         setTargetIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
@@ -1954,20 +1968,73 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, allUsers, inv
             <form onSubmit={handleSend} className="p-4 w-[500px] max-w-full space-y-4">
                 <h3 className="text-xl font-bold">Send Announcement</h3>
                 <div>
-                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients</label>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Recipients / Targeting</label>
                     {user ? <div className="p-2 bg-gray-50 rounded border text-sm">Target: <strong>{user.username}</strong></div> : (
                         <div className="space-y-3">
-                            <select value={targetType} onChange={e => setTargetType(e.target.value as any)} className="w-full border rounded p-2 text-sm">
+                            <select value={targetType} onChange={e => { setTargetType(e.target.value as any); setTargetIds([]); }} className="w-full border rounded p-2 text-sm dark:bg-gray-700">
                                 <option value="all">All Members</option>
-                                <option value="plan">Members of Specific Plans</option>
+                                <option value="single">Manual Selection ({preSelectedUserIds.length} pre-selected)</option>
+                                <option value="plan">By Active Plans</option>
                                 <option value="inactive">Inactive Members (No active plan)</option>
+                                <option value="country">By Country</option>
+                                <option value="currency">By Currency</option>
                             </select>
+
+                            {targetType === 'single' && (
+                                <div className="space-y-2 border rounded p-3 bg-gray-50 dark:bg-gray-900/50">
+                                    <input
+                                        type="text"
+                                        placeholder="Search users by name, username, email..."
+                                        value={userSearch}
+                                        onChange={e => setUserSearch(e.target.value)}
+                                        className="w-full border rounded p-1.5 text-xs dark:bg-gray-800"
+                                    />
+                                    <div className="max-h-36 overflow-y-auto space-y-1">
+                                        {allUsers
+                                            .filter(u => !userSearch || u.username.toLowerCase().includes(userSearch.toLowerCase()) || (u.fullName && u.fullName.toLowerCase().includes(userSearch.toLowerCase())) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                                            .slice(0, 30)
+                                            .map(u => {
+                                                const isChecked = targetIds.includes(u._id);
+                                                return (
+                                                    <label key={u._id} className="flex items-center gap-2 p-1.5 hover:bg-white dark:hover:bg-gray-800 rounded cursor-pointer text-xs">
+                                                        <input type="checkbox" checked={isChecked} onChange={() => toggleId(u._id)} className="rounded" />
+                                                        <span className="font-bold">@{u.username}</span>
+                                                        <span className="text-gray-400">({u.fullName || u.email})</span>
+                                                    </label>
+                                                );
+                                            })}
+                                    </div>
+                                </div>
+                            )}
+
                             {targetType === 'plan' && (
                                 <div className="max-h-32 overflow-y-auto border rounded p-2 grid grid-cols-1 gap-1">
                                     {investmentPlans.map(plan => (
                                         <label key={plan._id} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-sm">
-                                            <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => togglePlan(plan._id)} className="rounded" />
+                                            <input type="checkbox" checked={targetIds.includes(plan._id)} onChange={() => toggleId(plan._id)} className="rounded" />
                                             <span>{plan.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+
+                            {targetType === 'country' && (
+                                <div className="max-h-36 overflow-y-auto border rounded p-2 grid grid-cols-1 sm:grid-cols-2 gap-1">
+                                    {countries.map(c => (
+                                        <label key={c} className="flex items-center gap-2 p-1 hover:bg-gray-50 cursor-pointer text-xs">
+                                            <input type="checkbox" checked={targetIds.includes(c)} onChange={() => toggleId(c)} className="rounded" />
+                                            <span>{c}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+
+                            {targetType === 'currency' && (
+                                <div className="max-h-32 overflow-y-auto border rounded p-2 grid grid-cols-3 gap-2">
+                                    {['PKR', 'USD', 'EUR'].map(cur => (
+                                        <label key={cur} className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50 cursor-pointer text-xs font-bold">
+                                            <input type="checkbox" checked={targetIds.includes(cur)} onChange={() => toggleId(cur)} className="rounded" />
+                                            <span>{cur}</span>
                                         </label>
                                     ))}
                                 </div>
