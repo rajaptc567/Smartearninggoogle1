@@ -13,34 +13,25 @@ export const UserPopupModal: React.FC = () => {
     const [activePopup, setActivePopup] = useState<Notification | null>(null);
     const [isVisible, setIsVisible] = useState(false);
 
-    // Register global close function for any HTML snippet referencing closeSmartexnPopup()
-    useEffect(() => {
-        (window as any).closeSmartexnPopup = () => {
-            handleDismiss();
-        };
-        return () => {
-            delete (window as any).closeSmartexnPopup;
-        };
-    }, [activePopup, isVisible]);
-
     // Find the first eligible popup notification that hasn't been shown yet or matches every_visit/login
     useEffect(() => {
-        // Do not show popup modals to admin users in the admin panel
-        if (currentUser?.role === 'admin' || location.pathname.startsWith('/admin')) {
-            setActivePopup(null);
+        const handleCloseEvent = () => {
             setIsVisible(false);
-            return;
-        }
+            setActivePopup(null);
+        };
+        window.addEventListener('close-smartexn-popup', handleCloseEvent);
+        return () => {
+            window.removeEventListener('close-smartexn-popup', handleCloseEvent);
+        };
+    }, []);
 
+    useEffect(() => {
+        // If on homepage or user is logged in
         const isHomepage = location.pathname === '/';
         
         const eligiblePopups = notifications.filter(n => {
             if (!n.isPopup) return false;
             
-            // Check if dismissed in this session already
-            const sessionDismissed = sessionStorage.getItem(`dismissed_popup_${n._id}`);
-            if (sessionDismissed === 'true') return false;
-
             // Check target user or broadcast
             const isForUser = currentUser && n.userId === currentUser._id;
             const isForGuestOrHomepage = isHomepage; // Broadcast or homepage popups
@@ -50,7 +41,7 @@ export const UserPopupModal: React.FC = () => {
             const trigger = n.displayTrigger || 'login';
             const freq = n.frequency || 'once_per_user';
 
-            if (freq === 'every_visit') return !sessionDismissed;
+            if (freq === 'every_visit') return true;
             if (trigger === 'login' && currentUser) return !n.popupShown;
             if (trigger === 'homepage' && isHomepage) return !n.popupShown;
 
@@ -82,22 +73,10 @@ export const UserPopupModal: React.FC = () => {
         }
     }, [notifications, currentUser, location.pathname]);
 
-    // Handle Escape key to close
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && isVisible) {
-                handleDismiss();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isVisible, activePopup]);
-
     const handleDismiss = async () => {
         if (!activePopup) return;
         try {
             if (activePopup._id) {
-                sessionStorage.setItem(`dismissed_popup_${activePopup._id}`, 'true');
                 const updatedList = await markNotificationPopupAsShown(activePopup._id);
                 dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedList });
             }
@@ -105,11 +84,7 @@ export const UserPopupModal: React.FC = () => {
             setActivePopup(null);
         } catch (err) {
             console.error('Failed to mark popup as shown:', err);
-            if (activePopup?._id) {
-                sessionStorage.setItem(`dismissed_popup_${activePopup._id}`, 'true');
-            }
             setIsVisible(false);
-            setActivePopup(null);
         }
     };
 
@@ -127,14 +102,8 @@ export const UserPopupModal: React.FC = () => {
     if (!isVisible || !activePopup) return null;
 
     return (
-        <div 
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300"
-            onClick={handleDismiss}
-        >
-            <div 
-                className="bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-800 max-w-lg w-full overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-300"
-                onClick={e => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-800 max-w-lg w-full overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-300">
                 
                 {/* Optional Banner Image */}
                 {activePopup.imageUrl && (

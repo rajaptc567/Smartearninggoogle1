@@ -681,7 +681,7 @@ const AdminNotifications: React.FC = () => {
               </div>
 
               {/* Simulated Popup Box */}
-              <div id="smartexnPlatformPopup" className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 max-w-md mx-auto overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 max-w-md mx-auto overflow-hidden">
                 {popupImageUrl && (
                   <div className="relative h-36 bg-gray-100 dark:bg-gray-800">
                     <img src={popupImageUrl} alt="Banner Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
