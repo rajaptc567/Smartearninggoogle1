@@ -27,6 +27,23 @@ const NotificationSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    imageUrl: {
+        type: String,
+    },
+    displayTrigger: {
+        type: String,
+        default: 'login',
+    },
+    frequency: {
+        type: String,
+        default: 'once_per_user',
+    },
+    actionButtonText: {
+        type: String,
+    },
+    actionButtonLink: {
+        type: String,
+    },
     read: {
         type: Boolean,
         default: false,

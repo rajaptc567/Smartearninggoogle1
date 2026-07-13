@@ -7,7 +7,8 @@ import {
     bulkUpdateTemplates,
     getTemplatesHistory,
     deleteTemplatesHistoryBulk,
-    manualSendTemplate
+    manualSendTemplate,
+    resendTemplateLog
 } from '../controllers/templatesController.js';
 
 const router = express.Router();
@@ -23,6 +24,9 @@ router.route('/bulk')
 
 router.route('/history')
     .get(authorize(['admin']), getTemplatesHistory);
+
+router.route('/history/:id/resend')
+    .post(authorize(['admin']), resendTemplateLog);
 
 router.route('/history/bulk-delete')
     .post(authorize(['admin']), deleteTemplatesHistoryBulk);

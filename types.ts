@@ -558,6 +558,11 @@ export interface Notification {
     isPopup: boolean;
     popupShown: boolean;
     read: boolean;
+    imageUrl?: string;
+    displayTrigger?: string;
+    frequency?: string;
+    actionButtonText?: string;
+    actionButtonLink?: string;
     date: string;
 }
 

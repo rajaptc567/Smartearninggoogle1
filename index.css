@@ -1,0 +1,42 @@
+.rendered-html p {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+.rendered-html p:last-child {
+  margin-bottom: 0;
+}
+.rendered-html ul {
+  list-style-type: disc;
+  margin-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.rendered-html ol {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.rendered-html li {
+  margin-bottom: 0.25rem;
+}
+.rendered-html a {
+  color: #2563eb;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.rendered-html strong, .rendered-html b {
+  font-weight: 700;
+}
+.rendered-html h1, .rendered-html h2, .rendered-html h3 {
+  font-weight: 800;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.rendered-html h1 { font-size: 1.5rem; }
+.rendered-html h2 { font-size: 1.25rem; }
+.rendered-html h3 { font-size: 1.1rem; }
+.rendered-html blockquote {
+  border-left: 4px solid #3b82f6;
+  padding-left: 1rem;
+  font-style: italic;
+  margin: 0.75rem 0;
+}

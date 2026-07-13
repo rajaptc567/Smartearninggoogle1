@@ -5,7 +5,7 @@ import { Notification } from '../types';
 import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { deleteNotification, bulkDeleteNotifications, updateNotification } from '../services/api';
+import { deleteNotification, bulkDeleteNotifications, updateNotification, createNotification, getNotifications } from '../services/api';
 
 interface ResolvedNotificationInfo {
   notification: Notification;
@@ -36,6 +36,75 @@ const AdminNotifications: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
+
+  // Bulk Pop-up Form State
+  const [activeTab, setActiveTab] = useState<'history' | 'bulk_popup'>('history');
+  const [popupSubject, setPopupSubject] = useState('');
+  const [popupMessage, setPopupMessage] = useState('');
+  const [popupImageUrl, setPopupImageUrl] = useState('');
+  const [targetType, setTargetType] = useState<'all' | 'plan' | 'single' | 'inactive'>('all');
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [displayTrigger, setDisplayTrigger] = useState<'login' | 'every_page' | 'delay_30s' | 'delay_2m' | 'delay_10m'>('login');
+  const [frequency, setFrequency] = useState<'once_per_user' | 'every_visit'>('once_per_user');
+  const [actionButtonText, setActionButtonText] = useState('');
+  const [actionButtonLink, setActionButtonLink] = useState('');
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [isSendingPopup, setIsSendingPopup] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+
+  const filteredUsersForSelection = useMemo(() => {
+    if (!userSearchTerm) return users.slice(0, 10);
+    return users.filter(u => u.username.toLowerCase().includes(userSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(userSearchTerm.toLowerCase())).slice(0, 15);
+  }, [users, userSearchTerm]);
+
+  const handleSendBulkPopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!popupMessage.trim()) {
+      alert('Please enter notification description / HTML content.');
+      return;
+    }
+    if (targetType === 'plan' && selectedPlanIds.length === 0) {
+      alert('Please select at least one investment plan.');
+      return;
+    }
+    if (targetType === 'single' && selectedUserIds.length === 0) {
+      alert('Please select at least one user.');
+      return;
+    }
+
+    setIsSendingPopup(true);
+    try {
+      const payload = {
+        subject: popupSubject,
+        message: popupMessage,
+        imageUrl: popupImageUrl,
+        isPopup: true,
+        targetType,
+        targetIds: targetType === 'plan' ? selectedPlanIds : targetType === 'single' ? selectedUserIds : undefined,
+        displayTrigger,
+        frequency,
+        actionButtonText,
+        actionButtonLink,
+        selectedChannels
+      };
+      const result = await createNotification(payload);
+      alert(`Successfully broadcasted pop-up notification to ${result.count} users!`);
+      const updatedNotifs = await getNotifications();
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifs });
+      setPopupSubject('');
+      setPopupMessage('');
+      setPopupImageUrl('');
+      setSelectedPlanIds([]);
+      setSelectedUserIds([]);
+      setActiveTab('history');
+    } catch (err: any) {
+      console.error('Failed to send bulk pop-up:', err);
+      alert(err.message || 'Failed to send bulk pop-up notification.');
+    } finally {
+      setIsSendingPopup(false);
+    }
+  };
 
   // Resolve linked entity and status for every notification
   const enrichedNotifications = useMemo<ResolvedNotificationInfo[]>(() => {
@@ -407,8 +476,363 @@ const AdminNotifications: React.FC = () => {
         </div>
       </div>
 
-      {/* Search and Advanced Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 gap-6">
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'history'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          Send History Logs ({notifications.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('bulk_popup')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'bulk_popup'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          Bulk Pop-up Broadcasts 🚀
+        </button>
+      </div>
+
+      {activeTab === 'bulk_popup' && (
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 shadow-xl max-w-4xl mx-auto">
+          <div className="mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">🚀 Broadcast Bulk Pop-up Notification</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Configure targeted pop-up announcements with images, rich HTML descriptions, display triggers, and call-to-action buttons.
+            </p>
+          </div>
+
+          <form onSubmit={handleSendBulkPopup} className="space-y-6">
+            {/* Target Audience */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Target Audience</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: 'all', label: 'All Members', desc: 'Every registered user' },
+                  { id: 'plan', label: 'By Active Plans', desc: 'Users holding specific plans' },
+                  { id: 'single', label: 'Manual Selection', desc: 'Search & pick specific users' },
+                  { id: 'inactive', label: 'Inactive / No Plan', desc: 'Users without active plans' }
+                ].map(item => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => setTargetType(item.id as any)}
+                    className={`p-4 rounded-2xl border text-left transition-all ${
+                      targetType === item.id
+                        ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-200 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    <p className="font-bold text-sm">{item.label}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{item.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* If Plan target type */}
+            {targetType === 'plan' && (
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Investment Plans:</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
+                  {state.investmentPlans.map(plan => {
+                    const isChecked = selectedPlanIds.includes(plan._id);
+                    return (
+                      <label 
+                        key={plan._id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                          isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedPlanIds(prev => [...prev, plan._id]);
+                            else setSelectedPlanIds(prev => prev.filter(id => id !== plan._id));
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="truncate">
+                          <p className="text-xs font-bold truncate text-gray-900 dark:text-white">{plan.name}</p>
+                          <p className="text-[10px] text-gray-500">{plan.currency} {plan.price}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* If Manual Selection */}
+            {targetType === 'single' && (
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Select Specific Users ({selectedUserIds.length} selected):</label>
+                  <input
+                    type="text"
+                    placeholder="Search by username or email..."
+                    value={userSearchTerm}
+                    onChange={e => setUserSearchTerm(e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs w-64"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-2">
+                  {filteredUsersForSelection.map(user => {
+                    const isChecked = selectedUserIds.includes(user._id);
+                    return (
+                      <label
+                        key={user._id}
+                        className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          isChecked ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedUserIds(prev => [...prev, user._id]);
+                            else setSelectedUserIds(prev => prev.filter(id => id !== user._id));
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="truncate">
+                          <p className="text-xs font-bold truncate text-gray-900 dark:text-white">@{user.username}</p>
+                          <p className="text-[10px] text-gray-500 truncate">{user.email}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Subject / Title */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Popup Title / Subject</label>
+              <input
+                type="text"
+                placeholder="e.g. 🎉 Special Bonus & Promotion Event!"
+                value={popupSubject}
+                onChange={e => setPopupSubject(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Banner Image URL */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Banner Image URL (Optional)</label>
+              <input
+                type="url"
+                placeholder="https://example.com/banner-image.jpg"
+                value={popupImageUrl}
+                onChange={e => setPopupImageUrl(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {popupImageUrl && (
+                <div className="mt-3 relative h-36 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                  <img src={popupImageUrl} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                </div>
+              )}
+            </div>
+
+            {/* Description / HTML Content */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-500">Description & HTML Content</label>
+                <span className="text-[10px] text-gray-400 font-mono">Supports HTML tags (&lt;b&gt;, &lt;p&gt;, &lt;a&gt;, &lt;ul&gt;, etc.)</span>
+              </div>
+              <textarea
+                rows={5}
+                placeholder="<p>Dear Member,</p><p>We are thrilled to announce our new reward system. Check out your dashboard for details!</p>"
+                value={popupMessage}
+                onChange={e => setPopupMessage(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                required
+              />
+            </div>
+
+            {/* LIVE HTML PREVIEW CARD FOR ADMIN */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-800/80 dark:to-gray-900/80 border border-blue-200 dark:border-blue-900/40 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Live HTML Popup Preview (Admin View)
+                </span>
+                <span className="text-[10px] font-mono bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                  Realtime Render
+                </span>
+              </div>
+
+              {/* Simulated Popup Box */}
+              <div id="smartexnPlatformPopup" className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 max-w-md mx-auto overflow-hidden">
+                {popupImageUrl && (
+                  <div className="relative h-36 bg-gray-100 dark:bg-gray-800">
+                    <img src={popupImageUrl} alt="Banner Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                )}
+                <div className="p-5 space-y-3">
+                  {!popupImageUrl && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                      Announcement
+                    </span>
+                  )}
+                  {popupSubject ? (
+                    <h4 className="font-black text-gray-900 dark:text-white text-base">
+                      {popupSubject}
+                    </h4>
+                  ) : (
+                    <h4 className="font-black text-gray-400 text-sm italic">
+                      [Popup Title will appear here...]
+                    </h4>
+                  )}
+
+                  <div 
+                    className="rendered-html text-xs text-gray-700 dark:text-gray-300 leading-relaxed max-h-40 overflow-y-auto pr-1"
+                    dangerouslySetInnerHTML={{ 
+                      __html: popupMessage || '<p class="text-gray-400 italic">Your HTML description content will be rendered here...</p>' 
+                    }}
+                  />
+
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
+                    {actionButtonText && (
+                      <div className="w-full py-2 px-4 bg-blue-600 text-white font-bold text-center rounded-xl text-xs uppercase tracking-wider">
+                        {actionButtonText}
+                      </div>
+                    )}
+                    <div className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-center rounded-xl text-[10px] uppercase tracking-wider">
+                      Got it / Dismiss
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Display Triggers & Frequency */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Trigger (When user visits/logs in)</label>
+                <select
+                  value={displayTrigger}
+                  onChange={e => setDisplayTrigger(e.target.value as any)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
+                >
+                  <option value="login">Every Time User Logs In (Upon Login)</option>
+                  <option value="homepage">On Homepage Whenever Any User Arrives</option>
+                  <option value="every_page">Show on Every Page Navigation</option>
+                  <option value="delay_30s">Show After 30 Seconds Delay</option>
+                  <option value="delay_2m">Show After 2 Minutes Delay</option>
+                  <option value="delay_10m">Show After 10 Minutes Delay</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Display Frequency</label>
+                <select
+                  value={frequency}
+                  onChange={e => setFrequency(e.target.value as any)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-bold text-gray-900 dark:text-white"
+                >
+                  <option value="once_per_user">Once Per User (Until Dismissed)</option>
+                  <option value="every_visit">Every Time / Always Show (Ignore Previous Dismissals)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Action Button (Optional) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Text (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Deposit Now or Claim Bonus"
+                  value={actionButtonText}
+                  onChange={e => setActionButtonText(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Action Button Link / Route (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. /member/deposit or https://t.me/channel"
+                  value={actionButtonLink}
+                  onChange={e => setActionButtonLink(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Additional Channels */}
+            <div>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Also Send Via (Optional Channels)</label>
+              <div className="flex gap-4">
+                {[
+                  { id: 'email', label: 'Email Notification' },
+                  { id: 'whatsapp', label: 'WhatsApp / SMS' }
+                ].map(ch => {
+                  const isChecked = selectedChannels.includes(ch.id);
+                  return (
+                    <label key={ch.id} className="flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-700 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={e => {
+                          if (e.target.checked) setSelectedChannels(prev => [...prev, ch.id]);
+                          else setSelectedChannels(prev => prev.filter(c => c !== ch.id));
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>{ch.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Submit */}
+            <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 dark:border-gray-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setActiveTab('history')}
+                className="rounded-2xl px-6"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSendingPopup}
+                className="rounded-2xl px-8 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg shadow-blue-500/25"
+              >
+                {isSendingPopup ? 'Broadcasting...' : '🚀 Broadcast Pop-up Now'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div className="space-y-6">
+          {/* Search and Advanced Filters */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-6">
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Search bar */}
           <div className="flex-1 relative">
@@ -697,7 +1121,9 @@ const AdminNotifications: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

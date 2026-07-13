@@ -7,7 +7,8 @@ import {
     getUsers,
     getTemplatesHistory,
     deleteTemplatesHistoryBulk,
-    manualSendTemplate
+    manualSendTemplate,
+    resendTemplateLog
 } from '../services/api';
 import { Template, TemplateLog, User } from '../types';
 import { 
@@ -28,7 +29,8 @@ import {
     EyeOff,
     Filter,
     CheckSquare,
-    Square
+    Square,
+    RefreshCw
 } from 'lucide-react';
 
 const AdminTemplates: React.FC = () => {
@@ -89,6 +91,22 @@ const AdminTemplates: React.FC = () => {
 
     // Expanded log details for history panel (optional popup/accordion)
     const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+    const [resendingLogId, setResendingLogId] = useState<string | null>(null);
+
+    const handleResend = async (logId: string) => {
+        try {
+            setResendingLogId(logId);
+            const updatedLogs = await resendTemplateLog(logId);
+            setHistoryLogs(updatedLogs);
+            alert('Notification resent successfully!');
+        } catch (err: any) {
+            alert(err.message || 'Failed to resend notification');
+            const logs = await getTemplatesHistory();
+            setHistoryLogs(logs);
+        } finally {
+            setResendingLogId(null);
+        }
+    };
 
     // Sample placeholders reference
     const placeholderVars = [
@@ -1241,7 +1259,22 @@ The SmartEarning Desk
                                                         <td className="py-3.5 px-4 text-gray-400">
                                                             {log.date ? new Date(log.date).toLocaleString() : 'N/A'}
                                                         </td>
-                                                        <td className="py-3.5 px-4 text-right">
+                                                        <td className="py-3.5 px-4 text-right flex items-center justify-end gap-3">
+                                                            <button
+                                                                onClick={() => handleResend(log._id)}
+                                                                disabled={resendingLogId === log._id}
+                                                                className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-50"
+                                                                title="Resend notification"
+                                                            >
+                                                                {resendingLogId === log._id ? (
+                                                                    <span>Sending...</span>
+                                                                ) : (
+                                                                    <>
+                                                                        <RefreshCw className="w-3.5 h-3.5" />
+                                                                        <span>Resend</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
                                                             <button
                                                                 onClick={() => setExpandedLogId(isExpanded ? null : log._id)}
                                                                 className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"

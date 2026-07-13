@@ -833,3 +833,12 @@ export const manualSendTemplate = async (userIds: string[], templateKey: string,
     });
     await handleResponse(response);
 };
+
+export const resendTemplateLog = async (id: string): Promise<TemplateLog[]> => {
+    const response = await fetch(`${API_BASE_URL}/templates/history/${id}/resend`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};

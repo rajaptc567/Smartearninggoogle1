@@ -1,7 +1,7 @@
 import Template from '../models/Template.js';
 import TemplateLog from '../models/TemplateLog.js';
 import User from '../models/User.js';
-import { sendTemplateNotification } from '../utils/automation.js';
+import { sendTemplateNotification, sendAutomatedMessage } from '../utils/automation.js';
 
 // @desc    Get all message templates (seeds if empty)
 // @route   GET /api/v1/templates
@@ -129,3 +129,65 @@ export const manualSendTemplate = async (req, res) => {
         res.status(400).json({ success: false, error: err.message });
     }
 };
+
+// @desc    Resend a template log entry
+// @route   POST /api/v1/templates/history/:id/resend
+export const resendTemplateLog = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const log = await TemplateLog.findById(id);
+        if (!log) {
+            return res.status(404).json({ success: false, error: 'Template log not found' });
+        }
+
+        if (log.userId && log.templateKey) {
+            await sendTemplateNotification({
+                userId: log.userId,
+                templateKey: log.templateKey,
+                variables: {},
+                sentBy: 'Admin'
+            });
+        } else {
+            let sentSuccess = false;
+            let errorMsg = null;
+            if (log.type === 'email') {
+                const resEmail = await sendAutomatedMessage({
+                    toEmail: log.recipient,
+                    subject: log.subject || 'Notification from SmartEarning',
+                    messageText: log.body
+                });
+                sentSuccess = resEmail.email?.success || false;
+                errorMsg = resEmail.email?.error || resEmail.error || null;
+            } else {
+                const resWa = await sendAutomatedMessage({
+                    toPhone: log.recipient,
+                    messageText: log.body
+                });
+                sentSuccess = resWa.whatsapp?.success || false;
+                errorMsg = resWa.whatsapp?.error || resWa.error || null;
+            }
+
+            await TemplateLog.create({
+                userId: log.userId,
+                username: log.username || 'AdminResend',
+                userEmail: log.userEmail,
+                userPhone: log.userPhone,
+                templateKey: log.templateKey || 'resend_custom',
+                templateName: log.templateName || 'Resent Message',
+                type: log.type,
+                recipient: log.recipient,
+                subject: log.subject,
+                body: log.body,
+                status: sentSuccess ? 'Success' : 'Failed',
+                error: errorMsg,
+                sentBy: 'Admin'
+            });
+        }
+
+        const logs = await TemplateLog.find().sort({ date: -1 });
+        res.status(200).json({ success: true, message: 'Resend triggered successfully', data: logs });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+

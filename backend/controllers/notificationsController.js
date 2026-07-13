@@ -25,7 +25,7 @@ export const getNotifications = async (req, res) => {
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {
     try {
-        const { userId, message, subject, isPopup, targetType, targetIds, randomCount, selectedChannels } = req.body;
+        const { userId, message, subject, isPopup, targetType, targetIds, randomCount, selectedChannels, imageUrl, displayTrigger, frequency, actionButtonText, actionButtonLink } = req.body;
         
         let notificationsToCreate = [];
         const senderType = 'Admin'; // Messages sent via this endpoint are always from an Admin
@@ -34,7 +34,20 @@ export const createNotification = async (req, res) => {
         if (userId) {
              const user = await User.findById(userId);
              if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-             notificationsToCreate.push({ userId, senderType, message, subject, isPopup, popupShown: false, read: false });
+             notificationsToCreate.push({ 
+                 userId, 
+                 senderType, 
+                 message, 
+                 subject, 
+                 isPopup, 
+                 popupShown: false, 
+                 read: false,
+                 imageUrl,
+                 displayTrigger,
+                 frequency,
+                 actionButtonText,
+                 actionButtonLink
+             });
         } 
         // CASE 2: Bulk Messaging
         else if (targetType) {
@@ -82,7 +95,12 @@ export const createNotification = async (req, res) => {
                 subject,
                 isPopup: isPopup || false,
                 popupShown: false,
-                read: false
+                read: false,
+                imageUrl,
+                displayTrigger,
+                frequency,
+                actionButtonText,
+                actionButtonLink
             }));
         } else {
              return res.status(400).json({ success: false, error: 'Missing recipient information' });

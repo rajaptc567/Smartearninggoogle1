@@ -27,6 +27,7 @@ import AdminTasks from './pages/AdminTasks';
 import AdminUserTasks from './pages/AdminUserTasks';
 import AdminTemplates from './pages/AdminTemplates';
 import AdminNotifications from './pages/AdminNotifications';
+import { UserPopupModal } from './components/UserPopupModal';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -130,6 +131,7 @@ const App: React.FC = () => {
         </Route>
       </Routes>
       <WhatsAppFloatingButton />
+      <UserPopupModal />
     </HashRouter>
   </>
   );
