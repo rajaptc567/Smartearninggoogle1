@@ -55,6 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/investment-plans', label: 'Investment Plans', icon: <PlanIcon /> },
       { to: '/admin/plan-equivalency', label: 'Plan Equivalency', icon: <LinkIcon /> },
       { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon /> },
+      { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon /> },
       { to: '/admin/wallet', label: 'Wallet', icon: <WalletIcon /> },
       { to: '/admin/rules', label: 'Upgrade Rules', icon: <RulesIcon /> },
       { to: '/admin/sponsor-commission-rules', label: 'Sponsor Rules', icon: <CommissionRuleIcon /> },

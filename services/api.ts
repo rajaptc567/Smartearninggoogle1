@@ -565,6 +565,91 @@ export const deletePasswordResetRequest = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+// --- [User Tasks API Functions] ---
+export const getUserTasks = async (): Promise<UserTask[]> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createUserTask = async (taskData: any): Promise<{ task: UserTask; user: User }> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(taskData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateUserTaskStatus = async (id: string, updates: { status?: string; adminNotes?: string }): Promise<UserTask> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(updates),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteUserTask = async (id: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const getUserTaskSubmissions = async (): Promise<any[]> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/submissions`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const submitUserTaskProof = async (taskId: string, proofData: { userId: string; proofText?: string; proofImage?: string }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/submit-proof`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(proofData)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateSubmissionStatus = async (subId: string, updates: { status: string; adminNotes?: string }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(updates)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteSubmission = async (subId: string): Promise<{}> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const convertUserCurrency = async (data: { userId: string; amount: number; fromCurrency: string; toCurrency: string }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/convert`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 // --- [Dispute API Functions] ---
 export const getDisputes = async (): Promise<Dispute[]> => {
     const response = await fetch(`${API_BASE_URL}/disputes`, {

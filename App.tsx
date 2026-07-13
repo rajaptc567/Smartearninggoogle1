@@ -24,6 +24,7 @@ import SentMessages from './pages/SentMessages';
 import TickerSettings from './pages/TickerSettings';
 import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
+import AdminUserTasks from './pages/AdminUserTasks';
 import AdminTemplates from './pages/AdminTemplates';
 import AdminNotifications from './pages/AdminNotifications';
 
@@ -53,6 +54,7 @@ import ActivePlans from './pages/user/ActivePlans';
 import UserDisputes from './pages/user/UserDisputes';
 import Messages from './pages/user/Messages';
 import UserTasks from './pages/user/UserTasks';
+import UserTasksSubmit from './pages/user/UserTasksSubmit';
 
 
 const App: React.FC = () => {
@@ -95,6 +97,7 @@ const App: React.FC = () => {
           <Route path="investment-plans" element={<InvestmentPlans />} />
           <Route path="plan-equivalency" element={<PlanEquivalency />} />
           <Route path="tasks" element={<AdminTasks />} />
+          <Route path="user-tasks" element={<AdminUserTasks />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
           <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />
@@ -118,6 +121,7 @@ const App: React.FC = () => {
           <Route path="plans" element={<UserInvestmentPlans />} />
           <Route path="active-plans" element={<ActivePlans />} />
           <Route path="tasks" element={<UserTasks />} />
+          <Route path="user-tasks" element={<UserTasksSubmit />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="referrals" element={<Referrals />} />
           <Route path="disputes" element={<UserDisputes />} />

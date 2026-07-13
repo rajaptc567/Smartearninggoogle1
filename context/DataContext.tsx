@@ -1,10 +1,10 @@
 
 import React, { createContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent } from '../types';
+import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent, UserTask, UserTaskSubmission } from '../types';
 import { 
     getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
-    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks,
+    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
     getDataVersion
 } from '../services/api';
 
@@ -18,6 +18,8 @@ interface AppState {
     transactions: Transaction[];
     rules: Rule[];
     tasks: Task[];
+    userTasks: UserTask[];
+    userTaskSubmissions: UserTaskSubmission[];
     settings: Settings;
     notifications: Notification[];
     logs: Log[];
@@ -69,6 +71,8 @@ const initialState: AppState = {
     transactions: [],
     rules: [],
     tasks: [],
+    userTasks: [],
+    userTaskSubmissions: [],
     settings: {
         isUserTransferEnabled: true,
         isTasksEnabled: true,
@@ -170,6 +174,14 @@ type Action =
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
+    | { type: 'SET_USER_TASKS'; payload: UserTask[] }
+    | { type: 'ADD_USER_TASK'; payload: UserTask }
+    | { type: 'UPDATE_USER_TASK'; payload: UserTask }
+    | { type: 'DELETE_USER_TASK'; payload: string }
+    | { type: 'SET_USER_TASK_SUBMISSIONS'; payload: UserTaskSubmission[] }
+    | { type: 'ADD_USER_TASK_SUBMISSION'; payload: UserTaskSubmission }
+    | { type: 'UPDATE_USER_TASK_SUBMISSION'; payload: UserTaskSubmission }
+    | { type: 'DELETE_USER_TASK_SUBMISSION'; payload: string }
     | { type: 'SET_CURRENT_USER'; payload: { user: User | null; token?: string } }
     | { type: 'SET_LOADING'; payload: boolean };
 
@@ -305,6 +317,16 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_TASK': newState = { ...state, tasks: state.tasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
         case 'DELETE_TASK': newState = { ...state, tasks: state.tasks.filter(t => t._id !== action.payload) }; break;
 
+        case 'SET_USER_TASKS': newState = { ...state, userTasks: action.payload || [] }; break;
+        case 'ADD_USER_TASK': newState = { ...state, userTasks: [action.payload, ...state.userTasks] }; break;
+        case 'UPDATE_USER_TASK': newState = { ...state, userTasks: state.userTasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
+        case 'DELETE_USER_TASK': newState = { ...state, userTasks: state.userTasks.filter(t => t._id !== action.payload) }; break;
+
+        case 'SET_USER_TASK_SUBMISSIONS': newState = { ...state, userTaskSubmissions: action.payload || [] }; break;
+        case 'ADD_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: [action.payload, ...state.userTaskSubmissions] }; break;
+        case 'UPDATE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.map(s => s._id === action.payload._id ? action.payload : s) }; break;
+        case 'DELETE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.filter(s => s._id !== action.payload) }; break;
+
         case 'SET_LOADING':
             newState = { ...state, isLoading: action.payload };
             break;
@@ -395,7 +417,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 // Private data only fetched if logged in
                 const privatePromises = isLoggedIn ? [
                     getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), 
-                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                 ] : [];
 
                 const [publicResults, privateResults] = await Promise.all([
@@ -425,7 +447,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                         logs: getValue(privateResults, 7, state.logs),
                         passwordResetRequests: getValue(privateResults, 8, state.passwordResetRequests),
                         disputes: getValue(privateResults, 9, state.disputes),
-                        tasks: getValue(privateResults, 10, state.tasks)
+                        tasks: getValue(privateResults, 10, state.tasks),
+                        userTasks: getValue(privateResults, 11, state.userTasks),
+                        userTaskSubmissions: getValue(privateResults, 12, state.userTaskSubmissions)
                     } 
                 });
                 dispatch({ type: 'SET_LOADING', payload: false });
@@ -494,7 +518,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     // Silent background fetch using Promise.allSettled to eliminate UI flicker
                     const results = await Promise.allSettled([
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks()
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ]);
                     
                     const getValue = (idx: number, fallback: any) => 
@@ -516,7 +540,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             logs: getValue(10, state.logs), 
                             passwordResetRequests: getValue(11, state.passwordResetRequests),
                             disputes: getValue(12, state.disputes), 
-                            tasks: getValue(13, state.tasks)
+                            tasks: getValue(13, state.tasks),
+                            userTasks: getValue(14, state.userTasks),
+                            userTaskSubmissions: getValue(15, state.userTaskSubmissions)
                         } 
                     });
                 }

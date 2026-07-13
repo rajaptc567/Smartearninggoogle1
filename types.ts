@@ -235,6 +235,17 @@ export interface Settings {
     whatsappToken?: string;
     autoWelcomeEnabled?: boolean;
     autoPasswordResetEnabled?: boolean;
+    isUserTaskEnabled?: boolean;
+    userTaskAccessMode?: 'all' | 'manual' | 'plan';
+    userTaskAllowedUserIds?: string[];
+    userTaskAllowedPlanIds?: string[];
+    userTaskNotificationEnabled?: boolean;
+    userTaskNotificationMessage?: string;
+    userTaskConfig?: {
+        minQuantity: number;
+        minRewardAmount: number;
+        commissionPercent: number;
+    };
     signUpConfig?: {
         customTitle?: string;
         fullNameRule?: 'required' | 'optional' | 'hidden';
@@ -285,6 +296,44 @@ export interface Task {
     status: 'Active' | 'Disabled' | 'Draft' | 'Archived';
     rewardAmount?: number;
     createdAt: string;
+}
+
+export interface UserTask {
+    _id: string;
+    userId: string;
+    userName: string;
+    category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Other';
+    subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Other';
+    title: string;
+    description: string;
+    link: string;
+    targetQuantity: number;
+    currentCompletions: number;
+    rewardPerTask: number;
+    totalBudget: number;
+    adminCommission: number;
+    currency: Currency;
+    status: 'Pending' | 'Approved' | 'Rejected' | 'On Hold' | 'Paid' | 'Completed';
+    adminNotes?: string;
+    completedUsers?: string[];
+    createdAt?: string;
+    date?: string;
+}
+
+export interface UserTaskSubmission {
+    _id: string;
+    taskId: string;
+    workerId: string;
+    workerName: string;
+    proofText: string;
+    proofImage?: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    adminNotes?: string;
+    rewardAmount: number;
+    currency: Currency;
+    createdAt?: string;
+    taskTitle?: string;
+    taskCategory?: string;
 }
 
 export interface Deposit {
@@ -563,7 +612,7 @@ export interface Dispute {
     _id: string;
     userId: string;
     userName: string;
-    type: 'Deposit' | 'Withdrawal' | 'Transfer';
+    type: 'Deposit' | 'Withdrawal' | 'Transfer' | 'UserTask';
     referenceId: string;
     description: string;
     proofUrl?: string;

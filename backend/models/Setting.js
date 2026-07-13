@@ -254,6 +254,17 @@ const SettingSchema = new mongoose.Schema({
     autoWelcomeEnabled: { type: Boolean, default: false },
     autoPasswordResetEnabled: { type: Boolean, default: false },
     signUpConfig: { type: SignUpConfigSchema, default: () => ({}) },
+    isUserTaskEnabled: { type: Boolean, default: true },
+    userTaskAccessMode: { type: String, enum: ['all', 'manual', 'plan'], default: 'all' },
+    userTaskAllowedUserIds: { type: [String], default: [] },
+    userTaskAllowedPlanIds: { type: [String], default: [] },
+    userTaskNotificationEnabled: { type: Boolean, default: true },
+    userTaskNotificationMessage: { type: String, default: 'Want to earn extra rewards? Activate the required investment plan to unlock the User Task Hub and start earning today!' },
+    userTaskConfig: {
+        minQuantity: { type: Number, default: 5 },
+        minRewardAmount: { type: Number, default: 0.10 },
+        commissionPercent: { type: Number, default: 10 }
+    },
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {

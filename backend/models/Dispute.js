@@ -32,7 +32,7 @@ const DisputeSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['Deposit', 'Withdrawal', 'Transfer'],
+        enum: ['Deposit', 'Withdrawal', 'Transfer', 'UserTask'],
         required: true,
     },
     referenceId: {
