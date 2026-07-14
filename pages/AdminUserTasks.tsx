@@ -3,6 +3,7 @@ import { useData } from '../hooks/useData';
 import { UserTask, UserTaskSubmission, formatCurrency } from '../types';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
 import { updateUserTaskStatus, deleteUserTask, updateSettings, updateSubmissionStatus, deleteSubmission } from '../services/api';
 
 const AdminUserTasks: React.FC = () => {
@@ -32,6 +33,7 @@ const AdminUserTasks: React.FC = () => {
     // Selected Task/Submission action
     const [adminNotes, setAdminNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [selectedCampaign, setSelectedCampaign] = useState<UserTask | null>(null);
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -383,7 +385,10 @@ const AdminUserTasks: React.FC = () => {
                                                     </Badge>
                                                 </td>
                                                 <td className="p-4 space-x-2">
-                                                    {task.status === 'Pending' && (
+                                                    <Button variant="secondary" onClick={() => setSelectedCampaign(task)} className="text-xs py-1 px-3">
+                                                     Details
+                                                 </Button>
+                                                 {task.status === 'Pending' && (
                                                         <Button variant="primary" onClick={() => handleTaskAction(task._id, 'Approved')} className="text-xs py-1 px-3">
                                                             Approve
                                                         </Button>
@@ -517,6 +522,84 @@ const AdminUserTasks: React.FC = () => {
                         </Button>
                     </form>
                 </div>
+            )}
+
+            {/* Campaign Detail Modal */}
+            {selectedCampaign && (
+                <Modal isOpen={true} onClose={() => setSelectedCampaign(null)}>
+                    <div className="p-8 w-[600px] max-w-full space-y-6">
+                        <div className="flex justify-between items-start border-b dark:border-gray-700 pb-4">
+                            <div>
+                                <h3 className="text-2xl font-black uppercase tracking-tight text-gray-900 dark:text-white">Campaign Details</h3>
+                                <p className="text-xs text-blue-600 font-bold uppercase mt-1">Submitted by: @{selectedCampaign.userName}</p>
+                            </div>
+                            <Badge variant={selectedCampaign.status === 'Approved' ? 'success' : selectedCampaign.status === 'Pending' ? 'warning' : 'danger'}>
+                                {selectedCampaign.status}
+                            </Badge>
+                        </div>
+
+                        <div className="space-y-4 text-sm">
+                            <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700">
+                                <div>
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block">Campaign Title</span>
+                                    <span className="font-bold text-gray-900 dark:text-white text-base">{selectedCampaign.title}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block">Category & SubType</span>
+                                    <span className="font-bold text-gray-800 dark:text-gray-200">{selectedCampaign.category} ({selectedCampaign.subType})</span>
+                                </div>
+                                <div className="col-span-full">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Target Link</span>
+                                    <a href={selectedCampaign.link} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline font-mono text-xs break-all block bg-white dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700">{selectedCampaign.link}</a>
+                                </div>
+                                <div className="col-span-full">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Instructions / Description</span>
+                                    <p className="text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700">{selectedCampaign.description || 'No description provided.'}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border dark:border-gray-700 text-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block">Reward / Task</span>
+                                    <span className="font-mono font-bold text-emerald-500">{selectedCampaign.rewardPerTask} USD</span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border dark:border-gray-700 text-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block">Total Budget</span>
+                                    <span className="font-mono font-bold text-blue-500">{selectedCampaign.totalBudget} USD</span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border dark:border-gray-700 text-center">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 block">Completions</span>
+                                    <span className="font-mono font-bold text-gray-900 dark:text-white">{selectedCampaign.currentCompletions} / {selectedCampaign.targetQuantity}</span>
+                                </div>
+                            </div>
+
+                            {selectedCampaign.adminNotes && (
+                                <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-200 dark:border-red-900/50">
+                                    <span className="text-[10px] font-black uppercase text-red-500 block mb-1">Admin Notes / Feedback</span>
+                                    <p className="text-xs text-red-700 dark:text-red-300">{selectedCampaign.adminNotes}</p>
+                                </div>
+                            )}
+
+                            <div className="text-xs text-gray-400 font-mono">
+                                Submitted on: {selectedCampaign.createdAt ? new Date(selectedCampaign.createdAt).toLocaleString() : 'N/A'} (ID: {selectedCampaign._id})
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t dark:border-gray-700">
+                            {selectedCampaign.status === 'Pending' && (
+                                <Button variant="primary" onClick={() => { handleTaskAction(selectedCampaign._id, 'Approved'); setSelectedCampaign(null); }}>
+                                    Approve Campaign
+                                </Button>
+                            )}
+                            {selectedCampaign.status !== 'Rejected' && (
+                                <Button variant="danger" onClick={() => { handleTaskAction(selectedCampaign._id, 'Rejected'); setSelectedCampaign(null); }}>
+                                    Reject & Refund
+                                </Button>
+                            )}
+                            <Button variant="secondary" onClick={() => setSelectedCampaign(null)}>Close</Button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );
