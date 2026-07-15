@@ -92,12 +92,14 @@ const UserTasksSubmit: React.FC = () => {
 
     // Proof Submission State (Module C)
     const [selectedTaskForProof, setSelectedTaskForProof] = useState<any | null>(null);
+    const [proofStep, setProofStep] = useState<number>(1);
     const [proofText, setProofText] = useState('');
     const [proofUsername, setProofUsername] = useState('');
     const [proofUserIdVal, setProofUserIdVal] = useState('');
     const [proofEmail, setProofEmail] = useState('');
     const [proofImage, setProofImage] = useState('');
     const [submittedProofsValues, setSubmittedProofsValues] = useState<Record<string, string>>({});
+    const [proofAgreed, setProofAgreed] = useState(false);
     const [isSubmittingProof, setIsSubmittingProof] = useState(false);
     const [showConvertModal, setShowConvertModal] = useState(false);
     const [isTransferringTaskWallet, setIsTransferringTaskWallet] = useState(false);
@@ -460,6 +462,10 @@ const UserTasksSubmit: React.FC = () => {
     const handleProofSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedTaskForProof) return;
+
+        if (!proofAgreed) {
+            return alert("WARNING: If you submit incorrect proof or do not complete the task properly, your account may be banned and your balance may be deducted. Please check the warning confirmation agreement checkbox to proceed.");
+        }
 
         const proofsToSubmit: Array<{ id: string; type: string; label: string; value: string }> = [];
         let finalProofText = proofText;
@@ -1106,32 +1112,27 @@ const UserTasksSubmit: React.FC = () => {
                                             </div>
 
                                             <div className="flex gap-2">
-                                                <a 
-                                                    href={task.link} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="flex-1 text-center py-3 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-2xl font-bold text-sm text-gray-900 dark:text-white transition-all"
-                                                >
-                                                    Open Link
-                                                </a>
                                                 {alreadySubmitted ? (
-                                                    <span className="flex-1 text-center py-3 px-4 bg-yellow-500/10 text-yellow-600 rounded-2xl font-bold text-sm">
-                                                        Submitted
+                                                    <span className="w-full text-center py-3 px-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl font-bold text-xs flex items-center justify-center gap-1">
+                                                        ✓ Submitted
                                                     </span>
                                                 ) : (
                                                     <Button 
                                                         variant="primary" 
-                                                        className="flex-1 py-3 text-sm"
+                                                        className="w-full py-3 text-xs font-bold"
                                                         onClick={() => {
                                                             setSelectedTaskForProof(task);
+                                                            setProofStep(1); // Start at step 1 (View Details)
                                                             setProofText('');
                                                             setProofUsername('');
                                                             setProofUserIdVal('');
                                                             setProofEmail('');
                                                             setProofImage('');
+                                                            setSubmittedProofsValues({});
+                                                            setProofAgreed(false);
                                                         }}
                                                     >
-                                                        Submit Proof
+                                                        🔍 View Detail
                                                     </Button>
                                                 )}
                                             </div>
@@ -1636,211 +1637,383 @@ const UserTasksSubmit: React.FC = () => {
 
             {/* PROOF SUBMISSION MODAL */}
             {selectedTaskForProof && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6 my-8">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Submit Proof: {selectedTaskForProof.title}</h3>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Task: {selectedTaskForProof.title}</h3>
                             <button onClick={() => setSelectedTaskForProof(null)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
                         </div>
 
-                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                            <p><strong className="text-gray-900 dark:text-white">Instructions:</strong> Complete the task at the target link and submit proof below.</p>
-                            <p><strong className="text-gray-900 dark:text-white">Reward:</strong> <span className="text-emerald-500 font-bold">+{selectedTaskForProof.rewardPerTask} USD</span></p>
+                        {/* Professional Step Indicator */}
+                        <div className="flex items-center justify-between mb-6 w-full max-w-xs mx-auto relative">
+                            <div className="absolute top-[15px] left-0 w-full h-0.5 bg-gray-200 dark:bg-gray-700 -z-0"></div>
+                            {[
+                                { step: 1, label: 'Details' },
+                                { step: 2, label: 'Submit Proof' }
+                            ].map((s) => {
+                                const isActive = proofStep === s.step;
+                                const isCompleted = proofStep > s.step;
+                                return (
+                                    <div key={s.step} className="flex flex-col items-center relative z-10 flex-1">
+                                        <div 
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-all duration-300 ${
+                                                isActive 
+                                                    ? 'bg-blue-600 text-white shadow-lg' 
+                                                    : isCompleted 
+                                                        ? 'bg-green-500 text-white' 
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400 border border-gray-200 dark:border-gray-600'
+                                            }`}
+                                        >
+                                            {isCompleted ? '✓' : s.step}
+                                        </div>
+                                        <span className={`text-[10px] mt-1.5 font-bold uppercase tracking-wider transition-colors duration-300 ${
+                                            isActive 
+                                                ? 'text-blue-600 dark:text-blue-400' 
+                                                : isCompleted 
+                                                    ? 'text-green-500' 
+                                                    : 'text-gray-400'
+                                        }`}>{s.label}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        <form onSubmit={handleProofSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                            {selectedTaskForProof.requiredProofs && Array.isArray(selectedTaskForProof.requiredProofs) && selectedTaskForProof.requiredProofs.length > 0 ? (
-                                <div className="space-y-4">
-                                    {selectedTaskForProof.requiredProofs.map((req: any, index: number) => {
-                                        const value = submittedProofsValues[req.id] || '';
-                                        const isImage = req.type === 'screenshot';
-                                        
-                                        return (
-                                            <div key={req.id || index} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700/60 space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-500">
-                                                        Proof Requirement #{index + 1}: {req.label}
-                                                    </span>
-                                                    <span className="text-xs text-red-500 font-bold">* Required</span>
-                                                </div>
-                                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                                    👉 {req.instruction}
-                                                </p>
-                                                
-                                                {isImage ? (
-                                                    <div className="space-y-2.5 pt-1">
-                                                        <div className="space-y-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">1. Upload Image File (PNG/JPG)</span>
-                                                            <input 
-                                                                type="file" 
-                                                                accept="image/*"
-                                                                onChange={(e) => handleDynamicImageUpload(req.id, e)}
-                                                                className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                                                            />
-                                                        </div>
+                        {proofStep === 1 ? (
+                            /* STEP 1: DETAILS & OVERVIEW */
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border dark:border-gray-700/60 text-sm">
+                                    <div>
+                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Reward Pool</span>
+                                        <span className="text-xl font-black text-emerald-500 font-mono">+{selectedTaskForProof.rewardPerTask} USD</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Platform</span>
+                                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-1">
+                                            {selectedTaskForProof.category} / {selectedTaskForProof.subType}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                                        <div className="space-y-1">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">2. Or Paste Image URL</span>
-                                                            <input 
-                                                                type="url" 
-                                                                value={value.startsWith('data:') ? '' : value}
-                                                                onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
-                                                                placeholder="https://imgur.com/screenshot.png"
-                                                                className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
-                                                            />
-                                                        </div>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Instructions &amp; Description</span>
+                                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700/60 max-h-48 overflow-y-auto">
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                            {selectedTaskForProof.description}
+                                        </p>
+                                    </div>
+                                </div>
 
-                                                        {value && (
-                                                            <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
-                                                                <img src={value} alt="Proof preview" className="w-full h-full object-cover" />
-                                                                <button 
-                                                                    type="button" 
-                                                                    onClick={() => setSubmittedProofsValues(prev => {
-                                                                        const next = { ...prev };
-                                                                        delete next[req.id];
-                                                                        return next;
-                                                                    })}
-                                                                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
-                                                                >
-                                                                    &times;
-                                                                </button>
-                                                            </div>
-                                                        )}
+                                <div className="space-y-2">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Required Proofs to Submit</span>
+                                    <div className="p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/40 space-y-2.5">
+                                        {selectedTaskForProof.requiredProofs && Array.isArray(selectedTaskForProof.requiredProofs) && selectedTaskForProof.requiredProofs.length > 0 ? (
+                                            <div className="space-y-2 text-xs text-blue-800 dark:text-blue-300 font-bold">
+                                                {selectedTaskForProof.requiredProofs.map((req: any, idx: number) => (
+                                                    <div key={idx} className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">{req.label}</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{req.instruction || 'Please provide required input.'}</span>
+                                                        </div>
                                                     </div>
-                                                ) : (
-                                                    <input 
-                                                        type={req.type === 'email' ? 'email' : 'text'}
-                                                        required
-                                                        value={value}
-                                                        onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
-                                                        placeholder={`Enter your ${req.label.toLowerCase()}`}
-                                                        className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
-                                                    />
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 text-xs text-blue-800 dark:text-blue-300 font-bold">
+                                                {selectedTaskForProof.requireTextProof && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">Text Proof</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.textProofInstruction || 'Proof text or URL.'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {selectedTaskForProof.requireUsername && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">Username</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.usernameInstruction || 'Your profile username.'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {selectedTaskForProof.requireUserId && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">User ID</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.userIdInstruction || 'Your platform unique ID.'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {selectedTaskForProof.requireEmail && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">Email Address</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.emailInstruction || 'Your registered email.'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {selectedTaskForProof.requireScreenshot && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">Screenshot Proof</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">{selectedTaskForProof.screenshotInstruction || 'Upload a screenshot image.'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot && (
+                                                    <div className="flex items-start gap-2">
+                                                        <span className="text-blue-500 mt-0.5">✔</span>
+                                                        <div>
+                                                            <span className="uppercase text-[10px] font-black text-blue-600 dark:text-blue-400 block">Confirmation Proof</span>
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">A screenshot or verification text.</span>
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
                                 </div>
-                            ) : (
-                                <>
-                                    {/* Legacy Proof Form (for old campaigns) */}
-                                    {(selectedTaskForProof.requireTextProof || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot)) && (
-                                        <div>
-                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
-                                                {selectedTaskForProof.textProofInstruction || 'Proof Text / Comment / Link'}
-                                            </label>
-                                            <input 
-                                                type="text" 
-                                                required={selectedTaskForProof.requireTextProof}
-                                                value={proofText}
-                                                onChange={(e) => setProofText(e.target.value)}
-                                                placeholder="e.g. My Telegram/YouTube username @john_doe"
-                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
-                                            />
-                                        </div>
-                                    )}
 
-                                    {selectedTaskForProof.requireUsername && (
-                                        <div>
-                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
-                                                {selectedTaskForProof.usernameInstruction || 'Username'}
-                                            </label>
-                                            <input 
-                                                type="text" 
-                                                required={selectedTaskForProof.requireUsername}
-                                                value={proofUsername}
-                                                onChange={(e) => setProofUsername(e.target.value)}
-                                                placeholder="Enter your username"
-                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {selectedTaskForProof.requireUserId && (
-                                        <div>
-                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
-                                                {selectedTaskForProof.userIdInstruction || 'User ID'}
-                                            </label>
-                                            <input 
-                                                type="text" 
-                                                required={selectedTaskForProof.requireUserId}
-                                                value={proofUserIdVal}
-                                                onChange={(e) => setProofUserIdVal(e.target.value)}
-                                                placeholder="Enter your profile ID / User ID"
-                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {selectedTaskForProof.requireEmail && (
-                                        <div>
-                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
-                                                {selectedTaskForProof.emailInstruction || 'Email'}
-                                            </label>
-                                            <input 
-                                                type="email" 
-                                                required={selectedTaskForProof.requireEmail}
-                                                value={proofEmail}
-                                                onChange={(e) => setProofEmail(e.target.value)}
-                                                placeholder="Enter your registered email"
-                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {(selectedTaskForProof.requireScreenshot || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail)) && (
-                                        <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
-                                            <label className="block text-xs font-black uppercase text-gray-500">
-                                                {selectedTaskForProof.screenshotInstruction || 'Screenshot / Image Proof'}
-                                            </label>
-                                            
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase">1. Upload Image File (PNG/JPG)</span>
-                                                <input 
-                                                    type="file" 
-                                                    accept="image/*"
-                                                    onChange={handleImageUpload}
-                                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase">2. Or Paste Image URL</span>
-                                                <input 
-                                                    type="url" 
-                                                    value={proofImage.startsWith('data:') ? '' : proofImage}
-                                                    onChange={(e) => setProofImage(e.target.value)}
-                                                    placeholder="https://imgur.com/screenshot.png"
-                                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
-                                                />
-                                            </div>
-
-                                            {proofImage && (
-                                                <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
-                                                    <img src={proofImage} alt="Proof preview" className="w-full h-full object-cover" />
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setProofImage('')}
-                                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
-                                                    >
-                                                        &times;
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            <div className="flex gap-4 pt-2">
-                                <Button type="button" variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="flex-1 py-3">
-                                    Cancel
-                                </Button>
-                                <Button type="submit" variant="primary" isLoading={isSubmittingProof} className="flex-1 py-3">
-                                    Submit Proof
-                                </Button>
+                                <div className="flex gap-4 pt-4 border-t dark:border-gray-700">
+                                    <Button type="button" variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
+                                        Close
+                                    </Button>
+                                    <Button 
+                                        type="button" 
+                                        variant="primary" 
+                                        className="flex-[2] py-3 text-xs font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg hover:scale-[1.02] active:scale-95 transition-all text-center"
+                                        onClick={() => {
+                                            if (selectedTaskForProof.link) {
+                                                window.open(selectedTaskForProof.link, '_blank', 'noopener,noreferrer');
+                                            }
+                                            setProofStep(2);
+                                        }}
+                                    >
+                                        Start Task &rarr;
+                                    </Button>
+                                </div>
                             </div>
-                        </form>
+                        ) : (
+                            /* STEP 2: PROOF SUBMISSION FORM */
+                            <form onSubmit={handleProofSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                                {selectedTaskForProof.requiredProofs && Array.isArray(selectedTaskForProof.requiredProofs) && selectedTaskForProof.requiredProofs.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {selectedTaskForProof.requiredProofs.map((req: any, index: number) => {
+                                            const value = submittedProofsValues[req.id] || '';
+                                            const isImage = req.type === 'screenshot';
+                                            
+                                            return (
+                                                <div key={req.id || index} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700/60 space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-500">
+                                                            Proof Requirement #{index + 1}: {req.label}
+                                                        </span>
+                                                        <span className="text-xs text-red-500 font-bold">* Required</span>
+                                                    </div>
+                                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                        👉 {req.instruction}
+                                                    </p>
+                                                    
+                                                    {isImage ? (
+                                                        <div className="space-y-2.5 pt-1">
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">1. Upload Image File (PNG/JPG)</span>
+                                                                <input 
+                                                                    type="file" 
+                                                                    accept="image/*"
+                                                                    onChange={(e) => handleDynamicImageUpload(req.id, e)}
+                                                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                                                                />
+                                                            </div>
+
+                                                            <div className="space-y-1">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase block">2. Or Paste Image URL</span>
+                                                                <input 
+                                                                    type="url" 
+                                                                    value={value.startsWith('data:') ? '' : value}
+                                                                    onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                                                    placeholder="https://imgur.com/screenshot.png"
+                                                                    className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                                />
+                                                            </div>
+
+                                                            {value && (
+                                                                <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
+                                                                    <img src={value} alt="Proof preview" className="w-full h-full object-cover" />
+                                                                    <button 
+                                                                        type="button" 
+                                                                        onClick={() => setSubmittedProofsValues(prev => {
+                                                                            const next = { ...prev };
+                                                                            delete next[req.id];
+                                                                            return next;
+                                                                        })}
+                                                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <input 
+                                                            type={req.type === 'email' ? 'email' : 'text'}
+                                                            required
+                                                            value={value}
+                                                            onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                                            placeholder={`Enter your ${req.label.toLowerCase()}`}
+                                                            className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Legacy Proof Form (for old campaigns) */}
+                                        {(selectedTaskForProof.requireTextProof || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot)) && (
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                    {selectedTaskForProof.textProofInstruction || 'Proof Text / Comment / Link'}
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    required={selectedTaskForProof.requireTextProof}
+                                                    value={proofText}
+                                                    onChange={(e) => setProofText(e.target.value)}
+                                                    placeholder="e.g. My Telegram/YouTube username @john_doe"
+                                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {selectedTaskForProof.requireUsername && (
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                    {selectedTaskForProof.usernameInstruction || 'Username'}
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    required={selectedTaskForProof.requireUsername}
+                                                    value={proofUsername}
+                                                    onChange={(e) => setProofUsername(e.target.value)}
+                                                    placeholder="Enter your username"
+                                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {selectedTaskForProof.requireUserId && (
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                    {selectedTaskForProof.userIdInstruction || 'User ID'}
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    required={selectedTaskForProof.requireUserId}
+                                                    value={proofUserIdVal}
+                                                    onChange={(e) => setProofUserIdVal(e.target.value)}
+                                                    placeholder="Enter your profile ID / User ID"
+                                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {selectedTaskForProof.requireEmail && (
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                    {selectedTaskForProof.emailInstruction || 'Email'}
+                                                </label>
+                                                <input 
+                                                    type="email" 
+                                                    required={selectedTaskForProof.requireEmail}
+                                                    value={proofEmail}
+                                                    onChange={(e) => setProofEmail(e.target.value)}
+                                                    placeholder="Enter your registered email"
+                                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {(selectedTaskForProof.requireScreenshot || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail)) && (
+                                            <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
+                                                <label className="block text-xs font-black uppercase text-gray-500">
+                                                    {selectedTaskForProof.screenshotInstruction || 'Screenshot / Image Proof'}
+                                                </label>
+                                                
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">1. Upload Image File (PNG/JPG)</span>
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/*"
+                                                        onChange={handleImageUpload}
+                                                        className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">2. Or Paste Image URL</span>
+                                                    <input 
+                                                        type="url" 
+                                                        value={proofImage.startsWith('data:') ? '' : proofImage}
+                                                        onChange={(e) => setProofImage(e.target.value)}
+                                                        placeholder="https://imgur.com/screenshot.png"
+                                                        className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                    />
+                                                </div>
+
+                                                {proofImage && (
+                                                    <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
+                                                        <img src={proofImage} alt="Proof preview" className="w-full h-full object-cover" />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setProofImage('')}
+                                                            className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3">
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 leading-relaxed flex items-start gap-2">
+                                        <span className="text-sm">⚠️</span>
+                                        <span>
+                                            <strong>Warning Notice:</strong> If you submit incorrect proof or do not complete the task properly, your account may be banned and your balance may be deducted.
+                                        </span>
+                                    </p>
+                                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={proofAgreed}
+                                            onChange={(e) => setProofAgreed(e.target.checked)}
+                                            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                            I confirm I completed the task properly and agree to the terms.
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div className="flex gap-4 pt-4 border-t dark:border-gray-700">
+                                    <Button type="button" variant="secondary" onClick={() => setProofStep(1)} className="flex-1 py-3 text-xs font-bold uppercase tracking-wider">
+                                        &larr; Back
+                                    </Button>
+                                    <Button type="submit" variant="primary" isLoading={isSubmittingProof} className="flex-[2] py-3 text-xs font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg">
+                                        Submit Proof ✓
+                                    </Button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}
