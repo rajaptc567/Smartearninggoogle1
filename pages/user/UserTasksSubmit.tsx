@@ -278,6 +278,7 @@ const UserTasksSubmit: React.FC = () => {
     ) || 'youtube';
     
     const activeCategoryConfig = presets[activePresetKey];
+    const activeWatchTimeTiers = (activeCategoryConfig?.watchTimeTiers || []).filter((tier: any) => tier.enabled !== false);
 
     // Get subType options dynamically for this category
     const availableSubTypes = Object.keys(activeCategoryConfig || {}).filter(k => {
