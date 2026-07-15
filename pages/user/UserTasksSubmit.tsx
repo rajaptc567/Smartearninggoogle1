@@ -861,31 +861,29 @@ const UserTasksSubmit: React.FC = () => {
                         <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">User Task Hub (USD)</h1>
                         <p className="mt-2 text-blue-100/70 font-medium uppercase text-xs tracking-widest ml-1">Create USD campaigns, complete tasks with proof, and convert currency</p>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:flex lg:flex-wrap gap-1.5 w-full lg:w-auto">
+                    <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-8 px-8 md:mx-0 md:px-0 md:flex-wrap gap-2 w-full md:w-auto pb-3 md:pb-0 scroll-smooth snap-x">
                         {[
-                            { id: 'browse', label: 'Available', count: browseableTasks.length, icon: '📋' },
-                            { id: 'pending-payment', label: 'Pending', count: pendingSubmissions.length, icon: '⏳' },
-                            { id: 'completed-tasks', label: 'Completed', count: completedSubmissions.length, icon: '✅' },
-                            { id: 'submit', label: 'Create', icon: '🚀' },
+                            { id: 'browse', label: 'Available Tasks', count: browseableTasks.length, icon: '📋' },
+                            { id: 'pending-payment', label: 'Pending Payment', count: pendingSubmissions.length, icon: '⏳' },
+                            { id: 'completed-tasks', label: 'Completed Tasks', count: completedSubmissions.length, icon: '✅' },
+                            { id: 'submit', label: 'Create Campaign', icon: '🚀' },
                             { id: 'my-tasks', label: 'My Campaigns', count: mySubmittedTasks.length, icon: '📂' },
-                            { id: 'review-proofs', label: 'Review', count: campaignSubmissions.filter(s => s.status === 'Pending').length, icon: '👁️' },
+                            { id: 'review-proofs', label: 'Review Proofs', count: campaignSubmissions.filter(s => s.status === 'Pending').length, icon: '👁️' },
                             { id: 'converter', label: 'Converter', icon: '🔄' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-[10px] md:text-xs uppercase tracking-wider transition-all duration-300 select-none ${
-                                    tab.id === 'converter' ? 'col-span-2 sm:col-span-1 lg:col-span-auto' : ''
-                                } ${
+                                className={`snap-center shrink-0 flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 select-none ${
                                     activeTab === tab.id
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/35 scale-[1.02] border border-transparent'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/35 scale-[1.03] border-2 border-transparent'
                                         : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5'
                                 }`}
                             >
-                                <span className="text-xs md:text-sm">{tab.icon}</span>
-                                <span className="truncate">{tab.label}</span>
+                                <span className="text-sm">{tab.icon}</span>
+                                <span>{tab.label}</span>
                                 {tab.count !== undefined && (
-                                    <span className={`ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                                    <span className={`ml-1 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
                                         activeTab === tab.id ? 'bg-blue-800 text-blue-200' : 'bg-white/10 text-gray-400'
                                     }`}>
                                         {tab.count}
