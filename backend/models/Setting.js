@@ -265,6 +265,62 @@ const SettingSchema = new mongoose.Schema({
         minRewardAmount: { type: Number, default: 0.10 },
         commissionPercent: { type: Number, default: 10 }
     },
+    proofControls: {
+        screenshotEnabled: { type: Boolean, default: true },
+        textEnabled: { type: Boolean, default: true },
+        maxScreenshotSizeMB: { type: Number, default: 5 },
+        allowedExtensions: { type: [String], default: ['jpg', 'jpeg', 'png', 'mp4', 'pdf'] },
+        minBudget: { type: Number, default: 5 }
+    },
+    systemLimits: {
+        minWorkerSlots: { type: Number, default: 10 },
+        maxWorkerSlots: { type: Number, default: 10000 },
+        approvalTimeoutDays: { type: Number, default: 3 }
+    },
+    campaignLiveRules: {
+        autoApproval: { type: Boolean, default: true }
+    },
+    taskCategoryPresets: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {
+            youtube: {
+                subscriber: { minPayout: 0.02, minSlots: 50 },
+                comments: { minPayout: 0.04, minSlots: 10 },
+                likes: { minPayout: 0.01, minSlots: 10 },
+                watchTimeTiers: [
+                    { duration: '5 Seconds', minPayout: 0.005, minSlots: 100 },
+                    { duration: '10 Seconds', minPayout: 0.010, minSlots: 100 },
+                    { duration: '15 Seconds', minPayout: 0.015, minSlots: 50 },
+                    { duration: '30 Seconds', minPayout: 0.025, minSlots: 50 },
+                    { duration: '1 Minute', minPayout: 0.050, minSlots: 20 },
+                    { duration: '5 Minutes', minPayout: 0.150, minSlots: 10 }
+                ]
+            },
+            facebook: {
+                likeFollow: { minPayout: 0.02, minSlots: 50 },
+                videoLike: { minPayout: 0.01, minSlots: 50 },
+                comments: { minPayout: 0.03, minSlots: 10 },
+                watchTimeTiers: [
+                    { duration: '30 Seconds', minPayout: 0.015, minSlots: 50 },
+                    { duration: '1 Minute', minPayout: 0.030, minSlots: 30 },
+                    { duration: '3 Minutes', minPayout: 0.080, minSlots: 20 }
+                ]
+            },
+            instagram: {
+                profileFollow: { minPayout: 0.015, minSlots: 50 },
+                postLike: { minPayout: 0.008, minSlots: 100 },
+                reelView: { minPayout: 0.005, minSlots: 100 },
+                comments: { minPayout: 0.03, minSlots: 10 }
+            },
+            google: {
+                reviews: { minPayout: 0.20, minSlots: 5 }
+            },
+            paidSignUp: {
+                simpleSignUp: { minPayout: 0.10, minSlots: 10 },
+                activePlanPurchase: { minPayout: 0.50, minSlots: 5 }
+            }
+        }
+    }
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {
@@ -280,6 +336,47 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.signUpConfig) {
         settings.signUpConfig = {};
+        needsSave = true;
+    }
+    if (!settings.taskCategoryPresets) {
+        settings.taskCategoryPresets = {
+            youtube: {
+                subscriber: { minPayout: 0.02, minSlots: 50 },
+                comments: { minPayout: 0.04, minSlots: 10 },
+                likes: { minPayout: 0.01, minSlots: 10 },
+                watchTimeTiers: [
+                    { duration: '5 Seconds', minPayout: 0.005, minSlots: 100 },
+                    { duration: '10 Seconds', minPayout: 0.010, minSlots: 100 },
+                    { duration: '15 Seconds', minPayout: 0.015, minSlots: 50 },
+                    { duration: '30 Seconds', minPayout: 0.025, minSlots: 50 },
+                    { duration: '1 Minute', minPayout: 0.050, minSlots: 20 },
+                    { duration: '5 Minutes', minPayout: 0.150, minSlots: 10 }
+                ]
+            },
+            facebook: {
+                likeFollow: { minPayout: 0.02, minSlots: 50 },
+                videoLike: { minPayout: 0.01, minSlots: 50 },
+                comments: { minPayout: 0.03, minSlots: 10 },
+                watchTimeTiers: [
+                    { duration: '30 Seconds', minPayout: 0.015, minSlots: 50 },
+                    { duration: '1 Minute', minPayout: 0.030, minSlots: 30 },
+                    { duration: '3 Minutes', minPayout: 0.080, minSlots: 20 }
+                ]
+            },
+            instagram: {
+                profileFollow: { minPayout: 0.015, minSlots: 50 },
+                postLike: { minPayout: 0.008, minSlots: 100 },
+                reelView: { minPayout: 0.005, minSlots: 100 },
+                comments: { minPayout: 0.03, minSlots: 10 }
+            },
+            google: {
+                reviews: { minPayout: 0.20, minSlots: 5 }
+            },
+            paidSignUp: {
+                simpleSignUp: { minPayout: 0.10, minSlots: 10 },
+                activePlanPurchase: { minPayout: 0.50, minSlots: 5 }
+            }
+        };
         needsSave = true;
     }
     if (needsSave) { await settings.save(); }

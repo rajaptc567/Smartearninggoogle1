@@ -25,6 +25,7 @@ import TickerSettings from './pages/TickerSettings';
 import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
 import AdminUserTasks from './pages/AdminUserTasks';
+import AdminTaskCategories from './pages/AdminTaskCategories';
 import AdminTemplates from './pages/AdminTemplates';
 import AdminNotifications from './pages/AdminNotifications';
 import { UserPopupModal } from './components/UserPopupModal';
@@ -99,6 +100,7 @@ const App: React.FC = () => {
           <Route path="plan-equivalency" element={<PlanEquivalency />} />
           <Route path="tasks" element={<AdminTasks />} />
           <Route path="user-tasks" element={<AdminUserTasks />} />
+          <Route path="task-categories" element={<AdminTaskCategories />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
           <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />

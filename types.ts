@@ -246,6 +246,8 @@ export interface Settings {
         minRewardAmount: number;
         commissionPercent: number;
     };
+    taskCategoryPresets?: any;
+    userTaskProofLimits?: any;
     signUpConfig?: {
         customTitle?: string;
         fullNameRule?: 'required' | 'optional' | 'hidden';
@@ -302,8 +304,8 @@ export interface UserTask {
     _id: string;
     userId: string;
     userName: string;
-    category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Other';
-    subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Other';
+    category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Google' | 'Instagram' | 'Other';
+    subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Review' | 'Other';
     title: string;
     description: string;
     link: string;
@@ -318,6 +320,17 @@ export interface UserTask {
     completedUsers?: string[];
     createdAt?: string;
     date?: string;
+    requireTextProof?: boolean;
+    textProofInstruction?: string;
+    requireUsername?: boolean;
+    usernameInstruction?: string;
+    requireUserId?: boolean;
+    userIdInstruction?: string;
+    requireEmail?: boolean;
+    emailInstruction?: string;
+    requireScreenshot?: boolean;
+    screenshotInstruction?: string;
+    requiredProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; instruction: string }>;
 }
 
 export interface UserTaskSubmission {
@@ -326,7 +339,11 @@ export interface UserTaskSubmission {
     workerId: string;
     workerName: string;
     proofText: string;
+    proofUsername?: string;
+    proofUserIdVal?: string;
+    proofEmail?: string;
     proofImage?: string;
+    submittedProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; value: string }>;
     status: 'Pending' | 'Approved' | 'Rejected';
     adminNotes?: string;
     rewardAmount: number;

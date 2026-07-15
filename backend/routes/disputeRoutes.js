@@ -3,7 +3,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
-import { getDisputes, createDispute, updateDispute, markAsRead } from '../controllers/disputesController.js';
+import { getDisputes, createDispute, updateDispute, markAsRead, resolveDisputeVerdict } from '../controllers/disputesController.js';
 
 // Multer for memory storage (Base64)
 const storage = multer.memoryStorage();
@@ -23,5 +23,8 @@ router.route('/:id')
 
 router.route('/:id/read')
     .put(authorize(['user', 'admin']), markAsRead);
+
+router.route('/:id/resolve')
+    .put(authorize(['admin']), resolveDisputeVerdict);
 
 export default router;

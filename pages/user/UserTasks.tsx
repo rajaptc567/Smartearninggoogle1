@@ -71,9 +71,30 @@ const UserTasks: React.FC = () => {
             // Budget
             if (t.maxGlobalCompletions > 0 && t.currentGlobalCompletions >= t.maxGlobalCompletions) return false;
 
+            // Completion & Submission Filters: Hide tasks that are already completed, pending verification, or on cooldown
+            const submissions = (currentUser.completedTasks || []).filter(ct => ct.taskId.toString() === t._id.toString());
+            const lastSub = submissions.length > 0 ? submissions[submissions.length - 1] : null;
+            if (lastSub) {
+                const isPending = lastSub.status === 'Pending';
+                const isApproved = lastSub.status === 'Approved';
+                
+                // Cooldown Logic
+                let cooldownMs = t.cooldownHours * 60 * 60 * 1000;
+                if (t.frequency === 'Daily') cooldownMs = Math.max(cooldownMs, 24 * 60 * 60 * 1000);
+                if (t.frequency === 'Weekly') cooldownMs = Math.max(cooldownMs, 7 * 24 * 60 * 60 * 1000);
+                
+                const nextAvailable = new Date(lastSub.completedAt).getTime() + cooldownMs;
+                const isLockedByCooldown = isApproved && t.frequency !== 'Once' && currentTime < nextAvailable;
+                const isFullyDone = isApproved && t.frequency === 'Once';
+
+                if (isPending || isFullyDone || isLockedByCooldown) {
+                    return false;
+                }
+            }
+
             return true;
         });
-    }, [tasks, currentUser]);
+    }, [tasks, currentUser, currentTime]);
 
     const handleTaskAction = (task: Task) => {
         if (task.type === 'Video') {

@@ -39,6 +39,27 @@ const DisputeSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    taskId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'UserTask'
+    },
+    submissionId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'UserTaskSubmission'
+    },
+    creatorId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User'
+    },
+    verdict: {
+        type: String,
+        enum: ['None', 'ReleaseToWorker', 'RefundToCreator', 'SplitPayout'],
+        default: 'None'
+    },
+    splitPercentageWorker: {
+        type: Number,
+        default: 50
+    },
     description: {
         type: String,
         required: true,

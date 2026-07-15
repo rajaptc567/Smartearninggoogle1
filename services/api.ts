@@ -603,6 +603,16 @@ export const deleteUserTask = async (id: string): Promise<{}> => {
     return result.data;
 };
 
+export const renewUserTask = async (id: string, extraSlots: number): Promise<{ task: any; user: any }> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}/renew`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ extraSlots }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const getUserTaskSubmissions = async (): Promise<any[]> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions`, {
         headers: getHeaders()
@@ -621,7 +631,7 @@ export const submitUserTaskProof = async (taskId: string, proofData: { userId: s
     return result.data;
 };
 
-export const updateSubmissionStatus = async (subId: string, updates: { status: string; adminNotes?: string }): Promise<any> => {
+export const updateSubmissionStatus = async (subId: string, updates: { status: string; adminNotes?: string; rejectionReason?: string }): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}`, {
         method: 'PUT',
         headers: getHeaders(),
@@ -650,6 +660,16 @@ export const convertUserCurrency = async (data: { userId: string; amount: number
     return result.data;
 };
 
+export const convertTaskWalletBalance = async (data: { userId: string }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/convert-task-wallet`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 // --- [Dispute API Functions] ---
 export const getDisputes = async (): Promise<Dispute[]> => {
     const response = await fetch(`${API_BASE_URL}/disputes`, {
@@ -664,6 +684,26 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
         method: 'POST',
         headers: getHeaders(true),
         body: formData,
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const openTaskDispute = async (subId: string, data: { description: string }): Promise<Dispute> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}/dispute`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const resolveDispute = async (disputeId: string, data: { verdict: string; splitPercentageWorker?: number; adminNotes?: string }): Promise<Dispute> => {
+    const response = await fetch(`${API_BASE_URL}/disputes/${disputeId}/resolve`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
     });
     const result = await handleResponse(response);
     return result.data;

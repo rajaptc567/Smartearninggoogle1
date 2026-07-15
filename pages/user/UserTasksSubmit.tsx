@@ -3,7 +3,7 @@ import { useData } from '../../hooks/useData';
 import { formatCurrency, UserTask } from '../../types';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute } from '../../services/api';
+import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus } from '../../services/api';
 import { canUserAccessTasks } from '../../src/utils/taskAccess';
 import { Link } from 'react-router-dom';
 
@@ -11,7 +11,10 @@ const UserTasksSubmit: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
 
-    const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter'>('browse');
+    const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs'>('browse');
+    const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
+    const [reviewFilter, setReviewFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
+    const [myCampaignFilter, setMyCampaignFilter] = useState<'all' | 'pending' | 'approved' | 'completed' | 'rejected'>('all');
 
     // Dispute State
     const [selectedSubmissionForDispute, setSelectedSubmissionForDispute] = useState<any | null>(null);
@@ -19,8 +22,9 @@ const UserTasksSubmit: React.FC = () => {
     const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
     // Create Campaign Form State
-    const [category, setCategory] = useState<'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Other'>('YouTube');
-    const [subType, setSubType] = useState<'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Other'>('Subscribe');
+    const [category, setCategory] = useState<string>('YouTube');
+    const [subType, setSubType] = useState<string>('Subscribe');
+    const [watchTimeTierIndex, setWatchTimeTierIndex] = useState<number>(0);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [link, setLink] = useState('');
@@ -28,11 +32,163 @@ const UserTasksSubmit: React.FC = () => {
     const [rewardPerTask, setRewardPerTask] = useState<number>(0.10); // in USD
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Proof Submission State
-    const [selectedTaskForProof, setSelectedTaskForProof] = useState<UserTask | null>(null);
+    // Creator Proof Requirements (Module A)
+    const [requireTextProof, setRequireTextProof] = useState(false);
+    const [textProofInstruction, setTextProofInstruction] = useState('');
+    const [requireUsername, setRequireUsername] = useState(false);
+    const [usernameInstruction, setUsernameInstruction] = useState('');
+    const [requireUserId, setRequireUserId] = useState(false);
+    const [userIdInstruction, setUserIdInstruction] = useState('');
+    const [requireEmail, setRequireEmail] = useState(false);
+    const [emailInstruction, setEmailInstruction] = useState('');
+    const [requireScreenshot, setRequireScreenshot] = useState(true);
+    const [screenshotInstruction, setScreenshotInstruction] = useState('Please upload screenshot proof of completion.');
+
+    const [requiredProofsList, setRequiredProofsList] = useState<Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; instruction: string }>>([
+        { id: 'screenshot_1', type: 'screenshot', label: 'Screenshot / Image', instruction: 'Please upload screenshot proof of completion.' }
+    ]);
+
+    const addProofType = (type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual', label: string) => {
+        const limits = settings?.userTaskProofLimits || {
+            screenshot: { enabled: true, max: 2 },
+            text: { enabled: true, max: 3 },
+            username: { enabled: true, max: 3 },
+            userId: { enabled: true, max: 3 },
+            email: { enabled: true, max: 3 },
+            manual: { enabled: true, max: 3 }
+        };
+
+        const config = limits[type] || { enabled: true, max: 5 };
+
+        if (!config.enabled) {
+            alert(`${label} proofs are currently disabled by the administrator.`);
+            return;
+        }
+
+        const count = requiredProofsList.filter(p => p.type === type).length;
+        if (count >= config.max) {
+            alert(`The administrator has limited the number of duplicate ${label} proofs to ${config.max}. You cannot add any more.`);
+            return;
+        }
+
+        const finalLabel = count > 0 ? `${label} #${count + 1}` : label;
+        
+        const newProof = {
+            id: `${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            type,
+            label: finalLabel,
+            instruction: type === 'screenshot' ? 'Please upload screenshot proof of completion.' : `Please provide your ${label.toLowerCase()} details.`
+        };
+        setRequiredProofsList([...requiredProofsList, newProof]);
+    };
+
+    const removeProofItem = (id: string) => {
+        setRequiredProofsList(requiredProofsList.filter(p => p.id !== id));
+    };
+
+    const updateProofInstruction = (id: string, instruction: string) => {
+        setRequiredProofsList(requiredProofsList.map(p => p.id === id ? { ...p, instruction } : p));
+    };
+
+    // Proof Submission State (Module C)
+    const [selectedTaskForProof, setSelectedTaskForProof] = useState<any | null>(null);
     const [proofText, setProofText] = useState('');
+    const [proofUsername, setProofUsername] = useState('');
+    const [proofUserIdVal, setProofUserIdVal] = useState('');
+    const [proofEmail, setProofEmail] = useState('');
     const [proofImage, setProofImage] = useState('');
+    const [submittedProofsValues, setSubmittedProofsValues] = useState<Record<string, string>>({});
     const [isSubmittingProof, setIsSubmittingProof] = useState(false);
+    const [showConvertModal, setShowConvertModal] = useState(false);
+    const [isTransferringTaskWallet, setIsTransferringTaskWallet] = useState(false);
+
+    const handleTransferTaskWallet = async () => {
+        setIsTransferringTaskWallet(true);
+        try {
+            const res = await convertTaskWalletBalance({ userId: currentUser._id });
+            dispatch({ type: 'UPDATE_USER', payload: res.user });
+            alert(`Successfully transferred task wallet balance to Main MLM Balance (${res.convertedAmount} ${res.currency})!`);
+            setShowConvertModal(false);
+        } catch (error) {
+            alert(`Failed to transfer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsTransferringTaskWallet(false);
+        }
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            alert('Only PNG and JPG image formats are allowed.');
+            e.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const maxDim = 1000;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                setProofImage(dataUrl);
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleDynamicImageUpload = (proofId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+            alert('Only PNG and JPG image formats are allowed.');
+            e.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const maxDim = 1000;
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                setSubmittedProofsValues(prev => ({ ...prev, [proofId]: dataUrl }));
+            };
+            img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    };
 
     const europeanCountries = [ 'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'United Kingdom' ];
     const allowedCurrency = currentUser.currency || (currentUser.country === 'Pakistan' ? 'PKR' : europeanCountries.includes(currentUser.country) ? 'EUR' : 'USD');
@@ -55,12 +211,204 @@ const UserTasksSubmit: React.FC = () => {
     const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
     const totalBudgetUSD = Number((subtotal + adminCommission).toFixed(2));
 
+    const DEFAULT_PRESETS = {
+        youtube: {
+            subscriber: { minPayout: 0.02, minSlots: 50 },
+            comments: { minPayout: 0.04, minSlots: 10 },
+            likes: { minPayout: 0.01, minSlots: 10 },
+            watchTimeTiers: [
+                { duration: '5 Seconds', minPayout: 0.005, minSlots: 100 },
+                { duration: '10 Seconds', minPayout: 0.010, minSlots: 100 },
+                { duration: '15 Seconds', minPayout: 0.015, minSlots: 100 },
+                { duration: '30 Seconds', minPayout: 0.020, minSlots: 50 },
+                { duration: '1 Minute', minPayout: 0.040, minSlots: 50 },
+                { duration: '5 Minutes', minPayout: 0.150, minSlots: 20 },
+            ]
+        },
+        facebook: {
+            likeFollow: { minPayout: 0.02, minSlots: 50 },
+            videoLike: { minPayout: 0.01, minSlots: 50 },
+            comments: { minPayout: 0.03, minSlots: 10 },
+            watchTimeTiers: [
+                { duration: '30 Seconds', minPayout: 0.01, minSlots: 100 },
+                { duration: '1 Minute', minPayout: 0.02, minSlots: 50 },
+                { duration: '3 Minutes', minPayout: 0.05, minSlots: 50 },
+            ]
+        },
+        instagram: {
+            profileFollow: { minPayout: 0.015, minSlots: 50 },
+            postLike: { minPayout: 0.008, minSlots: 100 },
+            reelView: { minPayout: 0.005, minSlots: 100 },
+            comments: { minPayout: 0.03, minSlots: 10 },
+        },
+        google: {
+            reviews: { minPayout: 0.20, minSlots: 5 }
+        },
+        paidSignUp: {
+            simpleSignUp: { minPayout: 0.10, minSlots: 10 },
+            activePlanPurchase: { minPayout: 0.50, minSlots: 5 }
+        }
+    };
+
+    const presets = settings.taskCategoryPresets || DEFAULT_PRESETS;
+
+    // Get list of all categories from database presets
+    const availableCategories = Object.keys(presets).map(key => {
+        const cat = presets[key];
+        const displayName = cat.displayName || (
+            key === 'youtube' ? 'YouTube' :
+            key === 'facebook' ? 'Facebook' :
+            key === 'instagram' ? 'Instagram' :
+            key === 'google' ? 'Google' :
+            key === 'paidSignUp' ? 'Website' :
+            key.charAt(0).toUpperCase() + key.slice(1)
+        );
+        return { key, displayName };
+    });
+
+    // Append "Other" catch-all if not present
+    if (!availableCategories.some(c => c.key === 'other')) {
+        availableCategories.push({ key: 'other', displayName: 'Other' });
+    }
+
+    // Find the preset key matching the selected category
+    const activePresetKey = Object.keys(presets).find(k => 
+        k.toLowerCase() === category.toLowerCase() || 
+        (presets[k]?.displayName && presets[k].displayName.toLowerCase() === category.toLowerCase())
+    ) || 'youtube';
+    
+    const activeCategoryConfig = presets[activePresetKey];
+
+    // Get subType options dynamically for this category
+    const availableSubTypes = Object.keys(activeCategoryConfig || {}).filter(k => {
+        if (k === 'enabled' || k === 'displayName' || k === 'watchTimeTiers') return false;
+        return typeof activeCategoryConfig[k] === 'object' && activeCategoryConfig[k] !== null;
+    }).map(subKey => {
+        const subConf = activeCategoryConfig[subKey];
+        const displayName = subConf?.displayName || (
+            subKey === 'subscriber' ? 'Subscribe' :
+            subKey === 'likes' ? 'Like' :
+            subKey === 'comments' ? 'Comment' :
+            subKey === 'likeFollow' ? 'Follow' :
+            subKey === 'videoLike' ? 'Like' :
+            subKey === 'profileFollow' ? 'Follow' :
+            subKey === 'postLike' ? 'Like' :
+            subKey === 'reelView' ? 'Watch Time' :
+            subKey === 'reviews' ? 'Review' :
+            subKey === 'simpleSignUp' ? 'Sign-up' :
+            subKey === 'activePlanPurchase' ? 'Other' :
+            subKey.charAt(0).toUpperCase() + subKey.slice(1)
+        );
+        return { key: subKey, displayName };
+    });
+
+    // If watchTimeTiers exists, add "Watch Time" option
+    const hasWatchTimeTiers = activeCategoryConfig?.watchTimeTiers && Array.isArray(activeCategoryConfig.watchTimeTiers);
+    if (hasWatchTimeTiers && !availableSubTypes.some(s => s.displayName === 'Watch Time')) {
+        availableSubTypes.push({ key: 'watchTimeTiers', displayName: 'Watch Time' });
+    }
+
+    // Append "Other" catch-all subtype if not present
+    if (!availableSubTypes.some(s => s.key === 'other')) {
+        availableSubTypes.push({ key: 'other', displayName: 'Other' });
+    }
+
+    const getSelectionLimits = () => {
+        let minPayout = config.minRewardAmount;
+        let minSlots = config.minQuantity;
+        let isPresetFound = false;
+        let presetName = '';
+
+        if (activeCategoryConfig) {
+            // Find if there is a matching subcategory based on selected subType displayName or subKey
+            const subKey = Object.keys(activeCategoryConfig).find(k => {
+                if (k === 'enabled' || k === 'displayName') return false;
+                if (k === 'watchTimeTiers') {
+                    return subType === 'Watch Time';
+                }
+                const subConf = activeCategoryConfig[k];
+                const subDisp = subConf?.displayName || k;
+                return k.toLowerCase() === subType.toLowerCase() || subDisp.toLowerCase() === subType.toLowerCase() ||
+                    (k === 'subscriber' && subType === 'Subscribe') ||
+                    (k === 'likes' && subType === 'Like') ||
+                    (k === 'comments' && subType === 'Comment') ||
+                    (k === 'likeFollow' && subType === 'Follow') ||
+                    (k === 'videoLike' && subType === 'Like') ||
+                    (k === 'profileFollow' && subType === 'Follow') ||
+                    (k === 'postLike' && subType === 'Like') ||
+                    (k === 'reelView' && subType === 'Watch Time') ||
+                    (k === 'reviews' && subType === 'Review') ||
+                    (k === 'simpleSignUp' && subType === 'Sign-up') ||
+                    (k === 'activePlanPurchase' && subType === 'Other');
+            });
+
+            if (subKey === 'watchTimeTiers') {
+                const tiers = activeCategoryConfig.watchTimeTiers || [];
+                const selectedTier = tiers[watchTimeTierIndex] || tiers[0];
+                if (selectedTier) {
+                    minPayout = selectedTier.minPayout;
+                    minSlots = selectedTier.minSlots;
+                    presetName = `${category} Watch Time (${selectedTier.duration})`;
+                    isPresetFound = true;
+                }
+            } else if (subKey) {
+                const subConfig = activeCategoryConfig[subKey];
+                minPayout = subConfig.minPayout ?? config.minRewardAmount;
+                minSlots = subConfig.minSlots ?? config.minQuantity;
+                presetName = `${category} ${subConfig.displayName || subKey.charAt(0).toUpperCase() + subKey.slice(1)}`;
+                isPresetFound = true;
+            }
+        }
+
+        return { minPayout, minSlots, isPresetFound, presetName };
+    };
+
     const handleCreateCampaign = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isEnabled) return alert('User task submissions are currently disabled.');
         if (!title || !link) return alert('Please fill in title and target link.');
-        if (targetQuantity < config.minQuantity) return alert(`Minimum target quantity is ${config.minQuantity}.`);
-        if (rewardPerTask < config.minRewardAmount) return alert(`Minimum reward per task is ${config.minRewardAmount} USD.`);
+
+        const { minPayout, minSlots, presetName } = getSelectionLimits();
+        if (targetQuantity < minSlots) {
+            return alert(`For ${presetName || 'this task type'}, the minimum slots (target quantity) required by the admin is ${minSlots}.`);
+        }
+        if (rewardPerTask < minPayout) {
+            return alert(`For ${presetName || 'this task type'}, the minimum reward per task required by the admin is $${minPayout} USD.`);
+        }
+
+        let finalTitle = title;
+        if (subType === 'Watch Time') {
+            const tiers = activeCategoryConfig?.watchTimeTiers || [];
+            const selectedTier = tiers[watchTimeTierIndex] || tiers[0];
+            if (selectedTier && !title.includes(selectedTier.duration)) {
+                finalTitle = `${title} (${selectedTier.duration} Watch Time)`;
+            }
+        }
+
+        if (requiredProofsList.length === 0) {
+            return alert('Please configure at least one required proof requirement (Module A).');
+        }
+
+        for (const item of requiredProofsList) {
+            if (!item.instruction.trim()) {
+                return alert(`Please provide instructions for the proof requirement: ${item.label}`);
+            }
+        }
+
+        const legacyRequireTextProof = requiredProofsList.some(p => p.type === 'text' || p.type === 'manual');
+        const legacyTextProofInstruction = requiredProofsList.filter(p => p.type === 'text' || p.type === 'manual').map(p => p.instruction).join(' | ') || '';
+
+        const legacyRequireUsername = requiredProofsList.some(p => p.type === 'username');
+        const legacyUsernameInstruction = requiredProofsList.filter(p => p.type === 'username').map(p => p.instruction).join(' | ') || '';
+
+        const legacyRequireUserId = requiredProofsList.some(p => p.type === 'userId');
+        const legacyUserIdInstruction = requiredProofsList.filter(p => p.type === 'userId').map(p => p.instruction).join(' | ') || '';
+
+        const legacyRequireEmail = requiredProofsList.some(p => p.type === 'email');
+        const legacyEmailInstruction = requiredProofsList.filter(p => p.type === 'email').map(p => p.instruction).join(' | ') || '';
+
+        const legacyRequireScreenshot = requiredProofsList.some(p => p.type === 'screenshot');
+        const legacyScreenshotInstruction = requiredProofsList.filter(p => p.type === 'screenshot').map(p => p.instruction).join(' | ') || '';
 
         // Convert totalBudgetUSD to user currency for balance verification
         const userCurr = currentUser.currency || 'USD';
@@ -77,11 +425,22 @@ const UserTasksSubmit: React.FC = () => {
                 userId: currentUser._id,
                 category,
                 subType,
-                title,
+                title: finalTitle,
                 description,
                 link,
                 targetQuantity: Number(targetQuantity),
-                rewardPerTask: Number(rewardPerTask) // in USD
+                rewardPerTask: Number(rewardPerTask), // in USD
+                requireTextProof: legacyRequireTextProof,
+                textProofInstruction: legacyTextProofInstruction,
+                requireUsername: legacyRequireUsername,
+                usernameInstruction: legacyUsernameInstruction,
+                requireUserId: legacyRequireUserId,
+                userIdInstruction: legacyUserIdInstruction,
+                requireEmail: legacyRequireEmail,
+                emailInstruction: legacyEmailInstruction,
+                requireScreenshot: legacyRequireScreenshot,
+                screenshotInstruction: legacyScreenshotInstruction,
+                requiredProofs: requiredProofsList
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
@@ -100,21 +459,73 @@ const UserTasksSubmit: React.FC = () => {
     const handleProofSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedTaskForProof) return;
-        if (!proofText && !proofImage) return alert('Please provide either screenshot proof, link, or ID/username.');
+
+        const proofsToSubmit: Array<{ id: string; type: string; label: string; value: string }> = [];
+        let finalProofText = proofText;
+        let finalProofUsername = proofUsername;
+        let finalProofUserIdVal = proofUserIdVal;
+        let finalProofEmail = proofEmail;
+        let finalProofImage = proofImage;
+
+        if (selectedTaskForProof.requiredProofs && Array.isArray(selectedTaskForProof.requiredProofs) && selectedTaskForProof.requiredProofs.length > 0) {
+            for (const req of selectedTaskForProof.requiredProofs) {
+                const val = (submittedProofsValues[req.id] || '').trim();
+                if (!val) {
+                    return alert(`Please provide required proof: "${req.label}"\nInstruction: ${req.instruction}`);
+                }
+                proofsToSubmit.push({
+                    id: req.id,
+                    type: req.type,
+                    label: req.label,
+                    value: val
+                });
+            }
+
+            // Populate legacy fields with first occurrence for backwards compatibility
+            const firstText = proofsToSubmit.find(p => p.type === 'text' || p.type === 'manual')?.value;
+            const firstUsername = proofsToSubmit.find(p => p.type === 'username')?.value;
+            const firstUserId = proofsToSubmit.find(p => p.type === 'userId')?.value;
+            const firstEmail = proofsToSubmit.find(p => p.type === 'email')?.value;
+            const firstScreenshot = proofsToSubmit.find(p => p.type === 'screenshot')?.value;
+
+            if (firstText) finalProofText = firstText;
+            if (firstUsername) finalProofUsername = firstUsername;
+            if (firstUserId) finalProofUserIdVal = firstUserId;
+            if (firstEmail) finalProofEmail = firstEmail;
+            if (firstScreenshot) finalProofImage = firstScreenshot;
+        } else {
+            if (selectedTaskForProof.requireTextProof && !proofText.trim()) return alert(selectedTaskForProof.textProofInstruction || 'Text proof is required.');
+            if (selectedTaskForProof.requireUsername && !proofUsername.trim()) return alert(selectedTaskForProof.usernameInstruction || 'Username is required.');
+            if (selectedTaskForProof.requireUserId && !proofUserIdVal.trim()) return alert(selectedTaskForProof.userIdInstruction || 'User ID is required.');
+            if (selectedTaskForProof.requireEmail && !proofEmail.trim()) return alert(selectedTaskForProof.emailInstruction || 'Email is required.');
+            if (selectedTaskForProof.requireScreenshot && !proofImage) return alert(selectedTaskForProof.screenshotInstruction || 'Screenshot image is required.');
+            
+            if (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot) {
+                if (!proofText.trim() && !proofImage) return alert('Please provide proof text or screenshot.');
+            }
+        }
 
         setIsSubmittingProof(true);
         try {
             const submission = await submitUserTaskProof(selectedTaskForProof._id, {
                 userId: currentUser._id,
-                proofText,
-                proofImage
+                proofText: finalProofText,
+                proofUsername: finalProofUsername,
+                proofUserIdVal: finalProofUserIdVal,
+                proofEmail: finalProofEmail,
+                proofImage: finalProofImage,
+                submittedProofs: proofsToSubmit
             });
             dispatch({ type: 'ADD_USER_TASK_SUBMISSION', payload: submission });
             alert('Proof submitted successfully! Awaiting admin review for USD reward.');
             setSelectedTaskForProof(null);
             setProofText('');
+            setProofUsername('');
+            setProofUserIdVal('');
+            setProofEmail('');
             setProofImage('');
-            setActiveTab('my-submissions');
+            setSubmittedProofsValues({});
+            setActiveTab('pending-payment');
         } catch (error) {
             alert(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
@@ -164,8 +575,42 @@ const UserTasksSubmit: React.FC = () => {
     };
 
     const mySubmittedTasks = userTasks.filter(t => t.userId?.toString() === currentUser._id?.toString());
-    const browseableTasks = userTasks.filter(t => t.status === 'Approved' && t.userId?.toString() !== currentUser._id?.toString() && t.currentCompletions < t.targetQuantity);
     const mySubmissions = userTaskSubmissions.filter(s => s.workerId?.toString() === currentUser._id?.toString());
+    
+    // Submissions made by workers for campaigns created by current user
+    const campaignSubmissions = userTaskSubmissions.filter(s => 
+        mySubmittedTasks.some(t => t._id?.toString() === s.taskId?.toString())
+    );
+
+    const handleApproveSubmission = async (subId: string) => {
+        if (!window.confirm("Are you sure you want to approve this submission and release the reward?")) return;
+        try {
+            const updated = await updateSubmissionStatus(subId, { status: 'Approved' });
+            dispatch({ type: 'UPDATE_USER_TASK_SUBMISSION', payload: updated });
+            alert("Submission approved and rewarded successfully!");
+        } catch (error) {
+            alert(`Failed to approve: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+
+    const handleRejectSubmission = async (subId: string) => {
+        const reason = window.prompt("Please enter the reason for rejecting this submission:");
+        if (reason === null) return;
+        if (!reason.trim()) return alert("Rejection reason is required.");
+        try {
+            const updated = await updateSubmissionStatus(subId, { 
+                status: 'Rejected', 
+                rejectionReason: reason,
+                adminNotes: reason
+            });
+            dispatch({ type: 'UPDATE_USER_TASK_SUBMISSION', payload: updated });
+            alert("Submission rejected successfully.");
+        } catch (error) {
+            alert(`Failed to reject: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+
+    const browseableTasks = userTasks.filter(t => t.status === 'Approved' && t.userId?.toString() !== currentUser._id?.toString() && t.currentCompletions < t.targetQuantity && !mySubmissions.some(s => s.taskId?.toString() === t._id?.toString()));
     const pendingSubmissions = mySubmissions.filter(s => s.status === 'Pending');
     const completedSubmissions = mySubmissions.filter(s => s.status === 'Approved');
 
@@ -243,12 +688,48 @@ const UserTasksSubmit: React.FC = () => {
                             My Campaigns ({mySubmittedTasks.length})
                         </Button>
                         <Button 
+                            variant={activeTab === 'review-proofs' ? 'primary' : 'secondary'} 
+                            onClick={() => setActiveTab('review-proofs')}
+                        >
+                            Review Proofs ({campaignSubmissions.filter(s => s.status === 'Pending').length})
+                        </Button>
+                        <Button 
                             variant={activeTab === 'converter' ? 'primary' : 'secondary'} 
                             onClick={() => setActiveTab('converter')}
                         >
                             Currency Converter
                         </Button>
                     </div>
+                </div>
+            </div>
+
+            {/* Top Balance Widget & Quick Actions */}
+            <div className="bg-gradient-to-r from-blue-900 to-indigo-900 p-6 md:p-8 rounded-[2.5rem] text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 border border-blue-500/20">
+                <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-blue-600/30 rounded-2xl flex items-center justify-center text-2xl font-black text-emerald-400 border border-emerald-500/30 shadow-inner">
+                        💲
+                    </div>
+                    <div>
+                        <span className="text-xs font-black uppercase tracking-widest text-blue-300">Available Task Balance</span>
+                        <div className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                            <span>${(currentUser.taskWalletBalance || 0).toFixed(2)} USD</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="text-right hidden sm:block">
+                        <span className="text-[10px] font-bold text-gray-300 uppercase block">Registered Currency</span>
+                        <span className="text-sm font-black text-emerald-400">{currentUser.currency || 'USD'}</span>
+                    </div>
+                    <Button 
+                        variant="primary" 
+                        onClick={() => setShowConvertModal(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg flex items-center gap-2 transition-transform hover:scale-105"
+                    >
+                        <span>Convert & Transfer to Main Wallet</span>
+                        <span>⚡</span>
+                    </Button>
                 </div>
             </div>
 
@@ -270,14 +751,39 @@ const UserTasksSubmit: React.FC = () => {
                                     <label className="block text-xs font-black uppercase text-gray-500 mb-2">Category / Platform</label>
                                     <select 
                                         value={category} 
-                                        onChange={(e) => setCategory(e.target.value as any)}
+                                        onChange={(e) => {
+                                            const catVal = e.target.value;
+                                            setCategory(catVal);
+                                            
+                                            // Pre-adjust subType for the newly selected category
+                                            const newPresetKey = Object.keys(presets).find(k => 
+                                                k.toLowerCase() === catVal.toLowerCase() || 
+                                                (presets[k]?.displayName && presets[k].displayName.toLowerCase() === catVal.toLowerCase())
+                                            ) || 'youtube';
+                                            const newCategoryConfig = presets[newPresetKey];
+                                            if (newCategoryConfig) {
+                                                const newSubKeys = Object.keys(newCategoryConfig).filter(k => {
+                                                    if (k === 'enabled' || k === 'displayName' || k === 'watchTimeTiers') return false;
+                                                    if (newCategoryConfig[k]?.enabled === false) return false;
+                                                    return typeof newCategoryConfig[k] === 'object' && newCategoryConfig[k] !== null;
+                                                });
+                                                if (newSubKeys.length > 0) {
+                                                    const firstSubPreset = newCategoryConfig[newSubKeys[0]];
+                                                    setSubType(firstSubPreset?.displayName || newSubKeys[0].charAt(0).toUpperCase() + newSubKeys[0].slice(1));
+                                                } else if (newCategoryConfig.watchTimeTiers && newCategoryConfig.watchTimeTiers.some((t: any) => t.enabled !== false)) {
+                                                    setSubType('Watch Time');
+                                                } else {
+                                                    setSubType('Other');
+                                                }
+                                            } else {
+                                                setSubType('Other');
+                                            }
+                                        }}
                                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
                                     >
-                                        <option value="YouTube">YouTube</option>
-                                        <option value="Facebook">Facebook</option>
-                                        <option value="WhatsApp">WhatsApp</option>
-                                        <option value="Website">Website / Sign-up</option>
-                                        <option value="Other">Other</option>
+                                        {availableCategories.map(cat => (
+                                            <option key={cat.key} value={cat.displayName}>{cat.displayName}</option>
+                                        ))}
                                     </select>
                                 </div>
 
@@ -285,20 +791,35 @@ const UserTasksSubmit: React.FC = () => {
                                     <label className="block text-xs font-black uppercase text-gray-500 mb-2">Action / SubType</label>
                                     <select 
                                         value={subType} 
-                                        onChange={(e) => setSubType(e.target.value as any)}
+                                        onChange={(e) => setSubType(e.target.value)}
                                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
                                     >
-                                        <option value="Subscribe">Subscribe</option>
-                                        <option value="Like">Like</option>
-                                        <option value="Comment">Comment</option>
-                                        <option value="Follow">Follow</option>
-                                        <option value="Watch Time">Watch Time</option>
-                                        <option value="Sign-up">Website Sign-up</option>
-                                        <option value="Share">Share</option>
-                                        <option value="Other">Other</option>
+                                        {availableSubTypes.map(sub => (
+                                            <option key={sub.key} value={sub.displayName}>{sub.displayName}</option>
+                                        ))}
                                     </select>
                                 </div>
                             </div>
+
+                            {subType === 'Watch Time' && activeWatchTimeTiers.length > 0 && (
+                                <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 rounded-2xl border border-blue-100 dark:border-gray-700 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                    <label className="block text-xs font-black uppercase text-blue-600 dark:text-blue-400">Select Watch Time Duration Tier</label>
+                                    <select
+                                        value={watchTimeTierIndex}
+                                        onChange={(e) => setWatchTimeTierIndex(Number(e.target.value))}
+                                        className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-950 border border-blue-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold text-sm"
+                                    >
+                                        {activeWatchTimeTiers.map((tier: any, idx: number) => {
+                                            const originalIdx = (activeCategoryConfig?.watchTimeTiers || []).findIndex((t: any) => t.duration === tier.duration);
+                                            return (
+                                                <option key={idx} value={originalIdx !== -1 ? originalIdx : idx}>
+                                                    {tier.duration} (Min Amount: ${tier.minPayout} | Min Slots: {tier.minSlots})
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">Campaign Title</label>
@@ -337,26 +858,167 @@ const UserTasksSubmit: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">Target Quantity (Min {config.minQuantity})</label>
+                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                        Target Quantity (Min {getSelectionLimits().minSlots})
+                                    </label>
                                     <input 
                                         type="number" 
-                                        min={config.minQuantity}
+                                        min={getSelectionLimits().minSlots}
                                         value={targetQuantity} 
                                         onChange={(e) => setTargetQuantity(Number(e.target.value))}
                                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
                                     />
+                                    {getSelectionLimits().isPresetFound && (
+                                        <p className="mt-1.5 text-xs text-blue-500 font-bold">
+                                            Admin required min slots for {getSelectionLimits().presetName} is {getSelectionLimits().minSlots}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">Reward Per Task (USD)</label>
+                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                        Reward Per Task (Min ${getSelectionLimits().minPayout.toFixed(3)} USD)
+                                    </label>
                                     <input 
                                         type="number" 
-                                        step="0.01"
-                                        min={config.minRewardAmount}
+                                        step="0.001"
+                                        min={getSelectionLimits().minPayout}
                                         value={rewardPerTask} 
                                         onChange={(e) => setRewardPerTask(Number(e.target.value))}
                                         className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
                                     />
+                                    {getSelectionLimits().isPresetFound && (
+                                        <p className="mt-1.5 text-xs text-blue-500 font-bold">
+                                            Admin locked min payout is ${getSelectionLimits().minPayout.toFixed(3)} USD
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Module A: Dynamic Proof Requirements Form Builder */}
+                            <div className="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-700">
+                                <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">Configure Required Proofs (Module A)</h4>
+                                
+                                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
+                                    <div className="flex flex-col gap-2">
+                                        <span className="text-xs font-black uppercase text-gray-400">Add Required Proof Type:</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => addProofType('screenshot', 'Screenshot / Image')}
+                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="text-sm font-black text-blue-600 dark:text-blue-400">+</span> 📸 Screenshot / Image
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => addProofType('text', 'Text Proof')}
+                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">+</span> 📝 Text Proof
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => addProofType('username', 'Username')}
+                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="text-sm font-black text-purple-600 dark:text-purple-400">+</span> 👤 Username
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => addProofType('userId', 'User ID')}
+                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">+</span> 🆔 User ID
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => addProofType('email', 'Email')}
+                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="text-sm font-black text-rose-600 dark:text-rose-400">+</span> 📧 Email
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2 bg-white dark:bg-gray-800 p-2.5 rounded-2xl border dark:border-gray-700 shadow-inner">
+                                        <input
+                                            type="text"
+                                            id="custom-proof-manual-input"
+                                            placeholder="Or enter manual entry name (e.g. Profile URL)..."
+                                            className="flex-1 bg-transparent border-none text-xs font-medium focus:ring-0 px-2 text-gray-900 dark:text-white"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = (e.currentTarget as HTMLInputElement).value.trim();
+                                                    if (val) {
+                                                        addProofType('manual', val);
+                                                        (e.currentTarget as HTMLInputElement).value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const el = document.getElementById('custom-proof-manual-input') as HTMLInputElement;
+                                                const val = el?.value.trim();
+                                                if (val) {
+                                                    addProofType('manual', val);
+                                                    el.value = '';
+                                                } else {
+                                                    alert("Please enter a label for manual entry proof.");
+                                                }
+                                            }}
+                                            className="px-4 py-2 text-xs font-black rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 hover:scale-105 transition-all flex items-center gap-1 shrink-0"
+                                        >
+                                            <span className="font-bold">+</span> Add Manual Entry
+                                        </button>
+                                    </div>
+
+                                    {/* Configured Proofs List */}
+                                    <div className="space-y-3 pt-2">
+                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Proof Requirements list:</span>
+                                        {requiredProofsList.length === 0 ? (
+                                            <p className="text-xs text-gray-400 italic text-center py-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed dark:border-gray-700">
+                                                No proofs configured yet. Please add at least one required proof above.
+                                            </p>
+                                        ) : (
+                                            requiredProofsList.map((proof, index) => (
+                                                <div key={proof.id} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm space-y-2.5 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                                #{index + 1}
+                                                            </span>
+                                                            <span className="text-xs font-black text-gray-900 dark:text-white">
+                                                                {proof.type === 'screenshot' ? '📸' : 
+                                                                 proof.type === 'text' ? '📝' : 
+                                                                 proof.type === 'username' ? '👤' : 
+                                                                 proof.type === 'userId' ? '🆔' : 
+                                                                 proof.type === 'email' ? '📧' : '✍️'} {proof.label}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeProofItem(proof.id)}
+                                                            className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
+                                                        >
+                                                            <span>🗑️</span> Remove
+                                                        </button>
+                                                    </div>
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={proof.instruction}
+                                                        onChange={(e) => updateProofInstruction(proof.id, e.target.value)}
+                                                        placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()})`}
+                                                        className="w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -391,6 +1053,16 @@ const UserTasksSubmit: React.FC = () => {
                                     <span>Total Budget</span>
                                     <span>{totalBudgetUSD} USD</span>
                                 </div>
+                                {getSelectionLimits().isPresetFound && (
+                                    <div className="mt-4 p-4 rounded-2xl bg-blue-950/40 border border-blue-900 text-xs space-y-2">
+                                        <p className="font-bold text-blue-400 uppercase tracking-wider">🔒 Admin Verified Preset</p>
+                                        <p className="text-gray-300">This task type is configured platform-wide:</p>
+                                        <ul className="list-disc pl-4 text-gray-400 space-y-1">
+                                            <li>Min Required Price: <strong>${getSelectionLimits().minPayout.toFixed(3)} USD</strong></li>
+                                            <li>Min Required Slots: <strong>{getSelectionLimits().minSlots} users</strong></li>
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -449,7 +1121,14 @@ const UserTasksSubmit: React.FC = () => {
                                                     <Button 
                                                         variant="primary" 
                                                         className="flex-1 py-3 text-sm"
-                                                        onClick={() => setSelectedTaskForProof(task)}
+                                                        onClick={() => {
+                                                            setSelectedTaskForProof(task);
+                                                            setProofText('');
+                                                            setProofUsername('');
+                                                            setProofUserIdVal('');
+                                                            setProofEmail('');
+                                                            setProofImage('');
+                                                        }}
                                                     >
                                                         Submit Proof
                                                     </Button>
@@ -465,47 +1144,158 @@ const UserTasksSubmit: React.FC = () => {
             )}
 
             {/* TAB 3: MY CAMPAIGNS */}
-            {activeTab === 'my-tasks' && (
-                <div className="space-y-6">
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">My Created Task Campaigns</h3>
-                    {mySubmittedTasks.length === 0 ? (
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center text-gray-500 shadow-xl border dark:border-gray-700">
-                            You have not created any task campaigns yet.
-                        </div>
-                    ) : (
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border dark:border-gray-700">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                            <th className="p-6">Title</th>
-                                            <th className="p-6">Category</th>
-                                            <th className="p-6">Budget (USD)</th>
-                                            <th className="p-6">Progress</th>
-                                            <th className="p-6">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
-                                        {mySubmittedTasks.map(task => (
-                                            <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                <td className="p-6 text-gray-900 dark:text-white font-bold">{task.title}</td>
-                                                <td className="p-6 text-gray-500">{task.category} ({task.subType})</td>
-                                                <td className="p-6 font-mono text-emerald-500 font-bold">{task.totalBudget} USD</td>
-                                                <td className="p-6 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
-                                                <td className="p-6">
-                                                    <Badge variant={task.status === 'Approved' ? 'success' : task.status === 'Pending' ? 'warning' : 'danger'}>
-                                                        {task.status}
-                                                    </Badge>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+            {activeTab === 'my-tasks' && (() => {
+                const totalMySpent = mySubmittedTasks.reduce((acc, t) => acc + t.totalBudget, 0).toFixed(2);
+                const activeCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Approved' && t.currentCompletions < t.targetQuantity).length;
+                const pendingCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Pending').length;
+                const completedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Completed' || t.currentCompletions >= t.targetQuantity).length;
+                const rejectedCampaignsCount = mySubmittedTasks.filter(t => t.status === 'Rejected').length;
+
+                const filteredMyCampaigns = mySubmittedTasks.filter(task => {
+                    if (myCampaignFilter === 'pending') return task.status === 'Pending';
+                    if (myCampaignFilter === 'approved') return task.status === 'Approved' && task.currentCompletions < task.targetQuantity;
+                    if (myCampaignFilter === 'completed') return task.status === 'Completed' || task.currentCompletions >= task.targetQuantity;
+                    if (myCampaignFilter === 'rejected') return task.status === 'Rejected';
+                    return true;
+                });
+
+                return (
+                    <div className="space-y-6">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">My Created Task Campaigns</h3>
+                                <p className="text-xs text-gray-500 mt-1">Monitor your running campaigns, total budget, completion progress, and administrator approval statuses.</p>
                             </div>
                         </div>
-                    )}
-                </div>
-            )}
+
+                        {/* Stats Section */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-md border dark:border-gray-700 flex flex-col justify-between">
+                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Total Spent</span>
+                                <span className="text-2xl font-black text-emerald-500 font-mono mt-1">${totalMySpent} USD</span>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-md border dark:border-gray-700 flex flex-col justify-between">
+                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">🟢 Active Campaigns</span>
+                                <span className="text-2xl font-black text-gray-900 dark:text-white mt-1">{activeCampaignsCount}</span>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-md border dark:border-gray-700 flex flex-col justify-between">
+                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">⏳ Awaiting Approval</span>
+                                <span className="text-2xl font-black text-amber-500 mt-1">{pendingCampaignsCount}</span>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-md border dark:border-gray-700 flex flex-col justify-between">
+                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">🏆 Completed Campaigns</span>
+                                <span className="text-2xl font-black text-blue-500 mt-1">{completedCampaignsCount}</span>
+                            </div>
+                        </div>
+
+                        {/* Filter Tabs */}
+                        <div className="flex flex-wrap gap-2 border-b dark:border-gray-700 pb-4">
+                            <button
+                                onClick={() => setMyCampaignFilter('all')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    myCampaignFilter === 'all'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                🌍 All ({mySubmittedTasks.length})
+                            </button>
+                            <button
+                                onClick={() => setMyCampaignFilter('pending')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    myCampaignFilter === 'pending'
+                                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                ⏳ Pending Approval ({pendingCampaignsCount})
+                            </button>
+                            <button
+                                onClick={() => setMyCampaignFilter('approved')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    myCampaignFilter === 'approved'
+                                        ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                🟢 Active ({activeCampaignsCount})
+                            </button>
+                            <button
+                                onClick={() => setMyCampaignFilter('completed')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    myCampaignFilter === 'completed'
+                                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                🏆 Completed ({completedCampaignsCount})
+                            </button>
+                            <button
+                                onClick={() => setMyCampaignFilter('rejected')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    myCampaignFilter === 'rejected'
+                                        ? 'bg-red-600 text-white shadow-lg shadow-red-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                ❌ Rejected ({rejectedCampaignsCount})
+                            </button>
+                        </div>
+
+                        {filteredMyCampaigns.length === 0 ? (
+                            <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center text-gray-500 shadow-xl border dark:border-gray-700 font-medium">
+                                No task campaigns found matching this filter.
+                            </div>
+                        ) : (
+                            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border dark:border-gray-700">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
+                                                <th className="p-6">Title</th>
+                                                <th className="p-6">Category</th>
+                                                <th className="p-6">Budget (USD)</th>
+                                                <th className="p-6">Progress</th>
+                                                <th className="p-6">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                            {filteredMyCampaigns.map(task => (
+                                                <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
+                                                    <td className="p-6 text-gray-900 dark:text-white font-bold">{task.title}</td>
+                                                    <td className="p-6 text-gray-500">{task.category} ({task.subType})</td>
+                                                    <td className="p-6 font-mono text-emerald-500 font-bold">{task.totalBudget} USD</td>
+                                                    <td className="p-6 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
+                                                    <td className="p-6">
+                                                        <div className="space-y-1">
+                                                            {task.currentCompletions >= task.targetQuantity || task.status === 'Completed' ? (
+                                                                <Badge variant="success">✅ Completed</Badge>
+                                                            ) : task.status === 'Approved' ? (
+                                                                <Badge variant="success">🟢 Active</Badge>
+                                                            ) : task.status === 'Pending' ? (
+                                                                <Badge variant="warning">⏳ Pending Approval</Badge>
+                                                            ) : task.status === 'Rejected' ? (
+                                                                <Badge variant="danger">❌ Rejected</Badge>
+                                                            ) : (
+                                                                <Badge variant="danger">{task.status}</Badge>
+                                                            )}
+                                                            {task.status === 'Rejected' && task.adminNotes && (
+                                                                <p className="text-[10px] text-red-500 max-w-[150px] font-medium leading-tight mt-1">
+                                                                    Reason: {task.adminNotes}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
              {/* TAB: PENDING PAYMENT TASKS */}
             {activeTab === 'pending-payment' && (
@@ -595,6 +1385,189 @@ const UserTasksSubmit: React.FC = () => {
                 </div>
             )}
 
+            {/* TAB: REVIEW PROOFS (CAMPAIGN OWNER REVIEW) */}
+            {activeTab === 'review-proofs' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Review Worker Submissions</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                As the creator of these campaigns, you can inspect worker proofs and approve to release payments or reject them with a reason.
+                            </p>
+                        </div>
+                        {/* Filter Sub-Tabs */}
+                        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700">
+                            {(['All', 'Pending', 'Approved', 'Rejected'] as const).map(status => (
+                                <button
+                                    key={status}
+                                    onClick={() => setReviewFilter(status)}
+                                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                        reviewFilter === status
+                                            ? 'bg-blue-600 text-white shadow-md'
+                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    {status} ({
+                                        status === 'All' 
+                                            ? campaignSubmissions.length 
+                                            : campaignSubmissions.filter(s => s.status === status).length
+                                    })
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {campaignSubmissions.length === 0 ? (
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center text-gray-500 shadow-xl border dark:border-gray-700">
+                            No worker submissions found for your task campaigns.
+                        </div>
+                    ) : (
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl overflow-hidden border dark:border-gray-700">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
+                                            <th className="p-6">Task Campaign</th>
+                                            <th className="p-6">Worker Name</th>
+                                            <th className="p-6">Proof details</th>
+                                            <th className="p-6">Cost / Reward</th>
+                                            <th className="p-6">Status</th>
+                                            <th className="p-6 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                        {campaignSubmissions
+                                            .filter(s => reviewFilter === 'All' || s.status === reviewFilter)
+                                            .map(sub => (
+                                                <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
+                                                    <td className="p-6">
+                                                        <div className="font-bold text-gray-900 dark:text-white">{sub.taskTitle || 'Engagement Task'}</div>
+                                                        <div className="text-[10px] uppercase font-bold text-blue-500 mt-1">{sub.taskCategory || 'Platform'}</div>
+                                                    </td>
+                                                    <td className="p-6">
+                                                        <div className="font-bold text-gray-800 dark:text-gray-200">@{sub.workerName}</div>
+                                                        <div className="text-[10px] font-mono text-gray-400">ID: {sub.workerId}</div>
+                                                    </td>
+                                                    <td className="p-6 text-sm text-gray-600 dark:text-gray-300">
+                                                        <div className="space-y-1.5 max-w-sm">
+                                                            {sub.submittedProofs && Array.isArray(sub.submittedProofs) && sub.submittedProofs.length > 0 ? (
+                                                                <div className="space-y-2">
+                                                                    {sub.submittedProofs.map((item: any, idx: number) => {
+                                                                        const isImage = item.type === 'screenshot' || (item.value && (item.value.startsWith('data:') || item.value.startsWith('http')));
+                                                                        return (
+                                                                            <div key={item.id || idx} className="bg-gray-50 dark:bg-gray-900/50 p-2 rounded-xl border dark:border-gray-700/60 text-xs">
+                                                                                <span className="text-[10px] uppercase font-black text-blue-500 block">{item.label}</span>
+                                                                                {isImage ? (
+                                                                                    <div className="mt-1">
+                                                                                        <div className="relative group w-20 h-20 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)}>
+                                                                                            <img src={item.value} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
+                                                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                                                                <span className="text-white text-lg font-black">🔍</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <a href={item.value} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 inline-block font-bold">Open Original</a>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <p className="font-medium text-gray-800 dark:text-gray-200 break-all">{item.value}</p>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    {sub.proofText && (
+                                                                        <div>
+                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Text Proof</span>
+                                                                            <p className="bg-gray-50 dark:bg-gray-900/50 p-2 rounded-xl text-xs border dark:border-gray-700 text-gray-800 dark:text-gray-200 break-all">{sub.proofText}</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {sub.proofUsername && (
+                                                                        <div>
+                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Username</span>
+                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofUsername}</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {sub.proofUserIdVal && (
+                                                                        <div>
+                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">User ID</span>
+                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofUserIdVal}</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {sub.proofEmail && (
+                                                                        <div>
+                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Email</span>
+                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofEmail}</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {sub.proofImage && (
+                                                                        <div className="mt-2">
+                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Screenshot Proof</span>
+                                                                            <div className="relative group w-20 h-20 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(sub.proofImage)}>
+                                                                                <img src={sub.proofImage} alt="Screenshot proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
+                                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                                                    <span className="text-white text-lg font-black">🔍</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    {!sub.proofText && !sub.proofUsername && !sub.proofUserIdVal && !sub.proofEmail && !sub.proofImage && (
+                                                                        <span className="text-xs italic text-gray-400">No proof details submitted</span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-6 font-mono font-black text-emerald-500">
+                                                        +{sub.rewardAmount} USD
+                                                    </td>
+                                                    <td className="p-6">
+                                                        <div className="space-y-1">
+                                                            <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
+                                                                {sub.status}
+                                                            </Badge>
+                                                            {sub.status === 'Rejected' && sub.rejectionReason && (
+                                                                <p className="text-[10px] text-red-500 max-w-[150px] line-clamp-2" title={sub.rejectionReason}>
+                                                                    <strong>Reason:</strong> {sub.rejectionReason}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-6 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            {sub.status === 'Pending' && (
+                                                                <>
+                                                                    <Button
+                                                                        variant="primary"
+                                                                        className="text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 border-none shadow"
+                                                                        onClick={() => handleApproveSubmission(sub._id)}
+                                                                    >
+                                                                        Approve & Pay
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="danger"
+                                                                        className="text-xs py-1.5 px-3"
+                                                                        onClick={() => handleRejectSubmission(sub._id)}
+                                                                    >
+                                                                        Reject
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                            {sub.status !== 'Pending' && (
+                                                                <span className="text-xs text-gray-400 italic">No actions available</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* TAB 5: CURRENCY CONVERTER & WITHDRAW */}
             {activeTab === 'converter' && (
                 <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-10 shadow-xl border dark:border-gray-700 max-w-2xl mx-auto space-y-6">
@@ -674,29 +1647,189 @@ const UserTasksSubmit: React.FC = () => {
                             <p><strong className="text-gray-900 dark:text-white">Reward:</strong> <span className="text-emerald-500 font-bold">+{selectedTaskForProof.rewardPerTask} USD</span></p>
                         </div>
 
-                        <form onSubmit={handleProofSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Proof Details (Username / ID / Link)</label>
-                                <input 
-                                    type="text" 
-                                    required
-                                    value={proofText}
-                                    onChange={(e) => setProofText(e.target.value)}
-                                    placeholder="e.g. My Telegram/YouTube username @john_doe"
-                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
-                                />
-                            </div>
+                        <form onSubmit={handleProofSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                            {selectedTaskForProof.requiredProofs && Array.isArray(selectedTaskForProof.requiredProofs) && selectedTaskForProof.requiredProofs.length > 0 ? (
+                                <div className="space-y-4">
+                                    {selectedTaskForProof.requiredProofs.map((req: any, index: number) => {
+                                        const value = submittedProofsValues[req.id] || '';
+                                        const isImage = req.type === 'screenshot';
+                                        
+                                        return (
+                                            <div key={req.id || index} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700/60 space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-500">
+                                                        Proof Requirement #{index + 1}: {req.label}
+                                                    </span>
+                                                    <span className="text-xs text-red-500 font-bold">* Required</span>
+                                                </div>
+                                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                    👉 {req.instruction}
+                                                </p>
+                                                
+                                                {isImage ? (
+                                                    <div className="space-y-2.5 pt-1">
+                                                        <div className="space-y-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">1. Upload Image File (PNG/JPG)</span>
+                                                            <input 
+                                                                type="file" 
+                                                                accept="image/*"
+                                                                onChange={(e) => handleDynamicImageUpload(req.id, e)}
+                                                                className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                                                            />
+                                                        </div>
 
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Screenshot URL or Image Link (Optional)</label>
-                                <input 
-                                    type="url" 
-                                    value={proofImage}
-                                    onChange={(e) => setProofImage(e.target.value)}
-                                    placeholder="https://imgur.com/screenshot.png"
-                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
-                                />
-                            </div>
+                                                        <div className="space-y-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase block">2. Or Paste Image URL</span>
+                                                            <input 
+                                                                type="url" 
+                                                                value={value.startsWith('data:') ? '' : value}
+                                                                onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                                                placeholder="https://imgur.com/screenshot.png"
+                                                                className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                            />
+                                                        </div>
+
+                                                        {value && (
+                                                            <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
+                                                                <img src={value} alt="Proof preview" className="w-full h-full object-cover" />
+                                                                <button 
+                                                                    type="button" 
+                                                                    onClick={() => setSubmittedProofsValues(prev => {
+                                                                        const next = { ...prev };
+                                                                        delete next[req.id];
+                                                                        return next;
+                                                                    })}
+                                                                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
+                                                                >
+                                                                    &times;
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <input 
+                                                        type={req.type === 'email' ? 'email' : 'text'}
+                                                        required
+                                                        value={value}
+                                                        onChange={(e) => setSubmittedProofsValues(prev => ({ ...prev, [req.id]: e.target.value }))}
+                                                        placeholder={`Enter your ${req.label.toLowerCase()}`}
+                                                        className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                    />
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Legacy Proof Form (for old campaigns) */}
+                                    {(selectedTaskForProof.requireTextProof || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail && !selectedTaskForProof.requireScreenshot)) && (
+                                        <div>
+                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                {selectedTaskForProof.textProofInstruction || 'Proof Text / Comment / Link'}
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                required={selectedTaskForProof.requireTextProof}
+                                                value={proofText}
+                                                onChange={(e) => setProofText(e.target.value)}
+                                                placeholder="e.g. My Telegram/YouTube username @john_doe"
+                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {selectedTaskForProof.requireUsername && (
+                                        <div>
+                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                {selectedTaskForProof.usernameInstruction || 'Username'}
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                required={selectedTaskForProof.requireUsername}
+                                                value={proofUsername}
+                                                onChange={(e) => setProofUsername(e.target.value)}
+                                                placeholder="Enter your username"
+                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {selectedTaskForProof.requireUserId && (
+                                        <div>
+                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                {selectedTaskForProof.userIdInstruction || 'User ID'}
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                required={selectedTaskForProof.requireUserId}
+                                                value={proofUserIdVal}
+                                                onChange={(e) => setProofUserIdVal(e.target.value)}
+                                                placeholder="Enter your profile ID / User ID"
+                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {selectedTaskForProof.requireEmail && (
+                                        <div>
+                                            <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                                {selectedTaskForProof.emailInstruction || 'Email'}
+                                            </label>
+                                            <input 
+                                                type="email" 
+                                                required={selectedTaskForProof.requireEmail}
+                                                value={proofEmail}
+                                                onChange={(e) => setProofEmail(e.target.value)}
+                                                placeholder="Enter your registered email"
+                                                className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {(selectedTaskForProof.requireScreenshot || (!selectedTaskForProof.requireTextProof && !selectedTaskForProof.requireUsername && !selectedTaskForProof.requireUserId && !selectedTaskForProof.requireEmail)) && (
+                                        <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border dark:border-gray-700">
+                                            <label className="block text-xs font-black uppercase text-gray-500">
+                                                {selectedTaskForProof.screenshotInstruction || 'Screenshot / Image Proof'}
+                                            </label>
+                                            
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">1. Upload Image File (PNG/JPG)</span>
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*"
+                                                    onChange={handleImageUpload}
+                                                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">2. Or Paste Image URL</span>
+                                                <input 
+                                                    type="url" 
+                                                    value={proofImage.startsWith('data:') ? '' : proofImage}
+                                                    onChange={(e) => setProofImage(e.target.value)}
+                                                    placeholder="https://imgur.com/screenshot.png"
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-medium text-xs"
+                                                />
+                                            </div>
+
+                                            {proofImage && (
+                                                <div className="relative w-24 h-24 rounded-xl overflow-hidden border shadow-sm mt-2">
+                                                    <img src={proofImage} alt="Proof preview" className="w-full h-full object-cover" />
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setProofImage('')}
+                                                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
 
                             <div className="flex gap-4 pt-2">
                                 <Button type="button" variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="flex-1 py-3">
@@ -747,6 +1880,71 @@ const UserTasksSubmit: React.FC = () => {
                                 </Button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* CONVERT & TRANSFER TASK WALLET MODAL */}
+            {showConvertModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border dark:border-gray-700 space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Task Wallet Conversion</h3>
+                            <button onClick={() => setShowConvertModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+                        </div>
+
+                        <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl space-y-3">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Task Balance (USD):</span>
+                                <span className="font-bold text-gray-900 dark:text-white">${(currentUser.taskWalletBalance || 0).toFixed(2)} USD</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Base Currency:</span>
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{currentUser.currency || 'USD'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Exchange Rate:</span>
+                                <span className="font-bold text-gray-900 dark:text-white">1 USD = {rates[currentUser.currency || 'USD'] || 1} {currentUser.currency || 'USD'}</span>
+                            </div>
+                            <div className="border-t dark:border-gray-700 pt-3 flex justify-between items-center">
+                                <span className="text-xs font-black uppercase text-gray-500">Converted Amount:</span>
+                                <span className="text-lg font-black text-emerald-500">
+                                    {(((currentUser.taskWalletBalance || 0) * (rates[currentUser.currency || 'USD'] || 1))).toFixed(2)} {currentUser.currency || 'USD'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-gray-500 text-center">
+                            Funds will be transferred instantly to your Main MLM Balance and added to your transactions record.
+                        </p>
+
+                        <div className="flex gap-4 pt-2">
+                            <Button type="button" variant="secondary" onClick={() => setShowConvertModal(false)} className="flex-1 py-3">
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="primary" 
+                                isLoading={isTransferringTaskWallet} 
+                                onClick={handleTransferTaskWallet}
+                                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700"
+                            >
+                                Instant Transfer
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SCREENSHOT PREVIEW OVERLAY */}
+            {selectedProofImage && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedProofImage(null)}>
+                    <div className="max-w-4xl max-h-[90vh] bg-white dark:bg-gray-800 p-5 rounded-3xl shadow-2xl relative overflow-auto space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center">
+                            <h4 className="font-bold text-gray-900 dark:text-white">Proof Screenshot Preview</h4>
+                            <button onClick={() => setSelectedProofImage(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white text-3xl font-black">&times;</button>
+                        </div>
+                        <img src={selectedProofImage} alt="Proof" className="max-w-full h-auto rounded-2xl mx-auto border dark:border-gray-700 shadow-lg" referrerPolicy="no-referrer" />
                     </div>
                 </div>
             )}

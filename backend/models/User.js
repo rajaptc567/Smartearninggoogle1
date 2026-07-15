@@ -70,6 +70,10 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    taskWalletBalance: {
+        type: Number,
+        default: 0,
+    },
     activePlan: {
         type: String,
         default: 'None',
@@ -95,6 +99,9 @@ const UserSchema = new mongoose.Schema({
         loginBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
         purchaseBlocked: { type: Boolean, default: false }, // Foundation Step 1 Requirement
     },
+    disputeLossCount: { type: Number, default: 0 },
+    trustScore: { type: Number, default: 100 },
+    penaltyCount: { type: Number, default: 0 },
     completedTasks: [{
         taskId: { type: mongoose.Schema.ObjectId, ref: 'Task' },
         proofUrl: String,

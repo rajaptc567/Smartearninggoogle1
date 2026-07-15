@@ -19,15 +19,36 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    proofUsername: {
+        type: String,
+        default: ''
+    },
+    proofUserIdVal: {
+        type: String,
+        default: ''
+    },
+    proofEmail: {
+        type: String,
+        default: ''
+    },
     proofImage: {
         type: String,
         default: ''
     },
+    submittedProofs: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: []
+    },
     status: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected'],
+        enum: ['Pending', 'Approved', 'Rejected', 'Disputed', 'Paid'],
         default: 'Pending'
     },
+    rejectionReason: { type: String, default: '' },
+    rejectedAt: { type: Date },
+    disputeDeadline: { type: Date },
+    disputeOpened: { type: Boolean, default: false },
+    disputeId: { type: mongoose.Schema.ObjectId, ref: 'Dispute' },
     adminNotes: {
         type: String,
         default: ''

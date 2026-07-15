@@ -12,13 +12,11 @@ const UserTaskSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: [true, 'Please select a task category'],
-        enum: ['Facebook', 'YouTube', 'WhatsApp', 'Website', 'Other']
+        required: [true, 'Please select a task category']
     },
     subType: {
         type: String,
-        required: [true, 'Please select task action type'],
-        enum: ['Comment', 'Like', 'Follow', 'Subscribe', 'Watch Time', 'Sign-up', 'Share', 'Other']
+        required: [true, 'Please select task action type']
     },
     title: {
         type: String,
@@ -59,6 +57,20 @@ const UserTaskSchema = new mongoose.Schema({
         type: String,
         default: 'USD',
         enum: ['USD', 'EUR', 'PKR']
+    },
+    requireTextProof: { type: Boolean, default: false },
+    textProofInstruction: { type: String, default: '' },
+    requireUsername: { type: Boolean, default: false },
+    usernameInstruction: { type: String, default: '' },
+    requireUserId: { type: Boolean, default: false },
+    userIdInstruction: { type: String, default: '' },
+    requireEmail: { type: Boolean, default: false },
+    emailInstruction: { type: String, default: '' },
+    requireScreenshot: { type: Boolean, default: true },
+    screenshotInstruction: { type: String, default: 'Please upload screenshot proof of completion.' },
+    requiredProofs: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: []
     },
     status: {
         type: String,
