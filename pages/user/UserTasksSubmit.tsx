@@ -852,16 +852,16 @@ const UserTasksSubmit: React.FC = () => {
     }
 
     return (
-        <div className="space-y-10 max-w-7xl mx-auto pb-20">
+        <div className="space-y-4 md:space-y-8 max-w-7xl mx-auto pb-20">
             {/* Header */}
-            <div className="bg-[#0f172a] p-8 md:p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+            <div className="bg-[#0f172a] p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none"></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6">
                     <div>
-                        <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">User Task Hub (USD)</h1>
-                        <p className="mt-2 text-blue-100/70 font-medium uppercase text-xs tracking-widest ml-1">Create USD campaigns, complete tasks with proof, and convert currency</p>
+                        <h1 className="text-xl md:text-3xl lg:text-4xl font-black uppercase tracking-tight">User Task Hub (USD)</h1>
+                        <p className="mt-1 text-blue-100/70 font-semibold uppercase text-[10px] md:text-xs tracking-wider ml-1">Create USD campaigns, complete tasks with proof, and convert currency</p>
                     </div>
-                    <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-8 px-8 md:mx-0 md:px-0 md:flex-wrap gap-2 w-full md:w-auto pb-3 md:pb-0 scroll-smooth snap-x">
+                    <div className="grid grid-cols-2 gap-2 w-full lg:flex lg:flex-wrap lg:w-auto">
                         {[
                             { id: 'browse', label: 'Available Tasks', count: browseableTasks.length, icon: '📋' },
                             { id: 'pending-payment', label: 'Pending Payment', count: pendingSubmissions.length, icon: '⏳' },
@@ -870,20 +870,22 @@ const UserTasksSubmit: React.FC = () => {
                             { id: 'my-tasks', label: 'My Campaigns', count: mySubmittedTasks.length, icon: '📂' },
                             { id: 'review-proofs', label: 'Review Proofs', count: campaignSubmissions.filter(s => s.status === 'Pending').length, icon: '👁️' },
                             { id: 'converter', label: 'Converter', icon: '🔄' },
-                        ].map(tab => (
+                        ].map((tab, idx) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`snap-center shrink-0 flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all duration-300 select-none ${
+                                className={`flex items-center justify-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-wider transition-all duration-300 select-none ${
+                                    idx === 6 ? 'col-span-2 lg:col-span-1' : ''
+                                } ${
                                     activeTab === tab.id
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/35 scale-[1.03] border-2 border-transparent'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/35 scale-[1.02]'
                                         : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5'
                                 }`}
                             >
-                                <span className="text-sm">{tab.icon}</span>
-                                <span>{tab.label}</span>
+                                <span className="text-xs md:text-sm">{tab.icon}</span>
+                                <span className="truncate">{tab.label}</span>
                                 {tab.count !== undefined && (
-                                    <span className={`ml-1 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                                    <span className={`ml-1 text-[9px] md:text-[10px] font-black px-1.5 py-0.5 rounded-full ${
                                         activeTab === tab.id ? 'bg-blue-800 text-blue-200' : 'bg-white/10 text-gray-400'
                                     }`}>
                                         {tab.count}
@@ -896,36 +898,34 @@ const UserTasksSubmit: React.FC = () => {
             </div>
 
             {/* Top Balance Widget & Quick Actions */}
-            <div className="bg-gradient-to-r from-blue-950 to-slate-900 p-6 md:p-8 rounded-[2.5rem] text-white shadow-xl flex flex-col lg:flex-row justify-between items-center gap-6 border border-blue-500/15">
-                <div className="flex flex-col sm:flex-row items-center gap-6 w-full lg:w-auto">
-                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <div className="w-12 h-12 shrink-0 bg-blue-600/20 rounded-2xl flex items-center justify-center text-xl font-black text-emerald-400 border border-blue-500/30 shadow-inner">
+            <div className="bg-gradient-to-r from-blue-950 to-slate-900 p-4 md:p-6 rounded-2xl md:rounded-[2rem] text-white shadow-xl flex flex-col lg:flex-row justify-between items-center gap-4 md:gap-6 border border-blue-500/15">
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-row items-center sm:gap-6 w-full lg:w-auto">
+                    <div className="flex items-center gap-2 md:gap-4 w-full sm:w-auto">
+                        <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 bg-blue-600/20 rounded-xl md:rounded-2xl flex items-center justify-center text-sm md:text-xl font-black text-emerald-400 border border-blue-500/30 shadow-inner">
                             💲
                         </div>
                         <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-300 block">Available Task Balance</span>
-                            <span className="text-2xl font-black tracking-tight text-white block">
-                                ${(currentUser.taskWalletBalance || 0).toFixed(2)} USD
+                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-blue-300 block leading-none mb-0.5 md:mb-1">Task Balance</span>
+                            <span className="text-xs md:text-2xl font-black tracking-tight text-white block">
+                                ${(currentUser.taskWalletBalance || 0).toFixed(2)}
                             </span>
                         </div>
                     </div>
                     
-                    <div className="hidden sm:block h-10 w-px bg-white/10"></div>
-
-                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <div className="w-12 h-12 shrink-0 bg-emerald-600/20 rounded-2xl flex items-center justify-center text-xl font-black text-emerald-400 border border-emerald-500/30 shadow-inner">
+                    <div className="flex items-center gap-2 md:gap-4 w-full sm:w-auto">
+                        <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 bg-emerald-600/20 rounded-xl md:rounded-2xl flex items-center justify-center text-sm md:text-xl font-black text-emerald-400 border border-emerald-500/30 shadow-inner">
                             💳
                         </div>
                         <div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block">Main MLM Balance</span>
-                            <span className="text-2xl font-black tracking-tight text-white block">
+                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-emerald-400 block leading-none mb-0.5 md:mb-1">MLM Balance</span>
+                            <span className="text-xs md:text-2xl font-black tracking-tight text-white block truncate">
                                 {(currentUser.walletBalance || 0).toFixed(2)} {currentUser.currency || 'USD'}
                             </span>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 w-full lg:w-auto justify-end">
+                <div className="flex items-center gap-3 md:gap-4 w-full lg:w-auto justify-end">
                     <div className="text-right hidden sm:block">
                         <span className="text-[10px] font-bold text-gray-400 uppercase block">Registered Currency</span>
                         <span className="text-sm font-black text-emerald-400">{currentUser.currency || 'USD'}</span>
@@ -933,7 +933,7 @@ const UserTasksSubmit: React.FC = () => {
                     <Button 
                         variant="primary" 
                         onClick={() => setShowConvertModal(true)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg flex items-center gap-2 transition-transform hover:scale-105 w-full sm:w-auto justify-center"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 md:px-6 md:py-3.5 rounded-xl md:rounded-2xl shadow-lg flex items-center gap-1.5 transition-transform hover:scale-105 w-full sm:w-auto justify-center text-[10px] md:text-sm"
                     >
                         <span>Convert & Transfer to Main Wallet</span>
                         <span>⚡</span>
@@ -1308,36 +1308,36 @@ const UserTasksSubmit: React.FC = () => {
                                 className="w-full pl-11 pr-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-900 dark:text-white"
                             />
                         </div>
-                        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Category:</span>
+                        <div className="grid grid-cols-2 gap-2 w-full md:flex md:items-center md:gap-4 md:w-auto">
+                            <div className="flex items-center gap-1 w-full sm:w-auto">
+                                <span className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Cat:</span>
                                 <select 
                                     value={browseCategory}
                                     onChange={(e) => {
                                         setBrowseCategory(e.target.value);
                                         setBrowsePage(1); // Reset page on filter change
                                     }}
-                                    className="px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800 dark:text-gray-200"
+                                    className="w-full px-2 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] md:text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800 dark:text-gray-200"
                                 >
                                     {['All', 'YouTube', 'Facebook', 'Telegram', 'TikTok', 'Twitter', 'Instagram', 'Custom'].map(cat => (
                                         <option key={cat} value={cat}>{cat}</option>
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sort:</span>
+                            <div className="flex items-center gap-1 w-full sm:w-auto">
+                                <span className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Sort:</span>
                                 <select 
                                     value={browseSort}
                                     onChange={(e) => {
                                         setBrowseSort(e.target.value);
                                         setBrowsePage(1); // Reset page on filter change
                                     }}
-                                    className="px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800 dark:text-gray-200"
+                                    className="w-full px-2 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-[10px] md:text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-800 dark:text-gray-200"
                                 >
                                     <option value="latest">⏱️ Latest</option>
-                                    <option value="reward-desc">💰 Reward: High to Low</option>
-                                    <option value="reward-asc">🪙 Reward: Low to High</option>
-                                    <option value="quantity-desc">👥 Slots: High to Low</option>
+                                    <option value="reward-desc">💰 High-Low</option>
+                                    <option value="reward-asc">🪙 Low-High</option>
+                                    <option value="quantity-desc">👥 Slots</option>
                                 </select>
                             </div>
                         </div>
@@ -1349,35 +1349,37 @@ const UserTasksSubmit: React.FC = () => {
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-6">
                                 {paginatedBrowseTasks.map(task => {
                                     const alreadySubmitted = mySubmissions.some(s => s.taskId.toString() === task._id.toString());
                                     return (
-                                        <div key={task._id} className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-xl border dark:border-gray-700 flex flex-col justify-between">
+                                        <div key={task._id} className="bg-white dark:bg-gray-800 rounded-xl md:rounded-[2rem] p-3 md:p-6 shadow-sm hover:shadow-md transition-shadow border dark:border-gray-700/60 flex flex-col justify-between">
                                             <div>
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <Badge variant="info">{task.category} / {task.subType}</Badge>
-                                                    <span className="text-emerald-500 font-black text-lg">+{task.rewardPerTask} USD</span>
+                                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 mb-2">
+                                                    <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-extrabold text-[8px] md:text-[10px] uppercase tracking-wide truncate max-w-[90px] md:max-w-none">
+                                                        {task.category}
+                                                    </span>
+                                                    <span className="text-emerald-500 font-black text-xs md:text-base whitespace-nowrap">+{task.rewardPerTask} USD</span>
                                                 </div>
-                                                <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{task.title}</h4>
-                                                <p className="text-sm text-gray-500 mb-6 line-clamp-3">{task.description}</p>
+                                                <h4 className="text-xs md:text-base font-bold text-gray-900 dark:text-white mb-1 line-clamp-1" title={task.title}>{task.title}</h4>
+                                                <p className="text-[10px] md:text-xs text-gray-500 mb-3 line-clamp-2 md:line-clamp-3">{task.description}</p>
                                             </div>
 
-                                            <div className="space-y-4">
-                                                <div className="text-xs text-gray-400 flex justify-between">
-                                                    <span>Progress: {task.currentCompletions} / {task.targetQuantity}</span>
-                                                    <span>By: {task.userName}</span>
+                                            <div className="space-y-2">
+                                                <div className="text-[9px] md:text-xs text-gray-400 flex flex-col gap-0.5 md:flex-row md:justify-between">
+                                                    <span>Progress: {task.currentCompletions}/{task.targetQuantity}</span>
+                                                    <span className="truncate max-w-[80px] md:max-w-none">By: {task.userName}</span>
                                                 </div>
 
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-1.5">
                                                     {alreadySubmitted ? (
-                                                        <span className="w-full text-center py-3 px-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl font-bold text-xs flex items-center justify-center gap-1">
+                                                        <span className="w-full text-center py-1.5 px-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg md:rounded-2xl font-bold text-[10px] md:text-xs flex items-center justify-center gap-1">
                                                             ✓ Submitted
                                                         </span>
                                                     ) : (
                                                         <Button 
                                                             variant="primary" 
-                                                            className="w-full py-3 text-xs font-bold"
+                                                            className="w-full py-1.5 px-2 text-[10px] md:text-xs font-bold rounded-lg md:rounded-2xl flex items-center justify-center gap-1"
                                                             onClick={() => {
                                                                 setSelectedTaskForProof(task);
                                                                 setProofStep(1); // Start at step 1 (View Details)
@@ -1388,9 +1390,10 @@ const UserTasksSubmit: React.FC = () => {
                                                                 setProofImage('');
                                                                 setSubmittedProofsValues({});
                                                                 setProofAgreed(false);
+                                                                setShowProofModal(true);
                                                             }}
                                                         >
-                                                            🔍 View Detail
+                                                            <span>🔍 View</span>
                                                         </Button>
                                                     )}
                                                 </div>
@@ -1538,22 +1541,22 @@ const UserTasksSubmit: React.FC = () => {
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left border-collapse">
                                             <thead>
-                                                <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                                    <th className="p-6">Title</th>
-                                                    <th className="p-6">Category</th>
-                                                    <th className="p-6">Budget (USD)</th>
-                                                    <th className="p-6">Progress</th>
-                                                    <th className="p-6">Status</th>
+                                                <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-[10px] md:text-xs tracking-wider">
+                                                    <th className="p-3.5 md:p-5">Title</th>
+                                                    <th className="p-3.5 md:p-5">Category</th>
+                                                    <th className="p-3.5 md:p-5">Budget (USD)</th>
+                                                    <th className="p-3.5 md:p-5">Progress</th>
+                                                    <th className="p-3.5 md:p-5">Status</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-xs md:text-sm font-medium">
                                                 {paginatedMyCampaigns.map(task => (
                                                     <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                        <td className="p-6 text-gray-900 dark:text-white font-bold">{task.title}</td>
-                                                        <td className="p-6 text-gray-500">{task.category} ({task.subType})</td>
-                                                        <td className="p-6 font-mono text-emerald-500 font-bold">{task.totalBudget} USD</td>
-                                                        <td className="p-6 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
-                                                        <td className="p-6">
+                                                        <td className="p-3.5 md:p-5 text-gray-900 dark:text-white font-bold">{task.title}</td>
+                                                        <td className="p-3.5 md:p-5 text-gray-500">{task.category} ({task.subType})</td>
+                                                        <td className="p-3.5 md:p-5 font-mono text-emerald-500 font-bold">{task.totalBudget} USD</td>
+                                                        <td className="p-3.5 md:p-5 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
+                                                        <td className="p-3.5 md:p-5">
                                                             <div className="space-y-1">
                                                                 {task.currentCompletions >= task.targetQuantity || task.status === 'Completed' ? (
                                                                     <Badge variant="success">✅ Completed</Badge>
@@ -1619,20 +1622,20 @@ const UserTasksSubmit: React.FC = () => {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                                <th className="p-6">Task</th>
-                                                <th className="p-6">Proof Details</th>
-                                                <th className="p-6">Pending Reward (USD)</th>
-                                                <th className="p-6">Status</th>
+                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-[10px] md:text-xs tracking-wider">
+                                                <th className="p-3.5 md:p-5">Task</th>
+                                                <th className="p-3.5 md:p-5">Proof Details</th>
+                                                <th className="p-3.5 md:p-5">Pending Reward (USD)</th>
+                                                <th className="p-3.5 md:p-5">Status</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-xs md:text-sm font-medium">
                                             {paginatedPendingSubmissions.map(sub => (
                                                 <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                    <td className="p-6 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
-                                                    <td className="p-6 text-gray-500 max-w-xs truncate">{sub.proofText || sub.proofImage || 'Screenshot Uploaded'}</td>
-                                                    <td className="p-6 font-mono text-orange-500 font-bold">+{sub.rewardAmount} USD</td>
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
+                                                    <td className="p-3.5 md:p-5 text-gray-500 max-w-xs truncate">{sub.proofText || sub.proofImage || 'Screenshot Uploaded'}</td>
+                                                    <td className="p-3.5 md:p-5 font-mono text-orange-500 font-bold">+{sub.rewardAmount} USD</td>
+                                                    <td className="p-3.5 md:p-5">
                                                         <Badge variant="warning">Pending Admin Review & Payout</Badge>
                                                     </td>
                                                 </tr>
@@ -1680,24 +1683,24 @@ const UserTasksSubmit: React.FC = () => {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                                <th className="p-6">Task</th>
-                                                <th className="p-6">Proof Details</th>
-                                                <th className="p-6">Paid Reward (USD)</th>
-                                                <th className="p-6">Status</th>
-                                                <th className="p-6">Action</th>
+                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-[10px] md:text-xs tracking-wider">
+                                                <th className="p-3.5 md:p-5">Task</th>
+                                                <th className="p-3.5 md:p-5">Proof Details</th>
+                                                <th className="p-3.5 md:p-5">Paid Reward (USD)</th>
+                                                <th className="p-3.5 md:p-5">Status</th>
+                                                <th className="p-3.5 md:p-5">Action</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-xs md:text-sm font-medium">
                                             {paginatedCompletedSubmissions.map(sub => (
                                                 <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                    <td className="p-6 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
-                                                    <td className="p-6 text-gray-500 max-w-xs truncate">{sub.proofText || sub.proofImage || 'Screenshot Uploaded'}</td>
-                                                    <td className="p-6 font-mono text-emerald-500 font-bold">+{sub.rewardAmount} USD</td>
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5 text-gray-900 dark:text-white font-bold">{sub.taskTitle || 'Engagement Task'}</td>
+                                                    <td className="p-3.5 md:p-5 text-gray-500 max-w-xs truncate">{sub.proofText || sub.proofImage || 'Screenshot Uploaded'}</td>
+                                                    <td className="p-3.5 md:p-5 font-mono text-emerald-500 font-bold">+{sub.rewardAmount} USD</td>
+                                                    <td className="p-3.5 md:p-5">
                                                         <Badge variant="success">Completed & Rewarded</Badge>
                                                     </td>
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5">
                                                         <Button 
                                                             variant="secondary" 
                                                             className="text-xs py-1 px-3"
@@ -1779,27 +1782,27 @@ const UserTasksSubmit: React.FC = () => {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                                <th className="p-6">Task Campaign</th>
-                                                <th className="p-6">Worker Name</th>
-                                                <th className="p-6">Proof details</th>
-                                                <th className="p-6">Cost / Reward</th>
-                                                <th className="p-6">Status</th>
-                                                <th className="p-6 text-right">Actions</th>
+                                            <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-[10px] md:text-xs tracking-wider">
+                                                <th className="p-3.5 md:p-5">Task Campaign</th>
+                                                <th className="p-3.5 md:p-5">Worker Name</th>
+                                                <th className="p-3.5 md:p-5">Proof details</th>
+                                                <th className="p-3.5 md:p-5">Cost / Reward</th>
+                                                <th className="p-3.5 md:p-5">Status</th>
+                                                <th className="p-3.5 md:p-5 text-right">Actions</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium">
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-xs md:text-sm font-medium">
                                             {paginatedReviewSubmissions.map(sub => (
                                                 <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5">
                                                         <div className="font-bold text-gray-900 dark:text-white">{sub.taskTitle || 'Engagement Task'}</div>
                                                         <div className="text-[10px] uppercase font-bold text-blue-500 mt-1">{sub.taskCategory || 'Platform'}</div>
                                                     </td>
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5">
                                                         <div className="font-bold text-gray-800 dark:text-gray-200">@{sub.workerName}</div>
                                                         <div className="text-[10px] font-mono text-gray-400">ID: {sub.workerId}</div>
                                                     </td>
-                                                    <td className="p-6 text-sm text-gray-600 dark:text-gray-300">
+                                                    <td className="p-3.5 md:p-5 text-sm text-gray-600 dark:text-gray-300">
                                                         <div className="space-y-1.5 max-w-sm">
                                                             {sub.submittedProofs && Array.isArray(sub.submittedProofs) && sub.submittedProofs.length > 0 ? (
                                                                 <div className="space-y-2">
@@ -1869,10 +1872,10 @@ const UserTasksSubmit: React.FC = () => {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-6 font-mono font-black text-emerald-500">
+                                                    <td className="p-3.5 md:p-5 font-mono font-black text-emerald-500">
                                                         +{sub.rewardAmount} USD
                                                     </td>
-                                                    <td className="p-6">
+                                                    <td className="p-3.5 md:p-5">
                                                         <div className="space-y-1">
                                                             <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
                                                                 {sub.status}
@@ -1884,7 +1887,7 @@ const UserTasksSubmit: React.FC = () => {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-6 text-right">
+                                                    <td className="p-3.5 md:p-5 text-right">
                                                         <div className="flex justify-end gap-2">
                                                             {sub.status === 'Pending' && (
                                                                 <>
