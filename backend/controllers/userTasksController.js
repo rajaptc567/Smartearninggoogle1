@@ -479,9 +479,14 @@ export const convertUserCurrency = async (req, res) => {
         else if (fromCurrency === 'EUR') amountInUSD = amount / (rates.EUR || 0.92);
         else if (fromCurrency === 'USD') amountInUSD = amount / (rates.USD || 1);
 
+        if ((user.taskWalletBalance || 0) < amountInUSD) {
+            return res.status(400).json({ success: false, error: 'You do not have enough amount for conversion.' });
+        }
+
         let convertedAmount = amountInUSD * (rates[toCurrency] || 1);
         convertedAmount = Number(convertedAmount.toFixed(2));
 
+        user.taskWalletBalance = Number((user.taskWalletBalance - amountInUSD).toFixed(2));
         user.walletBalance = Number((user.walletBalance + convertedAmount).toFixed(2));
         user.currency = toCurrency;
         await user.save();
