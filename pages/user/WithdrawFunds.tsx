@@ -336,23 +336,23 @@ const WithdrawFunds: React.FC = () => {
     }
 
     return (
-        <div className="space-y-10 max-w-5xl mx-auto pb-16 px-2">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 md:p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-12 group">
+        <div className="space-y-6 md:space-y-8 max-w-5xl mx-auto pb-12 px-2">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 md:p-7 rounded-2xl md:rounded-[2rem] text-white shadow-2xl relative overflow-hidden mb-6 md:mb-8 group">
                 <div className="absolute inset-0 bg-white/5 opacity-10 pointer-events-none"></div>
                 <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
                 <div className="absolute top-1/2 right-10 -translate-y-1/2 opacity-10 hidden lg:block">
                     <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 12c0 1.77.46 3.45 1.28 4.94L2 22l5.25-1.38c1.44.75 3.06 1.18 4.79 1.18h.01c5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2z"/></svg>
                 </div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
                     <div className="text-center md:text-left">
-                        <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter uppercase leading-none">Withdraw Funds</h1>
-                        <p className="text-blue-50 text-sm md:text-base max-w-2xl leading-relaxed font-medium">
+                        <h1 className="text-2xl md:text-4xl font-black mb-2 tracking-tighter uppercase leading-none">Withdraw Funds</h1>
+                        <p className="text-blue-50 text-xs md:text-sm max-w-2xl leading-relaxed font-medium">
                             Redeem your earnings and move them to your personal account. Choose your preferred withdrawal method and provide the necessary details to process your payout.
                         </p>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 text-center min-w-[220px] shadow-inner">
-                        <p className="text-[10px] text-blue-200 uppercase tracking-[0.3em] font-black mb-1">Withdrawable</p>
-                        <p className="text-3xl font-black tracking-tighter">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
+                    <div className="bg-white/10 backdrop-blur-xl p-4 md:p-5 rounded-xl md:rounded-2xl border border-white/10 text-center w-full md:w-auto md:min-w-[180px] shadow-inner">
+                        <p className="text-[9px] text-blue-200 uppercase tracking-[0.3em] font-black mb-0.5">Withdrawable</p>
+                        <p className="text-2xl md:text-3xl font-black tracking-tighter">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
                     </div>
                 </div>
             </div>
@@ -369,7 +369,7 @@ const WithdrawFunds: React.FC = () => {
 
             <StepIndicator currentStep={step} />
 
-            <div className={`bg-white dark:bg-gray-950 p-8 sm:p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800 ${cooldownMessage ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+            <div className={`bg-white dark:bg-gray-950 p-5 sm:p-8 md:p-10 rounded-2xl md:rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800 ${cooldownMessage ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
                 
                 {/* STEP 1: AMOUNT */}
                 {step === 1 && (
@@ -670,13 +670,13 @@ const WithdrawFunds: React.FC = () => {
                         <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Settlement Log</h3>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center">
-                        <div className="flex items-center gap-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Show:</label>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 w-full sm:w-auto items-stretch sm:items-center">
+                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 sm:bg-transparent sm:border-none sm:p-0 gap-2 w-full sm:w-auto">
+                            <label className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap">Show:</label>
                             <select 
                                 value={itemsPerPage} 
                                 onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2"
+                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2 w-full sm:w-auto"
                             >
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
@@ -687,7 +687,7 @@ const WithdrawFunds: React.FC = () => {
                         <select 
                             value={historyStatus} 
                             onChange={(e) => setHistoryStatus(e.target.value)} 
-                            className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-teal-500/20"
+                            className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-teal-500/20 w-full sm:w-auto py-2 sm:py-1.5"
                         >
                             <option value="">All Statuses</option>
                             <option value={Status.Paid}>Paid</option>
@@ -695,7 +695,7 @@ const WithdrawFunds: React.FC = () => {
                             <option value={Status.Pending}>Pending</option>
                             <option value={Status.Rejected}>Rejected</option>
                         </select>
-                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800 justify-between col-span-2 sm:col-span-1 w-full sm:w-auto">
                             <input 
                                 type="date" 
                                 value={historyDateFrom} 

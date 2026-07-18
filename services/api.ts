@@ -584,7 +584,7 @@ export const createUserTask = async (taskData: any): Promise<{ task: UserTask; u
     return result.data;
 };
 
-export const updateUserTaskStatus = async (id: string, updates: { status?: string; adminNotes?: string }): Promise<UserTask> => {
+export const updateUserTaskStatus = async (id: string, updates: { status?: string; adminNotes?: string; reviewRequested?: boolean; userReviewMessage?: string }): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/${id}`, {
         method: 'PUT',
         headers: getHeaders(),
@@ -689,11 +689,12 @@ export const createDispute = async (formData: FormData): Promise<Dispute> => {
     return result.data;
 };
 
-export const openTaskDispute = async (subId: string, data: { description: string }): Promise<Dispute> => {
+export const openTaskDispute = async (subId: string, formDataOrData: any): Promise<Dispute> => {
+    const isFormData = formDataOrData instanceof FormData;
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions/${subId}/dispute`, {
         method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(data)
+        headers: isFormData ? getHeaders(true) : getHeaders(),
+        body: isFormData ? formDataOrData : JSON.stringify(formDataOrData)
     });
     const result = await handleResponse(response);
     return result.data;

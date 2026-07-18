@@ -36,7 +36,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) =>
         { to: '/member/plans', label: 'Investment Plans', icon: <PlanIcon />, condition: null },
         { to: '/member/active-plans', label: 'My Active Plans', icon: <ActivePlansIcon />, condition: null },
         { to: '/member/tasks', label: 'My Tasks', icon: <TaskIcon />, condition: 'isTasksEnabled' },
-        { to: '/member/user-tasks', label: 'User Task Hub', icon: <TaskIcon />, condition: 'isUserTaskEnabled' },
+        { to: '/member/user-tasks', label: 'Earn Cash & Gigs Hub', icon: <TaskIcon />, condition: 'isUserTaskEnabled' },
         { to: '/member/transactions', label: 'Transactions', icon: <WalletIcon />, condition: null },
         { to: '/member/referrals', label: 'My Referral Network', icon: <UsersIcon />, condition: null },
         { to: '/member/messages', label: 'Inbox', icon: <InboxIcon />, badge: unreadMessagesCount },

@@ -927,13 +927,13 @@ const DepositFunds: React.FC = () => {
                         <h3 className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">History Log</h3>
                     </div>
                     
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto items-stretch sm:items-center">
-                        <div className="flex items-center gap-2 justify-between bg-gray-50/50 dark:bg-gray-900/40 p-2 rounded-xl border border-gray-100 dark:border-gray-800/80">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Show:</label>
+                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 w-full lg:w-auto items-stretch sm:items-center">
+                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl border border-gray-100 dark:border-gray-800 dark:bg-gray-900 sm:bg-transparent sm:border-none sm:p-0 gap-2 w-full sm:w-auto">
+                            <label className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap">Show:</label>
                             <select 
                                 value={itemsPerPage} 
                                 onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                                className="rounded-lg bg-transparent border-none dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-0 py-0.5 px-1.5 cursor-pointer outline-none"
+                                className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-1 px-2 w-full sm:w-auto"
                             >
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
@@ -944,14 +944,14 @@ const DepositFunds: React.FC = () => {
                         <select 
                             value={historyStatus} 
                             onChange={(e) => setHistoryStatus(e.target.value)} 
-                            className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 py-2 sm:py-2.5 px-3 outline-none"
+                            className="rounded-xl border-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-white text-[10px] font-black uppercase tracking-widest focus:ring-blue-500/20 w-full sm:w-auto py-2 sm:py-1.5"
                         >
                             <option value="">All Statuses</option>
                             <option value={Status.Approved}>Approved</option>
                             <option value={Status.Pending}>Pending</option>
                             <option value={Status.Rejected}>Rejected</option>
                         </select>
-                        <div className="flex items-center justify-between gap-1 bg-gray-50 dark:bg-gray-900 p-1.5 sm:p-2 rounded-xl border border-gray-100 dark:border-gray-800 min-w-0">
+                        <div className="flex items-center justify-between gap-1 bg-gray-50 dark:bg-gray-900 p-1.5 sm:p-2 rounded-xl border border-gray-100 dark:border-gray-800 col-span-2 sm:col-span-1 min-w-0">
                             <input 
                                 type="date" 
                                 value={historyDateFrom} 

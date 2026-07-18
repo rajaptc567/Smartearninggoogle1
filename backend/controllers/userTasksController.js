@@ -4,6 +4,8 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Setting from '../models/Setting.js';
 import Dispute from '../models/Dispute.js';
+import Notification from '../models/Notification.js';
+import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 export const getUserTasks = async (req, res) => {
     try {
@@ -73,7 +75,7 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10 };
+        const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
         if (targetQuantity < config.minQuantity) {
             return res.status(400).json({ success: false, error: `Minimum target quantity is ${config.minQuantity}.` });
         }
@@ -91,20 +93,24 @@ export const createUserTask = async (req, res) => {
         const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
         const totalBudget = Number((subtotal + adminCommission).toFixed(2));
 
+        // Upfront Deduction Base Fee logic
+        const baseFeeCharged = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
+        const totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
+
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
-        let budgetInUserCurr = totalBudget * (rates[userCurr] || 1);
-        budgetInUserCurr = Number(budgetInUserCurr.toFixed(2));
+        let deductionInUserCurr = totalAmountUSD * (rates[userCurr] || 1);
+        deductionInUserCurr = Number(deductionInUserCurr.toFixed(2));
 
-        if (user.walletBalance < budgetInUserCurr) {
+        if (user.walletBalance < deductionInUserCurr) {
             return res.status(400).json({ 
                 success: false, 
-                error: `Insufficient wallet balance. Required: ${budgetInUserCurr} ${userCurr} (${totalBudget} USD), Available: ${user.walletBalance} ${userCurr}` 
+                error: `Insufficient wallet balance. Required: ${deductionInUserCurr} ${userCurr} (${totalAmountUSD} USD: ${totalBudget} Budget + ${baseFeeCharged} Base Fee), Available: ${user.walletBalance} ${userCurr}` 
             });
         }
 
         // Deduct from wallet
-        user.walletBalance = Number((user.walletBalance - budgetInUserCurr).toFixed(2));
+        user.walletBalance = Number((user.walletBalance - deductionInUserCurr).toFixed(2));
         await user.save();
 
         // Create transaction
@@ -113,8 +119,8 @@ export const createUserTask = async (req, res) => {
             userName: user.username,
             currency: userCurr,
             type: 'Task Budget Deduction',
-            amount: -budgetInUserCurr,
-            description: `Submitted User Task (USD): ${title} (${targetQuantity} completions)`,
+            amount: -deductionInUserCurr,
+            description: `Submitted User Task (USD): ${title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
             status: 'Approved'
         });
 
@@ -130,6 +136,7 @@ export const createUserTask = async (req, res) => {
             rewardPerTask,
             totalBudget,
             adminCommission,
+            baseFeeCharged,
             currency: 'USD',
             requireTextProof: Boolean(requireTextProof),
             textProofInstruction: textProofInstruction || '',
@@ -145,6 +152,29 @@ export const createUserTask = async (req, res) => {
             status: 'Pending'
         });
 
+        // Send Notification to Campaign Creator
+        await Notification.create({
+            userId: user._id,
+            subject: 'Campaign Submitted ⏳',
+            message: `Your campaign "${task.title}" has been successfully submitted for Admin approval. It will go live once reviewed.`,
+            senderType: 'System'
+        });
+
+        // Send Notification to Admins
+        try {
+            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
+            for (const admin of admins) {
+                await Notification.create({
+                    userId: admin._id,
+                    subject: 'New Campaign Submission 📋',
+                    message: `User @${user.username} has submitted a new campaign "${task.title}" for review.`,
+                    senderType: 'System'
+                });
+            }
+        } catch (adminErr) {
+            console.error('Failed to notify admins of new campaign:', adminErr);
+        }
+
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: { task, user } });
     } catch (err) {
@@ -154,9 +184,98 @@ export const createUserTask = async (req, res) => {
 
 export const updateUserTaskStatus = async (req, res) => {
     try {
-        const { status, adminNotes } = req.body;
+        const { status, adminNotes, reviewRequested, userReviewMessage } = req.body;
         const task = await UserTask.findById(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+
+        // If user is requesting a one-time review
+        if (reviewRequested === true) {
+            if (task.status !== 'Rejected') {
+                return res.status(400).json({ success: false, error: 'Only rejected campaigns can be submitted for review.' });
+            }
+            if (task.resubmittedForReview === true) {
+                return res.status(400).json({ success: false, error: 'This campaign has already been submitted for a one-time review.' });
+            }
+
+            const user = await User.findById(task.userId);
+            if (!user) {
+                return res.status(404).json({ success: false, error: 'Campaign creator not found.' });
+            }
+
+            const settings = await Setting.getSettings();
+            const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
+            
+            // Re-calculate budget to deduct
+            const subtotal = task.targetQuantity * task.rewardPerTask;
+            const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
+            const totalBudget = Number((subtotal + adminCommission).toFixed(2));
+
+            // Upfront Deduction Base Fee logic for resubmission
+            const baseFeeCharged = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
+            const totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
+
+            const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
+            const userCurr = user.currency || 'USD';
+            let deductionInUserCurr = totalAmountUSD * (rates[userCurr] || 1);
+            deductionInUserCurr = Number(deductionInUserCurr.toFixed(2));
+
+            if (user.walletBalance < deductionInUserCurr) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `Insufficient wallet balance to re-submit campaign. Required: ${deductionInUserCurr} ${userCurr} (${totalAmountUSD} USD: ${totalBudget} Budget + ${baseFeeCharged} Base Fee), Available: ${user.walletBalance} ${userCurr}` 
+                });
+            }
+
+            // Deduct from wallet
+            user.walletBalance = Number((user.walletBalance - deductionInUserCurr).toFixed(2));
+            await user.save();
+
+            // Create budget deduction transaction
+            await Transaction.create({
+                userId: user._id,
+                userName: user.username,
+                currency: userCurr,
+                type: 'Task Budget Deduction',
+                amount: -deductionInUserCurr,
+                description: `Resubmitted User Task For Review (USD): ${task.title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
+                status: 'Approved'
+            });
+
+            // Set state to pending review
+            task.status = 'Pending';
+            task.reviewRequested = true;
+            task.resubmittedForReview = true;
+            task.baseFeeCharged = baseFeeCharged; // Update stored fee charged
+            task.userReviewMessage = userReviewMessage || '';
+            task.adminNotes = ''; // Clear previous rejection notes
+            await task.save();
+
+            // Send notification to creator
+            await Notification.create({
+                userId: user._id,
+                subject: 'Campaign Resubmitted 🔄',
+                message: `Your campaign "${task.title}" has been resubmitted for a final one-time review. If approved, it will go live immediately.`,
+                senderType: 'System'
+            });
+
+            // Send notification to Admins
+            try {
+                const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
+                for (const admin of admins) {
+                    await Notification.create({
+                        userId: admin._id,
+                        subject: 'Resubmitted Campaign for Review 🔄',
+                        message: `User @${user.username} has resubmitted their campaign "${task.title}" with notes: "${userReviewMessage || ''}"`,
+                        senderType: 'System'
+                    });
+                }
+            } catch (adminErr) {
+                console.error('Failed to notify admins of campaign resubmission:', adminErr);
+            }
+
+            global.appDataVersion = Date.now();
+            return res.status(200).json({ success: true, data: task });
+        }
 
         // Core Rules Edit Blocked validation
         const coreFields = [
@@ -178,6 +297,11 @@ export const updateUserTaskStatus = async (req, res) => {
         task.status = status || task.status;
         if (adminNotes !== undefined) task.adminNotes = adminNotes;
 
+        // If admin updates the status, clear the reviewRequested flag if it matches
+        if (status === 'Approved' || status === 'Rejected') {
+            task.reviewRequested = false;
+        }
+
         // If rejected and was pending/approved (not yet paid/completed refund), refund user
         if (status === 'Rejected' && oldStatus !== 'Rejected' && oldStatus !== 'Paid') {
             const user = await User.findById(task.userId);
@@ -185,7 +309,11 @@ export const updateUserTaskStatus = async (req, res) => {
                 const settings = await Setting.getSettings();
                 const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278, USDT: 1 };
                 const userCurr = user.currency || 'USDT';
-                let refundInUserCurr = task.totalBudget * (rates[userCurr] || 1);
+                
+                const baseFee = task.baseFeeCharged || 0;
+                const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
+
+                let refundInUserCurr = totalRefundUSD * (rates[userCurr] || 1);
                 refundInUserCurr = Number(refundInUserCurr.toFixed(2));
 
                 user.walletBalance = Number((user.walletBalance + refundInUserCurr).toFixed(2));
@@ -196,13 +324,31 @@ export const updateUserTaskStatus = async (req, res) => {
                     currency: userCurr,
                     type: 'Task Refund',
                     amount: refundInUserCurr,
-                    description: `Refund for rejected user task: ${task.title}`,
+                    description: `Refund for rejected user task: ${task.title} (Budget + Base Fee of ${baseFee} USD)`,
                     status: 'Approved'
                 });
             }
         }
 
         await task.save();
+
+        // Send notifications if status changed
+        if (status === 'Approved' && oldStatus !== 'Approved') {
+            await Notification.create({
+                userId: task.userId,
+                subject: 'Campaign Approved! 🟢',
+                message: `Congratulations! Your campaign "${task.title}" has been approved and is now live for workers to complete.`,
+                senderType: 'System'
+            });
+        } else if (status === 'Rejected' && oldStatus !== 'Rejected') {
+            await Notification.create({
+                userId: task.userId,
+                subject: 'Campaign Rejected ❌',
+                message: `Your campaign "${task.title}" was rejected by the Admin. Reason: ${adminNotes || 'No reason specified'}.`,
+                senderType: 'System'
+            });
+        }
+
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: task });
     } catch (err) {
@@ -384,6 +530,22 @@ export const submitUserTaskProof = async (req, res) => {
             status: 'Pending'
         });
 
+        // Notify Campaign Creator
+        await Notification.create({
+            userId: task.userId,
+            subject: 'New Task Submission 📥',
+            message: `Worker @${worker.username} has submitted a proof of completion for your campaign "${task.title}". Please review it.`,
+            senderType: 'System'
+        });
+
+        // Notify Worker
+        await Notification.create({
+            userId: worker._id,
+            subject: 'Proof Submitted Successfully! 📤',
+            message: `Your completion proof for campaign "${task.title}" has been successfully submitted and is pending the creator's review.`,
+            senderType: 'System'
+        });
+
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: submission });
     } catch (err) {
@@ -438,6 +600,24 @@ export const updateSubmissionStatus = async (req, res) => {
         }
 
         await submission.save();
+
+        // Send Notification to Worker on Approval or Rejection
+        if (status === 'Approved' && oldStatus !== 'Approved') {
+            await Notification.create({
+                userId: submission.workerId,
+                subject: 'Task Approved! ✅',
+                message: `Your proof for campaign "${submission.taskTitle}" was approved! You earned ${submission.rewardAmount} USD task reward.`,
+                senderType: 'System'
+            });
+        } else if (status === 'Rejected' && oldStatus !== 'Rejected') {
+            await Notification.create({
+                userId: submission.workerId,
+                subject: 'Task Rejected ❌',
+                message: `Your proof for campaign "${submission.taskTitle}" was rejected. Reason: "${submission.rejectionReason || 'No reason specified'}". You have 48 hours to open a dispute if you believe this is an error.`,
+                senderType: 'System'
+            });
+        }
+
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: submission });
     } catch (err) {
@@ -538,6 +718,15 @@ export const openTaskDispute = async (req, res) => {
         const worker = await User.findById(submission.workerId);
         const creator = await User.findById(task.userId);
 
+        let proofUrl = req.body.proofUrl || '';
+        if (req.file) {
+            try {
+                proofUrl = await uploadStream(req.file.buffer, 'disputes');
+            } catch (err) {
+                return res.status(500).json({ success: false, error: 'Cloudinary upload failed: ' + err.message });
+            }
+        }
+
         const dispute = await Dispute.create({
             userId: worker._id,
             userName: worker.username,
@@ -547,11 +736,12 @@ export const openTaskDispute = async (req, res) => {
             creatorId: creator ? creator._id : null,
             referenceId: String(submission._id),
             description: req.body.description || `Dispute raised for rejected task: ${task.title}. Rejection reason: ${submission.rejectionReason}`,
+            proofUrl: proofUrl,
             messages: [
                 { sender: 'System', message: `System Log: Worker submitted proof on ${submission.createdAt}` },
                 { sender: 'System', message: `System Log: Creator rejected submission on ${submission.rejectedAt || new Date()}. Reason: ${submission.rejectionReason}` },
                 { sender: 'System', message: `System Log: Worker opened dispute within 48h window.` },
-                { sender: 'User', message: req.body.description || 'Dispute initiated by worker.' }
+                { sender: 'User', message: req.body.description || 'Dispute initiated by worker.', attachmentUrl: proofUrl || undefined }
             ],
             status: 'Open',
             adminUnread: true,
@@ -565,6 +755,39 @@ export const openTaskDispute = async (req, res) => {
 
         task.escrowFrozen = true;
         await task.save();
+
+        // Notify Worker
+        await Notification.create({
+            userId: worker._id,
+            subject: 'Dispute Opened ⚖️',
+            message: `Your dispute for the campaign "${task.title}" has been opened successfully. The Admin is now reviewing it.`,
+            senderType: 'System'
+        });
+
+        // Notify Campaign Creator
+        if (creator) {
+            await Notification.create({
+                userId: creator._id,
+                subject: 'Dispute Raised ⚖️',
+                message: `Worker @${worker.username} has raised a dispute against your rejection of their proof for campaign "${task.title}". The Admin will make a final decision.`,
+                senderType: 'System'
+            });
+        }
+
+        // Notify Admins
+        try {
+            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
+            for (const admin of admins) {
+                await Notification.create({
+                    userId: admin._id,
+                    subject: 'New Task Dispute ⚖️',
+                    message: `Worker @${worker.username} has disputed a rejection on campaign "${task.title}" by Creator @${creator ? creator.username : 'User'}.`,
+                    senderType: 'System'
+                });
+            }
+        } catch (adminErr) {
+            console.error('Failed to notify admins of new dispute:', adminErr);
+        }
 
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: dispute });

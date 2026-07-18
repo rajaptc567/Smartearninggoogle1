@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
 import {
     getUserTasks,
@@ -15,6 +16,13 @@ import {
     renewUserTask
 } from '../controllers/userTasksController.js';
 
+// Multer for memory storage (Base64)
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
 const router = express.Router();
 
 router.route('/')
@@ -29,7 +37,7 @@ router.route('/submissions/:subId')
     .delete(deleteSubmission);
 
 router.route('/submissions/:subId/dispute')
-    .post(authorize(['user', 'admin']), openTaskDispute);
+    .post(upload.single('proof'), authorize(['user', 'admin']), openTaskDispute);
 
 router.route('/:id/submit-proof')
     .post(submitUserTaskProof);

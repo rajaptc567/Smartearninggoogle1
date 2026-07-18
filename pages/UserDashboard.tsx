@@ -21,7 +21,7 @@ const MapPinIcon = () => <svg className="w-5 h-5 text-gray-500 dark:text-gray-40
 
 const PieChart = ({ data, currency }: { data: { label: string, value: number, color: string }[], currency: string }) => {
     const total = data.reduce((sum, item) => sum + item.value, 0);
-    if (total === 0) return <div className="flex items-center justify-center h-full"><p className="text-sm text-gray-500">No commission data yet.</p></div>;
+    if (total === 0) return <div className="flex items-center justify-center h-full min-h-[120px]"><p className="text-sm text-gray-500">No earnings or commission data yet.</p></div>;
     
     let cumulative = 0;
     const segments = data.map(item => {
@@ -65,11 +65,13 @@ const PieChart = ({ data, currency }: { data: { label: string, value: number, co
 
 const UserDashboard: React.FC = () => {
     const { state } = useData();
-    const { currentUser, deposits, withdrawals, transactions, users, investmentPlans } = state;
+    const { currentUser, deposits, withdrawals, transactions, users, investmentPlans, settings } = state;
+    const navigate = useNavigate();
     
     const [visibleWidgets, setVisibleWidgets] = useState({
       balance: true, deposits: true, commission: true, withdrawals: true,
-      pending: true, referrals: true, plan: true, monthly: true, breakdown: true
+      pending: true, referrals: true, plan: true, monthly: true, breakdown: true,
+      taskEarnings: true
     });
     const [showCustomize, setShowCustomize] = useState(false);
 
@@ -96,6 +98,19 @@ const UserDashboard: React.FC = () => {
         const activePlanCount = (currentUser.activePlans || []).length;
         const activePlanValue = (currentUser.activePlans || []).reduce((sum, p) => sum + p.price, 0);
 
+        const approvedTaskRewards = userTransactions.filter(t => t.type === 'Task Reward' && t.status === 'Approved');
+        const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
+        const userCurr = currentUser.currency || 'USD';
+        const totalTaskEarnings = approvedTaskRewards.reduce((sum, t) => {
+            const txCurr = t.currency || 'USD';
+            if (txCurr === userCurr) {
+                return sum + t.amount;
+            }
+            const amtInUSD = t.amount / (rates[txCurr] || 1);
+            const amtInUserCurr = amtInUSD * (rates[userCurr] || 1);
+            return sum + amtInUserCurr;
+        }, 0);
+
         return {
             totalDeposits: deposits.filter(d => d.userId === currentUser._id && d.status === Status.Approved).reduce((sum, d) => sum + d.amount, 0),
             totalWithdrawals: withdrawals.filter(w => w.userId === currentUser._id && w.status === Status.Paid).reduce((sum, w) => sum + w.finalAmount, 0),
@@ -106,8 +121,9 @@ const UserDashboard: React.FC = () => {
             monthlyEarnings: approvedCommissions.filter(t => t.date >= firstDayOfMonth).reduce((sum, t) => sum + t.amount, 0),
             activePlanCount,
             activePlanValue,
+            totalTaskEarnings,
         };
-    }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser._id, currentUser.activePlans]);
+    }, [userTransactions, deposits, withdrawals, investmentPlans, currentUser._id, currentUser.activePlans, settings]);
     
     const networkBreakdown = useMemo(() => {
         const breakdown: { active: { [key: number]: number }, inactive: { [key: number]: number }, total: number } = {
@@ -226,6 +242,23 @@ const UserDashboard: React.FC = () => {
                     {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
                     {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
                     {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
+                    {visibleWidgets.taskEarnings && (
+                        <div 
+                            onClick={() => navigate('/member/user-tasks')}
+                            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex items-center justify-between cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all border border-emerald-100 dark:border-emerald-950/30 group"
+                        >
+                            <div>
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Earn Cash & Gigs Earnings</p>
+                                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(stats.totalTaskEarnings, currentUser.currency)}</p>
+                                <span className="text-[10px] font-bold text-indigo-500 group-hover:text-indigo-600 transition-colors mt-1 inline-flex items-center gap-1">
+                                    Go to Earning Hub ➜
+                                </span>
+                            </div>
+                            <div className="text-white p-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20 group-hover:scale-110 transition-transform">
+                                <EarningsIcon />
+                            </div>
+                        </div>
+                    )}
                     {visibleWidgets.referrals && <NetworkSummaryCard />}
                     {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
                     {visibleWidgets.monthly && <StatCard title="Earnings This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
@@ -235,11 +268,12 @@ const UserDashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ShareButtons url={referralLink} title="Join me on SmartEarning and start earning today!" />
-                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <h3 className="font-semibold mb-3 text-gray-800 dark:text-white text-center">Referral Commission Breakdown</h3>
+                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-100 dark:border-gray-700/50 hover:shadow-lg hover:scale-[1.01] transition-all duration-300">
+                    <h3 className="font-semibold mb-3 text-gray-800 dark:text-white text-center">Earnings & Commissions Breakdown</h3>
                     <PieChart currency={currentUser.currency} data={[
-                        { label: 'Direct', value: stats.directCommission, color: '#3b82f6' },
-                        { label: 'Indirect', value: stats.indirectCommission, color: '#8b5cf6' },
+                        { label: 'Direct Commission', value: stats.directCommission, color: '#3b82f6' },
+                        { label: 'Indirect Commission', value: stats.indirectCommission, color: '#8b5cf6' },
+                        { label: 'Gigs / Tasks', value: stats.totalTaskEarnings, color: '#10b981' },
                     ]} />
                 </div>}
             </div>

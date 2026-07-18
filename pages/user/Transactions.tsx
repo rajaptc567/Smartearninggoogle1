@@ -94,28 +94,32 @@ const Transactions: React.FC = () => {
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-700">
-                <div>
-                    <label className="text-xs font-medium text-gray-500">Type</label>
-                    <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1">
-                        <option value="">All Types</option>
-                        {transactionTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                    </select>
+            <div className="flex flex-col gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-700">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-medium text-gray-500">Type</label>
+                        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1">
+                            <option value="">All Types</option>
+                            {transactionTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-gray-500">Status</label>
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1">
+                            <option value="">All Statuses</option>
+                            {Object.values(Status).filter(s => s !== Status.Matching).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label className="text-xs font-medium text-gray-500">Status</label>
-                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1">
-                        <option value="">All Statuses</option>
-                        {Object.values(Status).filter(s => s !== Status.Matching).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                </div>
-                 <div>
-                    <label className="text-xs font-medium text-gray-500">From</label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1" />
-                </div>
-                 <div>
-                    <label className="text-xs font-medium text-gray-500">To</label>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-medium text-gray-500">From</label>
+                        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-gray-500">To</label>
+                        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full rounded-md dark:bg-gray-700 text-sm py-2 mt-1" />
+                    </div>
                 </div>
             </div>
 

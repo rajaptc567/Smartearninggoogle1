@@ -349,28 +349,28 @@ const TransferFunds: React.FC = () => {
     }
 
     return (
-        <div className="space-y-10 max-w-5xl mx-auto pb-16 px-2">
+        <div className="space-y-6 md:space-y-8 max-w-5xl mx-auto pb-12 px-2">
             {/* Fintech Header */}
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 md:p-10 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden mb-12 group">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 md:p-7 rounded-2xl md:rounded-[2rem] text-white shadow-2xl relative overflow-hidden mb-6 md:mb-8 group">
                 <div className="absolute inset-0 bg-white/5 opacity-10 pointer-events-none"></div>
                 <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-all duration-700"></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6">
                     <div className="text-center md:text-left">
-                        <h1 className="text-3xl md:text-5xl font-black mb-4 tracking-tighter uppercase leading-none">Internal Transfer</h1>
-                        <p className="text-blue-50 text-sm md:text-base max-w-2xl leading-relaxed font-medium">
+                        <h1 className="text-2xl md:text-4xl font-black mb-2 tracking-tighter uppercase leading-none">Internal Transfer</h1>
+                        <p className="text-blue-50 text-xs md:text-sm max-w-2xl leading-relaxed font-medium">
                             Send funds instantly to other members within the SmartEarning network. Cross-currency support and real-time verification active.
                         </p>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[2rem] border border-white/10 text-center min-w-[220px] shadow-inner">
-                        <p className="text-[10px] text-blue-200 uppercase tracking-[0.3em] font-black mb-1">Liquid Balance</p>
-                        <p className="text-3xl font-black tracking-tighter">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
+                    <div className="bg-white/10 backdrop-blur-xl p-4 md:p-5 rounded-xl md:rounded-2xl border border-white/10 text-center w-full md:w-auto md:min-w-[180px] shadow-inner">
+                        <p className="text-[9px] text-blue-200 uppercase tracking-[0.3em] font-black mb-0.5">Liquid Balance</p>
+                        <p className="text-2xl md:text-3xl font-black tracking-tighter">{formatCurrency(currentUser.walletBalance, currentUser.currency)}</p>
                     </div>
                 </div>
             </div>
 
             <StepIndicator currentStep={step} />
 
-            <div className="bg-white dark:bg-gray-950 p-8 sm:p-12 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-800">
+            <div className="bg-white dark:bg-gray-950 p-5 sm:p-8 md:p-10 rounded-2xl md:rounded-[2rem] shadow-xl border border-gray-100 dark:border-gray-800">
                 {/* STEP 1: RECIPIENT */}
                 {step === 1 && (
                     <div className="animate-fade-in space-y-8 max-w-2xl mx-auto">

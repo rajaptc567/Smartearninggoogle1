@@ -4,7 +4,10 @@ import React from 'react';
 import { Status } from '../../types';
 
 interface BadgeProps {
-  status: Status | 'Enabled' | 'Disabled';
+  status?: Status | 'Enabled' | 'Disabled';
+  variant?: 'success' | 'warning' | 'danger' | 'info' | 'gray' | 'primary' | 'secondary';
+  className?: string;
+  children?: React.ReactNode;
 }
 
 // FIX: Added 'Matching' and 'Paused' status to support all possible Status enum values.
@@ -25,10 +28,30 @@ const statusColors: { [key in Status | 'Enabled' | 'Disabled']: string } = {
   'Enabled': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
 };
 
-const Badge: React.FC<BadgeProps> = ({ status }) => {
+const variantColors = {
+  success: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border border-green-500/20',
+  warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300 border border-yellow-500/20',
+  danger: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border border-red-500/20',
+  info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-500/20',
+  gray: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 border border-gray-600/20',
+  primary: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-500/20',
+  secondary: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-700/20',
+};
+
+const Badge: React.FC<BadgeProps> = ({ status, variant, className = '', children }) => {
+  if (variant) {
+    const colorClass = variantColors[variant] || variantColors.gray;
+    return (
+      <span className={`px-2 py-1 text-xs font-semibold rounded-full inline-flex items-center gap-1.5 ${colorClass} ${className}`}>
+        {children}
+      </span>
+    );
+  }
+
+  const colorClass = status ? (statusColors[status] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800';
   return (
-    <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[status]}`}>
-      {status}
+    <span className={`px-2 py-1 text-xs font-semibold rounded-full inline-flex items-center gap-1.5 ${colorClass} ${className}`}>
+      {children || status}
     </span>
   );
 };

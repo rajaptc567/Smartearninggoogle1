@@ -220,6 +220,64 @@ export const resolveDisputeVerdict = async (req, res) => {
                 task.escrowFrozen = false;
                 await task.save();
                 await submission.save();
+
+                // Send notifications based on the dispute resolution verdict
+                try {
+                    if (verdict === 'ReleaseToWorker') {
+                        if (worker) {
+                            await Notification.create({
+                                userId: worker._id,
+                                subject: 'Dispute Won! 🏆',
+                                message: `The Admin ruled in your favor for campaign "${task.title}". The task reward has been successfully released to your balance.`,
+                                senderType: 'System'
+                            });
+                        }
+                        if (creator) {
+                            await Notification.create({
+                                userId: creator._id,
+                                subject: 'Dispute Resolved (Lost)',
+                                message: `The Admin ruled in favor of worker @${worker ? worker.username : 'User'} for campaign "${task.title}". The escrow reward has been released.`,
+                                senderType: 'System'
+                            });
+                        }
+                    } else if (verdict === 'RefundToCreator') {
+                        if (worker) {
+                            await Notification.create({
+                                userId: worker._id,
+                                subject: 'Dispute Lost',
+                                message: `The Admin ruled in favor of the creator for campaign "${task.title}". Your dispute request has been rejected.`,
+                                senderType: 'System'
+                            });
+                        }
+                        if (creator) {
+                            await Notification.create({
+                                userId: creator._id,
+                                subject: 'Dispute Won! 🏆',
+                                message: `The Admin ruled in your favor for campaign "${task.title}". The escrow budget has been successfully refunded to your wallet.`,
+                                senderType: 'System'
+                            });
+                        }
+                    } else if (verdict === 'SplitPayout') {
+                        if (worker) {
+                            await Notification.create({
+                                userId: worker._id,
+                                subject: 'Dispute Resolved (Split Payout) ⚖️',
+                                message: `The Admin resolved the dispute on campaign "${task.title}" with a split payout. Your share has been credited to your balance.`,
+                                senderType: 'System'
+                            });
+                        }
+                        if (creator) {
+                            await Notification.create({
+                                userId: creator._id,
+                                subject: 'Dispute Resolved (Split Payout) ⚖️',
+                                message: `The Admin resolved the dispute on campaign "${task.title}" with a split payout between you and worker @${worker ? worker.username : 'User'}.`,
+                                senderType: 'System'
+                            });
+                        }
+                    }
+                } catch (notiErr) {
+                    console.error('Failed to create notifications for dispute resolution:', notiErr);
+                }
             }
         }
 

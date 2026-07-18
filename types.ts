@@ -317,6 +317,9 @@ export interface UserTask {
     currency: Currency;
     status: 'Pending' | 'Approved' | 'Rejected' | 'On Hold' | 'Paid' | 'Completed';
     adminNotes?: string;
+    reviewRequested?: boolean;
+    resubmittedForReview?: boolean;
+    userReviewMessage?: string;
     completedUsers?: string[];
     createdAt?: string;
     date?: string;

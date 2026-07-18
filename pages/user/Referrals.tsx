@@ -335,84 +335,84 @@ const Referrals: React.FC = () => {
         const symbol = currencySymbols[currentUser?.currency || 'USD'];
 
         return (
-            <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-2xl md:rounded-[2.5rem] shadow-sm border transition-all duration-200 overflow-hidden group 
-                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/20' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-800 dark:border-gray-700'} 
+            <div className={`relative bg-[#0f172a] dark:bg-gray-800 rounded-xl md:rounded-2xl shadow-sm border transition-all duration-200 overflow-hidden group 
+                ${(isHeldView || hasHeld) ? 'border-orange-500 ring-2 ring-orange-500/10' : isOverflow ? 'border-red-500 ring-2 ring-red-500/10' : 'border-gray-800 dark:border-gray-700'} 
                 ${highlightedUserId === user._id ? 'border-blue-400 ring-2 ring-blue-400' : ''} 
-                border-l-[6px] md:border-l-8 ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
+                border-l-[4px] md:border-l-[6px] ${isHeldView || hasHeld ? 'border-l-orange-500' : isOverflow ? 'border-l-red-500' : isDirect ? 'border-l-blue-500' : 'border-l-purple-500'}`}>
                 
                 {isOverflow && (
-                    <div className="bg-red-600 text-white py-1 px-3 md:py-1.5 md:px-4 text-center">
-                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider md:tracking-[0.3em]">Direct Referral Limit Reached</span>
+                    <div className="bg-red-600 text-white py-1 px-3 text-center">
+                        <span className="text-[9px] font-black uppercase tracking-wider">Direct Referral Limit Reached</span>
                     </div>
                 )}
 
-                <div className="p-4 md:p-8">
-                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4 md:mb-6">
-                        <div className="flex items-center gap-3 md:gap-4 w-full sm:w-auto">
-                            <div className={`w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-black text-lg md:text-2xl shrink-0 ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isOverflow ? 'bg-red-100 text-red-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                <div className="p-3 sm:p-4 md:p-5">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-3 md:mb-4">
+                        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-black text-sm md:text-base shrink-0 ${isHeldView || hasHeld ? 'bg-orange-100 text-orange-600' : isOverflow ? 'bg-red-100 text-red-600' : isDirect ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                 {user.username.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                                <h4 className="font-bold text-white flex flex-wrap items-center gap-2 text-lg md:text-xl leading-tight">
+                                <h4 className="font-bold text-white flex flex-wrap items-center gap-1.5 text-sm md:text-base leading-tight">
                                     {user.username}
-                                    {info.isRecurringReferral && !isHeldView && <span className="text-[9px] md:text-[10px] bg-indigo-100 text-indigo-700 px-1.5 md:px-2 py-0.5 rounded-full font-black uppercase flex items-center gap-1 shadow-sm">🔄 Recurring</span>}
-                                    {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-2.5 w-2.5 md:h-3 md:w-3"><span className="animate-ping absolute inline-flex h-2.5 w-2.5 md:h-3 md:w-3 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 md:h-3 md:w-3 bg-orange-500" title="Has locked commissions!"></span></span>}
+                                    {info.isRecurringReferral && !isHeldView && <span className="text-[8px] md:text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-black uppercase flex items-center gap-0.5 shadow-sm">🔄 Recurring</span>}
+                                    {(showHeldAlert || isHeldView) && hasHeld && <span className="flex h-2 w-2 relative"><span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" title="Has locked commissions!"></span></span>}
                                 </h4>
-                                <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1 md:mt-2">
-                                    <span className={`px-2.5 py-0.5 md:px-4 md:py-1 rounded-full font-black uppercase text-[9px] md:text-[11px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isOverflow ? 'bg-red-600 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                    <span className={`px-1.5 py-0.5 rounded font-black uppercase text-[8px] md:text-[9px] tracking-wider ${isHeldView || hasHeld ? 'bg-orange-500 text-white' : isOverflow ? 'bg-red-600 text-white' : isDirect ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>
                                         {isDirect ? 'DIRECT' : `LEVEL ${level}`}
                                     </span>
-                                    <span className="text-xs md:text-sm text-gray-400 font-medium truncate max-w-[120px] md:max-w-none">@{user.username}</span>
+                                    <span className="text-[11px] text-gray-400 font-medium truncate max-w-[120px]">@{user.username}</span>
                                 </div>
                             </div>
                         </div>
-                        <div className="text-left sm:text-right w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-800 sm:border-transparent mt-2 sm:mt-0 flex justify-between sm:block">
-                            <p className={`text-[9px] md:text-[11px] uppercase font-black tracking-[0.1em] mb-0.5 md:mb-1 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
+                        <div className="text-left sm:text-right w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-800 sm:border-transparent mt-1.5 sm:mt-0 flex justify-between sm:block">
+                            <p className={`text-[8px] md:text-[9px] uppercase font-black tracking-wider mb-0.5 ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-gray-500'}`}>
                                 {isHeldView || hasHeld ? 'LOCKED' : isOverflow ? 'LOST' : 'EARNED'}
                             </p>
-                            <p className={`text-xl sm:text-2xl md:text-3xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
-                                <span className="text-sm md:text-lg mr-1">{symbol}</span>
+                            <p className={`text-base sm:text-lg md:text-xl font-black ${isHeldView || hasHeld ? 'text-orange-500' : isOverflow ? 'text-red-500' : 'text-[#22c55e]'}`}>
+                                <span className="text-xs md:text-sm mr-0.5">{symbol}</span>
                                 {amountToShow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                         </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                            <p className="text-[9px] md:text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                            <p className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase tracking-wider">
                                 {isHeldView || hasHeld ? 'LOCK REASONS & ROADMAP' : 'TIMELINE BREAKDOWN'}
                             </p>
                             {info.held > 0 && !isHeldView && (
-                                <div className="flex items-center gap-1 bg-orange-500/10 px-2 py-0.5 rounded-lg border border-orange-500/20">
-                                    <span className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-                                    <span className="text-[9px] md:text-[10px] font-black text-orange-500 uppercase tracking-tighter">Held: {formatCurrency(info.held, currentUser?.currency)}</span>
+                                <div className="flex items-center gap-1 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">
+                                    <span className="w-1 h-1 rounded-full bg-orange-500 animate-pulse"></span>
+                                    <span className="text-[8px] md:text-[9px] font-black text-orange-500 uppercase">Held: {formatCurrency(info.held, currentUser?.currency)}</span>
                                 </div>
                             )}
                         </div>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             {historyToShow && historyToShow.length > 0 ? historyToShow.map((item: any) => (
-                                <div key={item._id || item.txId} className={`flex justify-between items-center p-3 md:p-4 bg-[#1f2937] dark:bg-gray-900 rounded-xl md:rounded-2xl border ${item.status === 'Pending' ? 'border-orange-500/30' : 'border-gray-800'} text-[12px] md:text-[13px] group/item hover:border-gray-600 transition-all shadow-sm`}>
+                                <div key={item._id || item.txId} className={`flex justify-between items-center p-2 md:p-2.5 bg-[#1f2937] dark:bg-gray-900 rounded-lg border ${item.status === 'Pending' ? 'border-orange-500/20' : 'border-gray-800'} text-[11px] md:text-[12px] group/item hover:border-gray-600 transition-all shadow-sm`}>
                                     <div className="flex flex-col min-w-0 pr-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full shrink-0 ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full shrink-0 ${item.status === 'Approved' ? 'bg-green-500' : 'bg-orange-500'}`}></span>
                                             <span className="font-bold text-gray-200 truncate">
                                                 {isHeldView ? item.reason : item.description.split('from')[0].trim()}
                                             </span>
                                         </div>
-                                        <span className="text-[10px] md:text-[11px] text-gray-500 mt-0.5 md:mt-1 ml-3.5 md:ml-4.5 font-medium">
+                                        <span className="text-[9px] md:text-[10px] text-gray-500 mt-0.5 ml-2.5 md:ml-3 font-medium">
                                             {new Date(item.date).toLocaleString()}
                                         </span>
                                     </div>
                                     <div className="text-right flex flex-col items-end shrink-0">
                                         <span className={`font-black ${item.status === 'Approved' ? 'text-[#22c55e]' : 'text-orange-500'}`}>
-                                            <span className="text-[9px] md:text-[10px] mr-0.5">{symbol}</span>
+                                            <span className="text-[8px] md:text-[9px] mr-0.5">{symbol}</span>
                                             {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                         {item.status === 'Pending' && item.planId && !isOverflow && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); navigate('/member/plans', { state: { highlightPlanId: item.planId } }); }}
-                                                className="text-[9px] md:text-[10px] text-blue-500 font-black uppercase tracking-wider md:tracking-widest mt-1 hover:underline flex items-center gap-1"
+                                                className="text-[8px] md:text-[9px] text-blue-500 font-black uppercase tracking-wider mt-0.5 hover:underline flex items-center gap-0.5"
                                             >
                                                 Unlock &rarr;
                                             </button>
@@ -420,36 +420,36 @@ const Referrals: React.FC = () => {
                                     </div>
                                 </div>
                             )) : (
-                                <div className="text-center py-4 md:py-6 bg-gray-900/50 rounded-xl md:rounded-2xl border border-dashed border-gray-800">
-                                    <p className="text-xs md:text-sm italic text-gray-500 font-medium px-4">{info.statusText}</p>
+                                <div className="text-center py-2 md:py-3.5 bg-gray-900/50 rounded-lg border border-dashed border-gray-800">
+                                    <p className="text-[11px] italic text-gray-500 font-medium px-3">{info.statusText}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     {(isHeldView || hasHeld) && !isOverflow && (
-                        <div className="mt-4 md:mt-6 p-4 md:p-5 bg-orange-500/10 border border-orange-500/30 rounded-2xl md:rounded-[1.5rem] shadow-lg">
-                            <div className="flex justify-between items-start mb-3 md:mb-4">
+                        <div className="mt-3 md:mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl shadow-lg">
+                            <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <p className="text-[9px] md:text-[10px] font-black text-orange-500 uppercase tracking-widest mb-0.5 md:mb-1">QUALIFICATION NEEDED</p>
-                                    <p className="text-xs md:text-sm font-bold text-white"><span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
+                                    <p className="text-[8px] md:text-[9px] font-black text-orange-500 uppercase tracking-wider mb-0.5">QUALIFICATION NEEDED</p>
+                                    <p className="text-xs font-bold text-white"><span className="text-orange-400">{requiredPlan?.name || 'Higher Tier'}</span></p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase">VALUE</p>
-                                    <p className="text-sm md:text-lg font-black text-orange-500">{formatCurrency(totalHeldGlobal, currentUser?.currency)}</p>
+                                    <p className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase">VALUE</p>
+                                    <p className="text-xs md:text-sm font-black text-orange-500">{formatCurrency(totalHeldGlobal, currentUser?.currency)}</p>
                                 </div>
                             </div>
                             <button 
-                                className="w-full py-2.5 md:py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-wider md:tracking-[0.2em] transition-all transform active:scale-95 shadow-xl shadow-orange-600/20 flex items-center justify-center gap-2"
+                                className="w-full py-1.5 md:py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all transform active:scale-95 shadow-lg shadow-orange-600/10 flex items-center justify-center gap-1.5"
                                 onClick={() => navigate('/member/plans', { state: { highlightPlanId: requiredPlan?._id } })}
                             >
-                                <svg className="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                                 Unlock &rarr;
                             </button>
                         </div>
                     )}
 
-                    <div className="mt-4 md:mt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.2em] pt-4 md:pt-5 border-t border-gray-800/50">
+                    <div className="mt-3 md:mt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[9px] md:text-[10px] font-black uppercase tracking-wider pt-3 border-t border-gray-800/50">
                         <span className="text-gray-500 w-full sm:w-auto">{info.statusText}</span>
                         <button onClick={() => { setSelectedSponsor(users.find(u => u.username && u.username.toLowerCase() === user.sponsor?.toLowerCase()) || null); if(user.sponsor) setIsSponsorModalOpen(true); }} className="text-blue-500 hover:text-blue-400 whitespace-nowrap">Referrer: @{user.sponsor || 'Direct'}</button>
                     </div>
@@ -528,30 +528,30 @@ const Referrals: React.FC = () => {
             </div>
 
             {selectedPlanDetails && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-                    <div className="lg:col-span-2 bg-[#1e293b] rounded-2xl md:rounded-[2.5rem] border border-gray-800 p-5 md:p-8 flex flex-col gap-6 md:gap-8 overflow-hidden relative group">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 animate-fade-in">
+                    <div className="lg:col-span-2 bg-[#1e293b] rounded-xl md:rounded-2xl border border-gray-800 p-3 md:p-3.5 flex flex-col gap-3 md:gap-3.5 overflow-hidden relative group">
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/5 blur-[60px] group-hover:bg-blue-500/10 transition-all duration-1000"></div>
-                        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-stretch">
-                            <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-4 md:p-6 bg-black/20 rounded-2xl md:rounded-[2rem] border border-white/5 shadow-inner shrink-0">
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">SCOPE TARGET</h4>
-                                <span className="text-xl md:text-2xl font-black text-blue-400">{selectedPlanDetails.name}</span>
-                                <span className="text-2xl md:text-3xl font-black text-white mt-2 md:mt-3">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
+                        <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-center md:items-stretch">
+                            <div className="w-full md:w-1/3 flex flex-col justify-center items-center text-center p-2.5 md:p-3 bg-black/20 rounded-xl border border-white/5 shadow-inner shrink-0">
+                                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">SCOPE TARGET</h4>
+                                <span className="text-sm md:text-base font-black text-blue-400">{selectedPlanDetails.name}</span>
+                                <span className="text-lg md:text-xl font-black text-white mt-1">{formatCurrency(selectedPlanDetails.price, selectedPlanDetails.currency)}</span>
                             </div>
                             
-                            <div className="flex-grow flex flex-col justify-between py-2 space-y-4 md:space-y-6">
-                                <div className="p-3 md:p-4 bg-black/10 rounded-2xl border border-white/5">
-                                    <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">STRATEGIC OVERVIEW</h5>
-                                    <p className="text-xs md:text-sm text-gray-300 italic">"{selectedPlanDetails.description}"</p>
+                            <div className="flex-grow flex flex-col justify-between py-0.5 space-y-2 md:space-y-3">
+                                <div className="p-2 bg-black/10 rounded-lg border border-white/5">
+                                    <h5 className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase tracking-wider mb-0.5">STRATEGIC OVERVIEW</h5>
+                                    <p className="text-[11px] md:text-xs text-gray-300 italic">"{selectedPlanDetails.description}"</p>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                <div className="grid grid-cols-2 gap-1.5 md:gap-2">
                                     <div>
-                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">MIN. WITHDRAWAL</h5>
-                                        <p className="text-sm md:text-lg font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
+                                        <h5 className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase mb-0.5 tracking-tighter">MIN. WITHDRAWAL</h5>
+                                        <p className="text-[11px] md:text-xs font-bold text-white">{formatCurrency(selectedPlanDetails.minWithdraw, selectedPlanDetails.currency)}</p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DIRECT RATE</h5>
-                                        <p className="text-sm md:text-lg font-bold text-[#22c55e]">
+                                        <h5 className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase mb-0.5 tracking-tighter">DIRECT RATE</h5>
+                                        <p className="text-[11px] md:text-xs font-bold text-[#22c55e]">
                                             {(() => {
                                                 const c = selectedPlanDetails.directCommissions?.[0];
                                                 if(!c) return 'None';
@@ -560,14 +560,14 @@ const Referrals: React.FC = () => {
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DIRECT CAP</h5>
-                                        <p className="text-sm md:text-lg font-bold text-blue-400">
+                                        <h5 className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase mb-0.5 tracking-tighter">DIRECT CAP</h5>
+                                        <p className="text-[11px] md:text-xs font-bold text-blue-400">
                                             {selectedPlanDetails.directReferralLimit === 0 ? 'Unlimited' : `${selectedPlanDetails.directReferralLimit} Slots`}
                                         </p>
                                     </div>
                                     <div>
-                                        <h5 className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase mb-1 md:mb-2 tracking-tighter">DEPTH</h5>
-                                        <p className="text-sm md:text-lg font-bold text-purple-400">
+                                        <h5 className="text-[8px] md:text-[9px] font-black text-gray-500 uppercase mb-0.5 tracking-tighter">DEPTH</h5>
+                                        <p className="text-[11px] md:text-xs font-bold text-purple-400">
                                             {1 + (selectedPlanDetails.indirectCommissions?.length || 0)} Levels
                                         </p>
                                     </div>
@@ -576,28 +576,28 @@ const Referrals: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className={`rounded-2xl md:rounded-[2.5rem] border p-6 md:p-8 flex flex-col justify-between shadow-2xl transition-all duration-300 
+                    <div className={`rounded-xl md:rounded-2xl border p-3 md:p-3.5 flex flex-col justify-between shadow-2xl transition-all duration-300 
                         ${scopeStats.held > 0 ? 'bg-orange-500/10 border-orange-500/40 ring-1 ring-orange-500/20' : 'bg-[#111827] border-gray-800'}`}>
                          <div>
-                            <h4 className={`text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.4em] mb-4 md:mb-6 ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-500'}`}>Network Performance Audit</h4>
-                            <div className="space-y-4 md:space-y-6">
+                            <h4 className={`text-[9px] md:text-[10px] font-black uppercase tracking-wider mb-2.5 ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-500'}`}>Network Performance Audit</h4>
+                            <div className="space-y-2 md:space-y-2.5">
                                 <div className="flex justify-between items-center">
                                     <span className="text-[10px] md:text-xs font-bold text-gray-400">Direct Reach</span>
-                                    <span className="text-sm md:text-xl font-black text-white">{scopeStats.directCount} Members</span>
+                                    <span className="text-xs md:text-sm font-black text-white">{scopeStats.directCount} Members</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-[10px] md:text-xs font-bold text-gray-400">Qualified</span>
-                                    <span className="text-sm md:text-xl font-black text-[#22c55e]">{formatCurrency(scopeStats.earned, currentUser.currency)}</span>
+                                    <span className="text-xs md:text-sm font-black text-[#22c55e]">{formatCurrency(scopeStats.earned, currentUser.currency)}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className={`text-[10px] md:text-xs font-bold ${scopeStats.held > 0 ? 'text-orange-500' : 'text-gray-400'}`}>Held (Locked)</span>
-                                    <span className={`text-sm md:text-xl font-black ${scopeStats.held > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>{formatCurrency(scopeStats.held, currentUser.currency)}</span>
+                                    <span className={`text-xs md:text-sm font-black ${scopeStats.held > 0 ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>{formatCurrency(scopeStats.held, currentUser.currency)}</span>
                                 </div>
                             </div>
                          </div>
                          <button 
                             onClick={() => setViewMode('held')}
-                            className={`mt-6 md:mt-8 w-full py-3 md:py-4 rounded-[1.5rem] md:rounded-2xl transition-all duration-300 border text-[9px] md:text-[10px] font-black uppercase tracking-widest md:tracking-[0.2em] 
+                            className={`mt-3 w-full py-1.5 rounded-lg transition-all duration-300 border text-[9px] md:text-[10px] font-black uppercase tracking-wider 
                                 ${scopeStats.held > 0 ? 'bg-orange-600 border-orange-400 text-white shadow-lg shadow-orange-600/30' : 'bg-white/5 border-white/10 text-blue-400 hover:bg-white/10'}`}
                          >
                             {scopeStats.held > 0 ? 'Claim Eligibility \u2192' : 'Check Eligibility \u2192'}
@@ -606,10 +606,10 @@ const Referrals: React.FC = () => {
                 </div>
             )}
 
-            <div className="bg-[#0b0f19] p-5 md:p-10 rounded-2xl md:rounded-[3rem] border border-gray-800 shadow-2xl relative overflow-hidden group">
+            <div className="bg-[#0b0f19] p-4 md:p-5 rounded-xl md:rounded-2xl border border-gray-800 shadow-2xl relative overflow-hidden group">
                 <div className="absolute -top-32 -right-32 w-80 h-80 bg-blue-600/10 blur-[120px] group-hover:bg-blue-600/15 transition-all duration-1000"></div>
                 
-                <div className="flex flex-col lg:flex-row justify-between items-stretch gap-10 relative z-10">
+                <div className="flex flex-col lg:flex-row justify-between items-stretch gap-4 md:gap-5 relative z-10">
                     <div className="flex-grow w-full lg:w-3/5">
                         <ShareButtons 
                             url={referralLink} 
@@ -618,20 +618,20 @@ const Referrals: React.FC = () => {
                         />
                     </div>
                     
-                    <div className="flex flex-col gap-6 w-full lg:w-2/5">
-                        <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
-                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Total Direct Refs</p>
-                            <p className="text-4xl font-black text-white">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase()).length}</p>
+                    <div className="grid grid-cols-2 gap-2.5 w-full lg:w-2/5">
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.01]">
+                            <p className="text-[9px] text-gray-500 uppercase font-black tracking-wider mb-1">Total Direct Refs</p>
+                            <p className="text-xl md:text-2xl font-black text-white">{users.filter(u => u.sponsor && u.sponsor.toLowerCase() === currentUser.username.toLowerCase()).length}</p>
                         </div>
-                        <div className="flex-1 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.02]">
-                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-3">Global Commissioners</p>
-                            <p className="text-4xl font-black text-[#22c55e]">{directEarners.length + indirectEarners.length}</p>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/5 text-center flex flex-col justify-center transition-transform hover:scale-[1.01]">
+                            <p className="text-[9px] text-gray-500 uppercase font-black tracking-wider mb-1">Global Commissioners</p>
+                            <p className="text-xl md:text-2xl font-black text-[#22c55e]">{directEarners.length + indirectEarners.length}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="p-2 md:p-3 bg-[#111827] rounded-2xl md:rounded-[2.5rem] border border-gray-800 shadow-2xl flex flex-wrap gap-1 md:gap-2 justify-center">
+            <div className="p-2 md:p-3 bg-[#111827] rounded-xl md:rounded-[2.5rem] border border-gray-800 shadow-2xl grid grid-cols-2 md:flex md:flex-wrap gap-1.5 md:gap-2 justify-center">
                 {[
                     { id: 'earning', label: 'earning', count: directEarners.length + indirectEarners.length, active: 'border-green-400 bg-gradient-to-r from-green-600 to-green-500 text-white shadow-[0_0_15px_rgba(74,222,128,0.4)]', inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' },
                     { id: 'all', label: 'all refferal', count: allNodes.length, active: 'border-blue-400 bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-[0_0_15px_rgba(96,165,250,0.4)]', inactive: 'border-gray-800 bg-gray-800/40 text-gray-500 hover:text-gray-300 hover:border-gray-700' },
@@ -643,11 +643,12 @@ const Referrals: React.FC = () => {
                     <button
                         key={tab.id}
                         onClick={() => setViewMode(tab.id as any)}
-                        className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 border-2 ${
+                        className={`px-3 md:px-5 py-1.5 md:py-2 rounded-lg md:rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 border-2 w-full md:w-auto flex items-center justify-center ${
                             viewMode === tab.id ? `${tab.active} scale-105 z-10` : `${tab.inactive}`
                         }`}
                     >
-                        {tab.label} <span className="opacity-70 ml-1">({tab.count})</span>
+                        <span className="truncate">{tab.label}</span>
+                        <span className="opacity-70 ml-1">({tab.count})</span>
                         {tab.id === 'held' && scopeStats.held > 0 && <span className="ml-1 w-2 h-2 bg-white rounded-full inline-block animate-ping"></span>}
                     </button>
                 ))}

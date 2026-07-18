@@ -263,7 +263,9 @@ const SettingSchema = new mongoose.Schema({
     userTaskConfig: {
         minQuantity: { type: Number, default: 5 },
         minRewardAmount: { type: Number, default: 0.10 },
-        commissionPercent: { type: Number, default: 10 }
+        commissionPercent: { type: Number, default: 10 },
+        campaignFeeEnabled: { type: Boolean, default: false },
+        campaignFeeAmount: { type: Number, default: 1.00 }
     },
     proofControls: {
         screenshotEnabled: { type: Boolean, default: true },

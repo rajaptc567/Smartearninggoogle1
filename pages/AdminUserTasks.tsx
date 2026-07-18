@@ -241,12 +241,14 @@ const AdminUserTasks: React.FC = () => {
     const [minQuantity, setMinQuantity] = useState(settings.userTaskConfig?.minQuantity ?? 5);
     const [minRewardAmount, setMinRewardAmount] = useState(settings.userTaskConfig?.minRewardAmount ?? 0.10);
     const [commissionPercent, setCommissionPercent] = useState(settings.userTaskConfig?.commissionPercent ?? 10);
+    const [campaignFeeEnabled, setCampaignFeeEnabled] = useState(settings.userTaskConfig?.campaignFeeEnabled ?? false);
+    const [campaignFeeAmount, setCampaignFeeAmount] = useState(settings.userTaskConfig?.campaignFeeAmount ?? 1.00);
 
     const [userTaskAccessMode, setUserTaskAccessMode] = useState<'all' | 'manual' | 'plan'>(settings.userTaskAccessMode || 'all');
     const [userTaskAllowedUserIds, setUserTaskAllowedUserIds] = useState<string[]>(settings.userTaskAllowedUserIds || []);
     const [userTaskAllowedPlanIds, setUserTaskAllowedPlanIds] = useState<string[]>(settings.userTaskAllowedPlanIds || []);
     const [userTaskNotificationEnabled, setUserTaskNotificationEnabled] = useState<boolean>(settings.userTaskNotificationEnabled ?? true);
-    const [userTaskNotificationMessage, setUserTaskNotificationMessage] = useState<string>(settings.userTaskNotificationMessage || 'Want to earn extra rewards? Activate the required investment plan to unlock the User Task Hub and start earning today!');
+    const [userTaskNotificationMessage, setUserTaskNotificationMessage] = useState<string>(settings.userTaskNotificationMessage || 'Want to earn extra rewards? Activate the required investment plan to unlock the Earn Cash & Gigs Hub and start earning today!');
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
     // Exchange Rates State
@@ -320,7 +322,9 @@ const AdminUserTasks: React.FC = () => {
                 userTaskConfig: {
                     minQuantity: Number(minQuantity),
                     minRewardAmount: Number(minRewardAmount),
-                    commissionPercent: Number(commissionPercent)
+                    commissionPercent: Number(commissionPercent),
+                    campaignFeeEnabled: Boolean(campaignFeeEnabled),
+                    campaignFeeAmount: Number(campaignFeeAmount)
                 }
             };
             const result = await updateSettings(updatedSettings);
@@ -455,32 +459,10 @@ const AdminUserTasks: React.FC = () => {
                                 </label>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Min Task Quantity</label>
-                                <input 
-                                    type="number" 
-                                    min="1"
-                                    value={minQuantity} 
-                                    onChange={(e) => setMinQuantity(Number(e.target.value))}
-                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Min Reward / Task (USD)</label>
-                                <input 
-                                    type="number" 
-                                    step="0.01"
-                                    min="0.01"
-                                    value={minRewardAmount} 
-                                    onChange={(e) => setMinRewardAmount(Number(e.target.value))}
-                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
-                                />
-                            </div>
-
-                            <div>
+                             <div>
                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">Admin Commission (%)</label>
                                 <input 
+                                    id="admin_commission_input"
                                     type="number" 
                                     min="0"
                                     max="100"
@@ -490,8 +472,38 @@ const AdminUserTasks: React.FC = () => {
                                 />
                             </div>
 
+                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border dark:border-gray-700">
+                                <div>
+                                    <p className="font-bold text-gray-900 dark:text-white text-xs">Enable Creation Fee</p>
+                                    <p className="text-[10px] text-gray-500">Charge base fee upfront</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        id="campaign_fee_toggle"
+                                        type="checkbox" 
+                                        checked={campaignFeeEnabled} 
+                                        onChange={(e) => setCampaignFeeEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                                </label>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Base Creation Fee (USD)</label>
+                                <input 
+                                    id="campaign_fee_amount_input"
+                                    type="number" 
+                                    step="0.01"
+                                    min="0"
+                                    value={campaignFeeAmount} 
+                                    onChange={(e) => setCampaignFeeAmount(Number(e.target.value))}
+                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
+                                />
+                            </div>
+
                             <div className="flex items-end">
-                                <Button type="submit" variant="primary" isLoading={isSavingSettings} className="w-full py-3">
+                                <Button id="save_task_rules_btn" type="submit" variant="primary" isLoading={isSavingSettings} className="w-full py-3">
                                     Save Task Rules
                                 </Button>
                             </div>
@@ -699,9 +711,14 @@ const AdminUserTasks: React.FC = () => {
                                                 <td className="p-4 font-mono text-emerald-500 font-bold">{task.totalBudget} USD</td>
                                                 <td className="p-4 text-gray-500">{task.currentCompletions} / {task.targetQuantity}</td>
                                                 <td className="p-4">
-                                                    <Badge variant={task.status === 'Approved' ? 'success' : task.status === 'Pending' ? 'warning' : 'danger'}>
-                                                        {task.status}
-                                                    </Badge>
+                                                    <div className="flex flex-col gap-1 items-start">
+                                                        <Badge variant={task.status === 'Approved' ? 'success' : task.status === 'Pending' ? 'warning' : 'danger'}>
+                                                            {task.status}
+                                                        </Badge>
+                                                        {task.reviewRequested && (
+                                                            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/30 px-1.5 py-0.5 rounded">🔄 Resubmitted</span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="p-4 space-x-2">
                                                     <Button variant="secondary" onClick={() => setSelectedCampaign(task)} className="text-xs py-1 px-3">
@@ -1390,9 +1407,14 @@ const AdminUserTasks: React.FC = () => {
                                 <h3 className="text-2xl font-black uppercase tracking-tight text-gray-900 dark:text-white">Campaign Details</h3>
                                 <p className="text-xs text-blue-600 font-bold uppercase mt-1">Submitted by: @{selectedCampaign.userName}</p>
                             </div>
-                            <Badge variant={selectedCampaign.status === 'Approved' ? 'success' : selectedCampaign.status === 'Pending' ? 'warning' : 'danger'}>
-                                {selectedCampaign.status}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant={selectedCampaign.status === 'Approved' ? 'success' : selectedCampaign.status === 'Pending' ? 'warning' : 'danger'}>
+                                    {selectedCampaign.status}
+                                </Badge>
+                                {selectedCampaign.reviewRequested && (
+                                    <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30">🔄 Resubmitted for Review</span>
+                                )}
+                            </div>
                         </div>
 
                         <div className="space-y-4 text-sm">
@@ -1491,6 +1513,15 @@ const AdminUserTasks: React.FC = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {selectedCampaign.reviewRequested && selectedCampaign.userReviewMessage && (
+                                <div className="bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 space-y-1.5">
+                                    <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 block tracking-wider">🔄 Resubmission Note (From Creator)</span>
+                                    <p className="text-xs text-indigo-900 dark:text-indigo-300 font-medium bg-white dark:bg-gray-800/60 p-3 rounded-xl border dark:border-gray-700 leading-relaxed italic">
+                                        "{selectedCampaign.userReviewMessage}"
+                                    </p>
+                                </div>
+                            )}
 
                             {selectedCampaign.adminNotes && (
                                 <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-2xl border border-red-200 dark:border-red-900/50">

@@ -81,6 +81,22 @@ const UserTaskSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    baseFeeCharged: {
+        type: Number,
+        default: 0
+    },
+    reviewRequested: {
+        type: Boolean,
+        default: false
+    },
+    resubmittedForReview: {
+        type: Boolean,
+        default: false
+    },
+    userReviewMessage: {
+        type: String,
+        default: ''
+    },
     completedUsers: [{
         type: mongoose.Schema.ObjectId,
         ref: 'User'

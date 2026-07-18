@@ -5,11 +5,11 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { updateDispute, updateDeposit, markDisputeAsRead } from '../services/api';
+import { updateDispute, updateDeposit, markDisputeAsRead, resolveDispute } from '../services/api';
 
 const AdminDisputes: React.FC = () => {
     const { state, dispatch } = useData();
-    const { disputes, deposits, withdrawals, transfers, users } = state;
+    const { disputes, deposits, withdrawals, transfers, users, userTaskSubmissions, userTasks } = state;
 
     const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,6 +116,17 @@ const AdminDisputes: React.FC = () => {
         return null;
     }, [selectedDispute, deposits, withdrawals, transfers]);
 
+    const linkedSubmission = useMemo(() => {
+        if (!selectedDispute || selectedDispute.type !== 'UserTask') return null;
+        const subId = selectedDispute.submissionId || selectedDispute.referenceId;
+        return userTaskSubmissions?.find(s => s._id === subId);
+    }, [selectedDispute, userTaskSubmissions]);
+
+    const linkedTask = useMemo(() => {
+        if (!linkedSubmission) return null;
+        return userTasks?.find(t => t._id === linkedSubmission.taskId);
+    }, [linkedSubmission, userTasks]);
+
     const handleSendMessage = async () => {
         if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
         setIsSubmitting(true);
@@ -185,7 +196,43 @@ const AdminDisputes: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }
+    };
+
+    const handleResolveUserTaskDispute = async (verdict: 'ReleaseToWorker' | 'RefundToCreator' | 'SplitPayout') => {
+        if (!selectedDispute) return;
+        const confirmMsg = `Are you sure you want to resolve this dispute with verdict: ${verdict}? This action will permanently update balances.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        const note = window.prompt(`Enter resolution notes for this ${verdict} verdict (optional):`) || `Verdict: ${verdict}`;
+        setIsSubmitting(true);
+        try {
+            const updatedDispute = await resolveDispute(selectedDispute._id, {
+                verdict,
+                adminNotes: note,
+                splitPercentageWorker: verdict === 'SplitPayout' ? 50 : undefined
+            });
+            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+            
+            if (linkedSubmission) {
+                const subStatus = verdict === 'RefundToCreator' ? 'Rejected' : 'Paid';
+                dispatch({
+                    type: 'UPDATE_USER_TASK_SUBMISSION',
+                    payload: {
+                        ...linkedSubmission,
+                        status: subStatus
+                    }
+                });
+            }
+            
+            setSelectedDispute(updatedDispute);
+            alert(`Dispute resolved successfully with verdict: ${verdict}`);
+        } catch (error) {
+            console.error("Failed to resolve dispute:", error);
+            alert("Failed to resolve dispute: " + (error instanceof Error ? error.message : "Unknown error"));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
     
     // DOWNLOAD LOGIC
     const handleDownload = (idsToDownload: string[]) => {
@@ -379,43 +426,94 @@ const AdminDisputes: React.FC = () => {
                         <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
                             {/* LEFT COLUMN: DETAILS & CONTEXT */}
                             <div className="md:w-1/3 overflow-y-auto space-y-4 pr-2 border-r dark:border-gray-700">
+                                 {/* UserTask Dispute Dossier */}
+                                 {selectedDispute.type === 'UserTask' && (
+                                     <div className="space-y-4">
+                                         <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-2xl">
+                                             <h4 className="font-bold text-xs uppercase text-amber-700 dark:text-amber-400 mb-1">User Task Dispute</h4>
+                                             <p className="text-xs text-amber-800 dark:text-amber-300">Escrow funds are frozen. User spot remains booked.</p>
+                                         </div>
+
+                                         {linkedTask && (
+                                             <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-2xl">
+                                                 <h4 className="font-bold text-xs uppercase text-gray-400 mb-2">Campaign Details</h4>
+                                                 <div className="text-xs space-y-1 text-gray-700 dark:text-gray-300">
+                                                     <p><strong>Title:</strong> {linkedTask.title}</p>
+                                                     <p><strong>Category:</strong> {linkedTask.category}</p>
+                                                     <p><strong>Reward:</strong> <span className="text-emerald-500 font-bold">+{linkedTask.rewardAmount} USD</span></p>
+                                                     <p><strong>Creator ID:</strong> <span className="font-mono text-[10px]">{linkedTask.creatorId}</span></p>
+                                                 </div>
+                                             </div>
+                                         )}
+
+                                         {linkedSubmission && (
+                                             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800/40">
+                                                 <h4 className="font-bold text-xs uppercase text-blue-600 dark:text-blue-300 mb-2">Worker's Proof Submission</h4>
+                                                 <div className="text-xs space-y-2 text-gray-700 dark:text-gray-300">
+                                                     <p><strong>Worker:</strong> {linkedSubmission.userName} ({linkedSubmission.userEmail || 'N/A'})</p>
+                                                     <div>
+                                                         <strong>Submitted Proof Text:</strong>
+                                                         <p className="mt-1 p-2 bg-white dark:bg-gray-800 rounded-lg border text-[11px] whitespace-pre-wrap">{linkedSubmission.proofText || 'None provided'}</p>
+                                                     </div>
+                                                     {linkedSubmission.proofImage && (
+                                                         <div>
+                                                             <strong>Original Screenshot:</strong>
+                                                             <a href={linkedSubmission.proofImage} target="_blank" rel="noreferrer" className="block mt-1">
+                                                                 <img src={linkedSubmission.proofImage} alt="Original Proof" className="w-full object-cover rounded-lg border max-h-40" />
+                                                             </a>
+                                                         </div>
+                                                     )}
+                                                     {linkedSubmission.rejectionReason && (
+                                                         <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-600 dark:text-red-400">
+                                                             <strong>Creator Rejection Reason:</strong>
+                                                             <p className="mt-0.5 text-[11px] font-medium">{linkedSubmission.rejectionReason}</p>
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                         )}
+                                     </div>
+                                 )}
+
                                  {/* Original Complaint */}
                                  <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
-                                    <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Issue Description</h4>
+                                    <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Issue Description / Dispute Reason</h4>
                                     <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                                         {selectedDispute.description}
                                     </p>
                                 </div>
 
-                                {/* Transaction Details */}
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
-                                    <h4 className="font-semibold text-xs uppercase text-blue-600 dark:text-blue-300 mb-2">Linked Transaction</h4>
-                                    {linkedTransaction ? (
-                                        <div className="text-sm space-y-1">
-                                            <div className="flex justify-between"><span>ID:</span> <span className="font-mono text-xs">{linkedTransaction._id}</span></div>
-                                            <div className="flex justify-between"><span>Amount:</span> <span className="font-bold">${(linkedTransaction as any).amount.toFixed(2)}</span></div>
-                                            <div className="flex justify-between"><span>Date:</span> <span>{new Date(linkedTransaction.date).toLocaleDateString()}</span></div>
-                                            <div className="flex justify-between"><span>Status:</span> <Badge status={linkedTransaction.status as Status} /></div>
-                                            
-                                            {selectedDispute.status !== 'Resolved' && selectedDispute.type === 'Deposit' && linkedTransaction.status !== 'Approved' && (
-                                                <div className="pt-2 mt-2 border-t border-blue-200 dark:border-blue-700 text-center">
-                                                    <Button size="sm" variant="success" onClick={handleForceApproveDeposit} disabled={isSubmitting} className="w-full">
-                                                        Force Approve Deposit
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <p className="text-red-500 italic text-xs">Original transaction not found.</p>
-                                    )}
-                                </div>
+                                {/* Transaction Details (Only for finance disputes) */}
+                                {selectedDispute.type !== 'UserTask' && (
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
+                                        <h4 className="font-semibold text-xs uppercase text-blue-600 dark:text-blue-300 mb-2">Linked Transaction</h4>
+                                        {linkedTransaction ? (
+                                            <div className="text-sm space-y-1">
+                                                <div className="flex justify-between"><span>ID:</span> <span className="font-mono text-xs">{linkedTransaction._id}</span></div>
+                                                <div className="flex justify-between"><span>Amount:</span> <span className="font-bold">${(linkedTransaction as any).amount.toFixed(2)}</span></div>
+                                                <div className="flex justify-between"><span>Date:</span> <span>{new Date(linkedTransaction.date).toLocaleDateString()}</span></div>
+                                                <div className="flex justify-between"><span>Status:</span> <Badge status={linkedTransaction.status as Status} /></div>
+                                                
+                                                {selectedDispute.status !== 'Resolved' && selectedDispute.type === 'Deposit' && linkedTransaction.status !== 'Approved' && (
+                                                    <div className="pt-2 mt-2 border-t border-blue-200 dark:border-blue-700 text-center">
+                                                        <Button size="sm" variant="success" onClick={handleForceApproveDeposit} disabled={isSubmitting} className="w-full">
+                                                            Force Approve Deposit
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-red-500 italic text-xs">Original transaction not found.</p>
+                                        )}
+                                    </div>
+                                )}
 
-                                {/* Proof */}
+                                {/* Proof Screenshot */}
                                 {selectedDispute.proofUrl && (
                                     <div className="mb-4">
-                                        <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Submitted Proof</h4>
+                                        <h4 className="font-semibold text-xs uppercase text-gray-500 mb-2">Dispute Attached Proof</h4>
                                         <a href={selectedDispute.proofUrl} target="_blank" rel="noreferrer">
-                                            <img src={selectedDispute.proofUrl} alt="Proof" className="w-full object-contain rounded border shadow-sm bg-gray-100 hover:opacity-90 transition-opacity" />
+                                            <img src={selectedDispute.proofUrl} alt="Dispute Proof" className="w-full object-contain rounded border shadow-sm bg-gray-100 hover:opacity-90 transition-opacity" />
                                         </a>
                                     </div>
                                 )}
@@ -473,19 +571,54 @@ const AdminDisputes: React.FC = () => {
                                 {attachment && <p className="text-xs text-gray-500 -mt-3 mb-3">Selected file: {attachment.name}</p>}
 
                                 {/* Status Actions */}
-                                <div className="flex flex-wrap gap-2 justify-end pt-2 border-t dark:border-gray-700">
-                                    {selectedDispute.status === 'Open' && (
-                                        <Button size="sm" variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200" onClick={() => handleStatusChange('Processing')}>Mark Processing</Button>
+                                <div className="flex flex-col gap-3 pt-2 border-t dark:border-gray-700">
+                                    {/* UserTask specific verdict buttons */}
+                                    {selectedDispute.type === 'UserTask' && selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
+                                        <div className="bg-amber-500/5 dark:bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 space-y-2">
+                                            <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 block mb-1">Campaign Dispute Verdict Actions:</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="success" 
+                                                    onClick={() => handleResolveUserTaskDispute('ReleaseToWorker')}
+                                                    className="font-bold text-xs uppercase bg-green-600 hover:bg-green-700 text-white"
+                                                >
+                                                    Approve & Release to Worker
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="danger" 
+                                                    onClick={() => handleResolveUserTaskDispute('RefundToCreator')}
+                                                    className="font-bold text-xs uppercase bg-red-600 hover:bg-red-700 text-white"
+                                                >
+                                                    Reject & Refund to Creator
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="secondary" 
+                                                    onClick={() => handleResolveUserTaskDispute('SplitPayout')}
+                                                    className="font-bold text-xs uppercase bg-blue-600 hover:bg-blue-700 text-white"
+                                                >
+                                                    50/50 Split Payout
+                                                </Button>
+                                            </div>
+                                        </div>
                                     )}
-                                    {(selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed') && (
-                                        <Button size="sm" variant="secondary" onClick={() => handleStatusChange('Open')}>Reopen Ticket</Button>
-                                    )}
-                                    {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
-                                        <>
-                                            <Button size="sm" variant="danger" onClick={() => handleStatusChange('Closed')}>Close Ticket</Button>
-                                            <Button size="sm" variant="success" onClick={() => handleStatusChange('Resolved')}>Resolve Ticket</Button>
-                                        </>
-                                    )}
+
+                                    <div className="flex flex-wrap gap-2 justify-end">
+                                        {selectedDispute.status === 'Open' && (
+                                            <Button size="sm" variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200" onClick={() => handleStatusChange('Processing')}>Mark Processing</Button>
+                                        )}
+                                        {(selectedDispute.status === 'Resolved' || selectedDispute.status === 'Closed') && (
+                                            <Button size="sm" variant="secondary" onClick={() => handleStatusChange('Open')}>Reopen Ticket</Button>
+                                        )}
+                                        {selectedDispute.status !== 'Resolved' && selectedDispute.status !== 'Closed' && (
+                                            <>
+                                                <Button size="sm" variant="danger" onClick={() => handleStatusChange('Closed')}>Close Ticket</Button>
+                                                <Button size="sm" variant="success" onClick={() => handleStatusChange('Resolved')}>Resolve Ticket</Button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
