@@ -174,6 +174,11 @@ export const resolveDisputeVerdict = async (req, res) => {
                     }
                 } else if (verdict === 'RefundToCreator') {
                     submission.status = 'Rejected';
+                    const settings = await Setting.getSettings();
+                    const disputeHours = settings.systemLimits?.disputeTimeLimitHours || 48;
+                    submission.disputeDeadline = new Date(Date.now() + disputeHours * 60 * 60 * 1000);
+                    submission.disputeOpened = false; // Reset so they can dispute again if rejected again or if they want to reopen with new proof
+
                     if (creator) {
                         const refundAmount = submission.rewardAmount * 1.1;
                         creator.walletBalance = Number((creator.walletBalance + refundAmount).toFixed(2));

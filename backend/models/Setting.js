@@ -149,6 +149,51 @@ const defaultFaqs = [
         answer: "Absolutely! SmartEarning is global. Our 'Plan Equivalency' system handles cross-currency referrals (USD, EUR, PKR) seamlessly. If you are a PKR user and your referral buys a USD plan, you will still earn your commission, automatically converted to PKR at our current platform exchange rate.",
         showOnHomepage: true
     },
+    {
+        question: "What is the Earning Area and how can I start earning without investment?",
+        answer: "The Earning Area (found under 'My Tasks') is a completely free online gigs section where you can earn money without any upfront investment. You can earn by completing simple daily micro-tasks such as liking Facebook posts, subscribing to YouTube channels, watching short advertising videos, or writing reviews.",
+        showOnHomepage: true
+    },
+    {
+        question: "How long does it take for Earning Area task submissions to be approved?",
+        answer: "Task submissions require proof of completion (usually a screenshot). Our verification moderators or the task sponsors typically review and approve these submissions within 12 to 24 hours. Once your proof is verified, your reward is immediately credited to your available wallet balance.",
+        showOnHomepage: true
+    },
+    {
+        question: "Are there limits on the number of daily tasks I can complete?",
+        answer: "Yes. To maintain high-quality social engagements, each task is bound by frequency limits (such as 'Once', 'Daily', or 'Weekly') and cooldown periods. Premium members with active investment plans often gain access to additional exclusive and higher-paying tasks with larger completion limits.",
+        showOnHomepage: true
+    },
+    {
+        question: "Why did my task reward submission get rejected?",
+        answer: "Submissions are rejected if the provided screenshot proof is invalid, blurred, or does not clearly show that you completed the required action (such as liking or subscribing). Submissions will also be rejected or reversed if you unfollow or undo the required action before or shortly after verification.",
+        showOnHomepage: true
+    },
+    {
+        question: "Can I withdraw earnings from the free Earning Area without buying an investment plan?",
+        answer: "Yes, definitely! Earnings accumulated from completing tasks in the Earning Area belong entirely to you. You can withdraw them directly to your local bank account or mobile wallet as soon as you meet the minimum withdrawal limit, with absolutely no requirement to purchase an investment plan first.",
+        showOnHomepage: true
+    },
+    {
+        question: "Can I use my Earning Area balance to buy an investment plan?",
+        answer: "Yes! Your Earning Area rewards go directly to your main wallet balance. Once you accumulate enough funds, you can use your balance to purchase any premium investment plan directly from the 'Investment Plans' tab, allowing you to transition from free earnings to high-yield passive income completely for free.",
+        showOnHomepage: true
+    },
+    {
+        question: "Do I earn MLM team commissions from my referrals' Earning Area tasks?",
+        answer: "Yes! Our transparent referral income generator includes Earning Area tasks. You earn a percentage of all task rewards completed by your level 1 (direct) and level 2 (indirect) team members. If you build an active network of free earners, you will receive substantial daily passive commission payouts.",
+        showOnHomepage: true
+    },
+    {
+        question: "Can I promote my own social media pages or website in the Earning Area?",
+        answer: "Yes! Our platform is a fully-featured automated micro-task marketplace. You can easily switch to the 'Task Creator' role, fund your advertising balance, and post tasks like YouTube subscribers, Facebook likes, web traffic, or Google reviews. Our active community of real users will complete your tasks with full verification screenshots.",
+        showOnHomepage: true
+    },
+    {
+        question: "Are there rules regarding VPNs or multiple accounts for completing tasks?",
+        answer: "Yes, we have a strict anti-fraud policy. Using VPNs, proxy servers, automated clickers, or creating multiple accounts to complete tasks is strictly prohibited. Our system monitors IP signatures and browser user-agents. Any accounts detected violating these rules will be suspended permanently with all earnings forfeited.",
+        showOnHomepage: true
+    },
     { 
         question: "What is the 'Withdrawal Security Guard'?", 
         answer: "The Security Guard is a verification layer that prevents bot activity and ensures platform stability. If you see a 'Security Verification Required' message on the withdrawal page, it means there are pending mandatory tasks in your 'My Tasks' section that must be completed first.",
@@ -277,7 +322,10 @@ const SettingSchema = new mongoose.Schema({
     systemLimits: {
         minWorkerSlots: { type: Number, default: 10 },
         maxWorkerSlots: { type: Number, default: 10000 },
-        approvalTimeoutDays: { type: Number, default: 3 }
+        approvalTimeoutDays: { type: Number, default: 3 },
+        disputeTimeLimitHours: { type: Number, default: 48 },
+        disputeReviewTimeoutDays: { type: Number, default: 3 },
+        secondDisputeTimeLimitHours: { type: Number, default: 48 }
     },
     campaignLiveRules: {
         autoApproval: { type: Boolean, default: true }
@@ -335,6 +383,18 @@ SettingSchema.statics.getSettings = async function() {
     if (!settings.faqs || settings.faqs.length === 0) {
         settings.faqs = defaultFaqs;
         needsSave = true;
+    } else {
+        let updated = false;
+        defaultFaqs.forEach(defFaq => {
+            const exists = settings.faqs.some(f => f.question.toLowerCase() === defFaq.question.toLowerCase());
+            if (!exists) {
+                settings.faqs.push(defFaq);
+                updated = true;
+            }
+        });
+        if (updated) {
+            needsSave = true;
+        }
     }
     if (!settings.signUpConfig) {
         settings.signUpConfig = {};

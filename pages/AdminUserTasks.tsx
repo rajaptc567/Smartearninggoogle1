@@ -266,6 +266,11 @@ const AdminUserTasks: React.FC = () => {
             manual: { enabled: true, max: 3 }
         };
     });
+    const [maxScreenshotSizeMB, setMaxScreenshotSizeMB] = useState<number>(settings.proofControls?.maxScreenshotSizeMB ?? 5);
+    const [approvalTimeoutDays, setApprovalTimeoutDays] = useState<number>(settings.systemLimits?.approvalTimeoutDays ?? 3);
+    const [disputeTimeLimitHours, setDisputeTimeLimitHours] = useState<number>(settings.systemLimits?.disputeTimeLimitHours ?? 48);
+    const [disputeReviewTimeoutDays, setDisputeReviewTimeoutDays] = useState<number>(settings.systemLimits?.disputeReviewTimeoutDays ?? 3);
+    const [secondDisputeTimeLimitHours, setSecondDisputeTimeLimitHours] = useState<number>(settings.systemLimits?.secondDisputeTimeLimitHours ?? 48);
     const [isSavingProofLimits, setIsSavingProofLimits] = useState(false);
 
     const handleSaveProofLimits = async (e: React.FormEvent) => {
@@ -274,11 +279,22 @@ const AdminUserTasks: React.FC = () => {
         try {
             const updatedSettings = {
                 ...settings,
-                userTaskProofLimits: localProofLimits
+                userTaskProofLimits: localProofLimits,
+                proofControls: {
+                    ...settings.proofControls,
+                    maxScreenshotSizeMB: Number(maxScreenshotSizeMB)
+                },
+                systemLimits: {
+                    ...settings.systemLimits,
+                    approvalTimeoutDays: Number(approvalTimeoutDays),
+                    disputeTimeLimitHours: Number(disputeTimeLimitHours),
+                    disputeReviewTimeoutDays: Number(disputeReviewTimeoutDays),
+                    secondDisputeTimeLimitHours: Number(secondDisputeTimeLimitHours)
+                }
             };
             const result = await updateSettings(updatedSettings);
             dispatch({ type: 'UPDATE_SETTINGS', payload: result });
-            alert('Duplicate proof limits updated successfully!');
+            alert('Duplicate proof limits, file size limits, auto-approval limits, dispute windows, and escalation timers updated successfully!');
         } catch (error) {
             alert('Failed to update duplicate proof limits');
         } finally {
@@ -984,6 +1000,119 @@ const AdminUserTasks: React.FC = () => {
                     </div>
 
                     <form onSubmit={handleSaveProofLimits} className="space-y-6">
+                        {/* File Size, Auto-Approval & Dispute Time Controls */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="p-6 bg-blue-50/50 dark:bg-blue-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/40 space-y-4 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-sm text-blue-900 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        📸 Proof Size Limit
+                                    </h4>
+                                    <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-1">
+                                        Define the maximum file size (in MB) allowed for screenshot and image proof uploads.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="100"
+                                        value={maxScreenshotSizeMB} 
+                                        onChange={(e) => setMaxScreenshotSizeMB(Number(e.target.value))}
+                                        className="w-full pr-12 pl-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-900 text-gray-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    />
+                                    <span className="absolute right-3 top-2.5 text-xs font-black text-blue-500 uppercase">MB</span>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-purple-50/50 dark:bg-purple-950/20 rounded-2xl border border-purple-100 dark:border-purple-900/40 space-y-4 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-sm text-purple-900 dark:text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        ⏱️ Creator Review Limit
+                                    </h4>
+                                    <p className="text-xs text-purple-700/70 dark:text-purple-400/70 mt-1">
+                                        Define how many days before a worker's proof submission is auto-approved if the creator does not review it.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="30"
+                                        value={approvalTimeoutDays} 
+                                        onChange={(e) => setApprovalTimeoutDays(Number(e.target.value))}
+                                        className="w-full pr-14 pl-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-900 text-gray-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                    />
+                                    <span className="absolute right-3 top-2.5 text-xs font-black text-purple-500 uppercase">Days</span>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-amber-50/50 dark:bg-amber-950/20 rounded-2xl border border-amber-100 dark:border-amber-900/40 space-y-4 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-sm text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        ⚖️ Initial Dispute Window
+                                    </h4>
+                                    <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">
+                                        Define the maximum number of hours a worker has to file a dispute after a task proof is rejected.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="168"
+                                        value={disputeTimeLimitHours} 
+                                        onChange={(e) => setDisputeTimeLimitHours(Number(e.target.value))}
+                                        className="w-full pr-14 pl-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-900 text-gray-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                    />
+                                    <span className="absolute right-3 top-2.5 text-xs font-black text-amber-500 uppercase">Hours</span>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-rose-50/50 dark:bg-rose-950/20 rounded-2xl border border-rose-100 dark:border-rose-900/40 space-y-4 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-sm text-rose-900 dark:text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        ⏱️ Dispute Review Limit
+                                    </h4>
+                                    <p className="text-xs text-rose-700/70 dark:text-rose-400/70 mt-1">
+                                        Define how many days before a worker's dispute automatically auto-approves if the creator fails to resolve or reject it.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="30"
+                                        value={disputeReviewTimeoutDays} 
+                                        onChange={(e) => setDisputeReviewTimeoutDays(Number(e.target.value))}
+                                        className="w-full pr-14 pl-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-rose-200 dark:border-rose-900 text-gray-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                                    />
+                                    <span className="absolute right-3 top-2.5 text-xs font-black text-rose-500 uppercase">Days</span>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-4 flex flex-col justify-between">
+                                <div>
+                                    <h4 className="font-black text-sm text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                                        ⚖️ Escalation Window
+                                    </h4>
+                                    <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-1">
+                                        Define the maximum hours a worker has to escalate a creator-rejected dispute directly to the Admin.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="168"
+                                        value={secondDisputeTimeLimitHours} 
+                                        onChange={(e) => setSecondDisputeTimeLimitHours(Number(e.target.value))}
+                                        className="w-full pr-14 pl-4 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-900 text-gray-900 dark:text-white font-mono font-bold text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                                    />
+                                    <span className="absolute right-3 top-2.5 text-xs font-black text-emerald-500 uppercase">Hours</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {[
                                 { key: 'screenshot', name: '📸 Screenshot / Image Proof' },

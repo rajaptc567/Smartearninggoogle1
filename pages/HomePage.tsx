@@ -87,21 +87,46 @@ const StarIcon = ({ filled = false, className = "" }) => (
     </svg>
 );
 
+const VideoIcon = () => (
+    <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+const LikeIcon = () => (
+    <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.757c1.246 0 2.25 1.01 2.25 2.25 0 .53-.186 1.03-.51 1.44l-3 4A2.25 2.25 0 0115.75 19H9.25a2.25 2.25 0 01-2.24-2.03L6.05 10H4a2 2 0 01-2-2V5a2 2 0 012-2h2a2 2 0 012 2v1h5.13a2 2 0 011.87 2.13L14 10z" />
+    </svg>
+);
+
+const SubscriberIcon = () => (
+    <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+    </svg>
+);
+
+const EarnBagIcon = () => (
+    <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12V11m0 1c-1.11 0-2.08-.402-2.599-1M12 12v1.5m0 3.5v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
 // Reusable Payment Method Card Component - MAXIMIZED VISIBILITY & FIXED SPACING
 const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
-    <div className="bg-white dark:bg-gray-800 p-0 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col items-center w-36 h-40 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl group overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 p-0 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 flex flex-col items-center w-28 h-32 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-xl group overflow-hidden">
         {/* Logo container - Takes remaining space */}
-        <div className={`w-full flex-grow flex items-center justify-center p-3 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
+        <div className={`w-full flex-grow flex items-center justify-center p-2.5 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
             {pm.logoUrl ? (
-                <img src={pm.logoUrl} alt={pm.name} className="max-w-[85%] max-h-[85%] object-contain drop-shadow-md" title={pm.name} />
+                <img src={pm.logoUrl} alt={pm.name} className="max-w-[85%] max-h-[85%] object-contain drop-shadow-sm" title={pm.name} />
             ) : (
                 <GenericPaymentIcon />
             )}
         </div>
         
         {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
-        <div className="w-full min-h-[44px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-2 border-t border-blue-500/50">
-            <span className="text-[11px] md:text-xs font-black uppercase tracking-widest text-white text-center leading-tight break-words w-full flex items-center justify-center">
+        <div className="w-full min-h-[36px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-1.5 border-t border-blue-500/50">
+            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-white text-center leading-tight break-words w-full flex items-center justify-center">
                 {pm.name}
             </span>
         </div>
@@ -222,28 +247,114 @@ const HomePage: React.FC = () => {
     }, [settings]);
 
     useEffect(() => {
-        const defaultTitle = "SmartEarning - Network & Investment Ecosystem";
+        const defaultTitle = "SmartEarning - Earn Money Online, Daily Micro Gigs & Passive Investments";
         const seoTitle = settings.seoTitle || defaultTitle;
         document.title = seoTitle;
 
-        let metaDescription = document.querySelector('meta[name="description"]');
-        if (!metaDescription) {
-            metaDescription = document.createElement('meta');
-            metaDescription.setAttribute('name', 'description');
-            document.head.appendChild(metaDescription);
-        }
-        const defaultDesc = "SmartEarning is a premier Multi-Level Marketing and passive investment ecosystem designed to help you secure stable growth.";
-        metaDescription.setAttribute('content', settings.seoDescription || defaultDesc);
+        // Structured SEO Metadata containing high-yield organic search term triggers
+        const metaTags: Record<string, string> = {
+            description: settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
+            keywords: settings.seoKeywords || "earn money online, online earning in Pakistan, complete micro tasks, easy tasks, passive income, MLM referral marketing, EasyPaisa earning app, earn money at home, make money online, micro gigs, smart earning",
+            author: "SmartEarning Global",
+            robots: "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1",
+            "og:title": seoTitle,
+            "og:description": settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
+            "og:type": "website",
+            "og:url": window.location.origin,
+            "og:site_name": "SmartEarning",
+            "twitter:card": "summary_large_image",
+            "twitter:title": seoTitle,
+            "twitter:description": settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
+        };
 
-        let metaKeywords = document.querySelector('meta[name="keywords"]');
-        if (!metaKeywords) {
-            metaKeywords = document.createElement('meta');
-            metaKeywords.setAttribute('name', 'keywords');
-            document.head.appendChild(metaKeywords);
+        Object.entries(metaTags).forEach(([key, val]) => {
+            let element = document.querySelector(`meta[name="${key}"]`) || document.querySelector(`meta[property="${key}"]`);
+            if (!element) {
+                element = document.createElement('meta');
+                if (key.startsWith('og:')) {
+                    element.setAttribute('property', key);
+                } else {
+                    element.setAttribute('name', key);
+                }
+                document.head.appendChild(element);
+            }
+            element.setAttribute('content', val);
+        });
+
+        // Canonical link resolution to prevent crawler duplication penalties
+        let canonical = document.querySelector('link[rel="canonical"]');
+        if (!canonical) {
+            canonical = document.createElement('link');
+            canonical.setAttribute('rel', 'canonical');
+            document.head.appendChild(canonical);
         }
-        const defaultKeywords = "SmartEarning, investment, MLM, multi-level marketing, passive income";
-        metaKeywords.setAttribute('content', settings.seoKeywords || defaultKeywords);
-    }, [settings.seoTitle, settings.seoDescription, settings.seoKeywords]);
+        canonical.setAttribute('href', window.location.href);
+
+        // JSON-LD Schema.org Multi-Graph generation for search engine rich snippets
+        let schemaScript = document.getElementById('seo-schema-jsonld') as HTMLScriptElement;
+        if (!schemaScript) {
+            schemaScript = document.createElement('script');
+            schemaScript.id = 'seo-schema-jsonld';
+            schemaScript.type = 'application/ld+json';
+            document.head.appendChild(schemaScript);
+        }
+
+        const faqsForSchema = localFaqs.filter(f => f.showOnHomepage);
+        const faqsSchema = faqsForSchema.map(f => ({
+            "@type": "Question",
+            "name": f.question,
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": f.answer
+            }
+        }));
+
+        const schemaData = {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@type": "WebSite",
+                    "@id": `${window.location.origin}/#website`,
+                    "url": window.location.origin,
+                    "name": "SmartEarning",
+                    "description": metaTags.description,
+                    "potentialAction": [
+                        {
+                            "@type": "SearchAction",
+                            "target": `${window.location.origin}/#search?q={search_term_string}`,
+                            "query-input": "required name=search_term_string"
+                        }
+                    ]
+                },
+                {
+                    "@type": "SoftwareApplication",
+                    "@id": `${window.location.origin}/#software`,
+                    "name": "SmartEarning Ecosystem",
+                    "applicationCategory": "FinancialApplication, BusinessApplication",
+                    "operatingSystem": "All",
+                    "url": window.location.origin,
+                    "description": "SmartEarning is an online earning platform. Users can complete daily micro-tasks, gigs, and social jobs or select packages to earn rewards with multiple referral tiers.",
+                    "offers": {
+                        "@type": "Offer",
+                        "price": "0.00",
+                        "priceCurrency": "USD"
+                    }
+                },
+                ...(faqsSchema.length > 0 ? [{
+                    "@type": "FAQPage",
+                    "@id": `${window.location.origin}/#faq`,
+                    "mainEntity": faqsSchema
+                }] : [])
+            ]
+        };
+
+        schemaScript.textContent = JSON.stringify(schemaData);
+
+        return () => {
+            const script = document.getElementById('seo-schema-jsonld');
+            if (script) script.remove();
+        };
+    }, [settings.seoTitle, settings.seoDescription, settings.seoKeywords, localFaqs]);
 
     const handleContentChange = (field: keyof HomepageContent) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setPageContent(prev => ({ ...prev, [field]: e.target.value }));
@@ -446,47 +557,195 @@ const HomePage: React.FC = () => {
             <main>
                 {/* Hero Section */}
                 {(showHero || editMode) && (
-                    <section className={`relative py-24 md:py-32 text-center overflow-hidden bg-white dark:bg-gray-900 ${!showHero && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`relative py-12 md:py-20 text-center overflow-hidden bg-white dark:bg-gray-900 ${!showHero && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showHero && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900"></div>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                            <div className="text-xs sm:text-sm font-black tracking-[0.2em] text-blue-600 dark:text-blue-400 uppercase mb-4">
+                            <div className="text-[10px] sm:text-xs font-black tracking-[0.2em] text-blue-600 dark:text-blue-400 uppercase mb-3">
                                 Secure Network Marketing Platform • Multi-Currency Wallet Investment System
                             </div>
-                            <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h1" className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6 leading-tight" />
-                            <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
-                            <div className="mt-10 flex justify-center gap-4">
-                                <Button size="lg" onClick={() => navigate('/register')} className="shadow-xl shadow-blue-500/20 px-8 py-4 text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
-                                <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-8 py-4 text-lg">View Plans</Button>
+                            <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h1" className="text-3xl md:text-6xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4 leading-tight" />
+                            <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-base md:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
+                            <div className="mt-6 flex justify-center gap-3">
+                                <Button size="lg" onClick={() => navigate('/register')} className="shadow-lg shadow-blue-500/20 px-6 py-3 text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
+                                <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-6 py-3 text-base">View Plans</Button>
                             </div>
                         </div>
                     </section>
                 )}
 
+                {/* Zero-Investment Gigs & Daily Social Tasks Section */}
+                <section id="tasks" className="py-12 md:py-16 bg-gradient-to-b from-gray-50 via-white to-gray-50 dark:from-gray-800/10 dark:via-gray-900 dark:to-gray-800/10 border-t border-b border-gray-200/60 dark:border-gray-800/60 relative overflow-hidden">
+                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/5 dark:bg-blue-400/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/5 dark:bg-emerald-400/5 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                        <div className="text-center max-w-3xl mx-auto mb-8 md:mb-10">
+                            <span className="text-[10px] sm:text-xs font-black tracking-[0.25em] text-emerald-600 dark:text-emerald-400 uppercase mb-2 block">
+                                NO INVESTMENT REQUIRED • EARN DAILY
+                            </span>
+                            <h2 className="text-2xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-3 uppercase">
+                                Zero-Investment Daily Gigs & Social Tasks
+                            </h2>
+                            <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Don't want to purchase an investment plan? No problem! Complete simple daily social media tasks, watch promotional videos, follow premium channels, and get paid instantly in <strong>USD, EUR, or PKR</strong> with local withdrawals.
+                            </p>
+                        </div>
+
+                        {/* Split Layout: Interactive Task Gigs Preview & How it works */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+                            {/* Left: Interactive Live Tasks Preview */}
+                            <div className="lg:col-span-7 space-y-4">
+                                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 shadow-md p-4 md:p-6 relative">
+                                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                                        <span className="flex h-2 w-2 relative">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                        </span>
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-green-500">Live Gigs</span>
+                                    </div>
+                                    
+                                    <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white flex items-center gap-1.5">
+                                        <EarnBagIcon />
+                                        Task Board Marketplace
+                                    </h3>
+
+                                    {/* Task List container */}
+                                    <div className="space-y-3">
+                                        {/* Task 1 */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-emerald-500/30 transition-all duration-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-red-100 dark:bg-red-950/30 rounded-lg">
+                                                    <VideoIcon />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[8px] font-bold bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400 px-1.5 py-0.5 rounded-full uppercase">YouTube</span>
+                                                        <span className="text-[8px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 px-1.5 py-0.5 rounded-full">3 Mins Watch</span>
+                                                    </div>
+                                                    <h4 className="font-bold text-xs md:text-sm text-gray-900 dark:text-white mt-1">Watch SmartEarning Platform Presentation Video</h4>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2.5 sm:mt-0 flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 dark:border-gray-800">
+                                                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">+$0.15 <span className="text-[9px] text-gray-400 font-normal">/ €0.14 / 42.0 PKR</span></span>
+                                                <Button size="sm" onClick={() => navigate('/register')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg px-3 py-1">Start</Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Task 2 */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-emerald-500/30 transition-all duration-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-blue-100 dark:bg-blue-950/30 rounded-lg">
+                                                    <LikeIcon />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[8px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 px-1.5 py-0.5 rounded-full uppercase">Facebook</span>
+                                                        <span className="text-[8px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 px-1.5 py-0.5 rounded-full">Like & Page Follow</span>
+                                                    </div>
+                                                    <h4 className="font-bold text-xs md:text-sm text-gray-900 dark:text-white mt-1">Like & Follow official Sponsor Page</h4>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2.5 sm:mt-0 flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 dark:border-gray-800">
+                                                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">+$0.10 <span className="text-[9px] text-gray-400 font-normal">/ €0.09 / 28.0 PKR</span></span>
+                                                <Button size="sm" onClick={() => navigate('/register')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg px-3 py-1">Start</Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Task 3 */}
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-100 dark:border-gray-800 hover:border-emerald-500/30 transition-all duration-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-purple-100 dark:bg-purple-950/30 rounded-lg">
+                                                    <SubscriberIcon />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[8px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400 px-1.5 py-0.5 rounded-full uppercase">Telegram</span>
+                                                        <span className="text-[8px] font-bold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 px-1.5 py-0.5 rounded-full">Subscribe</span>
+                                                    </div>
+                                                    <h4 className="font-bold text-xs md:text-sm text-gray-900 dark:text-white mt-1">Join CryptoSignals Telegram Announcement Channel</h4>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2.5 sm:mt-0 flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 dark:border-gray-800">
+                                                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">+$0.12 <span className="text-[9px] text-gray-400 font-normal">/ €0.11 / 33.5 PKR</span></span>
+                                                <Button size="sm" onClick={() => navigate('/register')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg px-3 py-1">Start</Button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="text-center mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                        <p className="text-[11px] text-gray-500">And hundreds of other custom micro-tasks added daily by publishers globally.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right: Dual-Benefit Model (Worker vs Advertiser) */}
+                            <div className="lg:col-span-5 space-y-4 md:space-y-6">
+                                <div className="space-y-2">
+                                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">One Platform, Two Powerhouses</h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                                        Whether you want to earn simple daily cash in your spare time or promote your social media profiles to gain real, authentic engagement, our dual-purpose gig system fits your exact needs.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* Worker */}
+                                    <div className="flex gap-3">
+                                        <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg flex items-center justify-center font-bold text-sm">1</div>
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm">Earn Daily as a Worker</h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                                                Complete tasks at your own convenience. Submit proof (text or screenshots) and watch your balance grow instantly. Withdraw your earnings daily with secure PKR/USD/EUR payment channels.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Creator */}
+                                    <div className="flex gap-3">
+                                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center font-bold text-sm">2</div>
+                                        <div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm">Promote as a Task Creator</h4>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
+                                                Need high-quality social proof, active watch time, comments, or signups? Top up your balance, submit your custom task specifications, and have thousands of active users engage with your brand instantly.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2">
+                                    <Button size="lg" onClick={() => navigate('/register')} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold uppercase tracking-wider text-xs shadow-md shadow-emerald-500/15 py-3">
+                                        Open Free Earning Account Now
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                  {/* Features Section */}
                 {(showFeatures || editMode) && (
-                    <section className={`py-20 bg-gray-50 dark:bg-gray-800/50 ${!showFeatures && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-10 md:py-16 bg-gray-50 dark:bg-gray-800/50 ${!showFeatures && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFeatures && <div className="absolute top-0 right-0 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                    <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-blue-500 mb-2 block">Secure Network Marketing Platform</span>
-                                    <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                    <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 text-center">
+                                 <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-blue-500 mb-1.5 block">Secure Network Marketing Platform</span>
+                                    <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
+                                    <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                    <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-purple-500 mb-2 block">Peer-to-Peer Ledger Investment Portal</span>
-                                    <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                    <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                                <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-purple-500 mb-1.5 block">Peer-to-Peer Ledger Investment Portal</span>
+                                    <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
+                                    <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
-                                    <div className="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mb-6 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-green-500 mb-2 block">Real-Time MLM Earning Dashboard</span>
-                                    <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-xl font-bold mb-3" />
-                                    <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-gray-500 dark:text-gray-400 leading-relaxed" />
+                                <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
+                                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-green-500 mb-1.5 block">Real-Time MLM Earning Dashboard</span>
+                                    <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
+                                    <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
                              </div>
                         </div>
@@ -495,42 +754,42 @@ const HomePage: React.FC = () => {
                 
                 {/* Global Reach (Currencies) Section */}
                 {(showMultiCurrency || editMode) && (
-                    <section className={`py-24 bg-gray-900 text-white relative overflow-hidden ${!showMultiCurrency && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-12 md:py-16 bg-gray-900 text-white relative overflow-hidden ${!showMultiCurrency && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showMultiCurrency && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-900/20 to-transparent pointer-events-none"></div>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-                            <div className="text-center mb-16 max-w-3xl mx-auto">
-                                <EditableText editMode={editMode} value={pageContent.multiCurrencyTitle || ''} onChange={handleContentChange('multiCurrencyTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold mb-4" />
-                                <EditableText editMode={editMode} value={pageContent.multiCurrencyDesc || ''} onChange={handleContentChange('multiCurrencyDesc')} tag="p" multiline className="text-lg text-gray-400" />
+                            <div className="text-center mb-8 md:mb-10 max-w-3xl mx-auto">
+                                <EditableText editMode={editMode} value={pageContent.multiCurrencyTitle || ''} onChange={handleContentChange('multiCurrencyTitle')} tag="h2" className="text-2xl md:text-4xl font-extrabold mb-3" />
+                                <EditableText editMode={editMode} value={pageContent.multiCurrencyDesc || ''} onChange={handleContentChange('multiCurrencyDesc')} tag="p" multiline className="text-sm md:text-base text-gray-400" />
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-green-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                    <div className="w-20 h-20 bg-green-900/30 rounded-full flex items-center justify-center mb-6 text-green-400">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-5 md:p-6 rounded-2xl hover:border-green-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-14 h-14 bg-green-900/30 rounded-full flex items-center justify-center mb-4 text-green-400">
                                         <UsdIcon />
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">US Dollar (USD)</h3>
-                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                    <h3 className="text-lg font-bold mb-1.5">US Dollar (USD)</h3>
+                                    <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
                                         Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods.
                                     </p>
                                 </div>
                                 
-                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-indigo-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                    <div className="w-20 h-20 bg-indigo-900/30 rounded-full flex items-center justify-center mb-6 text-indigo-400">
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-5 md:p-6 rounded-2xl hover:border-indigo-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-14 h-14 bg-indigo-900/30 rounded-full flex items-center justify-center mb-4 text-indigo-400">
                                         <EurIcon />
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">Euro (EUR)</h3>
-                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                    <h3 className="text-lg font-bold mb-1.5">Euro (EUR)</h3>
+                                    <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
                                         For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal.
                                     </p>
                                 </div>
                                 
-                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-8 rounded-2xl hover:border-teal-500/50 transition-colors duration-300 flex flex-col items-center text-center">
-                                    <div className="w-20 h-20 bg-teal-900/30 rounded-full flex items-center justify-center mb-6 text-teal-400">
+                                <div className="bg-gray-800/80 backdrop-blur border border-gray-700 p-5 md:p-6 rounded-2xl hover:border-teal-500/50 transition-colors duration-300 flex flex-col items-center text-center">
+                                    <div className="w-14 h-14 bg-teal-900/30 rounded-full flex items-center justify-center mb-4 text-teal-400">
                                         <PkrIcon />
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">Pakistani Rupee (PKR) - Local Channels</h3>
-                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                    <h3 className="text-lg font-bold mb-1.5">Pakistani Rupee (PKR) - Local Channels</h3>
+                                    <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
                                         We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>our secure local channels</strong>, you can instantly subscribe to high-performing options like our <strong>premium plans</strong> and withdraw your earnings directly to your mobile wallet.
                                     </p>
                                 </div>
@@ -541,32 +800,32 @@ const HomePage: React.FC = () => {
 
                 {/* Investment Plans Section */}
                 {(showInvestmentPlans || editMode) && featuredPlans.length > 0 && (
-                    <section id="plans" className={`py-20 bg-white dark:bg-gray-900 ${!showInvestmentPlans && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section id="plans" className={`py-10 md:py-16 bg-white dark:bg-gray-900 ${!showInvestmentPlans && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showInvestmentPlans && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-center mb-4 text-gray-900 dark:text-white">
+                            <h2 className="text-2xl md:text-4xl font-black tracking-tight text-center mb-3 text-gray-900 dark:text-white">
                                 High-Yield Crypto Investment Plans & Passive Earnings
                             </h2>
-                            <p className="text-center text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-12">
+                            <p className="text-center text-sm md:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-6 md:mb-8">
                                 Discover highly lucrative financial packages tailored for maximum return. From budget-friendly <strong>plans</strong> in PKR to globally scalable options, we make wealth generation simple and secure.
                             </p>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                 {featuredPlans.map(plan => (
-                                    <div key={plan._id} className="relative group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2">
-                                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                        <h4 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">{plan.name}</h4>
-                                        <div className="flex items-baseline mb-4">
-                                            <span className="text-4xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(plan.price, plan.currency)}</span>
+                                    <div key={plan._id} className="relative group bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-t-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                        <h4 className="text-xl md:text-2xl font-bold mb-1 text-gray-900 dark:text-white">{plan.name}</h4>
+                                        <div className="flex items-baseline mb-2.5">
+                                            <span className="text-3xl md:text-4xl font-extrabold text-blue-600 dark:text-blue-400">{formatCurrency(plan.price, plan.currency)}</span>
                                         </div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 min-h-[40px]">{plan.description}</p>
+                                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 min-h-[30px] md:min-h-[40px]">{plan.description}</p>
                                         
-                                        <ul className="space-y-4 mb-8">
-                                            <li className="flex items-center text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-3"><CheckIcon /></div> Duration: {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
-                                            <li className="flex items-center text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-3"><CheckIcon /></div> Min. Withdraw: {formatCurrency(plan.minWithdraw, plan.currency)}</li>
-                                            <li className="flex items-center text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-3"><CheckIcon /></div> Direct Commission: {renderDirectCommission(plan)}</li>
+                                        <ul className="space-y-2.5 mb-5 md:mb-6">
+                                            <li className="flex items-center text-xs sm:text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-2.5"><CheckIcon /></div> Duration: {plan.durationDays === 0 ? 'Unlimited' : `${plan.durationDays} Days`}</li>
+                                            <li className="flex items-center text-xs sm:text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-2.5"><CheckIcon /></div> Min. Withdraw: {formatCurrency(plan.minWithdraw, plan.currency)}</li>
+                                            <li className="flex items-center text-xs sm:text-sm text-gray-700 dark:text-gray-300"><div className="p-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 mr-2.5"><CheckIcon /></div> Direct Commission: {renderDirectCommission(plan)}</li>
                                         </ul>
-                                        <Button className="w-full py-3 text-lg font-semibold bg-gray-900 dark:bg-gray-700 hover:bg-blue-600 dark:hover:bg-blue-600 transition-colors" onClick={() => navigate('/register')}>Choose {plan.name}</Button>
+                                        <Button className="w-full py-2.5 text-base font-semibold bg-gray-900 dark:bg-gray-700 hover:bg-blue-600 dark:hover:bg-blue-600 transition-colors" onClick={() => navigate('/register')}>Choose {plan.name}</Button>
                                     </div>
                                 ))}
                             </div>
@@ -574,53 +833,55 @@ const HomePage: React.FC = () => {
                     </section>
                 )}
 
+
+
                 {/* MLM System Section */}
                 {(showMLM || editMode) && (
-                    <section className={`py-20 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${!showMLM && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-10 md:py-16 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${!showMLM && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showMLM && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-12">
-                                 <EditableText editMode={editMode} value={pageContent.mlmTitle || ''} onChange={handleContentChange('mlmTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
-                                 <EditableText editMode={editMode} value={pageContent.mlmDesc || ''} onChange={handleContentChange('mlmDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
+                            <div className="text-center mb-6 md:mb-8">
+                                 <EditableText editMode={editMode} value={pageContent.mlmTitle || ''} onChange={handleContentChange('mlmTitle')} tag="h2" className="text-2xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-3" />
+                                 <EditableText editMode={editMode} value={pageContent.mlmDesc || ''} onChange={handleContentChange('mlmDesc')} tag="p" multiline className="text-sm md:text-base text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
                             </div>
 
-                            <div className="flex flex-col lg:flex-row items-center gap-12">
+                            <div className="flex flex-col lg:flex-row items-center gap-6 md:gap-8">
                                 {/* Text Content */}
-                                <div className="lg:w-1/2 space-y-6">
-                                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white uppercase tracking-tight">
+                                <div className="lg:w-1/2 space-y-4">
+                                    <h3 className="text-xl md:text-2xl font-extrabold text-gray-900 dark:text-white uppercase tracking-tight">
                                         Multi-Tier Referral Commission System
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
                                         Our platform acts as a powerful <strong>transparent referral income generator</strong>. Build your network, unlock tiers, and earn through our structural levels managed by automated MLM affiliate software:
                                     </p>
                                     
-                                    <div className="space-y-4">
-                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 1 - Direct Earnings</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">Directly refer partners to earn immediate commissions. Your portfolio works as a transparent referral income generator.</p>
+                                    <div className="space-y-2.5">
+                                        <div className="bg-white dark:bg-gray-700/50 p-3 md:p-3.5 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-0.5">Level 1 - Direct Earnings</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300">Directly refer partners to earn immediate commissions. Your portfolio works as a transparent referral income generator.</p>
                                         </div>
-                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 2 - Passive Network Expansion</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">When your direct members refer others, you earn secondary rewards within our passive earning network ecosystem.</p>
+                                        <div className="bg-white dark:bg-gray-700/50 p-3 md:p-3.5 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-0.5">Level 2 - Passive Network Expansion</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300">When your direct members refer others, you earn secondary rewards within our passive earning network ecosystem.</p>
                                         </div>
-                                        <div className="bg-white dark:bg-gray-700/50 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
-                                            <h4 className="font-bold text-gray-900 dark:text-white mb-1">Level 3+ - Fully Automated MLM Affiliate Software</h4>
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">Commission flows effortlessly down multiple levels of depth, completely managed by our robust automated MLM affiliate software.</p>
+                                        <div className="bg-white dark:bg-gray-700/50 p-3 md:p-3.5 rounded-lg shadow-sm border border-gray-100 dark:border-gray-600">
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-0.5">Level 3+ - Fully Automated MLM Affiliate Software</h4>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300">Commission flows effortlessly down multiple levels of depth, completely managed by our robust automated MLM affiliate software.</p>
                                         </div>
                                     </div>
 
-                                    <p className="text-gray-600 dark:text-gray-300 italic text-sm border-l-4 border-blue-500 pl-4 py-1">
+                                    <p className="text-gray-600 dark:text-gray-300 italic text-xs border-l-4 border-blue-500 pl-4 py-0.5">
                                         This creates a powerful ripple effect, rewarding you for your leadership as your network grows. The bigger and more active your team, the higher your earning potential.
                                     </p>
 
-                                    <ul className="space-y-2 mt-4">
-                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                    <ul className="space-y-1.5 mt-2">
+                                        <li className="flex items-start text-xs text-gray-700 dark:text-gray-300">
                                             <span className="text-green-500 mr-2">✓</span> <strong>Direct Commission (Level 1):</strong> &nbsp; Earned from the people you personally refer.
                                         </li>
-                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                        <li className="flex items-start text-xs text-gray-700 dark:text-gray-300">
                                             <span className="text-green-500 mr-2">✓</span> <strong>Indirect Commission (Level 2+):</strong> &nbsp; Earned from referrals made by your team.
                                         </li>
-                                        <li className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                        <li className="flex items-start text-xs text-gray-700 dark:text-gray-300">
                                             <span className="text-green-500 mr-2">✓</span> <strong>Unlimited Growth:</strong> &nbsp; The bigger and more active your network, the higher your potential.
                                         </li>
                                     </ul>
@@ -639,12 +900,12 @@ const HomePage: React.FC = () => {
 
                 {/* REDESIGNED: Payment Methods Section (Optimized for space & fixed clipping) */}
                 {(showPaymentMethods || editMode) && (
-                    <section className={`py-20 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden ${!showPaymentMethods && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-10 md:py-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 overflow-hidden ${!showPaymentMethods && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showPaymentMethods && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="text-center mb-12">
-                                <EditableText editMode={editMode} value={pageContent.paymentMethodsTitle || ''} onChange={handleContentChange('paymentMethodsTitle')} tag="h2" className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4" />
-                                <EditableText editMode={editMode} value={pageContent.paymentMethodsDesc || ''} onChange={handleContentChange('paymentMethodsDesc')} tag="p" multiline className="text-lg text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
+                            <div className="text-center mb-6 md:mb-8">
+                                <EditableText editMode={editMode} value={pageContent.paymentMethodsTitle || ''} onChange={handleContentChange('paymentMethodsTitle')} tag="h2" className="text-2xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-3" />
+                                <EditableText editMode={editMode} value={pageContent.paymentMethodsDesc || ''} onChange={handleContentChange('paymentMethodsDesc')} tag="p" multiline className="text-sm md:text-base text-gray-600 dark:text-gray-400 max-w-3xl mx-auto" />
                             </div>
                             
                             {editMode && (
@@ -713,14 +974,14 @@ const HomePage: React.FC = () => {
 
                 {/* Video Showcase Section */}
                 {(showVideoSection && (videoUrl || editMode)) && (
-                    <section className={`py-20 bg-gray-900 text-white relative ${!showVideoSection && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-10 md:py-16 bg-gray-900 text-white relative ${!showVideoSection && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                             {editMode && !showVideoSection && (
                                 <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>
                             )}
-                            <div className="text-center mb-12">
-                                <EditableText editMode={editMode} value={pageContent.videoTitle || ''} onChange={handleContentChange('videoTitle')} tag="h2" className="text-3xl md:text-4xl font-bold" />
-                                <EditableText editMode={editMode} value={pageContent.videoDesc || ''} onChange={handleContentChange('videoDesc')} multiline className="mt-4 text-lg text-gray-400 max-w-3xl mx-auto" />
+                            <div className="text-center mb-6 md:mb-8">
+                                <EditableText editMode={editMode} value={pageContent.videoTitle || ''} onChange={handleContentChange('videoTitle')} tag="h2" className="text-2xl md:text-4xl font-bold" />
+                                <EditableText editMode={editMode} value={pageContent.videoDesc || ''} onChange={handleContentChange('videoDesc')} multiline className="mt-2 text-sm md:text-base text-gray-400 max-w-3xl mx-auto" />
                             </div>
                             
                             {editMode && (
@@ -761,20 +1022,20 @@ const HomePage: React.FC = () => {
 
                 {/* FAQ Section - SMART DISPLAY (Accordion Style) */}
                 {(showFAQ || editMode) && (
-                    <section className={`py-24 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
+                    <section className={`py-10 md:py-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 ${!showFAQ && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showFAQ && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
-                            <div className="text-center mb-16">
-                                <h2 className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter mb-4 uppercase">Featured Support Queries</h2>
-                                <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
+                            <div className="text-center mb-6 md:mb-8">
+                                <h2 className="text-2xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tighter mb-2 md:mb-3 uppercase">Featured Support Queries</h2>
+                                <p className="text-sm md:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">Get instant answers to the most common questions about commissions, levels, and withdrawals.</p>
                             </div>
 
                             {state.isLoading ? (
                                 <SectionLoading text="Fresh data is loading." />
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                                     {displayedFaqs.map((faq, index) => (
-                                        <div key={index} className={`bg-gray-50 dark:bg-gray-800/40 rounded-3xl border border-gray-200 dark:border-gray-700/50 p-6 transition-all duration-300 hover:shadow-xl hover:border-blue-500/30 group ${!editMode && openFaqIndex === index ? 'ring-2 ring-blue-500/10 border-blue-500/40 bg-white dark:bg-gray-800' : ''}`}>
+                                        <div key={index} className={`bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700/50 p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:border-blue-500/30 group ${!editMode && openFaqIndex === index ? 'ring-2 ring-blue-500/10 border-blue-500/40 bg-white dark:bg-gray-800' : ''}`}>
                                             {editMode ? (
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between">
@@ -811,7 +1072,7 @@ const HomePage: React.FC = () => {
                                                         onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
                                                         className="flex justify-between items-start w-full text-left focus:outline-none"
                                                     >
-                                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-start gap-3 pr-4">
+                                                        <h3 className="text-base md:text-lg font-bold text-gray-900 dark:text-white flex items-start gap-3 pr-4">
                                                             <span className="text-blue-500 font-black shrink-0">Q.</span>
                                                             {faq.question}
                                                         </h3>
@@ -819,7 +1080,7 @@ const HomePage: React.FC = () => {
                                                             <ChevronDownIcon className={openFaqIndex === index ? 'rotate-180' : ''} />
                                                         </div>
                                                     </button>
-                                                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === index ? 'max-h-[500px] opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
+                                                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${openFaqIndex === index ? 'max-h-[500px] opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
                                                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                                                             <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
                                                                 {faq.answer}
@@ -831,11 +1092,11 @@ const HomePage: React.FC = () => {
                                         </div>
                                     ))}
                                 </div>
-                            )}
+                             )}
                             
                             {!editMode && localFaqs.length > displayedFaqs.length && (
-                                <div className="text-center mt-16 animate-bounce">
-                                    <Link to="/faqs" className="inline-flex items-center gap-3 px-12 py-5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-full font-black uppercase text-sm tracking-[0.2em] shadow-2xl shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95">
+                                <div className="text-center mt-8 md:mt-10 animate-bounce">
+                                    <Link to="/faqs" className="inline-flex items-center gap-3 px-8 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-full font-black uppercase text-xs tracking-[0.2em] shadow-2xl shadow-blue-500/30 transition-all transform hover:scale-105 active:scale-95">
                                         View Full Knowledge Base
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                                     </Link>

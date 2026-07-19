@@ -128,6 +128,21 @@ export interface Notice {
 }
 
 export interface Settings {
+    proofControls?: {
+        screenshotEnabled?: boolean;
+        textEnabled?: boolean;
+        maxScreenshotSizeMB?: number;
+        allowedExtensions?: string[];
+        minBudget?: number;
+    };
+    systemLimits?: {
+        minWorkerSlots?: number;
+        maxWorkerSlots?: number;
+        approvalTimeoutDays?: number;
+        disputeTimeLimitHours?: number;
+        disputeReviewTimeoutDays?: number;
+        secondDisputeTimeLimitHours?: number;
+    };
     isUserTransferEnabled: boolean;
     isTasksEnabled: boolean; 
     transferConfig: {
@@ -347,13 +362,22 @@ export interface UserTaskSubmission {
     proofEmail?: string;
     proofImage?: string;
     submittedProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; value: string }>;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'Pending' | 'Approved' | 'Rejected' | 'Disputed' | 'Paid';
     adminNotes?: string;
     rewardAmount: number;
     currency: Currency;
     createdAt?: string;
     taskTitle?: string;
     taskCategory?: string;
+    rejectionReason?: string;
+    rejectedAt?: string;
+    disputeDeadline?: string;
+    disputeOpened?: boolean;
+    disputeId?: string;
+    disputeReviewDeadline?: string;
+    secondDisputeDeadline?: string;
+    disputeStage?: 'None' | 'CreatorReview' | 'RejectedByCreator' | 'Escalated' | 'Resolved';
+    disputeCreatorNotes?: string;
 }
 
 export interface Deposit {

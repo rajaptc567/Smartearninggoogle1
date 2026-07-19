@@ -228,7 +228,23 @@ const UserTasks: React.FC = () => {
                                         {task.requireProof && (
                                             <div className="flex flex-col gap-2">
                                                 <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest ml-1">{task.proofInstructions}</p>
-                                                <input type="file" accept="image/*" className="w-full text-[10px] text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white" onChange={e => e.target.files && setProofFiles(p => ({...p, [task._id]: e.target.files![0]}))} />
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    className="w-full text-[10px] text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white" 
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+                                                            if (file.size > maxMB * 1024 * 1024) {
+                                                                alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
+                                                                e.target.value = '';
+                                                                return;
+                                                            }
+                                                            setProofFiles(p => ({...p, [task._id]: file}));
+                                                        }
+                                                    }} 
+                                                />
                                             </div>
                                         )}
                                         <Button onClick={() => handleVerify(task)} className="w-full py-4 rounded-2xl bg-green-600 hover:bg-green-700 shadow-xl shadow-green-500/20" disabled={task.requireProof && !proofFiles[task._id]}>Finalize Submission</Button>
@@ -283,7 +299,23 @@ const UserTasks: React.FC = () => {
                                         {activeVideoTask.requireProof && (
                                             <div className="flex flex-col items-end gap-2">
                                                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{activeVideoTask.proofInstructions}</p>
-                                                <input type="file" accept="image/*" className="text-[10px] text-gray-500 file:mr-3 file:py-2 file:px-6 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-600 file:text-white" onChange={e => e.target.files && setProofFiles(p => ({...p, [activeVideoTask._id]: e.target.files![0]}))} />
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    className="text-[10px] text-gray-500 file:mr-3 file:py-2 file:px-6 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-indigo-600 file:text-white" 
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+                                                            if (file.size > maxMB * 1024 * 1024) {
+                                                                alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
+                                                                e.target.value = '';
+                                                                return;
+                                                            }
+                                                            setProofFiles(p => ({...p, [activeVideoTask._id]: file}));
+                                                        }
+                                                    }} 
+                                                />
                                             </div>
                                         )}
                                         <Button onClick={() => handleVerify(activeVideoTask)} className="bg-green-600 hover:bg-green-700 px-16 py-5 rounded-[2rem] text-sm font-black uppercase tracking-[0.3em] shadow-2xl shadow-green-500/30" disabled={isProcessing === activeVideoTask._id}>

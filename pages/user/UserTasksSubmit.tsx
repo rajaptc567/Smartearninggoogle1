@@ -77,7 +77,7 @@ const UserTasksSubmit: React.FC = () => {
 
     const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs'>('browse');
     const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
-    const [reviewFilter, setReviewFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
+    const [reviewFilter, setReviewFilter] = useState<'All' | 'Pending' | 'Disputed' | 'Approved' | 'Rejected'>('Pending');
     const [myCampaignFilter, setMyCampaignFilter] = useState<'all' | 'pending' | 'approved' | 'completed' | 'rejected'>('all');
 
     // Dispute State
@@ -235,8 +235,15 @@ const UserTasksSubmit: React.FC = () => {
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-            alert('Only PNG and JPG image formats are allowed.');
+        const isImage = file.type.startsWith('image/') || /\.(heic|heif|webp|png|jpe?g|gif|bmp|tiff?)$/i.test(file.name);
+        if (!isImage) {
+            alert('Please select a valid image file (PNG, JPG, WEBP, GIF, BMP, HEIC, etc.).');
+            e.target.value = '';
+            return;
+        }
+        const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+        if (file.size > maxMB * 1024 * 1024) {
+            alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
             e.target.value = '';
             return;
         }
@@ -272,8 +279,15 @@ const UserTasksSubmit: React.FC = () => {
     const handleDisputeImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(file.type)) {
-            alert('Only PNG, JPG and WEBP image formats are allowed.');
+        const isImage = file.type.startsWith('image/') || /\.(heic|heif|webp|png|jpe?g|gif|bmp|tiff?)$/i.test(file.name);
+        if (!isImage) {
+            alert('Please select a valid image file (PNG, JPG, WEBP, GIF, BMP, HEIC, etc.).');
+            e.target.value = '';
+            return;
+        }
+        const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+        if (file.size > maxMB * 1024 * 1024) {
+            alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
             e.target.value = '';
             return;
         }
@@ -309,8 +323,15 @@ const UserTasksSubmit: React.FC = () => {
     const handleDynamicImageUpload = (proofId: string, e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-            alert('Only PNG and JPG image formats are allowed.');
+        const isImage = file.type.startsWith('image/') || /\.(heic|heif|webp|png|jpe?g|gif|bmp|tiff?)$/i.test(file.name);
+        if (!isImage) {
+            alert('Please select a valid image file (PNG, JPG, WEBP, GIF, BMP, HEIC, etc.).');
+            e.target.value = '';
+            return;
+        }
+        const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+        if (file.size > maxMB * 1024 * 1024) {
+            alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
             e.target.value = '';
             return;
         }
@@ -757,6 +778,9 @@ const UserTasksSubmit: React.FC = () => {
             
             const dispute = await openTaskDispute(selectedSubmissionForDispute._id, formData);
             
+            const isEscalation = selectedSubmissionForDispute.disputeStage === 'RejectedByCreator';
+            const nextDisputeStage = isEscalation ? 'Escalated' : 'CreatorReview';
+
             // Dispatch locally so the UI updates without requiring page reload
             dispatch({
                 type: 'UPDATE_USER_TASK_SUBMISSION',
@@ -764,11 +788,17 @@ const UserTasksSubmit: React.FC = () => {
                     ...selectedSubmissionForDispute,
                     status: 'Disputed',
                     disputeOpened: true,
-                    disputeId: dispute._id
+                    disputeId: dispute._id,
+                    disputeStage: nextDisputeStage
                 }
             });
 
-            alert('Dispute submitted successfully to Admin! Admin will review your details/screenshot and resolve it.');
+            if (isEscalation) {
+                alert('Dispute successfully escalated to the Admin! The Admin will review the chat and make a final decision.');
+            } else {
+                const disputeReviewDays = settings?.systemLimits?.disputeReviewTimeoutDays ?? 3;
+                alert(`Dispute raised successfully! The creator has been notified and has ${disputeReviewDays} days to review it.`);
+            }
             setSelectedSubmissionForDispute(null);
             setDisputeDescription('');
             setDisputeProofImage('');
@@ -1033,7 +1063,11 @@ const UserTasksSubmit: React.FC = () => {
 
     // 5. Review Proofs Tab Filtration & Pagination
     const filteredReviewCampaignSubmissions = campaignSubmissions
-        .filter(s => reviewFilter === 'All' || s.status === reviewFilter)
+        .filter(s => {
+            if (reviewFilter === 'All') return true;
+            if (reviewFilter === 'Disputed') return s.status === 'Disputed';
+            return s.status === reviewFilter;
+        })
         .filter(s => {
             if (reviewSearch === '') return true;
             const workerMatch = s.workerName && s.workerName.toLowerCase().includes(reviewSearch.toLowerCase());
@@ -1501,7 +1535,7 @@ const UserTasksSubmit: React.FC = () => {
 
                         <div className="mt-8 p-6 bg-gray-900/60 rounded-3xl border border-gray-800">
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                Funds will be deducted from your wallet balance in USD equivalent. When workers submit valid proof (screenshot, ID, or link), admin approves and workers receive their USD rewards instantly!
+                                Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!
                             </p>
                         </div>
                     </div>
@@ -2491,12 +2525,19 @@ const UserTasksSubmit: React.FC = () => {
                                                     <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()}>
                                                         {sub.status === 'Rejected' ? (
                                                             (() => {
-                                                                const isDeadlineExpired = sub.disputeDeadline ? new Date() > new Date(sub.disputeDeadline) : false;
+                                                                const isLevel2 = sub.disputeStage === 'RejectedByCreator';
+                                                                const isDeadlineExpired = isLevel2 
+                                                                    ? (sub.secondDisputeDeadline ? new Date() > new Date(sub.secondDisputeDeadline) : false)
+                                                                    : (sub.disputeDeadline ? new Date() > new Date(sub.disputeDeadline) : false);
+                                                                
                                                                 if (sub.disputeOpened) {
                                                                     return <span className="text-[10px] md:text-xs font-bold text-blue-500 uppercase tracking-wider">Disputed</span>;
                                                                 }
                                                                 if (isDeadlineExpired) {
-                                                                    return <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Expired (48h)</span>;
+                                                                    const limitHours = isLevel2 
+                                                                        ? (settings?.systemLimits?.secondDisputeTimeLimitHours ?? 48)
+                                                                        : (settings?.systemLimits?.disputeTimeLimitHours ?? 48);
+                                                                    return <span className="text-[10px] md:text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Expired ({limitHours}h)</span>;
                                                                 }
                                                                 return (
                                                                     <Button 
@@ -2508,7 +2549,7 @@ const UserTasksSubmit: React.FC = () => {
                                                                             setDisputeProofImage('');
                                                                         }}
                                                                     >
-                                                                        Raise Dispute
+                                                                        {isLevel2 ? 'Escalate to Admin' : 'Raise Dispute'}
                                                                     </Button>
                                                                 );
                                                             })()
@@ -2541,7 +2582,7 @@ const UserTasksSubmit: React.FC = () => {
                         {/* Filter Sub-Tabs */}
                         <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
                             <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl border dark:border-gray-700 w-full sm:w-auto justify-center sm:justify-start">
-                                {(['All', 'Pending', 'Approved', 'Rejected'] as const).map(status => (
+                                {(['All', 'Pending', 'Disputed', 'Approved', 'Rejected'] as const).map(status => (
                                     <button
                                         key={status}
                                         onClick={() => {
@@ -2557,7 +2598,9 @@ const UserTasksSubmit: React.FC = () => {
                                         {status} ({
                                             status === 'All' 
                                                 ? campaignSubmissions.length 
-                                                : campaignSubmissions.filter(s => s.status === status).length
+                                                : status === 'Disputed'
+                                                    ? campaignSubmissions.filter(s => s.status === 'Disputed').length
+                                                    : campaignSubmissions.filter(s => s.status === status).length
                                         })
                                     </button>
                                 ))}
@@ -2600,7 +2643,11 @@ const UserTasksSubmit: React.FC = () => {
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-xs md:text-sm font-medium">
                                             {paginatedReviewSubmissions.map(sub => (
-                                                <tr key={sub._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
+                                                <tr 
+                                                    key={sub._id} 
+                                                    onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
+                                                    className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 cursor-pointer transition-colors"
+                                                >
                                                     <td className="p-3.5 md:p-5">
                                                         <div className="font-bold text-gray-900 dark:text-white">{sub.taskTitle || 'Engagement Task'}</div>
                                                         <div className="text-[10px] uppercase font-bold text-blue-500 mt-1">{sub.taskCategory || 'Platform'}</div>
@@ -2610,79 +2657,59 @@ const UserTasksSubmit: React.FC = () => {
                                                         <div className="text-[10px] font-mono text-gray-400">ID: {sub.workerId}</div>
                                                     </td>
                                                     <td className="p-3.5 md:p-5 text-sm text-gray-600 dark:text-gray-300">
-                                                        <div className="space-y-1.5 max-w-sm">
+                                                        <div className="flex flex-col gap-1 max-w-xs">
                                                             {sub.submittedProofs && Array.isArray(sub.submittedProofs) && sub.submittedProofs.length > 0 ? (
-                                                                <div className="space-y-2">
+                                                                <div className="flex flex-wrap gap-1">
                                                                     {sub.submittedProofs.map((item: any, idx: number) => {
-                                                                        const isImage = item.type === 'screenshot' || (item.value && (item.value.startsWith('data:') || item.value.startsWith('http')));
+                                                                        const isImg = item.type === 'screenshot' || item.type === 'file' || (item.value && (item.value.startsWith('data:') || item.value.startsWith('http')));
                                                                         return (
-                                                                            <div key={item.id || idx} className="bg-gray-50 dark:bg-gray-900/50 p-2 rounded-xl border dark:border-gray-700/60 text-xs">
-                                                                                <span className="text-[10px] uppercase font-black text-blue-500 block">{item.label}</span>
-                                                                                {isImage ? (
-                                                                                    <div className="mt-1">
-                                                                                        <div className="relative group w-20 h-20 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(item.value)}>
-                                                                                            <img src={item.value} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
-                                                                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                                                                                <span className="text-white text-lg font-black">🔍</span>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <a href={item.value} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 inline-block font-bold">Open Original</a>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <p className="font-medium text-gray-800 dark:text-gray-200 break-all">{item.value}</p>
-                                                                                )}
-                                                                            </div>
+                                                                            <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
+                                                                                {isImg ? '📸' : '✍'} {item.label}
+                                                                            </span>
                                                                         );
                                                                     })}
                                                                 </div>
                                                             ) : (
-                                                                <>
+                                                                <div className="flex flex-wrap gap-1">
                                                                     {sub.proofText && (
-                                                                        <div>
-                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Text Proof</span>
-                                                                            <p className="bg-gray-50 dark:bg-gray-900/50 p-2 rounded-xl text-xs border dark:border-gray-700 text-gray-800 dark:text-gray-200 break-all">{sub.proofText}</p>
-                                                                        </div>
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
+                                                                            ✍ Text Answer
+                                                                        </span>
                                                                     )}
                                                                     {sub.proofUsername && (
-                                                                        <div>
-                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Username</span>
-                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofUsername}</p>
-                                                                        </div>
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
+                                                                            👤 @{sub.proofUsername}
+                                                                        </span>
                                                                     )}
                                                                     {sub.proofUserIdVal && (
-                                                                        <div>
-                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">User ID</span>
-                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofUserIdVal}</p>
-                                                                        </div>
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm font-mono">
+                                                                            🆔 ID: {sub.proofUserIdVal}
+                                                                        </span>
                                                                     )}
                                                                     {sub.proofEmail && (
-                                                                        <div>
-                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block">Email</span>
-                                                                            <p className="font-mono text-xs text-gray-800 dark:text-gray-200">{sub.proofEmail}</p>
-                                                                        </div>
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
+                                                                            ✉ Email
+                                                                        </span>
                                                                     )}
                                                                     {sub.proofImage && (
-                                                                        <div className="mt-2">
-                                                                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Screenshot Proof</span>
-                                                                            <div className="relative group w-20 h-20 rounded-xl overflow-hidden border dark:border-gray-700 cursor-zoom-in" onClick={() => setSelectedProofImage(sub.proofImage)}>
-                                                                                <img src={sub.proofImage} alt="Screenshot proof" className="w-full h-full object-cover group-hover:scale-110 transition-transform" referrerPolicy="no-referrer" />
-                                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                                                                    <span className="text-white text-lg font-black">🔍</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800/80 text-[10px] font-bold text-gray-600 dark:text-gray-300 border dark:border-gray-700/60 shadow-sm">
+                                                                            📸 Screenshot
+                                                                        </span>
                                                                     )}
                                                                     {!sub.proofText && !sub.proofUsername && !sub.proofUserIdVal && !sub.proofEmail && !sub.proofImage && (
-                                                                        <span className="text-xs italic text-gray-400">No proof details submitted</span>
+                                                                        <span className="text-xs italic text-gray-400">No proofs submitted</span>
                                                                     )}
-                                                                </>
+                                                                </div>
                                                             )}
+                                                            <span className="text-[10px] text-blue-500 font-bold hover:underline flex items-center gap-0.5 mt-1">
+                                                                🔍 Click to inspect proofs & files
+                                                            </span>
                                                         </div>
                                                     </td>
                                                     <td className="p-3.5 md:p-5 font-mono font-black text-emerald-500">
                                                         +{sub.rewardAmount} USD
                                                     </td>
-                                                    <td className="p-3.5 md:p-5">
+                                                    <td className="p-3.5 md:p-5" onClick={(e) => e.stopPropagation()}>
                                                         <div className="space-y-1">
                                                             <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
                                                                 {sub.status}
@@ -2694,28 +2721,32 @@ const UserTasksSubmit: React.FC = () => {
                                                             )}
                                                         </div>
                                                     </td>
-                                                    <td className="p-3.5 md:p-5 text-right">
+                                                    <td className="p-3.5 md:p-5 text-right" onClick={(e) => e.stopPropagation()}>
                                                         <div className="flex justify-end gap-2">
-                                                            {sub.status === 'Pending' && (
+                                                            <button
+                                                                onClick={() => setSelectedWorkerSubmissionForDetails(sub)}
+                                                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 dark:bg-blue-950/20 dark:hover:bg-blue-900/30 dark:border-blue-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shadow-sm"
+                                                            >
+                                                                👁 Detail
+                                                            </button>
+                                                            {(sub.status === 'Pending' || (sub.status === 'Disputed' && sub.disputeStage === 'CreatorReview')) && (
                                                                 <>
-                                                                    <Button
-                                                                        variant="primary"
-                                                                        className="text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 border-none shadow"
+                                                                    <button
+                                                                        className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-600 border border-green-200 dark:bg-green-950/20 dark:hover:bg-green-900/30 dark:border-green-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm"
                                                                         onClick={() => handleApproveSubmission(sub._id)}
                                                                     >
-                                                                        Approve & Pay
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="danger"
-                                                                        className="text-xs py-1.5 px-3"
-                                                                        onClick={() => handleRejectSubmission(sub._id)}
+                                                                        Accept
+                                                                    </button>
+                                                                    <button
+                                                                        className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 dark:bg-red-950/20 dark:hover:bg-red-900/30 dark:border-red-900/40 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm"
+                                                                        onClick={() => {
+                                                                            setRejectingSubId(sub._id);
+                                                                            setRejectionFeedback('');
+                                                                        }}
                                                                     >
                                                                         Reject
-                                                                    </Button>
+                                                                    </button>
                                                                 </>
-                                                            )}
-                                                            {sub.status !== 'Pending' && (
-                                                                <span className="text-xs text-gray-400 italic">No actions available</span>
                                                             )}
                                                         </div>
                                                     </td>
@@ -3206,7 +3237,10 @@ const UserTasksSubmit: React.FC = () => {
                         </div>
 
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl text-xs text-gray-600 dark:text-gray-300 space-y-2">
-                            <p><strong className="text-gray-900 dark:text-white">Notice:</strong> You can file a dispute within 48 hours of task rejection. The Admin will review your proof and decide on payment release.</p>
+                            <p id="submission-timeline-notice" className="text-gray-700 dark:text-gray-300 leading-relaxed font-medium bg-blue-50/50 dark:bg-blue-950/20 p-3.5 rounded-xl border border-blue-100/50 dark:border-blue-900/30 shadow-sm">
+                                <strong className="text-blue-900 dark:text-blue-300 font-extrabold uppercase tracking-wider block mb-1">⏱️ Proof Submission & Dispute Rules</strong>
+                                When a worker submits proof, the creator has <strong className="text-blue-600 dark:text-blue-400 font-extrabold font-mono">{settings?.systemLimits?.approvalTimeoutDays ?? 3} days</strong> to review it. If left unreviewed, it will be auto-approved. If rejected, you have <strong className="text-amber-600 dark:text-amber-400 font-extrabold font-mono">{settings?.systemLimits?.disputeTimeLimitHours ?? 48} hours</strong> to raise a dispute. The creator then has <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">{settings?.systemLimits?.disputeReviewTimeoutDays ?? 3} days</strong> to review and resolve the dispute. If they reject your dispute, you can escalate it directly to the Admin within <strong className="text-rose-600 dark:text-rose-400 font-extrabold font-mono">{settings?.systemLimits?.secondDisputeTimeLimitHours ?? 48} hours</strong>.
+                            </p>
                             <p><strong className="text-gray-900 dark:text-white">Escrow & Booking:</strong> Upon submitting this dispute, the campaign creator's funds for this task are held in escrow, and your spot will remain locked/booked. No other worker can take your slot while the dispute is pending.</p>
                             <p><strong className="text-gray-900 dark:text-white">Reward at Stake:</strong> <span className="text-emerald-500 font-bold">+{selectedSubmissionForDispute.rewardAmount} USD</span></p>
                         </div>
@@ -3606,7 +3640,7 @@ const UserTasksSubmit: React.FC = () => {
             {/* Modal: Detailed Worker Submission Viewer */}
             {selectedWorkerSubmissionForDetails && (() => {
                 const sub = selectedWorkerSubmissionForDetails;
-                const task = selectedCampaignForDetail;
+                const task = selectedCampaignForDetail || mySubmittedTasks.find(t => t._id?.toString() === sub.taskId?.toString());
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden border dark:border-gray-700 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
@@ -3844,7 +3878,7 @@ const UserTasksSubmit: React.FC = () => {
                                 <Button type="button" variant="secondary" onClick={() => setSelectedWorkerSubmissionForDetails(null)}>
                                     Close Window
                                 </Button>
-                                {sub.status === 'Pending' && (
+                                {(sub.status === 'Pending' || (sub.status === 'Disputed' && sub.disputeStage === 'CreatorReview')) && (
                                     <div className="flex gap-2">
                                         <button
                                             onClick={async () => {

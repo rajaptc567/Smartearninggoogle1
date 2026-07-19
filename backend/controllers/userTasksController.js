@@ -482,8 +482,122 @@ export const renewUserTask = async (req, res) => {
     }
 };
 
+const autoApproveStaleSubmissions = async () => {
+    try {
+        const settings = await Setting.getSettings();
+        
+        // 1. Auto-approve normal pending proofs
+        const timeoutDays = settings.systemLimits?.approvalTimeoutDays || 3;
+        const cutoffDate = new Date(Date.now() - timeoutDays * 24 * 60 * 60 * 1000);
+
+        const staleSubmissions = await UserTaskSubmission.find({
+            status: 'Pending',
+            createdAt: { $lte: cutoffDate }
+        });
+
+        for (const submission of staleSubmissions) {
+            submission.status = 'Approved';
+            submission.adminNotes = `Auto-approved: creator did not review within the ${timeoutDays}-day limit.`;
+            await submission.save();
+
+            const task = await UserTask.findById(submission.taskId);
+            if (task && task.currentCompletions < task.targetQuantity) {
+                task.currentCompletions += 1;
+                if (task.currentCompletions >= task.targetQuantity) {
+                    task.status = 'Completed';
+                }
+                await task.save();
+            }
+
+            const worker = await User.findById(submission.workerId);
+            if (worker) {
+                let rewardInUSD = submission.rewardAmount;
+                worker.taskWalletBalance = Number(((worker.taskWalletBalance || 0) + rewardInUSD).toFixed(2));
+                await worker.save();
+
+                await Transaction.create({
+                    userId: worker._id,
+                    userName: worker.username,
+                    currency: 'USD',
+                    type: 'Task Reward',
+                    amount: rewardInUSD,
+                    description: `Completed User Task (Auto-Approved): ${submission.taskTitle || 'Engagement Task'}`,
+                    status: 'Approved'
+                });
+
+                await Notification.create({
+                    userId: worker._id,
+                    subject: 'Task Auto-Approved! ⏱️✅',
+                    message: `Your proof for campaign "${submission.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${submission.rewardAmount} USD!`,
+                    senderType: 'System'
+                });
+            }
+        }
+
+        // 2. Auto-approve disputed submissions in CreatorReview stage whose disputeReviewDeadline has passed
+        const disputeReviewDays = settings.systemLimits?.disputeReviewTimeoutDays || 3;
+        const staleDisputed = await UserTaskSubmission.find({
+            status: 'Disputed',
+            disputeStage: 'CreatorReview',
+            disputeReviewDeadline: { $lte: new Date() }
+        });
+
+        for (const submission of staleDisputed) {
+            submission.status = 'Approved';
+            submission.disputeStage = 'Resolved';
+            submission.adminNotes = `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit.`;
+            await submission.save();
+
+            // Mark Dispute document as resolved/closed
+            if (submission.disputeId) {
+                await Dispute.findByIdAndUpdate(submission.disputeId, {
+                    status: 'Resolved',
+                    verdict: 'ReleaseToWorker',
+                    adminResponse: 'Auto-approved because creator did not review dispute in time.'
+                });
+            }
+
+            const task = await UserTask.findById(submission.taskId);
+            if (task && task.currentCompletions < task.targetQuantity) {
+                task.currentCompletions += 1;
+                if (task.currentCompletions >= task.targetQuantity) {
+                    task.status = 'Completed';
+                }
+                await task.save();
+            }
+
+            const worker = await User.findById(submission.workerId);
+            if (worker) {
+                let rewardInUSD = submission.rewardAmount;
+                worker.taskWalletBalance = Number(((worker.taskWalletBalance || 0) + rewardInUSD).toFixed(2));
+                await worker.save();
+
+                await Transaction.create({
+                    userId: worker._id,
+                    userName: worker.username,
+                    currency: 'USD',
+                    type: 'Task Reward',
+                    amount: rewardInUSD,
+                    description: `Completed User Task (Auto-Approved Dispute): ${submission.taskTitle || 'Engagement Task'}`,
+                    status: 'Approved'
+                });
+
+                await Notification.create({
+                    userId: worker._id,
+                    subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
+                    message: `Your dispute for campaign "${submission.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${submission.rewardAmount} USD!`,
+                    senderType: 'System'
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Error in autoApproveStaleSubmissions:', err);
+    }
+};
+
 export const getUserTaskSubmissions = async (req, res) => {
     try {
+        await autoApproveStaleSubmissions();
         const submissions = await UserTaskSubmission.find().sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: submissions.length, data: submissions });
     } catch (err) {
@@ -567,12 +681,42 @@ export const updateSubmissionStatus = async (req, res) => {
             const reason = rejectionReason || adminNotes || 'No reason specified';
             submission.rejectionReason = reason;
             submission.rejectedAt = new Date();
-            submission.disputeDeadline = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48-hour dispute window
+            const settings = await Setting.getSettings();
+            if (oldStatus === 'Disputed' && submission.disputeStage === 'CreatorReview') {
+                submission.disputeStage = 'RejectedByCreator';
+                submission.disputeCreatorNotes = reason;
+                const secondDisputeHours = settings.systemLimits?.secondDisputeTimeLimitHours || 48;
+                submission.secondDisputeDeadline = new Date(Date.now() + secondDisputeHours * 60 * 60 * 1000);
+                submission.disputeOpened = false; // Reset so they can escalate to admin
+                
+                if (submission.disputeId) {
+                    await Dispute.findByIdAndUpdate(submission.disputeId, {
+                        messages: [
+                            { sender: 'System', message: `System Log: Creator rejected the dispute on ${new Date()}. Reason: ${reason}` }
+                        ]
+                    });
+                }
+            } else {
+                const disputeHours = settings.systemLimits?.disputeTimeLimitHours || 48;
+                submission.disputeDeadline = new Date(Date.now() + disputeHours * 60 * 60 * 1000);
+                submission.disputeOpened = false; // Reset disputeOpened so they can dispute again if rejected again
+            }
         }
 
         const task = await UserTask.findById(submission.taskId);
 
         if (status === 'Approved' && oldStatus !== 'Approved') {
+            if (oldStatus === 'Disputed') {
+                submission.disputeStage = 'Resolved';
+                if (submission.disputeId) {
+                    await Dispute.findByIdAndUpdate(submission.disputeId, {
+                        status: 'Resolved',
+                        verdict: 'ReleaseToWorker',
+                        adminResponse: 'Resolved directly by the campaign creator.'
+                    });
+                }
+            }
+
             if (task && task.currentCompletions < task.targetQuantity) {
                 task.currentCompletions += 1;
                 if (task.currentCompletions >= task.targetQuantity) {
@@ -610,12 +754,24 @@ export const updateSubmissionStatus = async (req, res) => {
                 senderType: 'System'
             });
         } else if (status === 'Rejected' && oldStatus !== 'Rejected') {
-            await Notification.create({
-                userId: submission.workerId,
-                subject: 'Task Rejected ❌',
-                message: `Your proof for campaign "${submission.taskTitle}" was rejected. Reason: "${submission.rejectionReason || 'No reason specified'}". You have 48 hours to open a dispute if you believe this is an error.`,
-                senderType: 'System'
-            });
+            const settings = await Setting.getSettings();
+            if (oldStatus === 'Disputed') {
+                const secondDisputeHours = settings.systemLimits?.secondDisputeTimeLimitHours || 48;
+                await Notification.create({
+                    userId: submission.workerId,
+                    subject: 'Dispute Rejected by Creator ⚖️❌',
+                    message: `The creator has rejected your dispute for campaign "${submission.taskTitle}". You have ${secondDisputeHours} hours to escalate this dispute directly to the Admin.`,
+                    senderType: 'System'
+                });
+            } else {
+                const disputeHours = settings.systemLimits?.disputeTimeLimitHours || 48;
+                await Notification.create({
+                    userId: submission.workerId,
+                    subject: 'Task Rejected ❌',
+                    message: `Your proof for campaign "${submission.taskTitle}" was rejected. Reason: "${submission.rejectionReason || 'No reason specified'}". You have ${disputeHours} hours to open a dispute if you believe this is an error.`,
+                    senderType: 'System'
+                });
+            }
         }
 
         global.appDataVersion = Date.now();
@@ -708,9 +864,6 @@ export const openTaskDispute = async (req, res) => {
         if (submission.disputeOpened) {
             return res.status(400).json({ success: false, error: 'Dispute already opened for this submission.' });
         }
-        if (submission.disputeDeadline && new Date() > new Date(submission.disputeDeadline)) {
-            return res.status(400).json({ success: false, error: 'The 48-hour dispute window has expired.' });
-        }
 
         const task = await UserTask.findById(submission.taskId);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
@@ -727,70 +880,157 @@ export const openTaskDispute = async (req, res) => {
             }
         }
 
-        const dispute = await Dispute.create({
-            userId: worker._id,
-            userName: worker.username,
-            type: 'UserTask',
-            taskId: task._id,
-            submissionId: submission._id,
-            creatorId: creator ? creator._id : null,
-            referenceId: String(submission._id),
-            description: req.body.description || `Dispute raised for rejected task: ${task.title}. Rejection reason: ${submission.rejectionReason}`,
-            proofUrl: proofUrl,
-            messages: [
-                { sender: 'System', message: `System Log: Worker submitted proof on ${submission.createdAt}` },
-                { sender: 'System', message: `System Log: Creator rejected submission on ${submission.rejectedAt || new Date()}. Reason: ${submission.rejectionReason}` },
-                { sender: 'System', message: `System Log: Worker opened dispute within 48h window.` },
-                { sender: 'User', message: req.body.description || 'Dispute initiated by worker.', attachmentUrl: proofUrl || undefined }
-            ],
-            status: 'Open',
-            adminUnread: true,
-            userUnread: false
-        });
+        const settings = await Setting.getSettings();
 
-        submission.disputeOpened = true;
-        submission.status = 'Disputed';
-        submission.disputeId = dispute._id;
-        await submission.save();
+        if (submission.disputeStage === 'RejectedByCreator') {
+            // Level 2 Escalation directly to Admin
+            if (submission.secondDisputeDeadline && new Date() > new Date(submission.secondDisputeDeadline)) {
+                const escalationHours = settings.systemLimits?.secondDisputeTimeLimitHours || 48;
+                return res.status(400).json({ success: false, error: `The ${escalationHours}-hour escalation window has expired.` });
+            }
 
-        task.escrowFrozen = true;
-        await task.save();
+            let dispute = await Dispute.findById(submission.disputeId);
+            if (!dispute) {
+                dispute = await Dispute.create({
+                    userId: worker._id,
+                    userName: worker.username,
+                    type: 'UserTask',
+                    taskId: task._id,
+                    submissionId: submission._id,
+                    creatorId: creator ? creator._id : null,
+                    referenceId: String(submission._id),
+                    description: req.body.description || `Dispute escalated to Admin for task: ${task.title}`,
+                    proofUrl: proofUrl,
+                    messages: [
+                        { sender: 'System', message: `System Log: Worker submitted proof on ${submission.createdAt}` },
+                        { sender: 'System', message: `System Log: Creator rejected submission. Reason: ${submission.rejectionReason}` },
+                        { sender: 'System', message: `System Log: Worker opened dispute.` },
+                        { sender: 'System', message: `System Log: Creator rejected dispute again. Reason: ${submission.disputeCreatorNotes}` },
+                        { sender: 'System', message: `System Log: Worker escalated dispute directly to Admin.` },
+                        { sender: 'User', message: req.body.description || 'Dispute escalated to Admin by worker.', attachmentUrl: proofUrl || undefined }
+                    ],
+                    status: 'Open',
+                    adminUnread: true,
+                    userUnread: false
+                });
+            } else {
+                dispute.messages.push(
+                    { sender: 'System', message: `System Log: Creator rejected dispute again. Reason: ${submission.disputeCreatorNotes}` },
+                    { sender: 'System', message: `System Log: Worker escalated dispute to Admin on ${new Date()}` },
+                    { sender: 'User', message: req.body.description || 'Dispute escalated to Admin by worker.', attachmentUrl: proofUrl || undefined }
+                );
+                if (proofUrl) dispute.proofUrl = proofUrl;
+                dispute.status = 'Open';
+                dispute.adminUnread = true;
+                dispute.userUnread = false;
+                await dispute.save();
+            }
 
-        // Notify Worker
-        await Notification.create({
-            userId: worker._id,
-            subject: 'Dispute Opened ⚖️',
-            message: `Your dispute for the campaign "${task.title}" has been opened successfully. The Admin is now reviewing it.`,
-            senderType: 'System'
-        });
+            submission.disputeStage = 'Escalated';
+            submission.disputeOpened = true;
+            submission.status = 'Disputed';
+            await submission.save();
 
-        // Notify Campaign Creator
-        if (creator) {
+            task.escrowFrozen = true;
+            await task.save();
+
+            // Notify Worker
             await Notification.create({
-                userId: creator._id,
-                subject: 'Dispute Raised ⚖️',
-                message: `Worker @${worker.username} has raised a dispute against your rejection of their proof for campaign "${task.title}". The Admin will make a final decision.`,
+                userId: worker._id,
+                subject: 'Dispute Escalated to Admin ⚖️🏛️',
+                message: `Your dispute for the campaign "${task.title}" has been escalated to the Admin. The Admin will review it and make a final decision.`,
                 senderType: 'System'
             });
-        }
 
-        // Notify Admins
-        try {
-            const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
-            for (const admin of admins) {
+            // Notify Creator
+            if (creator) {
                 await Notification.create({
-                    userId: admin._id,
-                    subject: 'New Task Dispute ⚖️',
-                    message: `Worker @${worker.username} has disputed a rejection on campaign "${task.title}" by Creator @${creator ? creator.username : 'User'}.`,
+                    userId: creator._id,
+                    subject: 'Dispute Escalated to Admin ⚖️🏛️',
+                    message: `Worker @${worker.username} has escalated their dispute for campaign "${task.title}" to the Admin. The Admin will make the final decision.`,
                     senderType: 'System'
                 });
             }
-        } catch (adminErr) {
-            console.error('Failed to notify admins of new dispute:', adminErr);
-        }
 
-        global.appDataVersion = Date.now();
-        res.status(201).json({ success: true, data: dispute });
+            // Notify Admins
+            try {
+                const admins = await User.find({ role: { $in: ['admin', 'super_admin'] } });
+                for (const admin of admins) {
+                    await Notification.create({
+                        userId: admin._id,
+                        subject: 'Escalated Task Dispute ⚖️🏛️',
+                        message: `Worker @${worker.username} has escalated their dispute on campaign "${task.title}" to the Admin after creator rejection.`,
+                        senderType: 'System'
+                    });
+                }
+            } catch (adminErr) {
+                console.error('Failed to notify admins of escalated dispute:', adminErr);
+            }
+
+            global.appDataVersion = Date.now();
+            return res.status(201).json({ success: true, data: dispute });
+
+        } else {
+            // Level 1 Dispute: Worker vs. Creator
+            if (submission.disputeDeadline && new Date() > new Date(submission.disputeDeadline)) {
+                const disputeHours = settings.systemLimits?.disputeTimeLimitHours || 48;
+                return res.status(400).json({ success: false, error: `The ${disputeHours}-hour dispute window has expired.` });
+            }
+
+            const disputeReviewDays = settings.systemLimits?.disputeReviewTimeoutDays || 3;
+            submission.disputeReviewDeadline = new Date(Date.now() + disputeReviewDays * 24 * 60 * 60 * 1000);
+            submission.disputeStage = 'CreatorReview';
+
+            const dispute = await Dispute.create({
+                userId: worker._id,
+                userName: worker.username,
+                type: 'UserTask',
+                taskId: task._id,
+                submissionId: submission._id,
+                creatorId: creator ? creator._id : null,
+                referenceId: String(submission._id),
+                description: req.body.description || `Dispute raised for rejected task: ${task.title}. Rejection reason: ${submission.rejectionReason}`,
+                proofUrl: proofUrl,
+                messages: [
+                    { sender: 'System', message: `System Log: Worker submitted proof on ${submission.createdAt}` },
+                    { sender: 'System', message: `System Log: Creator rejected submission on ${submission.rejectedAt || new Date()}. Reason: ${submission.rejectionReason}` },
+                    { sender: 'System', message: `System Log: Worker opened dispute. Creator has ${disputeReviewDays} days to review/resolve.` },
+                    { sender: 'User', message: req.body.description || 'Dispute initiated by worker.', attachmentUrl: proofUrl || undefined }
+                ],
+                status: 'Open',
+                adminUnread: true,
+                userUnread: false
+            });
+
+            submission.disputeOpened = true;
+            submission.status = 'Disputed';
+            submission.disputeId = dispute._id;
+            await submission.save();
+
+            task.escrowFrozen = true;
+            await task.save();
+
+            // Notify Worker
+            await Notification.create({
+                userId: worker._id,
+                subject: 'Dispute Raised ⚖️',
+                message: `Your dispute for campaign "${task.title}" has been raised. The creator has ${disputeReviewDays} days to review/resolve it. If they do not, it will be automatically approved.`,
+                senderType: 'System'
+            });
+
+            // Notify Creator
+            if (creator) {
+                await Notification.create({
+                    userId: creator._id,
+                    subject: 'Dispute Raised by Worker ⚖️',
+                    message: `Worker @${worker.username} has raised a dispute against your rejection of their proof for campaign "${task.title}". You have ${disputeReviewDays} days to review and either approve or reject/dismiss their dispute.`,
+                    senderType: 'System'
+                });
+            }
+
+            global.appDataVersion = Date.now();
+            return res.status(201).json({ success: true, data: dispute });
+        }
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }

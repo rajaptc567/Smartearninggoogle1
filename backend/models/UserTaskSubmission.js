@@ -66,7 +66,15 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
     },
     taskCategory: {
         type: String
-    }
+    },
+    disputeReviewDeadline: { type: Date },
+    secondDisputeDeadline: { type: Date },
+    disputeStage: {
+        type: String,
+        enum: ['None', 'CreatorReview', 'RejectedByCreator', 'Escalated', 'Resolved'],
+        default: 'None'
+    },
+    disputeCreatorNotes: { type: String, default: '' }
 }, { timestamps: true });
 
 export default mongoose.model('UserTaskSubmission', UserTaskSubmissionSchema);
