@@ -10,14 +10,14 @@ import ShareButtons from '../components/ui/ShareButtons';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
 
 // Icons
-const WalletIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
-const DepositIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
-const WithdrawalIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
-const UsersIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 1.803M15 21a9 9 0 00-9-8.627M15 21a9 9 0 003.75-1.465M12 12a4 4 0 100-8 4 4 0 000 8z"></path></svg>;
-const EarningsIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
-const ClockIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
-const PlanIcon = () => <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
-const MapPinIcon = () => <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+const WalletIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
+const DepositIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
+const WithdrawalIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>;
+const UsersIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 1.803M15 21a9 9 0 00-9-8.627M15 21a9 9 0 003.75-1.465M12 12a4 4 0 100-8 4 4 0 000 8z"></path></svg>;
+const EarningsIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 12v-2m0 2v.01m0-2.01V10m0 2v2m0-2v.01M12 6.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"></path></svg>;
+const ClockIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
+const PlanIcon = ({ className = "w-8 h-8" }: { className?: string }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
+const MapPinIcon = ({ className = "w-5 h-5 text-gray-500 dark:text-gray-400" }: { className?: string }) => <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
 const PieChart = ({ data, currency }: { data: { label: string, value: number, color: string }[], currency: string }) => {
     const total = data.reduce((sum, item) => sum + item.value, 0);
@@ -156,108 +156,234 @@ const UserDashboard: React.FC = () => {
     const recentTransactions = userTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
+    const isCompact = (settings?.userDashboardVersion || 'compact') === 'compact';
+
     const toggleWidget = (widget: keyof typeof visibleWidgets) => {
       setVisibleWidgets(prev => ({ ...prev, [widget]: !prev[widget] }));
     };
 
-    const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode, color: string }> = ({ title, value, icon, color }) => (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex items-center justify-between">
-            <div><p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p><p className="text-2xl font-semibold text-gray-800 dark:text-white">{value}</p></div>
-            <div className={`text-white p-3 rounded-full ${color}`}>{icon}</div>
-        </div>
-    );
+    const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode, color: string }> = ({ title, value, icon, color }) => {
+        if (isCompact) {
+            return (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-2.5 sm:p-3.5 flex items-center justify-between gap-2 transition-all">
+                    <div className="min-w-0">
+                        <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">{title}</p>
+                        <p className="text-base md:text-lg font-bold text-gray-800 dark:text-white mt-0.5 truncate">{value}</p>
+                    </div>
+                    <div className={`text-white p-1.5 md:p-2 rounded-lg shrink-0 ${color}`}>
+                        <div className="w-4 h-4 md:w-5 md:h-5 flex items-center justify-center">
+                            {React.cloneElement(icon as React.ReactElement, { className: 'w-full h-full' })}
+                        </div>
+                    </div>
+                </div>
+            );
+        } else {
+            return (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-6 flex items-center justify-between gap-2 transition-all hover:shadow-md">
+                    <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">{title}</p>
+                        <p className="text-2xl font-extrabold text-gray-800 dark:text-white mt-1 truncate">{value}</p>
+                    </div>
+                    <div className={`text-white p-3.5 rounded-xl shrink-0 ${color}`}>
+                        <div className="w-6 h-6 flex items-center justify-center">
+                            {React.cloneElement(icon as React.ReactElement, { className: 'w-full h-full' })}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+    };
     
      const NetworkSummaryCard = () => {
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
-        return (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Network Overview</p>
-                        <p className="text-2xl font-semibold text-gray-800 dark:text-white">{networkBreakdown.total} Total Referrals</p>
+        if (isCompact) {
+            return (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-2.5 sm:p-3.5 col-span-2 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="min-w-0">
+                            <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Network Overview</p>
+                            <p className="text-base md:text-lg font-bold text-gray-800 dark:text-white mt-0.5 truncate">{networkBreakdown.total} Referrals</p>
+                        </div>
+                        <div className="text-white p-1.5 md:p-2 rounded-lg bg-purple-500 shrink-0">
+                            <UsersIcon className="w-4 h-4 md:w-5 md:h-5" />
+                        </div>
                     </div>
-                    <div className="text-white p-3 rounded-full bg-purple-500"><UsersIcon /></div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] border-t dark:border-gray-700/50 pt-2 mt-2">
+                        <div>
+                            <h4 className="font-bold text-green-600 dark:text-green-400 mb-0.5">Active ({totalActive})</h4>
+                            <ul className="space-y-0.5 text-gray-600 dark:text-gray-400 text-[10px]">
+                                {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                    <li key={`active-${level}`} className="flex justify-between">
+                                        <span>Lvl {level}:</span>
+                                        <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-red-500 dark:text-red-400 mb-0.5">Inactive ({totalInactive})</h4>
+                            <ul className="space-y-0.5 text-gray-600 dark:text-gray-400 text-[10px]">
+                                {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                    <li key={`inactive-${level}`} className="flex justify-between">
+                                        <span>Lvl {level}:</span>
+                                        <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm mt-4 border-t dark:border-gray-700 pt-4">
-                    <div>
-                        <h4 className="font-semibold text-green-600 dark:text-green-400 mb-2">Active Referrals ({totalActive})</h4>
-                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
-                            {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
-                                <li key={`active-${level}`} className="flex justify-between">
-                                    <span>Level {level}:</span>
-                                    <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
-                                </li>
-                            ))}
-                        </ul>
+            );
+        } else {
+            return (
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-6 col-span-2 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Network Overview</p>
+                            <p className="text-2xl font-extrabold text-gray-800 dark:text-white mt-1">{networkBreakdown.total} Referrals</p>
+                        </div>
+                        <div className="text-white p-3.5 rounded-xl bg-purple-500 shrink-0">
+                            <UsersIcon className="w-6 h-6" />
+                        </div>
                     </div>
-                    <div>
-                        <h4 className="font-semibold text-red-500 dark:text-red-400 mb-2">Inactive Referrals ({totalInactive})</h4>
-                        <ul className="space-y-1 text-gray-600 dark:text-gray-300">
-                            {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
-                                <li key={`inactive-${level}`} className="flex justify-between">
-                                    <span>Level {level}:</span>
-                                    <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
-                                </li>
-                            ))}
-                        </ul>
+                    <div className="grid grid-cols-2 gap-4 border-t dark:border-gray-700/50 pt-4 mt-2">
+                        <div>
+                            <h4 className="font-bold text-green-600 dark:text-green-400 text-sm mb-1">Active ({totalActive})</h4>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400 text-xs">
+                                {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                    <li key={`active-${level}`} className="flex justify-between">
+                                        <span>Lvl {level}:</span>
+                                        <span className="font-bold">{networkBreakdown.active[parseInt(level)]}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-red-500 dark:text-red-400 text-sm mb-1">Inactive ({totalInactive})</h4>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400 text-xs">
+                                {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                    <li key={`inactive-${level}`} className="flex justify-between">
+                                        <span>Lvl {level}:</span>
+                                        <span className="font-bold">{networkBreakdown.inactive[parseInt(level)]}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
-            </div>
-        );
+            );
+        }
     };
 
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">Here's a summary of your account activity.</p>
-                </div>
-                {currentUser.country && (
-                    <div className="hidden sm:flex items-center space-x-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-full text-sm font-semibold text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 shadow-sm">
-                        <MapPinIcon />
-                        <span>{currentUser.country}</span>
+        <div className={isCompact ? "space-y-4 md:space-y-5" : "space-y-6 md:space-y-8"}>
+            {/* Top Welcome Section */}
+            {isCompact ? (
+                <div className="flex flex-col items-center text-center space-y-3 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-emerald-500/5 dark:from-blue-500/10 dark:via-indigo-500/5 dark:to-emerald-500/10 p-4 md:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
+                    <div className="space-y-0.5">
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Here's a compact summary of your account activity.</p>
+                        {currentUser.country && (
+                            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1 mt-1">
+                                <MapPinIcon className="w-3.5 h-3.5" />
+                                <span>{currentUser.country}</span>
+                            </p>
+                        )}
                     </div>
-                )}
-            </div>
+
+                    {/* Highly visible, attractive button for Earning Area */}
+                    <div className="w-full max-w-sm bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm p-3 rounded-xl border border-blue-100/50 dark:border-blue-900/30 shadow-sm flex flex-col items-center space-y-2">
+                        <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium">
+                            Complete simple social micro-tasks & gigs to earn instant USD!
+                        </p>
+                        <Button 
+                            onClick={() => navigate('/member/user-tasks')}
+                            variant="primary" 
+                            className="w-full py-1.5 text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 border-none shadow-sm animate-pulse flex items-center justify-center gap-1.5"
+                        >
+                            🚀 Mega Earning & Gigs Hub ➜
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/50 shadow-sm gap-4">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Manage your investments, commissions, and track referral networks.</p>
+                        {currentUser.country && (
+                            <p className="text-sm font-semibold text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-1">
+                                <MapPinIcon className="w-4 h-4" />
+                                <span>{currentUser.country}</span>
+                            </p>
+                        )}
+                    </div>
+                    <div>
+                        <Button 
+                            onClick={() => navigate('/member/user-tasks')} 
+                            variant="primary" 
+                            className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 border-none shadow-md shrink-0"
+                        >
+                            🚀 Earning Area
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             <div className="relative">
-                <Button onClick={() => setShowCustomize(!showCustomize)} size="sm" variant="secondary" className="absolute top-0 right-0 -mt-8">Customize</Button>
+                <Button onClick={() => setShowCustomize(!showCustomize)} size="xs" variant="secondary" className="absolute top-0 right-0 -mt-3 text-[10px] px-2 py-0.5 z-10">Customize</Button>
                 {showCustomize && (
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-sm">
+                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs border dark:border-gray-700">
                         {Object.keys(visibleWidgets).map(key => (
-                          <label key={key} className="flex items-center space-x-2">
-                            <input type="checkbox" checked={visibleWidgets[key as keyof typeof visibleWidgets]} onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} className="rounded"/>
-                            <span className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                          <label key={key} className="flex items-center space-x-2 cursor-pointer select-none">
+                            <input type="checkbox" checked={visibleWidgets[key as keyof typeof visibleWidgets]} onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"/>
+                            <span className="capitalize text-gray-700 dark:text-gray-300">{key.replace(/([A-Z])/g, ' $1')}</span>
                           </label>
                         ))}
                     </div>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className={isCompact ? "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6"}>
                     {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
                     {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
                     {visibleWidgets.commission && <StatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
                     {visibleWidgets.withdrawals && <StatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
                     {visibleWidgets.pending && <StatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
                     {visibleWidgets.taskEarnings && (
-                        <div 
-                            onClick={() => navigate('/member/user-tasks')}
-                            className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex items-center justify-between cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all border border-emerald-100 dark:border-emerald-950/30 group"
-                        >
-                            <div>
-                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Earn Cash & Gigs Earnings</p>
-                                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(stats.totalTaskEarnings, currentUser.currency)}</p>
-                                <span className="text-[10px] font-bold text-indigo-500 group-hover:text-indigo-600 transition-colors mt-1 inline-flex items-center gap-1">
-                                    Go to Earning Hub ➜
-                                </span>
+                        isCompact ? (
+                            <div 
+                                onClick={() => navigate('/member/user-tasks')}
+                                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-2.5 sm:p-3.5 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group col-span-1"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Earn Cash & Gigs</p>
+                                    <p className="text-base md:text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">{formatCurrency(stats.totalTaskEarnings, currentUser.currency)}</p>
+                                    <span className="text-[9px] md:text-[10px] font-bold text-indigo-500 group-hover:text-indigo-600 transition-colors mt-0.5 inline-flex items-center gap-0.5">
+                                        Earning Hub ➜
+                                    </span>
+                                </div>
+                                <div className="text-white p-1.5 md:p-2 rounded-lg bg-emerald-500 shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                                    <EarningsIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                </div>
                             </div>
-                            <div className="text-white p-3 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/20 group-hover:scale-110 transition-transform">
-                                <EarningsIcon />
+                        ) : (
+                            <div 
+                                onClick={() => navigate('/member/user-tasks')}
+                                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-6 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group col-span-1"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Earn Cash & Gigs</p>
+                                    <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 truncate">{formatCurrency(stats.totalTaskEarnings, currentUser.currency)}</p>
+                                    <span className="text-xs font-bold text-indigo-500 group-hover:text-indigo-600 transition-colors mt-2 inline-flex items-center gap-1">
+                                        Go to Earning Hub ➜
+                                    </span>
+                                </div>
+                                <div className="text-white p-3.5 rounded-xl bg-emerald-500 shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                                    <EarningsIcon className="w-6 h-6" />
+                                </div>
                             </div>
-                        </div>
+                        )
                     )}
                     {visibleWidgets.referrals && <NetworkSummaryCard />}
                     {visibleWidgets.plan && <StatCard title="Active Plan(s)" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
@@ -266,10 +392,10 @@ const UserDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ShareButtons url={referralLink} title="Join me on SmartEarning and start earning today!" />
-                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-100 dark:border-gray-700/50 hover:shadow-lg hover:scale-[1.01] transition-all duration-300">
-                    <h3 className="font-semibold mb-3 text-gray-800 dark:text-white text-center">Earnings & Commissions Breakdown</h3>
+                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-100 dark:border-gray-700/50 hover:shadow-md hover:scale-[1.01] transition-all duration-300">
+                    <h3 className="font-semibold mb-2 text-gray-800 dark:text-white text-center text-xs uppercase tracking-wider text-gray-400">Earnings & Commissions Breakdown</h3>
                     <PieChart currency={currentUser.currency} data={[
                         { label: 'Direct Commission', value: stats.directCommission, color: '#3b82f6' },
                         { label: 'Indirect Commission', value: stats.indirectCommission, color: '#8b5cf6' },
@@ -278,21 +404,21 @@ const UserDashboard: React.FC = () => {
                 </div>}
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Recent Transactions</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-100 dark:border-gray-700/50">
+                <h2 className="text-base font-semibold mb-3 text-gray-800 dark:text-white">Recent Transactions</h2>
                 <Table headers={['ID', 'Type', 'Amount', 'Status', 'Date', 'Description']}>
                     {recentTransactions.map((tx: Transaction) => (
                          <tr key={tx._id} className="text-gray-700 dark:text-gray-400">
-                            <td className="px-4 py-3 text-sm">{tx._id.substring(0, 8)}...</td>
-                            <td className="px-4 py-3 text-sm">{tx.type}</td>
-                            <td className={`px-4 py-3 text-sm font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
-                            <td className="px-4 py-3 text-xs">
+                            <td className="px-3 py-2 text-xs">{tx._id.substring(0, 8)}...</td>
+                            <td className="px-3 py-2 text-xs">{tx.type}</td>
+                            <td className={`px-3 py-2 text-xs font-semibold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
+                            <td className="px-3 py-2 text-xs">
                                 {/* MASKING: Show 'Matching' as 'Pending' to user */}
                                 <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
                             </td>
-                            <td className="px-4 py-3 text-sm">{tx.date}</td>
-                            <td className="px-4 py-3 text-sm">{tx.description}</td>
-                        </tr>
+                            <td className="px-3 py-2 text-xs">{tx.date}</td>
+                            <td className="px-3 py-2 text-xs">{tx.description}</td>
+                         </tr>
                     ))}
                 </Table>
             </div>

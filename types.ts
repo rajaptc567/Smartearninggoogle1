@@ -251,6 +251,7 @@ export interface Settings {
     autoWelcomeEnabled?: boolean;
     autoPasswordResetEnabled?: boolean;
     isUserTaskEnabled?: boolean;
+    userDashboardVersion?: 'old' | 'compact';
     userTaskAccessMode?: 'all' | 'manual' | 'plan';
     userTaskAllowedUserIds?: string[];
     userTaskAllowedPlanIds?: string[];
