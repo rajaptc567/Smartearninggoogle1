@@ -309,22 +309,22 @@ const UserDashboard: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/50 shadow-sm gap-4">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Welcome, {currentUser.fullName}!</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Manage your investments, commissions, and track referral networks.</p>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/50 shadow-sm gap-4">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white truncate">Welcome, {currentUser.fullName}!</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your investments, commissions, and track referral networks.</p>
                         {currentUser.country && (
-                            <p className="text-sm font-semibold text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-1">
+                            <p className="text-sm font-semibold text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-2">
                                 <MapPinIcon className="w-4 h-4" />
                                 <span>{currentUser.country}</span>
                             </p>
                         )}
                     </div>
-                    <div>
+                    <div className="shrink-0">
                         <Button 
                             onClick={() => navigate('/member/user-tasks')} 
                             variant="primary" 
-                            className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 border-none shadow-md shrink-0"
+                            className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 border-none shadow-md"
                         >
                             🚀 Earning Area
                         </Button>
@@ -346,7 +346,7 @@ const UserDashboard: React.FC = () => {
             </div>
 
             {showCustomize && (
-                <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700/50 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
                     {Object.keys(visibleWidgets).map(key => (
                       <label key={key} className="flex items-center space-x-1.5 cursor-pointer select-none">
                         <input 
@@ -372,7 +372,7 @@ const UserDashboard: React.FC = () => {
                         isCompact ? (
                             <div 
                                 onClick={() => navigate('/member/user-tasks')}
-                                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-2.5 sm:p-3.5 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group col-span-1"
+                                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-2.5 sm:p-3.5 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md md:hover:scale-[1.01] md:transition-all group col-span-1"
                             >
                                 <div className="min-w-0">
                                     <p className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Earn Cash & Gigs</p>
@@ -388,7 +388,7 @@ const UserDashboard: React.FC = () => {
                         ) : (
                             <div 
                                 onClick={() => navigate('/member/user-tasks')}
-                                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-6 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group col-span-1"
+                                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-950/30 p-6 flex items-center justify-between gap-2 cursor-pointer hover:shadow-md md:hover:scale-[1.01] md:transition-all group col-span-1"
                             >
                                 <div className="min-w-0">
                                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Earn Cash & Gigs</p>
@@ -412,7 +412,7 @@ const UserDashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ShareButtons url={referralLink} title="Join me on SmartEarning and start earning today!" />
-                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-100 dark:border-gray-700/50 hover:shadow-md hover:scale-[1.01] transition-all duration-300">
+                 {visibleWidgets.breakdown && <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border border-gray-100 dark:border-gray-700/50 hover:shadow-md md:hover:scale-[1.01] md:transition-all md:duration-300">
                     <h3 className="font-semibold mb-2 text-gray-800 dark:text-white text-center text-xs uppercase tracking-wider text-gray-400">Earnings & Commissions Breakdown</h3>
                     <PieChart currency={currentUser.currency} data={[
                         { label: 'Direct Commission', value: stats.directCommission, color: '#3b82f6' },
