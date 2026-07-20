@@ -131,7 +131,8 @@ const Settings: React.FC = () => {
             requireCountryCodeInPhone: settings.signUpConfig?.requireCountryCodeInPhone || false,
             requireCountryCodeInWhatsapp: settings.signUpConfig?.requireCountryCodeInWhatsapp || false,
             customFields: settings.signUpConfig?.customFields || []
-        }
+        },
+        userDashboardVersion: settings.userDashboardVersion || 'compact'
     }));
     setIsDirty(false);
   }, [settings]);
@@ -534,6 +535,25 @@ const Settings: React.FC = () => {
                                     onChange={handleCheckboxChange}
                                 />
                                 <label htmlFor="isTasksEnabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.isTasksEnabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="userDashboardVersion" className="block text-sm font-medium text-gray-900 dark:text-gray-200">User Dashboard Layout Style</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select between the standard full dashboard layout and the new centered, compact, mobile-perfect version.</p>
+                            </div>
+                            <div>
+                                <select 
+                                    id="userDashboardVersion"
+                                    name="userDashboardVersion"
+                                    value={localSettings.userDashboardVersion || 'compact'}
+                                    onChange={handleSelectChange}
+                                    className="rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white text-sm py-1.5 px-3"
+                                >
+                                    <option value="old">Standard (Old Version)</option>
+                                    <option value="compact">Compact (New Version)</option>
+                                </select>
                             </div>
                         </div>
 

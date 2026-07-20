@@ -63,6 +63,18 @@ const PieChart = ({ data, currency }: { data: { label: string, value: number, co
 };
 
 
+const CompactStatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string; onClick?: () => void }> = ({ title, value, icon, color, onClick }) => (
+    <div 
+        onClick={onClick}
+        className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/50 p-3 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-md transition-all h-full ${onClick ? 'cursor-pointer hover:scale-[1.02] border-emerald-200 dark:border-emerald-800/30' : ''}`}
+    >
+        <div className={`text-white p-2 rounded-full ${color} mb-1.5 flex items-center justify-center scale-90`}>{icon}</div>
+        <p className="text-[10px] sm:text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-tight leading-none text-center">{title}</p>
+        <p className="text-sm sm:text-base font-extrabold text-gray-800 dark:text-white mt-1 leading-none text-center">{value}</p>
+    </div>
+);
+
+
 const UserDashboard: React.FC = () => {
     const { state } = useData();
     const { currentUser, deposits, withdrawals, transactions, users, investmentPlans, settings } = state;
@@ -160,14 +172,14 @@ const UserDashboard: React.FC = () => {
       setVisibleWidgets(prev => ({ ...prev, [widget]: !prev[widget] }));
     };
 
-    const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode, color: string }> = ({ title, value, icon, color }) => (
+    const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string }> = ({ title, value, icon, color }) => (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex items-center justify-between">
             <div><p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p><p className="text-2xl font-semibold text-gray-800 dark:text-white">{value}</p></div>
             <div className={`text-white p-3 rounded-full ${color}`}>{icon}</div>
         </div>
     );
     
-     const NetworkSummaryCard = () => {
+    const NetworkSummaryCard = () => {
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
         const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
 
@@ -208,6 +220,166 @@ const UserDashboard: React.FC = () => {
         );
     };
 
+    const isCompact = settings?.userDashboardVersion !== 'old';
+
+    if (isCompact) {
+        const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
+        const totalInactive = Object.values(networkBreakdown.inactive).reduce((s: number, c: number) => s + c, 0);
+
+        return (
+            <div className="flex flex-col items-center justify-center max-w-4xl mx-auto space-y-4 px-1 py-2 sm:p-4 text-center">
+                {/* Centered Top Section */}
+                <div className="flex flex-col items-center text-center space-y-1">
+                    {currentUser.country && (
+                        <div className="inline-flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-[11px] font-bold text-gray-600 dark:text-gray-400 border border-gray-200/50 dark:border-gray-700 shadow-sm mb-1">
+                            <MapPinIcon />
+                            <span>{currentUser.country}</span>
+                        </div>
+                    )}
+                    <h1 className="text-xl sm:text-2xl font-black text-gray-800 dark:text-white leading-tight">
+                        Welcome, {currentUser.fullName}!
+                    </h1>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-md">
+                        Your account activities and wallet balances are compiled below. Click the Earning button to start!
+                    </p>
+                </div>
+
+                {/* Highly Attractive Top Earning Area Button */}
+                <div className="w-full max-w-md bg-gradient-to-r from-emerald-500 via-teal-600 to-indigo-600 rounded-xl p-3 text-white text-center shadow-md shadow-emerald-500/10 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 border border-emerald-400/20">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-100">🚀 INSTANT PAYOUTS</p>
+                    <h2 className="text-sm sm:text-base font-extrabold mt-0.5 mb-2">💸 SmartEarning Instant Gigs Hub</h2>
+                    <Button 
+                        onClick={() => navigate('/member/user-tasks')}
+                        size="sm"
+                        className="bg-white hover:bg-emerald-50 text-emerald-700 font-extrabold text-xs px-5 py-2 rounded-full shadow-sm hover:scale-105 active:scale-95 transition-all inline-flex items-center gap-1.5 border-none"
+                    >
+                        <span>Click to Earn Cash Now ➜</span>
+                    </Button>
+                </div>
+
+                {/* Compact Layout Customizer Toggle */}
+                <div className="w-full flex justify-center">
+                    <button 
+                        onClick={() => setShowCustomize(!showCustomize)} 
+                        className="px-2.5 py-1 text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700 shadow-sm transition-all"
+                    >
+                        {showCustomize ? 'Hide Customizer' : 'Customize Cards'}
+                    </button>
+                </div>
+                {showCustomize && (
+                    <div className="bg-white dark:bg-gray-800 p-2.5 rounded-lg border dark:border-gray-700 w-full max-w-md grid grid-cols-2 gap-1.5 text-[11px] text-left shadow-xs">
+                        {Object.keys(visibleWidgets).map(key => (
+                          <label key={key} className="flex items-center space-x-1.5 cursor-pointer p-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <input 
+                                type="checkbox" 
+                                checked={visibleWidgets[key as keyof typeof visibleWidgets]} 
+                                onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} 
+                                className="rounded text-blue-600 focus:ring-blue-500 h-3 w-3"
+                            />
+                            <span className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                          </label>
+                        ))}
+                    </div>
+                )}
+
+                {/* Grid of Compact Centered Stat Cards (2-columns on mobile, 3-4 on desktop) */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5 w-full">
+                    {visibleWidgets.balance && <CompactStatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
+                    {visibleWidgets.deposits && <CompactStatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
+                    {visibleWidgets.commission && <CompactStatCard title="Total Commission" value={formatCurrency(stats.totalCommission, currentUser.currency)} icon={<EarningsIcon />} color="bg-green-500" />}
+                    {visibleWidgets.withdrawals && <CompactStatCard title="Total Withdrawals" value={formatCurrency(stats.totalWithdrawals, currentUser.currency)} icon={<WithdrawalIcon />} color="bg-red-500" />}
+                    {visibleWidgets.pending && <CompactStatCard title="Pending Commission" value={formatCurrency(stats.pendingCommission, currentUser.currency)} icon={<ClockIcon />} color="bg-yellow-500" />}
+                    {visibleWidgets.taskEarnings && (
+                        <CompactStatCard 
+                            title="Instant Gigs Reward" 
+                            value={formatCurrency(stats.totalTaskEarnings, currentUser.currency)} 
+                            icon={<EarningsIcon />} 
+                            color="bg-emerald-500" 
+                            onClick={() => navigate('/member/user-tasks')}
+                        />
+                    )}
+                    {visibleWidgets.plan && <CompactStatCard title="Active Plans" value={stats.activePlanCount} icon={<PlanIcon />} color="bg-indigo-500" />}
+                    {visibleWidgets.monthly && <CompactStatCard title="This Month" value={formatCurrency(stats.monthlyEarnings, currentUser.currency)} icon={<EarningsIcon />} color="bg-teal-500" />}
+                    {visibleWidgets.plan && <CompactStatCard title="Plans Value" value={formatCurrency(stats.activePlanValue, currentUser.currency)} icon={<PlanIcon />} color="bg-pink-500" />}
+                </div>
+
+                {/* Compact Centered Network Card */}
+                {visibleWidgets.referrals && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/50 p-2.5 shadow-sm w-full max-w-sm mx-auto text-center flex flex-col items-center justify-center">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="text-white p-1 rounded-full bg-purple-500 mb-1 flex items-center justify-center scale-95"><UsersIcon /></div>
+                            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-none">Network Overview</p>
+                            <p className="text-sm font-black text-gray-800 dark:text-white mt-1 leading-none">{networkBreakdown.total} Total Referrals</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 w-full text-xs border-t border-gray-100 dark:border-gray-700 pt-2.5 mt-2.5">
+                            <div className="flex flex-col items-center border-r border-gray-100 dark:border-gray-700/50">
+                                <h4 className="font-bold text-green-600 dark:text-green-400 mb-1">Active ({totalActive})</h4>
+                                <ul className="space-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                                    {Object.keys(networkBreakdown.active).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                        <li key={`active-${level}`} className="flex gap-1 justify-center">
+                                            <span>L{level}:</span>
+                                            <span className="font-extrabold">{networkBreakdown.active[parseInt(level)]}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <h4 className="font-bold text-red-500 dark:text-red-400 mb-1">Inactive ({totalInactive})</h4>
+                                <ul className="space-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                                    {Object.keys(networkBreakdown.inactive).sort((a,b) => Number(a) - Number(b)).map(level => (
+                                        <li key={`inactive-${level}`} className="flex gap-1 justify-center">
+                                            <span>L{level}:</span>
+                                            <span className="font-extrabold">{networkBreakdown.inactive[parseInt(level)]}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Referral and Breakdown Pie Chart */}
+                <div className="w-full flex flex-col items-center space-y-2">
+                    <div className="w-full max-w-sm mx-auto scale-95 origin-center">
+                        <ShareButtons url={referralLink} title="Join me on SmartEarning and start earning today!" />
+                    </div>
+                    {visibleWidgets.breakdown && (
+                        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/50 p-3 w-full max-w-sm mx-auto text-center shadow-xs">
+                            <h3 className="font-semibold mb-1 text-gray-800 dark:text-white text-[11px] sm:text-xs uppercase tracking-wider text-center">Earnings Breakdown</h3>
+                            <div className="scale-85 origin-center">
+                                <PieChart currency={currentUser.currency} data={[
+                                    { label: 'Direct', value: stats.directCommission, color: '#3b82f6' },
+                                    { label: 'Indirect', value: stats.indirectCommission, color: '#8b5cf6' },
+                                    { label: 'Gigs / Tasks', value: stats.totalTaskEarnings, color: '#10b981' },
+                                ]} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Centered Recent Transactions Table */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/50 p-2.5 sm:p-3 w-full text-center">
+                    <h2 className="text-xs sm:text-sm font-extrabold mb-2 text-gray-800 dark:text-white text-center uppercase tracking-wider">Recent Transactions</h2>
+                    <div className="overflow-x-auto w-full rounded-lg border border-gray-100 dark:border-gray-700 text-left">
+                        <Table headers={['ID', 'Type', 'Amount', 'Status', 'Date', 'Description']}>
+                            {recentTransactions.map((tx: Transaction) => (
+                                 <tr key={tx._id} className="text-gray-700 dark:text-gray-400 text-[11px] hover:bg-gray-50/50 dark:hover:bg-gray-700/10 border-b dark:border-gray-700/40">
+                                    <td className="px-2 py-1.5">{tx._id.substring(0, 5)}...</td>
+                                    <td className="px-2 py-1.5 font-semibold">{tx.type}</td>
+                                    <td className={`px-2 py-1.5 font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(tx.amount, tx.currency)}</td>
+                                    <td className="px-2 py-1.5">
+                                        <Badge status={(tx.status as Status === Status.Matching) ? Status.Pending : (tx.status as Status || Status.Approved)} />
+                                    </td>
+                                    <td className="px-2 py-1.5 text-[9px] opacity-75">{tx.date}</td>
+                                    <td className="px-2 py-1.5 text-[10px] truncate max-w-[100px]" title={tx.description}>{tx.description}</td>
+                                </tr>
+                            ))}
+                        </Table>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
