@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
@@ -86,6 +86,16 @@ const UserDashboard: React.FC = () => {
       taskEarnings: true
     });
     const [showCustomize, setShowCustomize] = useState(false);
+    const [isMobileView, setIsMobileView] = useState(true);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobileView(window.innerWidth < 1024);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     if (!currentUser) {
         return (
@@ -220,7 +230,7 @@ const UserDashboard: React.FC = () => {
         );
     };
 
-    const isCompact = settings?.userDashboardVersion !== 'old';
+    const isCompact = settings?.userDashboardVersion === 'compact' && isMobileView;
 
     if (isCompact) {
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
