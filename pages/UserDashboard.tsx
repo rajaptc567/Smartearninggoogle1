@@ -238,7 +238,7 @@ const UserDashboard: React.FC = () => {
             );
         } else {
             return (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-6 col-span-2 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/50 p-6 col-span-1 sm:col-span-2 lg:col-span-1 xl:col-span-1">
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Network Overview</p>
@@ -295,7 +295,7 @@ const UserDashboard: React.FC = () => {
                     </div>
 
                     {/* Highly visible, attractive button for Earning Area */}
-                    <div className="w-full max-w-sm bg-white/60 dark:bg-gray-900/40 backdrop-blur-sm p-3 rounded-xl border border-blue-100/50 dark:border-blue-900/30 shadow-sm flex flex-col items-center space-y-2">
+                    <div className="w-full max-w-sm bg-white/95 dark:bg-gray-900/90 p-3 rounded-xl border border-blue-100/50 dark:border-blue-900/30 shadow-sm flex flex-col items-center space-y-2">
                         <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium">
                             Complete simple social micro-tasks & gigs to earn instant USD!
                         </p>
@@ -332,18 +332,36 @@ const UserDashboard: React.FC = () => {
                 </div>
             )}
 
-            <div className="relative">
-                <Button onClick={() => setShowCustomize(!showCustomize)} size="xs" variant="secondary" className="absolute top-0 right-0 -mt-3 text-[10px] px-2 py-0.5 z-10">Customize</Button>
-                {showCustomize && (
-                    <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs border dark:border-gray-700">
-                        {Object.keys(visibleWidgets).map(key => (
-                          <label key={key} className="flex items-center space-x-2 cursor-pointer select-none">
-                            <input type="checkbox" checked={visibleWidgets[key as keyof typeof visibleWidgets]} onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"/>
-                            <span className="capitalize text-gray-700 dark:text-gray-300">{key.replace(/([A-Z])/g, ' $1')}</span>
-                          </label>
-                        ))}
-                    </div>
-                )}
+            {/* Customize Controls Bar in Normal Flow */}
+            <div className="flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/30 px-3.5 py-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400 dark:text-gray-500">Dashboard Metrics</span>
+                <Button 
+                    onClick={() => setShowCustomize(!showCustomize)} 
+                    size="xs" 
+                    variant="secondary" 
+                    className="text-[10px] px-2.5 py-1 flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                    🔧 Customize View
+                </Button>
+            </div>
+
+            {showCustomize && (
+                <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700/50 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                    {Object.keys(visibleWidgets).map(key => (
+                      <label key={key} className="flex items-center space-x-1.5 cursor-pointer select-none">
+                        <input 
+                            type="checkbox" 
+                            checked={visibleWidgets[key as keyof typeof visibleWidgets]} 
+                            onChange={() => toggleWidget(key as keyof typeof visibleWidgets)} 
+                            className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                        />
+                        <span className="capitalize text-gray-600 dark:text-gray-300">{key.replace(/([A-Z])/g, ' $1')}</span>
+                      </label>
+                    ))}
+                </div>
+            )}
+
+            <div>
                 <div className={isCompact ? "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 md:gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6"}>
                     {visibleWidgets.balance && <StatCard title="Available Balance" value={formatCurrency(currentUser.walletBalance, currentUser.currency)} icon={<WalletIcon />} color="bg-blue-500" />}
                     {visibleWidgets.deposits && <StatCard title="Total Deposits" value={formatCurrency(stats.totalDeposits, currentUser.currency)} icon={<DepositIcon />} color="bg-sky-500" />}
