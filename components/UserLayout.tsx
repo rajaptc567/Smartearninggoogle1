@@ -289,14 +289,7 @@ const UserLayout: React.FC = () => {
   }
 
   return (
-    <div 
-      className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200"
-      style={{
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'optimizeLegibility'
-      }}
-    >
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
       <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <UserHeader setSidebarOpen={setSidebarOpen} />
@@ -334,16 +327,7 @@ const UserLayout: React.FC = () => {
                 style={settings.tickerStyle}
             />
         )}
-        <main 
-          className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8"
-          style={{
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'optimizeLegibility',
-            transform: 'translateZ(0)',
-            backfaceVisibility: 'hidden'
-          }}
-        >
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>

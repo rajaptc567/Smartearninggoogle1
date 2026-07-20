@@ -300,7 +300,6 @@ const SettingSchema = new mongoose.Schema({
     autoPasswordResetEnabled: { type: Boolean, default: false },
     signUpConfig: { type: SignUpConfigSchema, default: () => ({}) },
     isUserTaskEnabled: { type: Boolean, default: true },
-    userDashboardVersion: { type: String, enum: ['old', 'compact'], default: 'compact' },
     userTaskAccessMode: { type: String, enum: ['all', 'manual', 'plan'], default: 'all' },
     userTaskAllowedUserIds: { type: [String], default: [] },
     userTaskAllowedPlanIds: { type: [String], default: [] },

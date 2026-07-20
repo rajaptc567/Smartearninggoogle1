@@ -109,7 +109,6 @@ const Settings: React.FC = () => {
         termsOfUseUpdated: settings.termsOfUseUpdated || defaultTermsOfUseUpdated,
         termsOfUseContent: settings.termsOfUseContent || defaultTermsOfUseContent,
         emailAutomationEnabled: settings.emailAutomationEnabled || false,
-        userDashboardVersion: settings.userDashboardVersion || 'compact',
         emailSenderAddress: settings.emailSenderAddress || 'studio56.pk@gmail.com',
         emailSenderPassword: settings.emailSenderPassword || 'zakr ambh tnsp mrzf',
         whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
@@ -571,25 +570,6 @@ const Settings: React.FC = () => {
                                     onChange={handleCheckboxChange}
                                 />
                                 <label htmlFor="isInitialPageLoaderEnabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.isInitialPageLoaderEnabled ?? true ? 'bg-green-400' : 'bg-gray-300'}`}></label>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600 gap-4">
-                            <div>
-                                <label htmlFor="userDashboardVersion" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">Default User Dashboard Style</label>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Choose which dashboard style to display for members: either the classic detailed layout or the new compact optimized version.</p>
-                            </div>
-                            <div className="shrink-0 w-full sm:w-48">
-                                <select 
-                                    id="userDashboardVersion"
-                                    name="userDashboardVersion"
-                                    value={localSettings.userDashboardVersion || 'compact'}
-                                    onChange={handleSelectChange}
-                                    className="w-full rounded-md border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                >
-                                    <option value="old">Classic Old Version</option>
-                                    <option value="compact">New Compact Version</option>
-                                </select>
                             </div>
                         </div>
                     </div>
