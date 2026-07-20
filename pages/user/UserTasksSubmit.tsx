@@ -704,7 +704,7 @@ const UserTasksSubmit: React.FC = () => {
                 submittedProofs: proofsToSubmit
             });
             dispatch({ type: 'ADD_USER_TASK_SUBMISSION', payload: submission });
-            alert('Proof submitted successfully! Awaiting admin review for USD reward.');
+            alert('Proof submitted successfully! Awaiting campaign creator review for USD reward.');
             setSelectedTaskForProof(null);
             setProofText('');
             setProofUsername('');
