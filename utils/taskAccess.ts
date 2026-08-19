@@ -1,7 +1,8 @@
 import { User, Settings } from '../types';
 
-export function canUserAccessTasks(currentUser: User | null, settings: Settings): boolean {
+export function canUserAccessTasks(currentUser: User | null, settings: Settings | null | undefined): boolean {
     if (!currentUser) return false;
+    if (!settings) return true;
     const mode = settings.userTaskAccessMode || 'all';
     if (mode === 'all') return true;
     if (mode === 'manual') {

@@ -74,7 +74,17 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
         enum: ['None', 'CreatorReview', 'RejectedByCreator', 'Escalated', 'Resolved'],
         default: 'None'
     },
-    disputeCreatorNotes: { type: String, default: '' }
+    disputeCreatorNotes: { type: String, default: '' },
+    disputeReason: { type: String, default: '' },
+    disputeProofUrl: { type: String, default: '' },
+    paid: { type: Boolean, default: false },
+    rewardClaimed: { type: Boolean, default: false },
+    rewardTransactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' },
+    rewardPaidAt: { type: Date }
 }, { timestamps: true });
+
+UserTaskSubmissionSchema.index({ taskId: 1, workerId: 1 });
+UserTaskSubmissionSchema.index({ workerId: 1, status: 1 });
+UserTaskSubmissionSchema.index({ status: 1 });
 
 export default mongoose.model('UserTaskSubmission', UserTaskSubmissionSchema);

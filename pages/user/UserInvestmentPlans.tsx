@@ -278,7 +278,7 @@ const UserInvestmentPlans: React.FC = () => {
           }
        `}</style>
 
-       <div className="text-center space-y-3">
+        <div className="text-center space-y-3">
             <h2 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
                 Choose Your Investment Plan
             </h2>
@@ -287,6 +287,24 @@ const UserInvestmentPlans: React.FC = () => {
                 Invest securely and grow your network today.
             </p>
         </div>
+
+        {(currentUser.heldUpgradeBalance || 0) > 0 && (
+            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-500 text-white rounded-xl font-bold text-xl">
+                        🔒
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-amber-900 dark:text-amber-200 text-sm">
+                            Held Upgrade Balance Available
+                        </h4>
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                            You have <span className="font-bold text-amber-900 dark:text-amber-100">{formatPrice(currentUser.heldUpgradeBalance, currentUser.currency)}</span> held from referral slots to upgrade your plan.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-6">
             {activePlans.map((plan, index) => {
@@ -297,7 +315,8 @@ const UserInvestmentPlans: React.FC = () => {
                 const { totalHeld } = getHeldCommissionInfo(plan._id);
                 const prerequisites = checkPrerequisites(plan._id);
                 const isLocked = prerequisites?.isLocked;
-                const canAfford = currentUser.walletBalance >= plan.price;
+                const totalBalance = (currentUser.walletBalance || 0) + (currentUser.heldUpgradeBalance || 0);
+                const canAfford = totalBalance >= plan.price;
 
                 const config = plan.displayConfig || { 
                     showDuration: true, 
@@ -485,33 +504,58 @@ const UserInvestmentPlans: React.FC = () => {
                         You are about to purchase the <span className="font-bold text-blue-600 dark:text-blue-400">{selectedPlan.name}</span> plan.
                     </p>
                     
-                    {currentUser.walletBalance >= selectedPlan.price ? (
-                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 mb-6">
-                             <div className="flex justify-between text-sm mb-2">
-                                 <span className="text-gray-500 dark:text-gray-400">Current Balance</span>
-                                 <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(currentUser.walletBalance, currentUser.currency)}</span>
-                             </div>
-                             <div className="flex justify-between text-sm mb-2">
-                                 <span className="text-gray-500 dark:text-gray-400">Plan Cost</span>
-                                 <span className="font-semibold text-red-500">-{formatPrice(selectedPlan.price, selectedPlan.currency)}</span>
-                             </div>
-                             <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
-                             <div className="flex justify-between text-base font-bold">
-                                 <span className="text-gray-800 dark:text-gray-200">New Balance</span>
-                                 <span className="text-green-600 dark:text-green-400">{formatPrice((currentUser.walletBalance - selectedPlan.price), currentUser.currency)}</span>
-                             </div>
-                        </div>
-                    ) : (
-                         <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 mb-6">
-                            <p className="text-sm text-red-700 dark:text-red-300">
-                                Insufficient balance. You need <span className="font-bold">{formatPrice((selectedPlan.price - currentUser.walletBalance), currentUser.currency)}</span> more.
-                            </p>
-                         </div>
-                    )}
+                    {(() => {
+                        const heldBal = currentUser.heldUpgradeBalance || 0;
+                        const walletBal = currentUser.walletBalance || 0;
+                        const totalBal = walletBal + heldBal;
+                        const canAffordTotal = totalBal >= selectedPlan.price;
+                        const heldUsed = Math.min(heldBal, selectedPlan.price);
+                        const walletUsed = Math.max(0, selectedPlan.price - heldUsed);
+
+                        if (canAffordTotal) {
+                            return (
+                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600 mb-6 text-left space-y-2">
+                                     <div className="flex justify-between text-sm">
+                                         <span className="text-gray-500 dark:text-gray-400">Wallet Balance</span>
+                                         <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(walletBal, currentUser.currency)}</span>
+                                     </div>
+                                     {heldBal > 0 && (
+                                         <div className="flex justify-between text-sm text-amber-700 dark:text-amber-300">
+                                             <span className="flex items-center gap-1">🔒 Held Upgrade Balance</span>
+                                             <span className="font-semibold">{formatPrice(heldBal, currentUser.currency)}</span>
+                                         </div>
+                                     )}
+                                     <div className="flex justify-between text-sm pt-1 border-t dark:border-gray-600">
+                                         <span className="text-gray-500 dark:text-gray-400">Plan Cost</span>
+                                         <span className="font-semibold text-red-500">-{formatPrice(selectedPlan.price, selectedPlan.currency)}</span>
+                                     </div>
+                                     {heldBal > 0 && (
+                                         <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400 italic">
+                                             <span>Applied from Held Balance</span>
+                                             <span>-{formatPrice(heldUsed, currentUser.currency)}</span>
+                                         </div>
+                                     )}
+                                     <div className="border-t border-gray-200 dark:border-gray-600 my-2"></div>
+                                     <div className="flex justify-between text-sm font-bold">
+                                         <span className="text-gray-800 dark:text-gray-200">Wallet Deducted</span>
+                                         <span className="text-gray-900 dark:text-white">{formatPrice(walletUsed, currentUser.currency)}</span>
+                                     </div>
+                                </div>
+                            );
+                        } else {
+                            return (
+                                 <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-100 dark:border-red-800 mb-6">
+                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                        Insufficient balance. You need <span className="font-bold">{formatPrice((selectedPlan.price - totalBal), currentUser.currency)}</span> more.
+                                    </p>
+                                 </div>
+                            );
+                        }
+                    })()}
                     
                     <div className="flex gap-3">
                         <Button variant="secondary" onClick={handleCloseModal} disabled={isPurchasing} className="flex-1">Cancel</Button>
-                        {currentUser.walletBalance >= selectedPlan.price ? (
+                        {(currentUser.walletBalance || 0) + (currentUser.heldUpgradeBalance || 0) >= selectedPlan.price ? (
                             <Button variant="success" onClick={handleConfirmPurchase} disabled={isPurchasing} className="flex-1">
                                 {isPurchasing ? 'Processing...' : 'Confirm & Pay'}
                             </Button>

@@ -31,6 +31,7 @@ const SentIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 const TemplateIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2z"></path></svg>;
 const MegaphoneIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-2.433 9.168-6M10 15V5a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2h4a2 2 0 002-2z"></path></svg>;
 const LinkIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>;
+const GlobeSearchIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>;
 const BellIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>;
 
 
@@ -57,10 +58,14 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon /> },
       { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon /> },
       { to: '/admin/task-categories', label: 'Task Configurator', icon: <SettingsIcon /> },
+      { to: '/admin/work-and-earn-editor', label: 'Work & Earn Editor', icon: <SettingsIcon /> },
+      { to: '/admin/reconciliation', label: 'Reconciliation', icon: <RulesIcon /> },
+      { to: '/admin/withdrawal-rules', label: 'Withdrawal Rules', icon: <RulesIcon /> },
       { to: '/admin/wallet', label: 'Wallet', icon: <WalletIcon /> },
       { to: '/admin/rules', label: 'Upgrade Rules', icon: <RulesIcon /> },
       { to: '/admin/sponsor-commission-rules', label: 'Sponsor Rules', icon: <CommissionRuleIcon /> },
       { to: '/admin/reports', label: 'Reports', icon: <ReportIcon /> },
+      { to: '/admin/seo-intelligence', label: 'SEO Intelligence', icon: <GlobeSearchIcon /> },
       { to: '/admin/settings', label: 'Settings', icon: <SettingsIcon /> },
       { to: '/admin/ticker-settings', label: 'Ticker Settings', icon: <MegaphoneIcon /> },
       { to: '/admin/logs', label: 'Logs', icon: <LogsIcon /> },
@@ -80,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                 <div className="flex items-center justify-center h-20 border-b border-gray-700 flex-shrink-0">
                     <h1 className="text-2xl font-bold text-white">SmartEarning</h1>
                 </div>
-                <nav className="mt-6 px-4 flex-grow">
+                <nav className="mt-4 px-4 flex-1 overflow-y-auto space-y-1 custom-scrollbar">
                     {navLinks.map(({ to, label, icon, badge }) => (
                         <NavLink
                             key={label}

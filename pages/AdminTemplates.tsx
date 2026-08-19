@@ -112,11 +112,13 @@ const AdminTemplates: React.FC = () => {
     const placeholderVars = [
         { name: '{username}', desc: 'The username of the recipient user (e.g. @john_doe)' },
         { name: '{fullName}', desc: 'The full name of the user' },
-        { name: '{amount}', desc: 'The transaction amount' },
+        { name: '{amount}', desc: 'The transaction or reward amount' },
         { name: '{currency}', desc: 'The wallet currency (e.g., PKR, USD, EUR)' },
         { name: '{txId}', desc: 'Transaction reference code or deposit ID' },
         { name: '{date}', desc: 'Current date and timestamp' },
         { name: '{notes}', desc: 'Admin remarks, notes, or rejection comments' },
+        { name: '{taskTitle}', desc: 'Title of the micro task campaign' },
+        { name: '{workerName}', desc: 'Username of the worker completing the task' },
         { name: '{resetLink}', desc: 'Secure password reset URL link' }
     ];
 
@@ -425,6 +427,7 @@ The SmartEarning Desk
         if (lowerKey.includes('transfer')) return 'Transfer';
         if (lowerKey.includes('plan')) return 'Plan';
         if (lowerKey.includes('referral')) return 'Referral';
+        if (lowerKey.includes('task') || lowerKey.includes('campaign') || lowerKey.includes('work') || lowerKey.includes('submission')) return 'Work & Earn';
         if (lowerKey.includes('welcome')) return 'Welcome';
         if (lowerKey.includes('password') || lowerKey.includes('reset')) return 'Password Reset';
         if (lowerKey.includes('announcement') || lowerKey.includes('general')) return 'Announcement';
@@ -693,6 +696,7 @@ The SmartEarning Desk
                                     className="w-full px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none"
                                 >
                                     <option value="all">All Categories</option>
+                                    <option value="work & earn">Work & Earn</option>
                                     <option value="deposit">Deposit</option>
                                     <option value="withdrawal">Withdrawal</option>
                                     <option value="transfer">Transfer</option>

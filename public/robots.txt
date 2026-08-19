@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /
+Allow: /how-it-works
+Allow: /how-it-works-for-workers
+Allow: /advertise
+Allow: /campaigns
+Allow: /micro-tasks
+Allow: /paid-surveys
+Allow: /task-proof
+Allow: /trust-and-safety
+Allow: /knowledge-base
+Allow: /faqs
+Allow: /privacy-policy
+Allow: /refund-policy
+Allow: /terms-of-use
+Disallow: /member/
+Disallow: /admin/
+Disallow: /secure-admin-login56
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: https://smartexn.com/sitemap.xml

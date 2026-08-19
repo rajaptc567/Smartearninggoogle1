@@ -14,6 +14,14 @@ const CommissionSchema = new mongoose.Schema({
     disabledLevels: {
         type: [Number],
         default: []
+    },
+    heldLevels: {
+        type: [Number],
+        default: []
+    },
+    holdForUpgrade: {
+        type: Boolean,
+        default: false
     }
 }, { _id: false });
 
@@ -69,6 +77,7 @@ const InvestmentPlanSchema = new mongoose.Schema({
     autoUpgrade: {
         enabled: { type: Boolean, default: false },
         toPlanId: { type: String },
+        type: { type: String, enum: ['auto', 'manual'], default: 'auto' },
     },
     customFeatures: {
         type: [String],

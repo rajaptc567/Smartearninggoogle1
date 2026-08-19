@@ -23,7 +23,22 @@ const TemplateSchema = new mongoose.Schema({
             'referral_signup_email', 'referral_signup_whatsapp',
             'referral_commission_email', 'referral_commission_whatsapp',
             'welcome_message_email', 'welcome_message_whatsapp',
-            'password_reset_email', 'password_reset_whatsapp'
+            'password_reset_email', 'password_reset_whatsapp',
+            'task_campaign_created_email', 'task_campaign_created_whatsapp',
+            'task_campaign_approved_email', 'task_campaign_approved_whatsapp',
+            'task_campaign_rejected_email', 'task_campaign_rejected_whatsapp',
+            'task_submission_received_email', 'task_submission_received_whatsapp',
+            'task_submission_approved_email', 'task_submission_approved_whatsapp',
+            'task_submission_rejected_email', 'task_submission_rejected_whatsapp',
+            'wallet_adjusted_email', 'wallet_adjusted_whatsapp',
+            'commission_locked_email', 'commission_locked_whatsapp',
+            'commission_unlocked_email', 'commission_unlocked_whatsapp',
+            'commission_missed_email', 'commission_missed_whatsapp',
+            'dispute_opened_email', 'dispute_opened_whatsapp',
+            'dispute_resolved_worker_email', 'dispute_resolved_worker_whatsapp',
+            'dispute_resolved_employer_email', 'dispute_resolved_employer_whatsapp',
+            'kyc_approved_email', 'kyc_approved_whatsapp',
+            'kyc_rejected_email', 'kyc_rejected_whatsapp'
         ]
     },
     name: {
@@ -1093,6 +1108,733 @@ We will notify you once processed.
 
 Regards,
 SmartEarning Team
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_campaign_created_email',
+        name: 'Work & Earn Campaign Submitted (Email)',
+        type: 'email',
+        subject: '📋 Campaign Submitted: {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">💼</span>
+        <h2 style="color: #3b82f6; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Campaign Submitted for Review</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your micro task campaign <strong>"{taskTitle}"</strong> has been successfully submitted and is under review by our team.</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <table style="width: 100%; font-size: 14px; border-collapse: collapse; color: #4b5563;">
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600; width: 140px;">Campaign Title:</td>
+                    <td style="padding: 4px 0; color: #1e3a8a; font-weight: 700;">{taskTitle}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Total Budget:</td>
+                    <td style="padding: 4px 0; color: #111827; font-weight: 700;">{amount} {currency}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Status:</td>
+                    <td style="padding: 4px 0; color: #f59e0b; font-weight: 700;">Pending Review</td>
+                </tr>
+            </table>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Once approved by Admin, your campaign will go live and workers can start submitting proofs.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_campaign_created_whatsapp',
+        name: 'Work & Earn Campaign Submitted (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - Campaign Submitted* 📋
+
+Hello @{username},
+
+Your campaign *"{taskTitle}"* with total budget *{amount} {currency}* has been submitted and is currently pending Admin review.
+
+We will notify you once approved!
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_campaign_approved_email',
+        name: 'Work & Earn Campaign Approved (Email)',
+        type: 'email',
+        subject: '🟢 Campaign Approved & Live: {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🚀</span>
+        <h2 style="color: #10b981; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Campaign Approved & Active!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Great news! Your campaign <strong>"{taskTitle}"</strong> has been verified and approved by the team.</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 14px; color: #065f46;">Your task is now live on the Work & Earn Hub. Workers can view instructions and submit completion proofs.</p>
+        </div>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'emerald_success'
+    },
+    {
+        key: 'task_campaign_approved_whatsapp',
+        name: 'Work & Earn Campaign Approved (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - Campaign Approved!* 🟢🚀
+
+Hello @{username},
+
+Your campaign *"{taskTitle}"* has been approved and is now LIVE! Workers can begin performing tasks and submitting proof.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_campaign_rejected_email',
+        name: 'Work & Earn Campaign Rejected (Email)',
+        type: 'email',
+        subject: '⚠️ Notice: Campaign Rejected - {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">❌</span>
+        <h2 style="color: #ef4444; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Campaign Rejected</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your campaign <strong>"{taskTitle}"</strong> was rejected during review.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #991b1b;">Reason / Notes:</p>
+            <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{notes}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">The total reserved budget ({amount} {currency}) has been credited back to your Task Wallet.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'coral_danger'
+    },
+    {
+        key: 'task_campaign_rejected_whatsapp',
+        name: 'Work & Earn Campaign Rejected (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - Campaign Rejected* 🔴
+
+Hello @{username},
+
+Your campaign *"{taskTitle}"* was rejected.
+Reason: {notes}
+
+The full campaign budget has been refunded to your Task Wallet balance.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_submission_received_email',
+        name: 'Task Proof Submitted to Employer (Email)',
+        type: 'email',
+        subject: '📥 New Task Proof Received: {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">📥</span>
+        <h2 style="color: #6366f1; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">New Task Completion Proof</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">A worker has completed your task and submitted proof for campaign <strong>"{taskTitle}"</strong>.</p>
+        
+        <div style="background-color: #eef2ff; border-left: 4px solid #6366f1; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 14px; color: #3730a3;">Worker: <strong>@{workerName}</strong></p>
+            <p style="margin: 4px 0 0 0; font-size: 14px; color: #3730a3;">Reward Amount: <strong>{amount} {currency}</strong></p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Please log into your Work & Earn dashboard to review and approve or reject the submission proof.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_submission_received_whatsapp',
+        name: 'Task Proof Submitted to Employer (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - New Submission Received* 📥
+
+Hello @{username},
+
+Worker @{workerName} has submitted proof of completion for your task *"{taskTitle}"*.
+
+Please log in to review the submitted proof.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_submission_approved_email',
+        name: 'Task Proof Approved for Worker (Email)',
+        type: 'email',
+        subject: '🎉 Task Approved! Reward Paid for {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🏆</span>
+        <h2 style="color: #10b981; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Task Approved & Reward Earned!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your submitted proof for campaign <strong>"{taskTitle}"</strong> has been reviewed and approved!</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 16px; font-weight: 700; color: #065f46;">Reward Credited: {amount} {currency}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Your Task Earnings balance has been credited immediately. Keep completing more tasks to boost your earnings!</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'emerald_success'
+    },
+    {
+        key: 'task_submission_approved_whatsapp',
+        name: 'Task Proof Approved for Worker (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - Task Approved!* 🏆🟢
+
+Hello @{username},
+
+Your proof for campaign *"{taskTitle}"* was approved! 
+💰 Reward Earned: *{amount} {currency}*
+
+The funds have been added to your Task Earnings balance.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_submission_rejected_email',
+        name: 'Task Proof Rejected for Worker (Email)',
+        type: 'email',
+        subject: '⚠️ Task Submission Status: {taskTitle}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⚠️</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Task Submission Rejected</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your submitted proof for campaign <strong>"{taskTitle}"</strong> was rejected.</p>
+        
+        <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #92400e;">Feedback / Notes:</p>
+            <p style="margin: 0; font-size: 14px; color: #78350f;">{notes}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">If you believe this was an error, you can open a dispute in your Work & Earn submissions panel within the dispute window.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Work & Earn Module - Automated System Notice</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'task_submission_rejected_whatsapp',
+        name: 'Task Proof Rejected for Worker (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*Work & Earn - Task Proof Rejected* ⚠️
+
+Hello @{username},
+
+Your proof for campaign *"{taskTitle}"* was rejected.
+Reason: {notes}
+
+If you believe this rejection is incorrect, you can open a dispute from your dashboard.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'wallet_adjusted_email',
+        name: 'Wallet Adjusted by Admin (Email)',
+        type: 'email',
+        subject: '💳 Wallet Balance Adjustment Notice',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">💳</span>
+        <h2 style="color: #3b82f6; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Wallet Balance Adjusted</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">An administrator has updated your account wallet balance.</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <table style="width: 100%; font-size: 14px; border-collapse: collapse; color: #4b5563;">
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600; width: 140px;">Adjustment Amount:</td>
+                    <td style="padding: 4px 0; color: #1e3a8a; font-weight: 700;">{amount} {currency}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Reason / Notes:</td>
+                    <td style="padding: 4px 0; color: #111827;">{notes}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">New Wallet Balance:</td>
+                    <td style="padding: 4px 0; color: #10b981; font-weight: 700;">{newBalance} {currency}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Date:</td>
+                    <td style="padding: 4px 0; color: #111827;">{date}</td>
+                </tr>
+            </table>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">You can check your updated wallet history in your dashboard transactions ledger.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Automated Wallet Management - SmartEarning Support</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'wallet_adjusted_whatsapp',
+        name: 'Wallet Adjusted by Admin (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Wallet Adjustment* 💳
+
+Dear @{username},
+
+Your wallet balance has been adjusted by an admin.
+
+🔹 Adjustment: *{amount} {currency}*
+🔹 Reason: {notes}
+🔹 New Balance: *{newBalance} {currency}*
+🔹 Date: {date}
+
+Thank you for being part of SmartEarning!
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'commission_locked_email',
+        name: 'Commission Locked Notice (Email)',
+        type: 'email',
+        subject: '🔐 Commission Held: {amount} {currency} Locked',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🔐</span>
+        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Commission Held / Locked</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">A referral commission of <strong>{amount} {currency}</strong> from <strong>@{referralUsername}</strong> has been received and held in locked status.</p>
+        
+        <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <table style="width: 100%; font-size: 14px; border-collapse: collapse; color: #4b5563;">
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600; width: 140px;">Held Commission:</td>
+                    <td style="padding: 4px 0; color: #d97706; font-weight: 700;">{amount} {currency}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Triggered By:</td>
+                    <td style="padding: 4px 0; color: #111827;">@{referralUsername}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 4px 0; font-weight: 600;">Plan Name:</td>
+                    <td style="padding: 4px 0; color: #111827;">{planName}</td>
+                </tr>
+            </table>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">To unlock and claim this commission into your main balance, activate an eligible active investment plan!</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">Affiliate Program Notice - SmartEarning Support</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'commission_locked_whatsapp',
+        name: 'Commission Locked Notice (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Commission Locked* 🔐
+
+Dear @{username},
+
+A commission of *{amount} {currency}* from @{referralUsername} ({planName}) is held/locked.
+
+Activate an active plan on your account to unlock and claim this commission!
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'commission_unlocked_email',
+        name: 'Commission Unlocked Notice (Email)',
+        type: 'email',
+        subject: '🔓 Commission Released! {amount} {currency} Credited',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🔓</span>
+        <h2 style="color: #10b981; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Locked Commission Unlocked!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Great news! Your locked commission of <strong>{amount} {currency}</strong> has been unlocked and credited to your main available balance.</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 16px; font-weight: 700; color: #065f46;">Amount Credited: {amount} {currency}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">These funds are now ready for withdrawal or reinvestment.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Affiliate System</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'emerald_success'
+    },
+    {
+        key: 'commission_unlocked_whatsapp',
+        name: 'Commission Unlocked Notice (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Commission Released!* 🔓🎉
+
+Dear @{username},
+
+Your locked commission of *{amount} {currency}* has been successfully released and added to your available balance!
+
+Thank you for staying active on SmartEarning.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'commission_missed_email',
+        name: 'Commission Missed Notice (Email)',
+        type: 'email',
+        subject: '⚠️ Notice: Missed Commission Alert',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⚠️</span>
+        <h2 style="color: #ef4444; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Commission Missed</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">A potential commission of <strong>{amount} {currency}</strong> from <strong>@{referralUsername}</strong> was missed.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 4px 0; font-weight: 700; color: #991b1b;">Missed Amount: {amount} {currency}</p>
+            <p style="margin: 0; font-size: 13px; color: #7f1d1d;">Referral: @{referralUsername}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Upgrade your plan or maintain direct referral qualifications to ensure you never miss future team commissions.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Affiliate System</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'coral_danger'
+    },
+    {
+        key: 'commission_missed_whatsapp',
+        name: 'Commission Missed Notice (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Missed Commission* ⚠️
+
+Dear @{username},
+
+You missed a commission of *{amount} {currency}* from @{referralUsername}.
+
+Make sure your investment plan and account requirements are up to date to receive all team commissions!
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'dispute_opened_email',
+        name: 'Dispute Opened (Email)',
+        type: 'email',
+        subject: '⚖️ Support Dispute Submitted: Case #{disputeId}',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⚖️</span>
+        <h2 style="color: #6366f1; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Dispute Registered</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your support dispute case has been registered and is under review by our admin arbitration team.</p>
+        
+        <div style="background-color: #f5f3ff; border-left: 4px solid #6366f1; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 4px 0; font-weight: 700; color: #3730a3;">Case Reference: #{disputeId}</p>
+            <p style="margin: 0 0 4px 0; font-size: 14px; color: #4338ca;">Subject / Title: {title}</p>
+            <p style="margin: 0; font-size: 13px; color: #5b21b6;">Details: {notes}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">You can view updates or add additional proof messages directly in your Disputes panel.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Dispute & Arbitration Desk</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'cosmic'
+    },
+    {
+        key: 'dispute_opened_whatsapp',
+        name: 'Dispute Opened (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Dispute Case Submitted* ⚖️
+
+Dear @{username},
+
+Dispute case *#{disputeId}* for "{title}" has been registered.
+Our arbitration team will review the submitted evidence and provide a verdict.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'dispute_resolved_worker_email',
+        name: 'Dispute Resolved - Worker Won (Email)',
+        type: 'email',
+        subject: '🏆 Dispute Resolved: Case #{disputeId} Ruled in Your Favor!',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🏆</span>
+        <h2 style="color: #10b981; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Dispute Ruled in Your Favor!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">The Admin arbitration team has ruled in your favor regarding dispute case <strong>#{disputeId}</strong> for <strong>"{title}"</strong>.</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 16px; font-weight: 700; color: #065f46;">Task Reward Credited: {amount} {currency}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">The earnings have been credited to your available wallet balance immediately.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Arbitration Desk</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'emerald_success'
+    },
+    {
+        key: 'dispute_resolved_worker_whatsapp',
+        name: 'Dispute Resolved - Worker Won (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Dispute Case Won!* 🏆🟢
+
+Dear @{username},
+
+Admin ruled in your favor for dispute *#{disputeId}* ("{title}")!
+Reward of *{amount} {currency}* has been credited to your wallet balance.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'dispute_resolved_employer_email',
+        name: 'Dispute Resolved - Employer Won (Email)',
+        type: 'email',
+        subject: '🛡️ Dispute Resolved: Case #{disputeId} Escrow Refunded',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">🛡️</span>
+        <h2 style="color: #3b82f6; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Dispute Resolved - Refund Processed</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Dispute case <strong>#{disputeId}</strong> for campaign <strong>"{title}"</strong> has been resolved by our arbitration desk.</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 15px; font-weight: 700; color: #1e40af;">Escrow Budget Refunded to Wallet</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">The campaign escrow funds have been safely returned to your wallet balance.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Support Desk</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'cosmic'
+    },
+    {
+        key: 'dispute_resolved_employer_whatsapp',
+        name: 'Dispute Resolved - Employer Won (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Dispute Case Resolved* 🛡️
+
+Dear @{username},
+
+Dispute *#{disputeId}* for campaign "{title}" has been resolved.
+Escrow funds have been refunded back to your wallet.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'kyc_approved_email',
+        name: 'KYC / Account Verification Approved (Email)',
+        type: 'email',
+        subject: '✅ Account Identity Verification Approved!',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">✅</span>
+        <h2 style="color: #10b981; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">KYC Verification Approved!</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Congratulations! Your account verification / KYC documents have been reviewed and fully approved.</p>
+        
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; font-size: 15px; font-weight: 700; color: #065f46;">Status: Verified Account</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">You now enjoy higher withdrawal limits and full unhindered access to all earning features.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Security & Verification Team</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'emerald_success'
+    },
+    {
+        key: 'kyc_approved_whatsapp',
+        name: 'KYC / Account Verification Approved (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Account Verified!* ✅
+
+Dear @{username},
+
+Your account identity verification (KYC) has been successfully approved!
+You now have full access to all withdrawal features and earning pools.
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'default'
+    },
+    {
+        key: 'kyc_rejected_email',
+        name: 'KYC / Account Verification Rejected (Email)',
+        type: 'email',
+        subject: '⚠️ Account Verification Status Update',
+        body: `
+<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
+    <div style="text-align: center; margin-bottom: 25px;">
+        <span style="font-size: 48px;">⚠️</span>
+        <h2 style="color: #ef4444; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Verification Action Needed</h2>
+    </div>
+    <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong>,</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">Your submitted verification / KYC documents could not be verified.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0 0 4px 0; font-weight: 700; color: #991b1b;">Reason:</p>
+            <p style="margin: 0; font-size: 14px; color: #7f1d1d;">{notes}</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">Please log into your profile settings and upload clear, valid documentation to complete verification.</p>
+    </div>
+    <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
+        <p style="margin: 0;">SmartEarning Security & Verification Team</p>
+    </div>
+</div>
+        `.trim(),
+        isEnabled: true,
+        graphicTheme: 'coral_danger'
+    },
+    {
+        key: 'kyc_rejected_whatsapp',
+        name: 'KYC / Account Verification Rejected (WhatsApp)',
+        type: 'whatsapp',
+        subject: '',
+        body: `
+*SmartEarning - Verification Action Required* ⚠️
+
+Dear @{username},
+
+Your account verification documents were not approved.
+Reason: {notes}
+
+Please upload updated clear documentation from your profile page.
         `.trim(),
         isEnabled: true,
         graphicTheme: 'default'

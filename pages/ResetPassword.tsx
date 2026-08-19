@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { verifyResetToken, resetPasswordWithToken as apiResetPassword } from '../services/api';
+import { SEOHead } from '../components/SEOHead';
 
 type ResetStatus = 'verifying' | 'invalid' | 'ready' | 'expired' | 'success';
 
@@ -167,10 +168,20 @@ const ResetPassword = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 px-4">
+            <SEOHead 
+                title="Reset Your Password | SmartExn" 
+                robots="noindex, nofollow" 
+                canonical="https://smartexn.com/reset-password" 
+            />
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">SmartEarning</h1>
+                    <Link to="/" className="inline-flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-sky-500 rounded-lg flex items-center justify-center text-white">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                        <span className="text-2xl font-bold text-gray-900 dark:text-white">Smart<span className="text-sky-500">Exn</span></span>
+                    </Link>
                     <h2 className="mt-2 text-2xl font-bold text-gray-800 dark:text-white">Reset Your Password</h2>
                 </div>
 

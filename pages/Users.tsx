@@ -173,6 +173,29 @@ const Users: React.FC = () => {
         }
     };
 
+    const handleBulkSkipVerification = async () => {
+        if (selectedUserIds.length === 0) return;
+        
+        const count = selectedUserIds.length;
+        const confirmMessage = `Are you sure you want to bypass/skip Email and WhatsApp verification for ${count} selected user(s)?\n\nThis will mark them as verified.`;
+        
+        if (window.confirm(confirmMessage)) {
+            setIsProcessing(true);
+            try {
+                await Promise.all(selectedUserIds.map(id => apiUpdateUser(id, { emailVerified: true, whatsappVerified: true })));
+                const updatedUsers = await getUsers();
+                dispatch({ type: 'SET_USERS', payload: updatedUsers });
+                setSelectedUserIds([]);
+                alert(`Successfully bypassed verification for ${count} user(s).`);
+            } catch (error) {
+                console.error("Failed to bulk bypass verification:", error);
+                alert(`Error: ${error instanceof Error ? error.message : 'Could not bypass verification.'}`);
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+    };
+
     const filteredUsers = useMemo(() => {
         return state.users.filter(user => {
             const matchesSearch = (() => {
@@ -354,6 +377,7 @@ const Users: React.FC = () => {
                             <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
                             <Button size="sm" variant="secondary" onClick={() => handleDownloadDossiers(selectedUserIds)}>Download Dossiers</Button>
                             <Button size="sm" variant="secondary" onClick={() => handleOpenMessage(null)}>Send Message ({selectedUserIds.length})</Button>
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-none text-xs font-bold" onClick={handleBulkSkipVerification} disabled={isProcessing}>Skip Verification</Button>
                             <Button size="sm" variant="danger" onClick={handleBulkDelete} disabled={isProcessing}>
                                 {isProcessing ? 'Processing...' : 'Delete Selected'}
                             </Button>
@@ -1299,6 +1323,37 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                         />
                                     </div>
                                 </div>
+
+                                <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/40 mt-4">
+                                    <h3 className="font-black text-xs uppercase text-emerald-600 dark:text-emerald-300 tracking-widest mb-4">Verification Bypass (Skip)</h3>
+                                    <p className="text-xs text-gray-400 mb-4 font-bold">Manually set or skip verification requirements for this user.</p>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-900 dark:text-white">Email Verified State</p>
+                                                <p className="text-[10px] text-gray-500 max-w-[200px]">If checked, Email verification is marked as completed.</p>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!formData.emailVerified} 
+                                                onChange={() => setFormData(prev => ({ ...prev, emailVerified: !prev.emailVerified }))}
+                                                className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-900 dark:text-white">WhatsApp Verified State</p>
+                                                <p className="text-[10px] text-gray-500 max-w-[200px]">If checked, WhatsApp verification is marked as completed.</p>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!formData.whatsappVerified} 
+                                                onChange={() => setFormData(prev => ({ ...prev, whatsappVerified: !prev.whatsappVerified }))}
+                                                className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1911,6 +1966,24 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, preSelectedUs
     const [isPopup, setIsPopup] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [selectedChannels, setSelectedChannels] = useState<string[]>(['email', 'whatsapp']);
+    const [verificationAction, setVerificationAction] = useState<'none' | 'must_verify' | 'remind'>('none');
+
+    const handleVerificationActionChange = (action: 'none' | 'must_verify' | 'remind') => {
+        setVerificationAction(action);
+        if (action === 'must_verify') {
+            setSubject('Account Verification Required');
+            setMessage('Dear Member,\n\nYour account requires verification to access all features. Please verify your Email and WhatsApp to continue to your dashboard and prevent account restriction.\n\nThank you.');
+            setIsPopup(true);
+        } else if (action === 'remind') {
+            setSubject('Friendly Reminder: Verify Your Account');
+            setMessage('Dear Member,\n\nThis is a friendly reminder to verify your account. Unlocking your account verification ensures maximum security and access to all daily earning opportunities.\n\nThank you for being with us!');
+            setIsPopup(false);
+        } else {
+            setSubject('');
+            setMessage('');
+            setIsPopup(false);
+        }
+    };
 
     const getTargetUsers = () => {
         if (targetType === 'single') {
@@ -1947,7 +2020,8 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, preSelectedUs
                 subject, 
                 message, 
                 isPopup, 
-                selectedChannels
+                selectedChannels,
+                verificationAction
             });
             dispatch({ type: 'UPDATE_NOTIFICATIONS', payload: result.data });
             alert(`Message sent successfully to ${targetUsers.length} user(s).`);
@@ -2041,6 +2115,18 @@ const MessageUserModal: React.FC<MessageUserModalProps> = ({ user, preSelectedUs
                             )}
                         </div>
                     )}
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-2">Verification Action (Optional)</label>
+                    <select 
+                        value={verificationAction} 
+                        onChange={e => handleVerificationActionChange(e.target.value as any)} 
+                        className="w-full border rounded p-2 text-sm dark:bg-gray-700 font-sans"
+                    >
+                        <option value="none">Normal Message (No verification changes)</option>
+                        <option value="must_verify">Must verify to enter into account (Reset status to Unverified)</option>
+                        <option value="remind">Just remind them to get verified (Friendly Reminder preset)</option>
+                    </select>
                 </div>
                 <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Subject (Optional)</label><input value={subject} onChange={e => setSubject(e.target.value)} className="w-full border rounded p-2" placeholder="Important Update" /></div>
                 <div><label className="block text-xs font-bold uppercase text-gray-500 mb-1">Message Content</label><textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className="w-full border rounded p-2" placeholder="Type your message here..." required /></div>

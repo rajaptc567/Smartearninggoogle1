@@ -57,7 +57,11 @@ const WithdrawalSchema = new mongoose.Schema({
     matchedDepositIds: [{
         type: mongoose.Schema.ObjectId,
         ref: 'Deposit'
-    }]
+    }],
+    isHub: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

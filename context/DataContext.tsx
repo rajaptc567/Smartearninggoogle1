@@ -117,6 +117,15 @@ const initialState: AppState = {
         faqs: [],
         homepagePaymentLogos: [],
         isInitialPageLoaderEnabled: true,
+        hubEnabled: true,
+        hubMinDeposit: 5,
+        hubMaxDeposit: 1000,
+        hubMinWithdrawal: 1,
+        hubMaxWithdrawal: 1000,
+        hubAccessMode: 'all',
+        hubAllowedUserIds: [],
+        hubAllowedPlanIds: [],
+        hubDepositMethods: [],
     },
     notifications: [],
     logs: [],
@@ -202,20 +211,38 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.faqs === undefined) newSettings.faqs = [];
         if (newSettings.homepagePaymentLogos === undefined) newSettings.homepagePaymentLogos = [];
         if (newSettings.isInitialPageLoaderEnabled === undefined) newSettings.isInitialPageLoaderEnabled = true;
+        if (newSettings.hubEnabled === undefined) newSettings.hubEnabled = true;
+        if (newSettings.hubMinDeposit === undefined) newSettings.hubMinDeposit = 5;
+        if (newSettings.hubMaxDeposit === undefined) newSettings.hubMaxDeposit = 1000;
+        if (newSettings.hubMinWithdrawal === undefined) newSettings.hubMinWithdrawal = 1;
+        if (newSettings.hubMaxWithdrawal === undefined) newSettings.hubMaxWithdrawal = 1000;
+        if (newSettings.hubAccessMode === undefined) newSettings.hubAccessMode = 'all';
+        if (newSettings.hubAllowedUserIds === undefined) newSettings.hubAllowedUserIds = [];
+        if (newSettings.hubAllowedPlanIds === undefined) newSettings.hubAllowedPlanIds = [];
+        if (newSettings.hubDepositMethods === undefined) newSettings.hubDepositMethods = [];
         return newSettings;
     };
 
     let newState: AppState;
 
     switch (action.type) {
-        case 'SET_ALL_DATA':
+        case 'SET_ALL_DATA': {
             if (!action.payload) return state;
             const sanitizedPayload = { ...action.payload };
             if (sanitizedPayload.settings) {
                 sanitizedPayload.settings = sanitizeSettings(sanitizedPayload.settings);
             }
-            newState = { ...state, ...sanitizedPayload };
+            let updatedCurrentUser = state.currentUser;
+            if (updatedCurrentUser && Array.isArray(sanitizedPayload.users)) {
+                const freshUser = sanitizedPayload.users.find((u: any) => String(u._id) === String(updatedCurrentUser?._id));
+                if (freshUser) {
+                    updatedCurrentUser = freshUser;
+                    try { localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser)); } catch (e) {}
+                }
+            }
+            newState = { ...state, ...sanitizedPayload, currentUser: updatedCurrentUser };
             break;
+        }
 
         case 'SET_CURRENT_USER':
             try {
@@ -236,96 +263,96 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             break;
 
         case 'SET_USERS': newState = { ...state, users: action.payload || [] }; break;
-        case 'ADD_USER': newState = { ...state, users: [...state.users, action.payload] }; break;
+        case 'ADD_USER': newState = { ...state, users: [action.payload, ...state.users.filter(u => String(u._id) !== String(action.payload._id))] }; break;
         case 'UPDATE_USER': {
             if (!action.payload) return state;
-            const updatedUsers = state.users.map(u => u._id === action.payload._id ? action.payload : u);
+            const updatedUsers = state.users.map(u => String(u._id) === String(action.payload._id) ? { ...u, ...action.payload } : u);
             let updatedCurrentUser = state.currentUser;
-            if (state.currentUser?._id === action.payload._id) {
-                updatedCurrentUser = action.payload;
+            if (state.currentUser && String(state.currentUser._id) === String(action.payload._id)) {
+                updatedCurrentUser = { ...state.currentUser, ...action.payload };
                 try { localStorage.setItem('currentUser', JSON.stringify(updatedCurrentUser)); } catch (e) {}
             }
             newState = { ...state, users: updatedUsers, currentUser: updatedCurrentUser };
             break;
         }
-        case 'DELETE_USER': newState = { ...state, users: state.users.filter(u => u._id !== action.payload) }; break;
+        case 'DELETE_USER': newState = { ...state, users: state.users.filter(u => String(u._id) !== String(action.payload)) }; break;
 
         case 'SET_DEPOSITS': newState = { ...state, deposits: action.payload || [] }; break;
-        case 'ADD_DEPOSIT': newState = { ...state, deposits: [action.payload, ...state.deposits] }; break;
-        case 'UPDATE_DEPOSIT': newState = { ...state, deposits: state.deposits.map(d => d._id === action.payload._id ? action.payload : d) }; break;
+        case 'ADD_DEPOSIT': newState = { ...state, deposits: [action.payload, ...state.deposits.filter(d => String(d._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_DEPOSIT': newState = { ...state, deposits: state.deposits.map(d => String(d._id) === String(action.payload._id) ? action.payload : d) }; break;
 
         case 'SET_WITHDRAWALS': newState = { ...state, withdrawals: action.payload || [] }; break;
-        case 'ADD_WITHDRAWAL': newState = { ...state, withdrawals: [action.payload, ...state.withdrawals] }; break;
-        case 'UPDATE_WITHDRAWAL': newState = { ...state, withdrawals: state.withdrawals.map(w => w._id === action.payload._id ? action.payload : w) }; break;
+        case 'ADD_WITHDRAWAL': newState = { ...state, withdrawals: [action.payload, ...state.withdrawals.filter(w => String(w._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_WITHDRAWAL': newState = { ...state, withdrawals: state.withdrawals.map(w => String(w._id) === String(action.payload._id) ? action.payload : w) }; break;
 
         case 'SET_PAYMENT_METHODS': newState = { ...state, paymentMethods: action.payload || [] }; break;
-        case 'ADD_PAYMENT_METHOD': newState = { ...state, paymentMethods: [action.payload, ...state.paymentMethods] }; break;
-        case 'UPDATE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.map(p => p._id === action.payload._id ? action.payload : p) }; break;
-        case 'DELETE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.filter(p => p._id !== action.payload) }; break;
+        case 'ADD_PAYMENT_METHOD': newState = { ...state, paymentMethods: [action.payload, ...state.paymentMethods.filter(p => String(p._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.map(p => String(p._id) === String(action.payload._id) ? action.payload : p) }; break;
+        case 'DELETE_PAYMENT_METHOD': newState = { ...state, paymentMethods: state.paymentMethods.filter(p => String(p._id) !== String(action.payload)) }; break;
 
         case 'SET_INVESTMENT_PLANS': newState = { ...state, investmentPlans: action.payload || [] }; break;
-        case 'ADD_INVESTMENT_PLAN': newState = { ...state, investmentPlans: [action.payload, ...state.investmentPlans] }; break;
-        case 'UPDATE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.map(p => p._id === action.payload._id ? action.payload : p) }; break;
-        case 'DELETE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.filter(p => p._id !== action.payload) }; break;
+        case 'ADD_INVESTMENT_PLAN': newState = { ...state, investmentPlans: [action.payload, ...state.investmentPlans.filter(p => String(p._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.map(p => String(p._id) === String(action.payload._id) ? action.payload : p) }; break;
+        case 'DELETE_INVESTMENT_PLAN': newState = { ...state, investmentPlans: state.investmentPlans.filter(p => String(p._id) !== String(action.payload)) }; break;
 
         case 'SET_RULES': newState = { ...state, rules: action.payload || [] }; break;
-        case 'ADD_RULE': newState = { ...state, rules: [action.payload, ...state.rules] }; break;
-        case 'DELETE_RULE': newState = { ...state, rules: state.rules.filter(r => r._id !== action.payload) }; break;
+        case 'ADD_RULE': newState = { ...state, rules: [action.payload, ...state.rules.filter(r => String(r._id) !== String(action.payload._id))] }; break;
+        case 'DELETE_RULE': newState = { ...state, rules: state.rules.filter(r => String(r._id) !== String(action.payload)) }; break;
         
         case 'SET_TRANSFERS': newState = { ...state, transfers: action.payload || [] }; break;
-        case 'ADD_TRANSFER': newState = { ...state, transfers: [action.payload, ...state.transfers] }; break;
-        case 'UPDATE_TRANSFER': newState = { ...state, transfers: state.transfers.map(t => t._id === action.payload._id ? action.payload : t) }; break;
+        case 'ADD_TRANSFER': newState = { ...state, transfers: [action.payload, ...state.transfers.filter(t => String(t._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_TRANSFER': newState = { ...state, transfers: state.transfers.map(t => String(t._id) === String(action.payload._id) ? action.payload : t) }; break;
 
         case 'SET_TRANSACTIONS': newState = { ...state, transactions: action.payload || [] }; break;
-        case 'ADD_TRANSACTION': newState = { ...state, transactions: [action.payload, ...state.transactions] }; break;
+        case 'ADD_TRANSACTION': newState = { ...state, transactions: [action.payload, ...state.transactions.filter(t => String(t._id) !== String(action.payload._id))] }; break;
 
         case 'SET_SETTINGS': newState = { ...state, settings: sanitizeSettings(action.payload) }; break;
         case 'UPDATE_SETTINGS': newState = { ...state, settings: sanitizeSettings(action.payload) }; break;
 
         case 'SET_LOGS': newState = { ...state, logs: action.payload || [] }; break;
-        case 'ADD_LOG': newState = { ...state, logs: [action.payload, ...state.logs] }; break;
+        case 'ADD_LOG': newState = { ...state, logs: [action.payload, ...state.logs.filter(l => String(l._id) !== String(action.payload._id))] }; break;
 
         case 'SET_NOTIFICATIONS': newState = { ...state, notifications: action.payload || [] }; break;
-        case 'ADD_NOTIFICATION': newState = { ...state, notifications: [action.payload, ...state.notifications] }; break;
+        case 'ADD_NOTIFICATION': newState = { ...state, notifications: [action.payload, ...state.notifications.filter(n => String(n._id) !== String(action.payload._id))] }; break;
         case 'UPDATE_NOTIFICATION':
-            newState = { ...state, notifications: state.notifications.map(n => n._id === action.payload._id ? action.payload : n) };
+            newState = { ...state, notifications: state.notifications.map(n => String(n._id) === String(action.payload._id) ? action.payload : n) };
             break;
         case 'UPDATE_NOTIFICATIONS':
             newState = { ...state, notifications: [...(action.payload || []), ...state.notifications] };
             break;
         case 'MARK_NOTIFICATIONS_AS_READ': newState = { ...state, notifications: action.payload || [] }; break;
         case 'DELETE_NOTIFICATIONS':
-            newState = { ...state, notifications: state.notifications.filter(n => !(action.payload || []).includes(n._id)) };
+            newState = { ...state, notifications: state.notifications.filter(n => !(action.payload || []).map(id => String(id)).includes(String(n._id))) };
             break;
 
         case 'SET_PASSWORD_RESET_REQUESTS':
             newState = { ...state, passwordResetRequests: action.payload || [] };
             break;
         case 'UPDATE_PASSWORD_RESET_REQUEST':
-            newState = { ...state, passwordResetRequests: state.passwordResetRequests.map(req => req._id === action.payload._id ? action.payload : req) };
+            newState = { ...state, passwordResetRequests: state.passwordResetRequests.map(req => String(req._id) === String(action.payload._id) ? action.payload : req) };
             break;
         case 'DELETE_PASSWORD_RESET_REQUEST':
-            newState = { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => req._id !== action.payload) };
+            newState = { ...state, passwordResetRequests: state.passwordResetRequests.filter(req => String(req._id) !== String(action.payload)) };
             break;
 
         case 'SET_DISPUTES': newState = { ...state, disputes: action.payload || [] }; break;
-        case 'ADD_DISPUTE': newState = { ...state, disputes: [action.payload, ...state.disputes] }; break;
-        case 'UPDATE_DISPUTE': newState = { ...state, disputes: state.disputes.map(d => d._id === action.payload._id ? action.payload : d) }; break;
+        case 'ADD_DISPUTE': newState = { ...state, disputes: [action.payload, ...state.disputes.filter(d => String(d._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_DISPUTE': newState = { ...state, disputes: state.disputes.map(d => String(d._id) === String(action.payload._id) ? action.payload : d) }; break;
 
         case 'SET_TASKS': newState = { ...state, tasks: action.payload || [] }; break;
-        case 'ADD_TASK': newState = { ...state, tasks: [action.payload, ...state.tasks] }; break;
-        case 'UPDATE_TASK': newState = { ...state, tasks: state.tasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
-        case 'DELETE_TASK': newState = { ...state, tasks: state.tasks.filter(t => t._id !== action.payload) }; break;
+        case 'ADD_TASK': newState = { ...state, tasks: [action.payload, ...state.tasks.filter(t => String(t._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_TASK': newState = { ...state, tasks: state.tasks.map(t => String(t._id) === String(action.payload._id) ? action.payload : t) }; break;
+        case 'DELETE_TASK': newState = { ...state, tasks: state.tasks.filter(t => String(t._id) !== String(action.payload)) }; break;
 
         case 'SET_USER_TASKS': newState = { ...state, userTasks: action.payload || [] }; break;
-        case 'ADD_USER_TASK': newState = { ...state, userTasks: [action.payload, ...state.userTasks] }; break;
-        case 'UPDATE_USER_TASK': newState = { ...state, userTasks: state.userTasks.map(t => t._id === action.payload._id ? action.payload : t) }; break;
-        case 'DELETE_USER_TASK': newState = { ...state, userTasks: state.userTasks.filter(t => t._id !== action.payload) }; break;
+        case 'ADD_USER_TASK': newState = { ...state, userTasks: [action.payload, ...state.userTasks.filter(t => String(t._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_USER_TASK': newState = { ...state, userTasks: state.userTasks.map(t => String(t._id) === String(action.payload._id) ? action.payload : t) }; break;
+        case 'DELETE_USER_TASK': newState = { ...state, userTasks: state.userTasks.filter(t => String(t._id) !== String(action.payload)) }; break;
 
         case 'SET_USER_TASK_SUBMISSIONS': newState = { ...state, userTaskSubmissions: action.payload || [] }; break;
-        case 'ADD_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: [action.payload, ...state.userTaskSubmissions] }; break;
-        case 'UPDATE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.map(s => s._id === action.payload._id ? action.payload : s) }; break;
-        case 'DELETE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.filter(s => s._id !== action.payload) }; break;
+        case 'ADD_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: [action.payload, ...state.userTaskSubmissions.filter(s => String(s._id) !== String(action.payload._id))] }; break;
+        case 'UPDATE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.map(s => String(s._id) === String(action.payload._id) ? action.payload : s) }; break;
+        case 'DELETE_USER_TASK_SUBMISSION': newState = { ...state, userTaskSubmissions: state.userTaskSubmissions.filter(s => String(s._id) !== String(action.payload)) }; break;
 
         case 'SET_LOADING':
             newState = { ...state, isLoading: action.payload };

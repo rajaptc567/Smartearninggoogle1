@@ -25,10 +25,44 @@ export const getNotifications = async (req, res) => {
 // @route   POST /api/v1/notifications
 export const createNotification = async (req, res) => {
     try {
-        const { userId, message, subject, isPopup, targetType, targetIds, randomCount, selectedChannels, imageUrl, displayTrigger, frequency, actionButtonText, actionButtonLink } = req.body;
+        const { userId, message, subject, isPopup, targetType, targetIds, randomCount, selectedChannels, imageUrl, displayTrigger, frequency, actionButtonText, actionButtonLink, verificationAction } = req.body;
         
         let notificationsToCreate = [];
         const senderType = 'Admin'; // Messages sent via this endpoint are always from an Admin
+
+        // Reset verification statuses for target users if requested
+        let targetQuery = null;
+        if (userId) {
+            targetQuery = { _id: userId };
+        } else if (targetType) {
+            if (targetType === 'all') {
+                targetQuery = {};
+            } else if (targetType === 'plan' && targetIds && targetIds.length > 0) {
+                targetQuery = { 'activePlans.planId': { $in: targetIds } };
+            } else if (targetType === 'single' && targetIds && targetIds.length > 0) {
+                targetQuery = { _id: { $in: targetIds } };
+            } else if (targetType === 'inactive') {
+                targetQuery = { 
+                    $or: [
+                        { activePlans: { $exists: false } }, 
+                        { activePlans: { $size: 0 } }
+                    ] 
+                };
+            } else if (targetType === 'country' && targetIds && targetIds.length > 0) {
+                targetQuery = { country: { $in: targetIds } };
+            } else if (targetType === 'currency' && targetIds && targetIds.length > 0) {
+                targetQuery = { currency: { $in: targetIds } };
+            }
+        }
+
+        if (targetQuery && (verificationAction === 'must_verify' || verificationAction === 'unverify')) {
+            await User.updateMany(targetQuery, { $set: { emailVerified: false, whatsappVerified: false } });
+            // Notify clients via socket.io for instant real-time reflections
+            const io = req.app.get('io');
+            if (io) {
+                io.emit('DATA_CHANGED');
+            }
+        }
 
         // CASE 1: Single User (Legacy or specific selection)
         if (userId) {

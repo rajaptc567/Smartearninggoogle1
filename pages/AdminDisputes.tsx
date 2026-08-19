@@ -5,7 +5,8 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { updateDispute, updateDeposit, markDisputeAsRead, resolveDispute } from '../services/api';
+import { updateDispute, updateDeposit, markDisputeAsRead, resolveDispute, getDisputes, getUserTaskSubmissions, getUserTasks, getUsers, getTransactions } from '../services/api';
+import { DisputeTimeline } from '../components/DisputeTimeline';
 
 const AdminDisputes: React.FC = () => {
     const { state, dispatch } = useData();
@@ -127,6 +128,28 @@ const AdminDisputes: React.FC = () => {
         return userTasks?.find(t => t._id === linkedSubmission.taskId);
     }, [linkedSubmission, userTasks]);
 
+    // Helper function to re-fetch and sync all data across the app
+    const refreshAllState = async () => {
+        try {
+            const [freshDisputes, freshSubmissions, freshTasks, freshUsers, freshTransactions] = await Promise.all([
+                getDisputes(),
+                getUserTaskSubmissions(),
+                getUserTasks(),
+                getUsers(),
+                getTransactions()
+            ]);
+            dispatch({ type: 'SET_DISPUTES', payload: freshDisputes });
+            dispatch({ type: 'SET_USER_TASK_SUBMISSIONS', payload: freshSubmissions });
+            dispatch({ type: 'SET_USER_TASKS', payload: freshTasks });
+            dispatch({ type: 'SET_USERS', payload: freshUsers });
+            dispatch({ type: 'SET_TRANSACTIONS', payload: freshTransactions });
+            return freshDisputes;
+        } catch (e) {
+            console.error("Failed to refresh state after dispute action:", e);
+            return null;
+        }
+    };
+
     const handleSendMessage = async () => {
         if (!selectedDispute || (!replyMessage.trim() && !attachment)) return;
         setIsSubmitting(true);
@@ -145,6 +168,7 @@ const AdminDisputes: React.FC = () => {
             setReplyMessage('');
             setAttachment(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
+            await refreshAllState();
         } catch (error) {
             console.error("Failed to send message", error);
             alert("Failed to send message");
@@ -160,6 +184,7 @@ const AdminDisputes: React.FC = () => {
             const updatedDispute = await updateDispute(selectedDispute._id, { status, sender: 'System' });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             setSelectedDispute(updatedDispute);
+            await refreshAllState();
         } catch (error) {
             console.error("Failed to update dispute status", error);
             alert("Failed to update dispute status");
@@ -187,6 +212,7 @@ const AdminDisputes: React.FC = () => {
                 sender: 'System'
             });
             dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+            await refreshAllState();
             
             handleClose();
             alert("Deposit Approved and Dispute Resolved.");
@@ -211,20 +237,16 @@ const AdminDisputes: React.FC = () => {
                 adminNotes: note,
                 splitPercentageWorker: verdict === 'SplitPayout' ? 50 : undefined
             });
-            dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
             
-            if (linkedSubmission) {
-                const subStatus = verdict === 'RefundToCreator' ? 'Rejected' : 'Paid';
-                dispatch({
-                    type: 'UPDATE_USER_TASK_SUBMISSION',
-                    payload: {
-                        ...linkedSubmission,
-                        status: subStatus
-                    }
-                });
+            const freshDisputes = await refreshAllState();
+            if (freshDisputes) {
+                const freshObj = freshDisputes.find(d => String(d._id) === String(selectedDispute._id)) || updatedDispute;
+                setSelectedDispute(freshObj);
+            } else {
+                dispatch({ type: 'UPDATE_DISPUTE', payload: updatedDispute });
+                setSelectedDispute(updatedDispute);
             }
             
-            setSelectedDispute(updatedDispute);
             alert(`Dispute resolved successfully with verdict: ${verdict}`);
         } catch (error) {
             console.error("Failed to resolve dispute:", error);
@@ -433,6 +455,8 @@ const AdminDisputes: React.FC = () => {
                                              <h4 className="font-bold text-xs uppercase text-amber-700 dark:text-amber-400 mb-1">User Task Dispute</h4>
                                              <p className="text-xs text-amber-800 dark:text-amber-300">Escrow funds are frozen. User spot remains booked.</p>
                                          </div>
+
+                                         <DisputeTimeline submission={linkedSubmission} dispute={selectedDispute} settings={state.settings} isAdmin={true} />
 
                                          {linkedTask && (
                                              <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-2xl">

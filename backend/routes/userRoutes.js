@@ -19,10 +19,20 @@ import {
     verifyAndStartResetTimer,
     bulkUpdateRestrictions,
     createBulkDummyUsers,
-    sendCustomAdminMessage
+    sendCustomAdminMessage,
+    verifyEmailCode,
+    verifyWhatsappCode,
+    resendEmailCode,
+    resendWhatsappCode
 } from '../controllers/usersController.js';
 
 const router = express.Router();
+
+// Verification routes
+router.post('/verify-email', authorize(['user', 'admin']), verifyEmailCode);
+router.post('/verify-whatsapp', authorize(['user', 'admin']), verifyWhatsappCode);
+router.post('/resend-email', authorize(['user', 'admin']), resendEmailCode);
+router.post('/resend-whatsapp', authorize(['user', 'admin']), resendWhatsappCode);
 
 // Public/Auth routes with rate limiting
 router.post('/login', authLimiter, loginUser);

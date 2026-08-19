@@ -104,13 +104,31 @@ export const createWithdrawal = async (req, res) => {
             }
         }
 
-        if (user.walletBalance < req.body.amount) {
-            return res.status(400).json({ success: false, error: 'Insufficient balance' });
-        }
+        const isHub = req.body.isHub === 'true' || req.body.isHub === true;
 
-        user.walletBalance -= req.body.amount;
+        if (isHub) {
+            const settings = await Setting.findOne();
+            const rate = settings?.exchangeRates?.[user.currency] || 1;
+            const reqAmountUSD = user.currency === 'USD' ? req.body.amount : (req.body.amount / (rate || 1));
+
+            const availTaskUSD = Math.max(user.taskWalletBalance || 0, user.taskEarningsBalance || 0);
+
+            if (availTaskUSD * rate < req.body.amount - 0.1 && (user.taskWalletBalance || 0) < req.body.amount) {
+                return res.status(400).json({ success: false, error: 'Insufficient Task Earnings / Task Wallet balance' });
+            }
+
+            user.taskWalletBalance = Number((Math.max(0, (user.taskWalletBalance || 0) - reqAmountUSD)).toFixed(2));
+            if (user.taskEarningsBalance !== undefined) {
+                user.taskEarningsBalance = Number((Math.max(0, (user.taskEarningsBalance || 0) - reqAmountUSD)).toFixed(2));
+            }
+        } else {
+            if (user.walletBalance < req.body.amount) {
+                return res.status(400).json({ success: false, error: 'Insufficient balance' });
+            }
+            user.walletBalance = Number((user.walletBalance - req.body.amount).toFixed(2));
+        }
         
-        const withdrawalData = { ...req.body, currency: user.currency };
+        const withdrawalData = { ...req.body, isHub, currency: user.currency };
         const withdrawal = await Withdrawal.create(withdrawalData);
         
         const transaction = await Transaction.create({
@@ -212,7 +230,11 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
-            user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
+            if (withdrawal.isHub) {
+                user.taskWalletBalance = Number((user.taskWalletBalance + withdrawal.amount).toFixed(2));
+            } else {
+                user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
+            }
             
             await Transaction.create({
                 userId: user._id,
@@ -232,7 +254,7 @@ export const updateWithdrawal = async (req, res) => {
 
              await Notification.create({
                 userId: user._id,
-                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your wallet.`
+                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your ${withdrawal.isHub ? 'task wallet' : 'wallet'}.`
             });
 
             // Send dynamic templated notification in the background

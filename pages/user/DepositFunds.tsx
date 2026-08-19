@@ -238,6 +238,10 @@ const DepositFunds: React.FC = () => {
 
     // Wizard State
     const [step, setStep] = useState(1);
+    
+    const isHub = useMemo(() => {
+        return localStorage.getItem('dashboard_mode') === 'work_and_earn';
+    }, []);
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [transactionId, setTransactionId] = useState('');
@@ -280,14 +284,34 @@ const DepositFunds: React.FC = () => {
         if (!currentUser) return [];
         const numericAmount = parseFloat(amount);
         if (isNaN(numericAmount) || numericAmount <= 0) return [];
-        return paymentMethods.filter(method => 
+        
+        const activeDepositMethods = paymentMethods.filter(method => 
             method.type === 'Deposit' && 
             method.status === 'Enabled' &&
-            method.currency === currentUser.currency &&
+            method.currency === currentUser.currency
+        );
+
+        if (isHub) {
+            // Filter by hubAllowedMethods list
+            const allowedMethodsList = settings.hubDepositMethods || [];
+            const hubMethods = activeDepositMethods.filter(method => 
+                allowedMethodsList.includes(method._id) || allowedMethodsList.includes(method.name)
+            );
+
+            // Filter by global hub limits
+            const minDep = settings.hubMinDeposit ?? 5;
+            const maxDep = settings.hubMaxDeposit ?? 1000;
+            if (numericAmount < minDep || numericAmount > maxDep) {
+                return [];
+            }
+            return hubMethods;
+        }
+
+        return activeDepositMethods.filter(method => 
             method.minAmount <= numericAmount && 
             method.maxAmount >= numericAmount
         );
-    }, [paymentMethods, amount, currentUser]);
+    }, [paymentMethods, amount, currentUser, isHub, settings]);
 
     const selectedMethod = useMemo(() =>
         availableMethods.find(method => method._id.toString() === selectedMethodId),
@@ -383,6 +407,7 @@ const DepositFunds: React.FC = () => {
         formData.append('senderAccountTitle', senderAccountTitle);
         formData.append('receipt', receipt);
         formData.append('confirmationAnswers', JSON.stringify(confirmationAnswers));
+        formData.append('isHub', isHub ? 'true' : 'false');
         if(userNotes) formData.append('userNotes', userNotes);
         if(selectedMethod.p2pWithdrawalId) formData.append('matchedWithdrawalId', selectedMethod.p2pWithdrawalId);
         try {
@@ -513,8 +538,15 @@ const DepositFunds: React.FC = () => {
 
             <div className="p-4 sm:p-8 md:p-10 text-white shadow-xl relative overflow-hidden mb-4 sm:mb-12 group transition-all" style={{ backgroundColor: pageConfig.primaryColor, borderRadius: pageConfig.cardRounding }}>
                 <div className="relative z-10">
-                    <h1 className="text-2xl sm:text-3xl md:text-5xl font-black mb-2 sm:mb-4 tracking-tighter uppercase leading-none">Deposit Funds</h1>
-                    <p className="text-blue-50 text-xs sm:text-sm md:text-base max-w-2xl leading-relaxed font-medium">Add funds to your wallet securely. Follow the sequence to complete your deposit.</p>
+                    <h1 className="text-2xl sm:text-3xl md:text-5xl font-black mb-2 sm:mb-4 tracking-tighter uppercase leading-none">
+                        {isHub ? "Deposit Hub Funds" : "Deposit Funds"}
+                    </h1>
+                    <p className="text-blue-50 text-xs sm:text-sm md:text-base max-w-2xl leading-relaxed font-medium">
+                        {isHub 
+                            ? "Add funds to your micro task & gigs wallet securely. Follow the sequence to complete your deposit." 
+                            : "Add funds to your investment wallet securely. Follow the sequence to complete your deposit."
+                        }
+                    </p>
                 </div>
             </div>
 
@@ -525,7 +557,12 @@ const DepositFunds: React.FC = () => {
                     <div className="animate-fade-in space-y-4 sm:space-y-8 max-w-2xl mx-auto">
                         <div className="text-center space-y-1 mb-2 sm:mb-6">
                             <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Amount Selection</h3>
-                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest">Select an amount based on active plan pricing</p>
+                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest font-mono">
+                                {isHub 
+                                    ? `Limits: Min ${formatCurrency(settings.hubMinDeposit ?? 5, currentUser.currency)} - Max ${formatCurrency(settings.hubMaxDeposit ?? 1000, currentUser.currency)}`
+                                    : "Select an amount based on active plan pricing"
+                                }
+                            </p>
                         </div>
                         {planPrices.length > 0 && (
                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-3">

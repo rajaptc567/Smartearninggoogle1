@@ -12,6 +12,10 @@ export const getSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
     try {
+        const prevSettings = await Setting.findOne();
+        const emailBecameRequired = req.body.emailVerificationRequired && (!prevSettings || !prevSettings.emailVerificationRequired);
+        const whatsappBecameRequired = req.body.whatsappVerificationRequired && (!prevSettings || !prevSettings.whatsappVerificationRequired);
+
         const settings = await Setting.findOneAndUpdate({}, { 
             ...req.body, 
             dataVersion: Date.now() 
@@ -20,6 +24,20 @@ export const updateSettings = async (req, res) => {
             upsert: true,
             runValidators: true,
         });
+
+        // If verification was newly enabled, mark all existing users as verified
+        if (emailBecameRequired || whatsappBecameRequired) {
+            try {
+                const User = (await import('../models/User.js')).default;
+                const updateFields = {};
+                if (emailBecameRequired) updateFields.emailVerified = true;
+                if (whatsappBecameRequired) updateFields.whatsappVerified = true;
+                
+                await User.updateMany({}, { $set: updateFields });
+            } catch (userErr) {
+                console.error('Failed to auto-verify existing users:', userErr);
+            }
+        }
         
         // Notify all clients via socket.io for instant real-time reflections
         const io = req.app.get('io');

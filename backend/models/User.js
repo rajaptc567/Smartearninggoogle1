@@ -63,14 +63,23 @@ const UserSchema = new mongoose.Schema({
     },
     currency: {
         type: String,
-        enum: ['EUR', 'PKR', 'USD'],
-        required: true,
+        default: 'USD',
+        required: [true, 'Please specify currency'],
     },
     walletBalance: {
         type: Number,
         default: 0,
     },
     taskWalletBalance: {
+        type: Number,
+        default: 0,
+    },
+    campaignWalletSources: {
+        fromInvestmentUSD: { type: Number, default: 0 },
+        fromTaskEarningsUSD: { type: Number, default: 0 },
+        fromRefundsUSD: { type: Number, default: 0 }
+    },
+    heldUpgradeBalance: {
         type: Number,
         default: 0,
     },
@@ -124,10 +133,42 @@ const UserSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {},
     },
+    emailVerified: {
+        type: Boolean,
+        default: false,
+    },
+    emailVerificationCode: {
+        type: String,
+    },
+    whatsappVerified: {
+        type: Boolean,
+        default: false,
+    },
+    whatsappVerificationCode: {
+        type: String,
+    },
     passwordResetToken: String,
     passwordResetExpires: Date,
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }
+});
+
+UserSchema.pre('validate', function(next) {
+    if (!this.country) {
+        this.country = 'Pakistan';
+    }
+
+    if (!this.currency || this.isModified('country')) {
+        if (this.country && this.country.toLowerCase() === 'pakistan') {
+             this.currency = 'PKR';
+        } else if (this.country && europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+            this.currency = 'EUR';
+        } else if (!this.currency) {
+            this.currency = 'USD';
+        }
+    }
+
+    next();
 });
 
 UserSchema.pre('save', async function(next) {
@@ -136,9 +177,9 @@ UserSchema.pre('save', async function(next) {
     }
 
     if (this.isModified('country') || !this.currency) {
-        if (this.country.toLowerCase() === 'pakistan') {
+        if (this.country && this.country.toLowerCase() === 'pakistan') {
              this.currency = 'PKR';
-        } else if (europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
+        } else if (this.country && europeanCountries.map(c => c.toLowerCase()).includes(this.country.toLowerCase())) {
             this.currency = 'EUR';
         } else {
             this.currency = 'USD';

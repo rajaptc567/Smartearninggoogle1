@@ -61,6 +61,8 @@ export interface User {
     country: string;
     currency: Currency;
     walletBalance: number;
+    taskWalletBalance?: number;
+    heldUpgradeBalance?: number;
     activePlan?: string;
     activePlans?: ActivePlan[];
     status: Status | 'Active' | 'Blocked' | 'Pending' | 'Paused';
@@ -70,6 +72,8 @@ export interface User {
     sponsor?: string;
     completedTasks?: CompletedTask[];
     isVerified?: boolean;
+    emailVerified?: boolean;
+    whatsappVerified?: boolean;
 }
 
 export interface PageStyling {
@@ -127,7 +131,24 @@ export interface Notice {
     endTime?: string;
 }
 
+export interface CustomEarnSubTab {
+    id: string;
+    name: string;
+    providerKey?: string;
+    description?: string;
+    icon?: string;
+    badge?: string;
+}
+
+export interface CustomEarnTab {
+    id: string;
+    title: string;
+    subTabs: CustomEarnSubTab[];
+    enabled?: boolean;
+}
+
 export interface Settings {
+    customEarnTabs?: CustomEarnTab[];
     proofControls?: {
         screenshotEnabled?: boolean;
         textEnabled?: boolean;
@@ -242,6 +263,36 @@ export interface Settings {
     termsOfUseTitle?: string;
     termsOfUseUpdated?: string;
     termsOfUseContent?: string;
+    cookiePolicyTitle?: string;
+    cookiePolicyUpdated?: string;
+    cookiePolicyContent?: string;
+    contactUsTitle?: string;
+    contactUsUpdated?: string;
+    contactUsContent?: string;
+    
+    // Contact Us Box Controls
+    enableContactUsBox?: boolean; // Enable/disable Contact Us box completely
+    enableContactViaEmail?: boolean; // Enable/disable Email contact option
+    enableContactViaWhatsApp?: boolean; // Enable/disable WhatsApp contact option
+    contactUsEmailAddress?: string; // Admin contact support email address
+    contactUsWhatsAppNumber?: string; // Admin contact support WhatsApp number
+    contactUsBoxTitle?: string; // Custom title for Contact Us Box
+    contactUsBoxSubtitle?: string; // Custom subtitle for Contact Us Box
+    aboutUsTitle?: string;
+    aboutUsUpdated?: string;
+    aboutUsContent?: string;
+    antiFraudPolicyTitle?: string;
+    antiFraudPolicyUpdated?: string;
+    antiFraudPolicyContent?: string;
+    withdrawalPolicyTitle?: string;
+    withdrawalPolicyUpdated?: string;
+    withdrawalPolicyContent?: string;
+    disclaimerTitle?: string;
+    disclaimerUpdated?: string;
+    disclaimerContent?: string;
+    dmcaPolicyTitle?: string;
+    dmcaPolicyUpdated?: string;
+    dmcaPolicyContent?: string;
     emailAutomationEnabled?: boolean;
     emailSenderAddress?: string;
     emailSenderPassword?: string;
@@ -252,6 +303,7 @@ export interface Settings {
     autoPasswordResetEnabled?: boolean;
     isUserTaskEnabled?: boolean;
     userDashboardVersion?: 'old' | 'compact';
+    landingPageStyle?: 'standard' | 'smartexn';
     userTaskAccessMode?: 'all' | 'manual' | 'plan';
     userTaskAllowedUserIds?: string[];
     userTaskAllowedPlanIds?: string[];
@@ -284,6 +336,203 @@ export interface Settings {
         requireCountryCodeInWhatsapp?: boolean;
         customFields?: CustomField[];
     };
+    hubEnabled?: boolean;
+    hubMinDeposit?: number;
+    hubMaxDeposit?: number;
+    hubMinWithdrawal?: number;
+    hubMaxWithdrawal?: number;
+    hubAccessMode?: 'all' | 'manual' | 'plan';
+    hubAllowedUserIds?: string[];
+    hubAllowedPlanIds?: string[];
+    hubDepositMethods?: string[];
+    hubFaqs?: FaqItem[];
+    hubPrivacyPolicyTitle?: string;
+    hubPrivacyPolicyUpdated?: string;
+    hubPrivacyPolicyContent?: string;
+    hubTermsOfUseTitle?: string;
+    hubTermsOfUseUpdated?: string;
+    hubTermsOfUseContent?: string;
+    hubRefundPolicyTitle?: string;
+    hubRefundPolicyUpdated?: string;
+    hubRefundPolicyContent?: string;
+    hubCookiePolicyTitle?: string;
+    hubCookiePolicyUpdated?: string;
+    hubCookiePolicyContent?: string;
+    hubContactUsTitle?: string;
+    hubContactUsUpdated?: string;
+    hubContactUsContent?: string;
+    hubAboutUsTitle?: string;
+    hubAboutUsUpdated?: string;
+    hubAboutUsContent?: string;
+    hubAntiFraudPolicyTitle?: string;
+    hubAntiFraudPolicyUpdated?: string;
+    hubAntiFraudPolicyContent?: string;
+    hubWithdrawalPolicyTitle?: string;
+    hubWithdrawalPolicyUpdated?: string;
+    hubWithdrawalPolicyContent?: string;
+    hubDisclaimerTitle?: string;
+    hubDisclaimerUpdated?: string;
+    hubDisclaimerContent?: string;
+    hubDmcaPolicyTitle?: string;
+    hubDmcaPolicyUpdated?: string;
+    hubDmcaPolicyContent?: string;
+    emailVerificationRequired?: boolean;
+    whatsappVerificationRequired?: boolean;
+    workAndEarnWithdrawalRules?: WorkAndEarnWithdrawalRule[];
+    workAndEarnPayoutTierConfig?: WorkAndEarnPayoutTierConfig;
+    ruleEvaluationLogs?: RuleEvaluationLog[];
+    modulePagesConfig?: ModulePageControlsConfig;
+}
+
+export interface ModulePageControl {
+    id: string;
+    name: string;
+    route: string;
+    icon?: string;
+    category: 'investment' | 'work_and_earn' | 'workAndEarn';
+    menuLocation?: string;
+    isEnabled: boolean;
+    isHiddenInNav: boolean;
+    disabledNotice?: string;
+}
+
+export interface ModulePageControlsConfig {
+    investment: Record<string, ModulePageControl>;
+    workAndEarn: Record<string, ModulePageControl>;
+}
+
+export interface PayoutSequenceStep {
+    stepNumber: number;
+    amountUSD: number;
+    label?: string;
+    requiredMilestoneUSD?: number;
+}
+
+export interface WorkAndEarnPayoutTierConfig {
+    enabled: boolean;
+    mode: 'sequence' | 'milestones_choice' | 'running_plan_only' | 'hybrid';
+    
+    // Limits & Frequency
+    minWithdrawalLimitUSD?: number;
+    maxWithdrawalLimitUSD?: number;
+    dailyWithdrawalLimitUSD?: number;
+    withdrawalFrequencyLimitHours?: number; // Minimum hours between withdrawal requests (e.g. 24 = once a day)
+
+    // Plan-Based Amount Limits
+    planBasedAmountLimitsEnabled: boolean; // Enable/disable restricting payouts to investment plan amounts
+    requireActivePlanToWithdraw: boolean; // Is active plan strictly required to withdraw or optional
+
+    // Currency settings
+    useBaseCurrencyPayouts: boolean; // convert to user's local currency (PKR/INR/etc)
+    hideUSDInUserCurrencyDisplay?: boolean; // Show clean local currency without USD secondary tag
+    
+    // Layout Grid Columns
+    payoutLayoutColumns?: 2 | 3 | 4; // Desktop/Tablet layout columns
+    payoutLayoutColumnsMobile?: 2 | 3 | 4; // Mobile layout columns
+    
+    // Mounted Plans integration
+    mountInvestmentPlans: boolean;
+    linkedPlanIds?: string[];
+    onlyShowRunningPlanAmount: boolean; // Show only amount of currently running plan for the user based on base currency
+    
+    // Sequential payouts
+    sequenceSteps: PayoutSequenceStep[]; // e.g. Step 1: $5, Step 2: $10, Step 3: $15
+    
+    // Milestone payout options (without sequence requirement)
+    manualPayoutAmountsUSD: number[];
+    allowMilestoneWithdrawalWithoutSequence: boolean;
+    
+    // Step 4 Withdrawal Investment Plan Pop-up
+    enableInvestmentPlanPopupOnWithdrawal?: boolean;
+}
+
+export type WithdrawalRuleType = 
+    | 'first_withdrawal'
+    | 'second_withdrawal'
+    | 'third_withdrawal'
+    | 'every_nth_withdrawal'
+    | 'after_x_total_earnings'
+    | 'after_x_successful_withdrawals'
+    | 'after_x_campaigns_completed'
+    | 'after_x_tasks_completed'
+    | 'account_age_requirement'
+    | 'kyc_requirement'
+    | 'investment_plan_requirement'
+    | 'minimum_referral_requirement'
+    | 'manual_admin_approval_requirement'
+    | 'wallet_balance_requirement'
+    | 'custom';
+
+export interface WorkAndEarnWithdrawalRule {
+    id: string;
+    name: string;
+    description?: string;
+    ruleType: WithdrawalRuleType;
+    enabled: boolean;
+    priority: number;
+    isMandatory: boolean;
+    
+    targetUserGroup: 'all' | 'specific_users' | 'no_active_plan';
+    targetUserIds?: string[];
+    
+    effectiveDate?: string;
+    expiryDate?: string;
+    
+    triggerConfig: {
+        withdrawalNumber?: number;
+        nthFrequency?: number;
+        minTotalEarningsUSD?: number;
+        minSuccessfulWithdrawals?: number;
+        minCampaignsCompleted?: number;
+        minTasksCompleted?: number;
+        minAccountAgeDays?: number;
+        minReferrals?: number;
+        minWalletBalanceUSD?: number;
+    };
+    
+    requirementConfig: {
+        requireActiveInvestmentPlan?: boolean;
+        planSelectionType?: 'any' | 'selected' | 'category' | 'min_amount';
+        requiredPlanIds?: string[];
+        requiredPlanCategory?: string;
+        minPlanAmountUSD?: number;
+        
+        // Payout Tiers & Investment Plan Mounts
+        linkedPlanIds?: string[];
+        manualPayoutAmounts?: number[];
+        payoutStepRule?: 'any_option' | 'higher_than_previous' | 'lower_than_previous' | 'exact_match';
+        minPayoutThresholdUSD?: number;
+        payoutCurrency?: string;
+        allowUserSelectionFromMountedPlans?: boolean;
+        
+        requireKycVerification?: boolean;
+        requireManualAdminApproval?: boolean;
+        customConditionExpression?: string;
+    };
+    
+    notificationConfig: {
+        title: string;
+        message: string;
+        primaryActionButtonText: string;
+        primaryActionUrl?: string;
+        secondaryActionButtonText?: string;
+        secondaryActionUrl?: string;
+    };
+    
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface RuleEvaluationLog {
+    id: string;
+    userId: string;
+    username: string;
+    ruleId: string;
+    ruleName: string;
+    ruleType: WithdrawalRuleType;
+    status: 'PASSED' | 'BLOCKED' | 'WARNED';
+    details: string;
+    timestamp: string;
 }
 
 export interface Task {
@@ -379,6 +628,8 @@ export interface UserTaskSubmission {
     secondDisputeDeadline?: string;
     disputeStage?: 'None' | 'CreatorReview' | 'RejectedByCreator' | 'Escalated' | 'Resolved';
     disputeCreatorNotes?: string;
+    disputeReason?: string;
+    disputeProofUrl?: string;
 }
 
 export interface Deposit {
@@ -471,6 +722,8 @@ export interface Commission {
     type: CommissionType;
     value: number;
     disabledLevels?: number[]; 
+    heldLevels?: number[];
+    holdForUpgrade?: boolean;
 }
 
 export interface InvestmentPlan {
@@ -493,6 +746,7 @@ export interface InvestmentPlan {
     autoUpgrade?: {
         enabled: boolean;
         toPlanId?: string;
+        type?: 'auto' | 'manual';
     };
     customFeatures?: string[];
     displayConfig?: {
@@ -562,7 +816,45 @@ export interface HomepagePaymentLogo {
     logoUrl: string;
 }
 
+export interface SmartexnContent {
+    heroTitle?: string;
+    heroSubtitle?: string;
+    heroStartBtn?: string;
+    heroPublishBtn?: string;
+    dashboardPreviewImage?: string;
+    mobilePreviewImage?: string;
+    howItWorksTitle?: string;
+    step1Title?: string;
+    step1Desc?: string;
+    step2Title?: string;
+    step2Desc?: string;
+    step3Title?: string;
+    step3Desc?: string;
+    step4Title?: string;
+    step4Desc?: string;
+    oppsTitle?: string;
+    opp1Title?: string;
+    opp1Desc?: string;
+    opp2Title?: string;
+    opp2Desc?: string;
+    opp3Title?: string;
+    opp3Desc?: string;
+    opp4Title?: string;
+    opp4Desc?: string;
+    bizTitle?: string;
+    bizPoint1Title?: string;
+    bizPoint1Desc?: string;
+    bizPoint2Title?: string;
+    bizPoint2Desc?: string;
+    bizPoint3Title?: string;
+    bizPoint3Desc?: string;
+    bizPoint4Title?: string;
+    bizPoint4Desc?: string;
+    footerCopyright?: string;
+}
+
 export interface HomepageContent {
+    smartexnContent?: SmartexnContent;
     showHero: boolean;
     showFeatures: boolean;
     showMultiCurrency: boolean;

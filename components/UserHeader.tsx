@@ -1,18 +1,35 @@
 
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import NotificationBell from './ui/NotificationBell';
 import { currencySymbols, Currency } from '../types';
 
 interface UserHeaderProps {
   setSidebarOpen: (open: boolean) => void;
+  dashboardMode: 'work_and_earn' | 'investment';
+  setDashboardMode: (mode: 'work_and_earn' | 'investment') => void;
 }
 
-const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
+const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen, dashboardMode, setDashboardMode }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { state } = useData();
-  const { currentUser, notifications } = state;
+  const { currentUser, notifications, settings } = state;
+
+  const hasHubAccess = React.useMemo(() => {
+    if (!currentUser || !settings) return false;
+    if (settings.hubEnabled === false) return false;
+    if (!settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
+    if (settings.hubAccessMode === 'manual') {
+        return (settings.hubAllowedUserIds || []).includes(currentUser._id);
+    }
+    if (settings.hubAccessMode === 'plan') {
+        const allowedPlanIds = settings.hubAllowedPlanIds || [];
+        return (currentUser.activePlans || []).some(ap => allowedPlanIds.includes(ap.planId));
+    }
+    return true;
+  }, [currentUser, settings]);
 
   const getTitle = () => {
     const path = location.pathname.split('/')[2] || 'dashboard';
@@ -26,7 +43,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
     }
   };
 
-  const userNotifications = notifications.filter(n => n.userId === currentUser?._id);
+  const userNotifications = notifications.filter(n => String(n.userId) === String(currentUser?._id));
 
   return (
     <header className="relative flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -41,9 +58,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
           </svg>
         </button>
         <div className="flex items-center space-x-3 sm:space-x-4 ml-2 lg:ml-0">
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white max-w-[120px] xs:max-w-none truncate">{getTitle()}</h1>
+            <h1 className="text-lg sm:text-2xl font-semibold text-gray-800 dark:text-white max-w-[80px] xs:max-w-none truncate">{getTitle()}</h1>
             {currentUser && (
-                <div className="hidden xs:flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
+                <div className="hidden md:flex items-center space-x-2 bg-gray-100 dark:bg-gray-700/50 px-3 py-1 rounded-full text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 shrink-0">
                     <MapPinIcon />
                     <span>{currentUser.country} ({currencySymbols[(currentUser.currency || 'USD').toUpperCase() as Currency] || '$'})</span>
                 </div>
@@ -52,7 +69,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
       </div>
 
       {/* Top Center Logo */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+      <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center justify-center">
         <Link to="/" className="flex items-center gap-1.5 hover:opacity-90 transition-all active:scale-95" title="Go to Home">
           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg shrink-0"></div>
           <span className="hidden sm:inline-block text-lg sm:text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 tracking-tight">
@@ -61,11 +78,39 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen }) => {
         </Link>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 sm:space-x-4">
+        {/* Responsive Dashboard Mode Switcher */}
+        {hasHubAccess && (
+          <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 p-0.5 sm:p-1 rounded-xl border dark:border-gray-700/50 shrink-0">
+            <button 
+              onClick={() => {
+                setDashboardMode('work_and_earn');
+                localStorage.setItem('dashboard_mode', 'work_and_earn');
+                navigate('/member');
+              }}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black tracking-tight transition-all duration-200 ${dashboardMode === 'work_and_earn' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'}`}
+              title="Work & Earn (Primary)"
+            >
+              <span>⚡ Work & Earn</span>
+            </button>
+            <button 
+              onClick={() => {
+                setDashboardMode('investment');
+                localStorage.setItem('dashboard_mode', 'investment');
+                navigate('/member');
+              }}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black tracking-tight transition-all duration-200 ${dashboardMode === 'investment' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'}`}
+              title="Investment (Secondary)"
+            >
+              <span>📈 Investment</span>
+            </button>
+          </div>
+        )}
+
         <NotificationBell notifications={userNotifications} userId={currentUser?._id} />
         <div className="relative">
           <button className="flex items-center focus:outline-none">
-            <span className="mr-2 hidden md:inline">{currentUser?.fullName || 'Member'}</span>
+            <span className="mr-2 hidden lg:inline">{currentUser?.fullName || 'Member'}</span>
             <img className="h-8 w-8 rounded-full object-cover" src="https://picsum.photos/101" alt="User avatar" />
           </button>
         </div>

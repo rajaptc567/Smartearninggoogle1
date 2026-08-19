@@ -77,6 +77,14 @@ const UserTaskSchema = new mongoose.Schema({
         enum: ['Pending', 'Approved', 'Rejected', 'On Hold', 'Paid', 'Completed'],
         default: 'Pending'
     },
+    history: [{
+        action: { type: String, required: true },
+        previousStatus: { type: String },
+        newStatus: { type: String },
+        timestamp: { type: Date, default: Date.now },
+        performedBy: { type: String },
+        details: { type: String }
+    }],
     adminNotes: {
         type: String,
         default: ''
@@ -84,6 +92,16 @@ const UserTaskSchema = new mongoose.Schema({
     baseFeeCharged: {
         type: Number,
         default: 0
+    },
+    fundingSourceBreakdown: {
+        fromInvestmentUSD: { type: Number, default: 0 },
+        fromTaskEarningsUSD: { type: Number, default: 0 },
+        fromRefundsUSD: { type: Number, default: 0 }
+    },
+    refundedBreakdown: {
+        fromInvestmentUSD: { type: Number, default: 0 },
+        fromTaskEarningsUSD: { type: Number, default: 0 },
+        fromRefundsUSD: { type: Number, default: 0 }
     },
     reviewRequested: {
         type: Boolean,
@@ -106,5 +124,7 @@ const UserTaskSchema = new mongoose.Schema({
         default: Date.now
     }
 }, { timestamps: true });
+
+UserTaskSchema.index({ userId: 1, status: 1 });
 
 export default mongoose.model('UserTask', UserTaskSchema);

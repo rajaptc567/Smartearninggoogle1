@@ -14,8 +14,8 @@ const connectDB = async () => {
         console.error('This can happen if:');
         console.error('1. The MONGO_URI environment variable is incorrect (check username, password, and cluster URL).');
         console.error('2. The database user does not have the correct permissions (should be "Read and write to any database").');
-        console.error('3. The IP address of the Render server is not whitelisted in MongoDB Atlas (you have already done this with 0.0.0.0/0, which is correct).');
-        process.exit(1);
+        console.error('3. The IP address of the Render server is not whitelisted in MongoDB Atlas.');
+        // Do not process.exit(1) so Express server can continue running
     }
 };
 

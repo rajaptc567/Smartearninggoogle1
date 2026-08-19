@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { User, Status, countries } from '../types';
 import { createUser as apiCreateUser } from '../services/api';
+import { SEOHead } from '../components/SEOHead';
 
 const Register: React.FC = () => {
     const navigate = useNavigate();
@@ -234,13 +235,20 @@ const Register: React.FC = () => {
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 py-12 px-4">
+            <SEOHead 
+                title="Create Account | SmartExn" 
+                robots="noindex, nofollow" 
+                canonical="https://smartexn.com/register" 
+            />
             <div className={`w-full ${hasExtraFields ? 'max-w-2xl' : 'max-w-md'} p-8 space-y-6 bg-white rounded-lg shadow-md dark:bg-gray-800 transition-all duration-300`}>
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                         <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg"></div>
-                            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
-                                SmartEarning
+                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-sky-500 rounded-lg flex items-center justify-center text-white">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            </div>
+                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                Smart<span className="text-sky-500">Exn</span>
                             </span>
                         </Link>
                     </div>

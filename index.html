@@ -6,22 +6,61 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="cryptomus" content="f4763887" />
-    <title>SmartEarning - Secure Network Marketing Platform</title>
-    <meta name="description" content="Discover SmartEarning (smartexn.com) - a premier secure network marketing platform. Invest in high-yield crypto investment plans and start earning today!" />
+    <title>SmartExn | Online Micro-Tasks, Surveys & Global Gigs</title>
+    <meta name="description" content="Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce." />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://smartexn.com/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://smartexn.com/" />
+    <meta property="og:title" content="SmartExn | Online Micro-Tasks, Surveys & Global Gigs" />
+    <meta property="og:description" content="Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce." />
+    <meta property="og:image" content="https://smartexn.com/favicon.svg" />
+    <meta property="og:site_name" content="SmartExn" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://smartexn.com/" />
+    <meta name="twitter:title" content="SmartExn | Online Micro-Tasks, Surveys & Global Gigs" />
+    <meta name="twitter:description" content="Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce." />
+    <meta name="twitter:image" content="https://smartexn.com/favicon.svg" />
+
+    <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "SmartEarning",
-      "url": "https://smartexn.com",
-      "logo": "https://smartexn.com/favicon.svg",
-      "description": "SmartEarning is a premier secure network marketing platform and high-yield multi-currency wallet investment system offering a multi-tier referral commission system.",
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "contactType": "customer support",
-        "email": "support@smartexn.com",
-        "url": "https://smartexn.com/faqs"
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://smartexn.com/#organization",
+          "name": "SmartExn",
+          "url": "https://smartexn.com",
+          "logo": "https://smartexn.com/favicon.svg",
+          "description": "SmartExn is a global crowdsourcing and digital micro-task network connecting task earners with advertisers and businesses.",
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "customer support",
+            "email": "support@smartexn.com",
+            "url": "https://smartexn.com/faqs"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://smartexn.com/#website",
+          "url": "https://smartexn.com",
+          "name": "SmartExn",
+          "description": "Online micro-tasks, paid surveys, crowdsourcing and campaign advertising platform.",
+          "publisher": {
+            "@id": "https://smartexn.com/#organization"
+          },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://smartexn.com/faqs?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
     }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>

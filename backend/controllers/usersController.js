@@ -142,29 +142,93 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
         const rawAmount = calculateAmount(commissionConfig, plan.price);
         if (rawAmount <= 0) { currentUplineUsername = uplineUser.sponsor; continue; }
         const finalAmount = convertCurrency(rawAmount, user.currency, uplineUser.currency);
+
+        // Check if slot or level is configured as held for auto upgrade rule
+        const currentLevelNum = level + 1;
+        const isSlotHeld = (slotStrategy?.heldLevels || []).includes(currentLevelNum) || commissionConfig?.holdForUpgrade === true;
+
         if (eligibility.status === 'Approved') {
-            uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
-            await uplineUser.save();
-            await Notification.create({ userId: uplineUser._id, subject: 'Commission Received!', message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.` });
-            
-            // Trigger Referral Commission Template Notifications
-            const commissionVars = {
-                amount: finalAmount.toFixed(2),
-                currency: uplineUser.currency,
-                referralUsername: user.username,
-                referralFullName: user.fullName || '',
-                planName: plan.name,
-                level: String(level + 1)
-            };
-            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_email', variables: commissionVars });
-            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_whatsapp', variables: commissionVars });
+            if (isSlotHeld) {
+                uplineUser.heldUpgradeBalance = Number(((uplineUser.heldUpgradeBalance || 0) + finalAmount).toFixed(2));
+                await uplineUser.save();
+
+                await Notification.create({ 
+                    userId: uplineUser._id, 
+                    subject: 'Commission Held for Plan Upgrade 🔒', 
+                    message: `A commission of ${uplineUser.currency}${finalAmount.toFixed(2)} (Slot #${slotIndexForStrategy + 1}, Level ${currentLevelNum}) from @${user.username} was held for your plan upgrade.` 
+                });
+
+                // Auto Upgrade execution check
+                const uplineActivePlanRecord = (uplineUser.activePlans || []).find(ap => ap.planId.toString() === plan._id.toString()) || (uplineUser.activePlans || [])[0];
+                let uplinePlan = null;
+                if (uplineActivePlanRecord) {
+                    uplinePlan = (allPlans || []).find(p => p._id.toString() === uplineActivePlanRecord.planId.toString());
+                }
+                if (!uplinePlan) uplinePlan = plan;
+
+                if (uplinePlan?.autoUpgrade?.enabled && uplinePlan?.autoUpgrade?.toPlanId) {
+                    const upgradeType = uplinePlan.autoUpgrade.type || 'auto';
+                    const targetPlan = (allPlans || []).find(p => p._id.toString() === String(uplinePlan.autoUpgrade.toPlanId));
+                    if (upgradeType === 'auto' && targetPlan) {
+                        const targetPriceInUplineCurrency = convertCurrency(targetPlan.price, targetPlan.currency, uplineUser.currency);
+                        if (uplineUser.heldUpgradeBalance >= targetPriceInUplineCurrency) {
+                            uplineUser.heldUpgradeBalance = Number((uplineUser.heldUpgradeBalance - targetPriceInUplineCurrency).toFixed(2));
+                            uplineUser.activePlans.push({ planId: targetPlan._id, planName: targetPlan.name, price: targetPlan.price, purchaseDate: new Date() });
+                            await uplineUser.save();
+
+                            await Transaction.create({ 
+                                userId: uplineUser._id, 
+                                userName: uplineUser.username, 
+                                currency: uplineUser.currency, 
+                                type: 'Plan Upgrade', 
+                                amount: -targetPriceInUplineCurrency, 
+                                description: `Auto-upgraded to ${targetPlan.name} plan using held commission balance`, 
+                                status: 'Approved' 
+                            });
+
+                            await Notification.create({ 
+                                userId: uplineUser._id, 
+                                subject: '🎉 Plan Auto-Upgraded!', 
+                                message: `Congratulations! Your held commissions reached ${uplineUser.currency}${targetPriceInUplineCurrency.toFixed(2)} and auto-upgraded you to ${targetPlan.name}.`,
+                                isPopup: true 
+                            });
+
+                            const upgradeVars = {
+                                planName: targetPlan.name,
+                                price: targetPlan.price.toFixed(2),
+                                currency: uplineUser.currency,
+                                purchaseDate: new Date().toLocaleString()
+                            };
+                            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'plan_activated_email', variables: upgradeVars });
+                            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'plan_activated_whatsapp', variables: upgradeVars });
+                        }
+                    }
+                }
+            } else {
+                uplineUser.walletBalance = Number((uplineUser.walletBalance + finalAmount).toFixed(2));
+                await uplineUser.save();
+                await Notification.create({ userId: uplineUser._id, subject: 'Commission Received!', message: `You earned ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username}'s plan purchase.` });
+                
+                // Trigger Referral Commission Template Notifications
+                const commissionVars = {
+                    amount: finalAmount.toFixed(2),
+                    currency: uplineUser.currency,
+                    referralUsername: user.username,
+                    referralFullName: user.fullName || '',
+                    planName: plan.name,
+                    level: String(level + 1)
+                };
+                sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_email', variables: commissionVars });
+                sendTemplateNotification({ userId: uplineUser._id, templateKey: 'referral_commission_whatsapp', variables: commissionVars });
+            }
+
             if (level === 0 && plan.directReferralLimit > 0) {
                 const equivIds = [plan._id.toString()];
                 if (settings.planEquivalencyGroups) {
                     const group = (settings.planEquivalencyGroups || []).find(g => String(g.usdPlanId) === plan._id.toString() || String(g.pkrPlanId) === plan._id.toString() || String(g.eurPlanId) === plan._id.toString());
                     if (group) [group.usdPlanId, group.pkrPlanId, group.eurPlanId].filter(Boolean).forEach(id => equivIds.push(String(id)));
                 }
-                const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: 'Commission', relatedPlanId: { $in: equivIds }, level: 1, status: 'Approved' });
+                const approvedCount = await Transaction.countDocuments({ userId: uplineUser._id, type: { $in: ['Commission', 'Commission Held'] }, relatedPlanId: { $in: equivIds }, level: 1, status: { $in: ['Approved', 'Held for Upgrade'] } });
                 if (approvedCount === plan.directReferralLimit) {
                     const admin = await User.findOne({ username: 'admin' });
                     if (admin) await Notification.create({ userId: admin._id, subject: '⚠️ Slot Limit Reached', message: `User @${uplineUser.username} filled slots for ${plan.name}.`, isPopup: true });
@@ -175,13 +239,48 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
             const isLimitRejected = eligibility.message.includes('[Limit]');
             if (!isLimitRejected || (isLimitRejected && settings.notifySponsorOnCommissionLimit)) {
                 await Notification.create({ userId: uplineUser._id, subject: 'Commission Missed', message: `${eligibility.message} commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} was lost.`, isPopup: level === 0 });
+                const commissionVars = {
+                    amount: finalAmount.toFixed(2),
+                    currency: uplineUser.currency || 'USD',
+                    referralUsername: user.username,
+                    referralFullName: user.fullName || '',
+                    planName: plan.name,
+                    notes: eligibility.message
+                };
+                sendTemplateNotification({ userId: uplineUser._id, templateKey: 'commission_missed_email', variables: commissionVars });
+                sendTemplateNotification({ userId: uplineUser._id, templateKey: 'commission_missed_whatsapp', variables: commissionVars });
             }
         } else if (eligibility.status === 'Pending') {
             await Notification.create({ userId: uplineUser._id, subject: 'Commission Locked 🔐', message: `A commission of ${uplineUser.currency}${finalAmount.toFixed(2)} from @${user.username} has been held.` });
+            const commissionVars = {
+                amount: finalAmount.toFixed(2),
+                currency: uplineUser.currency || 'USD',
+                referralUsername: user.username,
+                referralFullName: user.fullName || '',
+                planName: plan.name
+            };
+            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'commission_locked_email', variables: commissionVars });
+            sendTemplateNotification({ userId: uplineUser._id, templateKey: 'commission_locked_whatsapp', variables: commissionVars });
         }
+
         const isLimitRejectedTx = eligibility.status === 'Rejected' && eligibility.message.includes('[Limit]');
         if (!isLimitRejectedTx || (isLimitRejectedTx && settings.showRejectedCommissionTransaction)) {
-            await Transaction.create({ userId: uplineUser._id, userName: uplineUser.username, currency: uplineUser.currency, type: 'Commission', amount: finalAmount, level: level + 1, sourceUserId: user._id, description: eligibility.message || `Commission from ${user.username} (L${level + 1})`, status: eligibility.status, relatedPlanId: plan._id });
+            const txStatus = eligibility.status === 'Approved' ? (isSlotHeld ? 'Held for Upgrade' : 'Approved') : eligibility.status;
+            const txType = isSlotHeld && eligibility.status === 'Approved' ? 'Commission Held' : 'Commission';
+            await Transaction.create({ 
+                userId: uplineUser._id, 
+                userName: uplineUser.username, 
+                currency: uplineUser.currency, 
+                type: txType, 
+                amount: finalAmount, 
+                level: level + 1, 
+                sourceUserId: user._id, 
+                description: isSlotHeld && eligibility.status === 'Approved' 
+                    ? `Commission held for plan upgrade from ${user.username} (Slot #${slotIndexForStrategy + 1}, L${level + 1})`
+                    : (eligibility.message || `Commission from ${user.username} (L${level + 1})`), 
+                status: txStatus, 
+                relatedPlanId: plan._id 
+            });
         }
         currentUplineUsername = uplineUser.sponsor;
     }
@@ -252,7 +351,62 @@ export const createUser = async (req, res) => {
         req.body.currency = country.toLowerCase() === 'pakistan' ? 'PKR' : (europeanCountries.map(c => c.toLowerCase()).includes(country.toLowerCase()) ? 'EUR' : 'USD');
         req.body.activePlans = [];
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
+        
+        const settings = await Setting.getSettings();
+
+        if (settings.emailVerificationRequired) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            req.body.emailVerificationCode = code;
+            req.body.emailVerified = false;
+        } else {
+            req.body.emailVerified = true;
+        }
+
+        if (settings.whatsappVerificationRequired) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            req.body.whatsappVerificationCode = code;
+            req.body.whatsappVerified = false;
+        } else {
+            req.body.whatsappVerified = true;
+        }
+
         const user = await User.create(req.body);
+
+        // Auto send verification codes if required
+        if (settings.emailVerificationRequired) {
+            try {
+                await sendAutomatedMessage({
+                    toEmail: user.email,
+                    subject: 'Verify Your Email Address - Work & Earn Hub',
+                    messageText: `<div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px;">
+                        <h2 style="color: #2563eb; font-weight: 800;">Email Verification Required</h2>
+                        <p>Dear <strong>${user.fullName || user.username}</strong>,</p>
+                        <p>Thank you for registering at Work & Earn Hub. To complete your registration, please verify your email address using the following verification code:</p>
+                        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1e3a8a; margin: 20px 0;">
+                            ${user.emailVerificationCode}
+                        </div>
+                        <p style="font-size: 12px; color: #6b7280;">This code is valid for registration verification. If you did not request this, please ignore this email.</p>
+                    </div>`
+                });
+            } catch (err) {
+                console.error('Failed to send email verification code:', err);
+            }
+        }
+
+        if (settings.whatsappVerificationRequired) {
+            try {
+                const recipientNumber = user.whatsapp || user.phone;
+                if (recipientNumber) {
+                    await sendAutomatedMessage({
+                        toPhone: recipientNumber,
+                        messageText: `Dear ${user.fullName || user.username}, your WhatsApp verification code for Work & Earn Hub is: ${user.whatsappVerificationCode}. Please enter this code to verify your account.`
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to send whatsapp verification code:', err);
+            }
+        }
+
         if (sponsorUser) {
             await Notification.create({ userId: sponsorUser._id, subject: 'New Team Member!', message: `Great news! @${user.username} has joined your network.` });
             
@@ -322,7 +476,7 @@ export const updateUser = async (req, res) => {
         const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
         
         // Fields admins are allowed to modify via this specific endpoint
-        const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor'];
+        const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor', 'emailVerified', 'whatsappVerified'];
 
         const allowedFields = isAdmin ? adminWhitelist : userWhitelist;
         
@@ -344,6 +498,14 @@ export const updateUser = async (req, res) => {
                 message: `Your status changed to: ${filteredUpdate.status}.`, 
                 isPopup: true 
             });
+            const kycVars = { notes: `Account status updated to ${filteredUpdate.status}` };
+            if (filteredUpdate.status === 'Active' || filteredUpdate.status === 'Approved') {
+                sendTemplateNotification({ userId: userToUpdate._id, templateKey: 'kyc_approved_email', variables: kycVars });
+                sendTemplateNotification({ userId: userToUpdate._id, templateKey: 'kyc_approved_whatsapp', variables: kycVars });
+            } else if (filteredUpdate.status === 'Blocked' || filteredUpdate.status === 'Rejected') {
+                sendTemplateNotification({ userId: userToUpdate._id, templateKey: 'kyc_rejected_email', variables: kycVars });
+                sendTemplateNotification({ userId: userToUpdate._id, templateKey: 'kyc_rejected_whatsapp', variables: kycVars });
+            }
         }
 
         // Apply filtered updates instead of raw req.body
@@ -364,6 +526,9 @@ export const updateUser = async (req, res) => {
             updatedUser.walletBalance = Number((updatedUser.walletBalance + releasedAmount).toFixed(2));
             updatedUser = await updatedUser.save();
             await Notification.create({ userId: updatedUser._id, subject: 'Commission Unlocked 🔓', message: `Success! ${updatedUser.currency}${releasedAmount.toFixed(2)} in commissions released.` });
+            const unlockVars = { amount: releasedAmount.toFixed(2), currency: updatedUser.currency || 'USD' };
+            sendTemplateNotification({ userId: updatedUser._id, templateKey: 'commission_unlocked_email', variables: unlockVars });
+            sendTemplateNotification({ userId: updatedUser._id, templateKey: 'commission_unlocked_whatsapp', variables: unlockVars });
         }
         res.status(200).json({ success: true, data: updatedUser });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -421,8 +586,25 @@ export const purchasePlan = async (req, res) => {
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         if (user.restrictions?.purchaseBlocked) return res.status(403).json({ success: false, error: 'Purchases disabled.' });
-        if (user.walletBalance < plan.price) return res.status(400).json({ success: false, error: 'Insufficient funds'});
-        user.walletBalance = Number((user.walletBalance - plan.price).toFixed(2));
+
+        const useHeldBalance = req.body.useHeldBalance !== false;
+        const userHeld = user.heldUpgradeBalance || 0;
+        let heldUsed = 0;
+        let walletUsed = 0;
+
+        if (useHeldBalance && userHeld > 0) {
+            heldUsed = Math.min(userHeld, plan.price);
+            walletUsed = Number((plan.price - heldUsed).toFixed(2));
+        } else {
+            walletUsed = plan.price;
+        }
+
+        if (user.walletBalance < walletUsed) {
+            return res.status(400).json({ success: false, error: `Insufficient funds. Required: ${walletUsed}, Available: ${user.walletBalance}` });
+        }
+
+        user.heldUpgradeBalance = Number((userHeld - heldUsed).toFixed(2));
+        user.walletBalance = Number((user.walletBalance - walletUsed).toFixed(2));
         user.activePlans.push({ planId: plan._id, planName: plan.name, price: plan.price, purchaseDate: new Date() });
         let updatedUser = await user.save();
 
@@ -524,6 +706,17 @@ export const adjustWallet = async (req, res) => {
         user.walletBalance = Number((user.walletBalance + amount).toFixed(2));
         await user.save();
         await Notification.create({ userId: user._id, subject: 'Wallet Adjusted', message: `Admin adjusted balance by ${user.currency}${Math.abs(amount)}.` });
+        
+        const walletVars = {
+            amount: (amount >= 0 ? '+' : '-') + Math.abs(amount).toFixed(2),
+            currency: user.currency || 'USD',
+            notes: description || 'Admin wallet adjustment',
+            newBalance: user.walletBalance.toFixed(2),
+            date: new Date().toLocaleDateString()
+        };
+        sendTemplateNotification({ userId: user._id, templateKey: 'wallet_adjusted_email', variables: walletVars });
+        sendTemplateNotification({ userId: user._id, templateKey: 'wallet_adjusted_whatsapp', variables: walletVars });
+
         const transaction = await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: amount > 0 ? 'Manual Credit' : 'Manual Debit', amount: amount, description: description || 'Admin manual adjustment', status: 'Approved' });
         res.status(200).json({ success: true, data: { user, transaction }});
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
@@ -708,6 +901,102 @@ export const sendCustomAdminMessage = async (req, res) => {
         res.status(200).json({ success: true, message: 'Message sent successfully.' });
     } catch (err) {
         console.error('sendCustomAdminMessage failed:', err);
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const verifyEmailCode = async (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ success: false, error: 'Verification code is required.' });
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        if (user.emailVerificationCode !== code) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+        }
+
+        user.emailVerified = true;
+        user.emailVerificationCode = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, data: user, message: 'Email verified successfully.' });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const verifyWhatsappCode = async (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ success: false, error: 'Verification code is required.' });
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        if (user.whatsappVerificationCode !== code) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code.' });
+        }
+
+        user.whatsappVerified = true;
+        user.whatsappVerificationCode = undefined;
+        await user.save();
+
+        res.status(200).json({ success: true, data: user, message: 'WhatsApp verified successfully.' });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const resendEmailCode = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        user.emailVerificationCode = code;
+        await user.save();
+
+        await sendAutomatedMessage({
+            toEmail: user.email,
+            subject: 'Verify Your Email Address - Work & Earn Hub',
+            messageText: `<div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px;">
+                <h2 style="color: #2563eb; font-weight: 800;">Email Verification Required</h2>
+                <p>Dear <strong>${user.fullName || user.username}</strong>,</p>
+                <p>You requested a new verification code. To verify your email, please use the following code:</p>
+                <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1e3a8a; margin: 20px 0;">
+                    ${code}
+                </div>
+                <p style="font-size: 12px; color: #6b7280;">This code is valid for registration verification.</p>
+            </div>`
+        });
+
+        res.status(200).json({ success: true, message: 'Verification code sent to your email.' });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const resendWhatsappCode = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found.' });
+
+        const recipientNumber = user.whatsapp || user.phone;
+        if (!recipientNumber) return res.status(400).json({ success: false, error: 'No phone or WhatsApp number is configured on your profile.' });
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        user.whatsappVerificationCode = code;
+        await user.save();
+
+        await sendAutomatedMessage({
+            toPhone: recipientNumber,
+            messageText: `Dear ${user.fullName || user.username}, your new WhatsApp verification code for Work & Earn Hub is: ${code}. Please enter this code to verify your account.`
+        });
+
+        res.status(200).json({ success: true, message: 'Verification code sent to your WhatsApp.' });
+    } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };

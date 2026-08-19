@@ -26,9 +26,14 @@ import AdminProfile from './pages/AdminProfile';
 import AdminTasks from './pages/AdminTasks';
 import AdminUserTasks from './pages/AdminUserTasks';
 import AdminTaskCategories from './pages/AdminTaskCategories';
+import AdminWorkAndEarnEditor from './pages/admin/AdminWorkAndEarnEditor';
+import AdminWithdrawalRules from './pages/AdminWithdrawalRules';
 import AdminTemplates from './pages/AdminTemplates';
 import AdminNotifications from './pages/AdminNotifications';
+import AdminFinancialReconciliation from './pages/admin/AdminFinancialReconciliation';
+import AdminSeoIntelligence from './pages/admin/AdminSeoIntelligence';
 import { UserPopupModal } from './components/UserPopupModal';
+import { SeoAnalyticsTracker } from './components/SeoAnalyticsTracker';
 
 // Public facing components
 import HomePage from './pages/HomePage';
@@ -41,6 +46,61 @@ import FaqPage from './pages/FaqPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
 import TermsOfUse from './pages/TermsOfUse';
+import HowItWorks from './pages/HowItWorks';
+import Advertise from './pages/Advertise';
+import MicroTasks from './pages/MicroTasks';
+import PaidSurveys from './pages/PaidSurveys';
+import HowItWorksForWorkers from './pages/HowItWorksForWorkers';
+import Campaigns from './pages/Campaigns';
+import TrustAndSafety from './pages/TrustAndSafety';
+import TaskProofGuide from './pages/TaskProofGuide';
+import KnowledgeBase from './pages/KnowledgeBase';
+import HowToCompleteMicroTasks from './pages/HowToCompleteMicroTasks';
+import KnowledgeTaskProof from './pages/KnowledgeTaskProof';
+import WhyTasksGetRejected from './pages/WhyTasksGetRejected';
+import OnlinePaidSurveysGuide from './pages/OnlinePaidSurveysGuide';
+import HowToCreateCampaign from './pages/HowToCreateCampaign';
+import CrowdsourcedWorkforceGuide from './pages/CrowdsourcedWorkforceGuide';
+import { NotFound } from './pages/NotFound';
+
+// Cluster 1: Micro-Tasks Subtopics
+import { SocialMediaTasks } from './pages/microtasks/SocialMediaTasks';
+import { AppTestingTasks } from './pages/microtasks/AppTestingTasks';
+import { WebsiteTestingTasks } from './pages/microtasks/WebsiteTestingTasks';
+import { DataVerificationTasks } from './pages/microtasks/DataVerificationTasks';
+import { ResearchTasks } from './pages/microtasks/ResearchTasks';
+import { ProofBasedTasks } from './pages/microtasks/ProofBasedTasks';
+
+// Cluster 2: Survey Authority Subtopics
+import { HowOnlineSurveysWork } from './pages/surveys/HowOnlineSurveysWork';
+import { SurveyQualification } from './pages/surveys/SurveyQualification';
+import { SurveyScreenOuts } from './pages/surveys/SurveyScreenOuts';
+import { AttentionChecks } from './pages/surveys/AttentionChecks';
+import { SurveyRewards } from './pages/surveys/SurveyRewards';
+import { SurveyQuality } from './pages/surveys/SurveyQuality';
+
+// Cluster 3: Worker Education Subtopics
+import { HowToFindTasks } from './pages/workers/HowToFindTasks';
+import { HowToSubmitProof } from './pages/workers/HowToSubmitProof';
+import { HowToAvoidTaskRejection } from './pages/workers/HowToAvoidTaskRejection';
+import { TaskCompletionTips } from './pages/workers/TaskCompletionTips';
+import { WorkerAccountSecurity } from './pages/workers/WorkerAccountSecurity';
+import { RewardAndWithdrawalGuide } from './pages/workers/RewardAndWithdrawalGuide';
+
+// Cluster 4: Advertiser Authority Subtopics
+import { SocialMediaCampaigns } from './pages/advertisers/SocialMediaCampaigns';
+import { AppTestingCampaigns } from './pages/advertisers/AppTestingCampaigns';
+import { WebsiteTestingCampaigns } from './pages/advertisers/WebsiteTestingCampaigns';
+import { SurveyCampaigns } from './pages/advertisers/SurveyCampaigns';
+import { DataVerificationCampaigns } from './pages/advertisers/DataVerificationCampaigns';
+import { CrowdsourcedResearch } from './pages/advertisers/CrowdsourcedResearch';
+
+// Cluster 5: Trust & Safety Subtopics
+import { EscrowSecurity } from './pages/trust/EscrowSecurity';
+import { ProofVerificationSystem } from './pages/trust/ProofVerificationSystem';
+import { FraudPreventionArchitecture } from './pages/trust/FraudPreventionArchitecture';
+import { DisputeResolutionSystem } from './pages/trust/DisputeResolutionSystem';
+import { EnterpriseAccountSecurity } from './pages/trust/EnterpriseAccountSecurity';
 
 // User facing components
 import UserLayout from './components/UserLayout';
@@ -57,6 +117,10 @@ import UserDisputes from './pages/user/UserDisputes';
 import Messages from './pages/user/Messages';
 import UserTasks from './pages/user/UserTasks';
 import UserTasksSubmit from './pages/user/UserTasksSubmit';
+import HubFaqs from './pages/user/HubFaqs';
+import HubLegal from './pages/user/HubLegal';
+import WorkAndEarnHistory from './pages/user/WorkAndEarnHistory';
+import { ModulePageGuard } from './components/ModulePageGuard';
 
 
 const App: React.FC = () => {
@@ -74,9 +138,65 @@ const App: React.FC = () => {
         />
       )}
       <HashRouter>
+        <SeoAnalyticsTracker />
         <Routes>
         {/* Public Routes */}
         <Route path="/" element={<HomePage />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
+        <Route path="/advertise" element={<Advertise />} />
+        <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/micro-tasks" element={<MicroTasks />} />
+        <Route path="/paid-surveys" element={<PaidSurveys />} />
+        <Route path="/how-it-works-for-workers" element={<HowItWorksForWorkers />} />
+        <Route path="/task-proof" element={<TaskProofGuide />} />
+        <Route path="/trust-and-safety" element={<TrustAndSafety />} />
+        <Route path="/knowledge-base" element={<KnowledgeBase />} />
+        <Route path="/knowledge-base/how-to-complete-micro-tasks" element={<HowToCompleteMicroTasks />} />
+        <Route path="/knowledge-base/task-proof-guide" element={<KnowledgeTaskProof />} />
+        <Route path="/knowledge-base/why-tasks-get-rejected" element={<WhyTasksGetRejected />} />
+        <Route path="/knowledge-base/online-paid-surveys-guide" element={<OnlinePaidSurveysGuide />} />
+        <Route path="/knowledge-base/how-to-create-a-campaign" element={<HowToCreateCampaign />} />
+        <Route path="/knowledge-base/crowdsourced-workforce-guide" element={<CrowdsourcedWorkforceGuide />} />
+
+        {/* Micro-Tasks Cluster */}
+        <Route path="/micro-tasks/social-media-tasks" element={<SocialMediaTasks />} />
+        <Route path="/micro-tasks/app-testing" element={<AppTestingTasks />} />
+        <Route path="/micro-tasks/website-testing" element={<WebsiteTestingTasks />} />
+        <Route path="/micro-tasks/data-verification" element={<DataVerificationTasks />} />
+        <Route path="/micro-tasks/research-tasks" element={<ResearchTasks />} />
+        <Route path="/micro-tasks/proof-based-tasks" element={<ProofBasedTasks />} />
+
+        {/* Paid Surveys Cluster */}
+        <Route path="/paid-surveys/how-online-surveys-work" element={<HowOnlineSurveysWork />} />
+        <Route path="/paid-surveys/survey-qualification" element={<SurveyQualification />} />
+        <Route path="/paid-surveys/survey-screen-outs" element={<SurveyScreenOuts />} />
+        <Route path="/paid-surveys/attention-checks" element={<AttentionChecks />} />
+        <Route path="/paid-surveys/survey-rewards" element={<SurveyRewards />} />
+        <Route path="/paid-surveys/survey-quality" element={<SurveyQuality />} />
+
+        {/* Worker Education Cluster */}
+        <Route path="/workers/how-to-find-tasks" element={<HowToFindTasks />} />
+        <Route path="/workers/how-to-submit-proof" element={<HowToSubmitProof />} />
+        <Route path="/workers/how-to-avoid-task-rejection" element={<HowToAvoidTaskRejection />} />
+        <Route path="/workers/task-completion-tips" element={<TaskCompletionTips />} />
+        <Route path="/workers/account-security" element={<WorkerAccountSecurity />} />
+        <Route path="/workers/reward-and-withdrawal-guide" element={<RewardAndWithdrawalGuide />} />
+
+        {/* Advertiser Authority Cluster */}
+        <Route path="/advertise/social-media-campaigns" element={<SocialMediaCampaigns />} />
+        <Route path="/advertise/app-testing-campaigns" element={<AppTestingCampaigns />} />
+        <Route path="/advertise/website-testing-campaigns" element={<WebsiteTestingCampaigns />} />
+        <Route path="/advertise/survey-campaigns" element={<SurveyCampaigns />} />
+        <Route path="/advertise/data-verification-campaigns" element={<DataVerificationCampaigns />} />
+        <Route path="/advertise/crowdsourced-research" element={<CrowdsourcedResearch />} />
+
+        {/* Trust & Safety Cluster */}
+        <Route path="/trust-and-safety/escrow" element={<EscrowSecurity />} />
+        <Route path="/trust-and-safety/proof-verification" element={<ProofVerificationSystem />} />
+        <Route path="/trust-and-safety/fraud-prevention" element={<FraudPreventionArchitecture />} />
+        <Route path="/trust-and-safety/disputes" element={<DisputeResolutionSystem />} />
+        <Route path="/trust-and-safety/account-security" element={<EnterpriseAccountSecurity />} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/faqs" element={<FaqPage />} />
@@ -101,6 +221,8 @@ const App: React.FC = () => {
           <Route path="tasks" element={<AdminTasks />} />
           <Route path="user-tasks" element={<AdminUserTasks />} />
           <Route path="task-categories" element={<AdminTaskCategories />} />
+          <Route path="work-and-earn-editor" element={<AdminWorkAndEarnEditor />} />
+          <Route path="withdrawal-rules" element={<AdminWithdrawalRules />} />
           <Route path="wallet" element={<Wallet />} />
           <Route path="rules" element={<Rules />} />
           <Route path="sponsor-commission-rules" element={<SponsorCommissionRules />} />
@@ -113,24 +235,38 @@ const App: React.FC = () => {
           <Route path="templates" element={<AdminTemplates />} />
           <Route path="profile" element={<AdminProfile />} />
           <Route path="notifications" element={<AdminNotifications />} />
+          <Route path="reconciliation" element={<AdminFinancialReconciliation />} />
+          <Route path="seo-intelligence" element={<AdminSeoIntelligence />} />
         </Route>
 
         {/* User Member Area Routes */}
         <Route path="/member" element={<UserLayout />}>
           <Route index element={<UserDashboard />} />
-          <Route path="deposit" element={<DepositFunds />} />
-          <Route path="withdraw" element={<WithdrawFunds />} />
-          <Route path="transfer" element={<TransferFunds />} />
-          <Route path="plans" element={<UserInvestmentPlans />} />
-          <Route path="active-plans" element={<ActivePlans />} />
-          <Route path="tasks" element={<UserTasks />} />
-          <Route path="user-tasks" element={<UserTasksSubmit />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="referrals" element={<Referrals />} />
+          <Route path="deposit" element={<ModulePageGuard category="investment" pageId="deposit"><DepositFunds /></ModulePageGuard>} />
+          <Route path="withdraw" element={<ModulePageGuard category="investment" pageId="withdraw"><WithdrawFunds /></ModulePageGuard>} />
+          <Route path="transfer" element={<ModulePageGuard category="investment" pageId="transfer"><TransferFunds /></ModulePageGuard>} />
+          <Route path="plans" element={<ModulePageGuard category="investment" pageId="plans"><UserInvestmentPlans /></ModulePageGuard>} />
+          <Route path="active-plans" element={<ModulePageGuard category="investment" pageId="activePlans"><ActivePlans /></ModulePageGuard>} />
+          <Route path="tasks" element={<ModulePageGuard category="investment" pageId="tasks"><UserTasks /></ModulePageGuard>} />
+          <Route path="user-tasks" element={<ModulePageGuard category="workAndEarn" pageId="userTasks"><UserTasksSubmit /></ModulePageGuard>} />
+          <Route path="available-tasks" element={<ModulePageGuard category="workAndEarn" pageId="availableTasks"><UserTasksSubmit initialTab="browse" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="pending-reviews" element={<ModulePageGuard category="workAndEarn" pageId="pendingReviews"><UserTasksSubmit initialTab="pending-payment" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="tasks-history" element={<ModulePageGuard category="workAndEarn" pageId="tasksHistory"><UserTasksSubmit initialTab="completed-tasks" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="create-campaign" element={<ModulePageGuard category="workAndEarn" pageId="createCampaign"><UserTasksSubmit initialTab="submit" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="my-campaigns" element={<ModulePageGuard category="workAndEarn" pageId="myCampaigns"><UserTasksSubmit initialTab="my-tasks" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="review-proofs" element={<ModulePageGuard category="workAndEarn" pageId="reviewProofs"><UserTasksSubmit initialTab="review-proofs" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+          <Route path="hub-faqs" element={<ModulePageGuard category="workAndEarn" pageId="hubFaqs"><HubFaqs /></ModulePageGuard>} />
+          <Route path="hub-legal" element={<ModulePageGuard category="workAndEarn" pageId="hubLegal"><HubLegal /></ModulePageGuard>} />
+          <Route path="work-history" element={<ModulePageGuard category="workAndEarn" pageId="workHistory"><WorkAndEarnHistory /></ModulePageGuard>} />
+          <Route path="transactions" element={<ModulePageGuard category="investment" pageId="transactions"><Transactions /></ModulePageGuard>} />
+          <Route path="referrals" element={<ModulePageGuard category="investment" pageId="referrals"><Referrals /></ModulePageGuard>} />
           <Route path="disputes" element={<UserDisputes />} />
           <Route path="messages" element={<Messages />} />
           <Route path="profile" element={<Profile />} />
         </Route>
+
+        {/* Catch-all 404 Route */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <WhatsAppFloatingButton />
       <UserPopupModal />

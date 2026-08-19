@@ -1,20 +1,176 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Outlet, useNavigate, Link } from 'react-router-dom';
+import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import UserSidebar from './UserSidebar';
 import UserHeader from './UserHeader';
 import { useData } from '../hooks/useData';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
-import { markNotificationPopupAsShown } from '../services/api';
+import { markNotificationPopupAsShown, verifyEmail, verifyWhatsapp, resendEmailVerification, resendWhatsappVerification } from '../services/api';
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
 import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice } from '../types';
+import { SEOHead } from './SEOHead';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { state, dispatch } = useData();
   const { currentUser, notifications, users, deposits, withdrawals, transfers, transactions, investmentPlans, settings } = state;
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Verification configurations & states
+  const needsEmailVerification = settings?.emailVerificationRequired && !currentUser?.emailVerified;
+  const needsWhatsappVerification = settings?.whatsappVerificationRequired && !currentUser?.whatsappVerified;
+  const needsAnyVerification = currentUser && (needsEmailVerification || needsWhatsappVerification);
+
+  const [emailCode, setEmailCode] = useState('');
+  const [whatsappCode, setWhatsappCode] = useState('');
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [verifyingWhatsapp, setVerifyingWhatsapp] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [whatsappError, setWhatsappError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState('');
+  const [whatsappSuccess, setWhatsappSuccess] = useState('');
+  const [emailResendTimer, setEmailResendTimer] = useState(0);
+  const [whatsappResendTimer, setWhatsappResendTimer] = useState(0);
+
+  // Handle Resend Timers
+  useEffect(() => {
+    let interval: any;
+    if (emailResendTimer > 0) {
+      interval = setInterval(() => {
+        setEmailResendTimer(p => p - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [emailResendTimer]);
+
+  useEffect(() => {
+    let interval: any;
+    if (whatsappResendTimer > 0) {
+      interval = setInterval(() => {
+        setWhatsappResendTimer(p => p - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [whatsappResendTimer]);
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailCode || emailCode.length < 5) {
+      setEmailError('Please enter a valid verification code.');
+      return;
+    }
+    setVerifyingEmail(true);
+    setEmailError('');
+    setEmailSuccess('');
+    try {
+      const res = await verifyEmail(emailCode);
+      if (res.success) {
+        setEmailSuccess('Email verified successfully!');
+        dispatch({ type: 'UPDATE_USER', payload: res.data });
+      } else {
+        setEmailError(res.message || 'Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      setEmailError(err.message || 'Verification failed. Please try again.');
+    } finally {
+      setVerifyingEmail(false);
+    }
+  };
+
+  const handleVerifyWhatsapp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!whatsappCode || whatsappCode.length < 5) {
+      setWhatsappError('Please enter a valid verification code.');
+      return;
+    }
+    setVerifyingWhatsapp(true);
+    setWhatsappError('');
+    setWhatsappSuccess('');
+    try {
+      const res = await verifyWhatsapp(whatsappCode);
+      if (res.success) {
+        setWhatsappSuccess('WhatsApp verified successfully!');
+        dispatch({ type: 'UPDATE_USER', payload: res.data });
+      } else {
+        setWhatsappError(res.message || 'Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      setWhatsappError(err.message || 'Verification failed. Please try again.');
+    } finally {
+      setVerifyingWhatsapp(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (emailResendTimer > 0) return;
+    try {
+      const res = await resendEmailVerification();
+      if (res.success) {
+        setEmailSuccess('A new verification code has been sent to your email.');
+        setEmailResendTimer(60);
+      } else {
+        setEmailError(res.message || 'Failed to resend code.');
+      }
+    } catch (err: any) {
+      setEmailError(err.message || 'Failed to resend code.');
+    }
+  };
+
+  const handleResendWhatsapp = async () => {
+    if (whatsappResendTimer > 0) return;
+    try {
+      const res = await resendWhatsappVerification();
+      if (res.success) {
+        setWhatsappSuccess('A new verification code has been sent to your WhatsApp.');
+        setWhatsappResendTimer(60);
+      } else {
+        setWhatsappError(res.message || 'Failed to resend code.');
+      }
+    } catch (err: any) {
+      setWhatsappError(err.message || 'Failed to resend code.');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
+    navigate('/login');
+  };
+
+  const hasHubAccess = useMemo(() => {
+    if (!currentUser || !settings) return false;
+    if (settings.hubEnabled === false) return false;
+    if (!settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
+    if (settings.hubAccessMode === 'manual') {
+        return (settings.hubAllowedUserIds || []).includes(currentUser._id);
+    }
+    if (settings.hubAccessMode === 'plan') {
+        const allowedPlanIds = settings.hubAllowedPlanIds || [];
+        return (currentUser.activePlans || []).some(ap => allowedPlanIds.includes(ap.planId));
+    }
+    return true;
+  }, [currentUser, settings]);
+
+  const [dashboardMode, setDashboardMode] = useState<'work_and_earn' | 'investment'>(() => {
+      const saved = localStorage.getItem('dashboard_mode');
+      const mode = (saved as 'work_and_earn' | 'investment') || 'work_and_earn';
+      // Fallback initially if no access
+      if (mode === 'work_and_earn' && settings && settings.hubEnabled === false) {
+          return 'investment';
+      }
+      return mode;
+  });
+
+  // Enforce access changes in real-time
+  useEffect(() => {
+    if (!hasHubAccess && dashboardMode === 'work_and_earn') {
+      setDashboardMode('investment');
+      localStorage.setItem('dashboard_mode', 'investment');
+    }
+  }, [hasHubAccess, dashboardMode]);
 
   // Popup State
   const [popupNotification, setPopupNotification] = useState<any | null>(null);
@@ -288,14 +444,138 @@ const UserLayout: React.FC = () => {
     return null; 
   }
 
+  if (needsAnyVerification) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white dark:bg-gray-900 border dark:border-gray-800 rounded-2xl shadow-xl overflow-hidden animate-fade-in p-6 sm:p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Account Security Gate</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Please verify your identity to activate and access your account.</p>
+          </div>
+
+          <div className="space-y-6">
+            {/* Email Verification Form */}
+            {needsEmailVerification && (
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border dark:border-gray-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Email Verification
+                  </h3>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">Pending</span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">We auto-sent a 6-digit code to <strong className="text-gray-700 dark:text-gray-300">{currentUser?.email}</strong>.</p>
+                
+                <form onSubmit={handleVerifyEmail} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      value={emailCode}
+                      onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono text-center tracking-widest text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <Button type="submit" size="sm" loading={verifyingEmail} className="shrink-0">
+                      Verify
+                    </Button>
+                  </div>
+                  {emailError && <p className="text-xs font-semibold text-red-500">{emailError}</p>}
+                  {emailSuccess && <p className="text-xs font-semibold text-emerald-500">{emailSuccess}</p>}
+                  
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={handleResendEmail}
+                      disabled={emailResendTimer > 0}
+                      className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline disabled:text-gray-400 disabled:no-underline cursor-pointer"
+                    >
+                      {emailResendTimer > 0 ? `Resend code in ${emailResendTimer}s` : 'Resend Email Code'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* WhatsApp Verification Form */}
+            {needsWhatsappVerification && (
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-xl border dark:border-gray-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    WhatsApp Verification
+                  </h3>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">Pending</span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">We auto-sent a 6-digit code to your registered WhatsApp number: <strong className="text-gray-700 dark:text-gray-300">{currentUser?.whatsapp || currentUser?.phone}</strong>.</p>
+                
+                <form onSubmit={handleVerifyWhatsapp} className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      value={whatsappCode}
+                      onChange={(e) => setWhatsappCode(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 bg-white dark:bg-gray-900 border dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm font-mono text-center tracking-widest text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <Button type="submit" size="sm" loading={verifyingWhatsapp} className="shrink-0">
+                      Verify
+                    </Button>
+                  </div>
+                  {whatsappError && <p className="text-xs font-semibold text-red-500">{whatsappError}</p>}
+                  {whatsappSuccess && <p className="text-xs font-semibold text-emerald-500">{whatsappSuccess}</p>}
+                  
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={handleResendWhatsapp}
+                      disabled={whatsappResendTimer > 0}
+                      className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline disabled:text-gray-400 disabled:no-underline cursor-pointer"
+                    >
+                      {whatsappResendTimer > 0 ? `Resend code in ${whatsappResendTimer}s` : 'Resend WhatsApp Code'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 border-t dark:border-gray-800 flex items-center justify-between">
+            <button
+              onClick={handleLogout}
+              className="text-xs text-red-600 hover:text-red-700 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout Account
+            </button>
+            <span className="text-[10px] text-gray-400 font-medium">Work & Earn Hub Security</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-      <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+      <SEOHead title="Member Dashboard | SmartExn" robots="noindex, nofollow" />
+      <UserSidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} dashboardMode={dashboardMode} setDashboardMode={setDashboardMode} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <UserHeader setSidebarOpen={setSidebarOpen} />
+        <UserHeader setSidebarOpen={setSidebarOpen} dashboardMode={dashboardMode} setDashboardMode={setDashboardMode} />
         
-        {/* PERSISTENT NO-PLAN WARNING BANNER */}
-        {hasNoPlan && (
+        {/* PERSISTENT NO-PLAN WARNING BANNER (Only in Investment Mode) */}
+        {hasNoPlan && dashboardMode !== 'work_and_earn' && !location.pathname.includes('/work-and-earn') && !location.pathname.includes('/tasks') && (
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 px-4 shadow-lg flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in relative z-40">
             <span className="flex items-center gap-2 font-bold text-sm">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -327,8 +607,132 @@ const UserLayout: React.FC = () => {
                 style={settings.tickerStyle}
             />
         )}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
-          <Outlet />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 md:p-8 pb-24 md:pb-8 flex flex-col justify-between">
+          <div className="flex-1 pb-10">
+            <Outlet context={{ dashboardMode, setDashboardMode }} />
+          </div>
+
+          {/* Professional Footer */}
+          <footer className="mt-auto border-t border-gray-200/60 dark:border-gray-800/80 pt-8 pb-6 text-left">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
+              {/* Branding and status */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
+                    W
+                  </span>
+                  <span className="text-sm font-black tracking-tight text-gray-900 dark:text-white uppercase">
+                    Work & Earn Hub
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed font-semibold">
+                  The ultimate digital nano-gigs ecosystem. Perform tasks, promote campaigns, and cash out securely.
+                </p>
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 px-2.5 py-1 rounded-full w-fit">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  All Hub Systems Operational
+                </div>
+              </div>
+
+              {/* Legal section */}
+              <div>
+                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
+                  ⚖️ Legal Documents
+                </h5>
+                <ul className="space-y-2 text-xs font-bold">
+                  <li>
+                    <Link to="/member/hub-legal?tab=privacy" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Privacy Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=terms" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Terms of Service
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=cookie" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Cookie Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=dmca" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      DMCA & Copyright
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Compliance & Limits */}
+              <div>
+                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
+                  🛡️ Risk & Compliance
+                </h5>
+                <ul className="space-y-2 text-xs font-bold">
+                  <li>
+                    <Link to="/member/hub-legal?tab=antifraud" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Anti-Fraud Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=withdrawal" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Withdrawal Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=refund" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Refund Policy
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=disclaimer" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Disclaimer Clause
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Information */}
+              <div>
+                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
+                  💡 Information & Help
+                </h5>
+                <ul className="space-y-2 text-xs font-bold">
+                  <li>
+                    <Link to="/member/hub-legal?tab=about" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      About Us
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-legal?tab=contact" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Contact Us
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/hub-faqs" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Hub Knowledge FAQs
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/member/disputes" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
+                      Disputes & Support
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200/60 dark:border-gray-800/80 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[11px] font-semibold text-gray-400">
+              <div>
+                © 2026 Work & Earn Gigs Hub. All Rights Reserved. Legally regulated and secure environment.
+              </div>
+              <div className="flex gap-4">
+                <span className="hover:text-gray-600 dark:hover:text-gray-200 transition cursor-help">Secure SSL 256-bit</span>
+                <span>•</span>
+                <span className="hover:text-gray-600 dark:hover:text-gray-200 transition cursor-help">PCI DSS Compliant</span>
+              </div>
+            </div>
+          </footer>
         </main>
       </div>
 
@@ -352,6 +756,69 @@ const UserLayout: React.FC = () => {
               </div>
           </Modal>
       )}
+
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-1.5 flex items-center justify-around text-slate-300 shadow-2xl">
+        <Link 
+          to="/member" 
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            location.pathname === '/member' || location.pathname === '/member/' 
+              ? 'text-amber-400 font-bold bg-amber-500/10' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span className="text-lg">🏠</span>
+          <span className="text-[10px] font-bold">Home</span>
+        </Link>
+
+        <Link 
+          to="/member/available-tasks" 
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            location.pathname.includes('/member/available-tasks') || location.pathname.includes('/member/pending-reviews') || location.pathname.includes('/member/tasks-history')
+              ? 'text-amber-400 font-bold bg-amber-500/10' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span className="text-lg">📋</span>
+          <span className="text-[10px] font-bold">Task</span>
+        </Link>
+
+        <Link 
+          to="/member/my-campaigns" 
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            location.pathname.includes('/member/my-campaigns') || location.pathname.includes('/member/create-campaign') || location.pathname.includes('/member/review-proofs')
+              ? 'text-amber-400 font-bold bg-amber-500/10' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span className="text-lg">📢</span>
+          <span className="text-[10px] font-bold">Campaign</span>
+        </Link>
+
+        <Link 
+          to="/member/withdraw" 
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            location.pathname.includes('/member/withdraw') 
+              ? 'text-amber-400 font-bold bg-amber-500/10' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span className="text-lg">💸</span>
+          <span className="text-[10px] font-bold">Withdraw</span>
+        </Link>
+
+        <Link 
+          to="/member/profile" 
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            location.pathname.includes('/member/profile') 
+              ? 'text-amber-400 font-bold bg-amber-500/10' 
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span className="text-lg">👤</span>
+          <span className="text-[10px] font-bold">Profile</span>
+        </Link>
+      </nav>
     </div>
   );
 };

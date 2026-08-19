@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, Template, TemplateLog } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, UserTask, Template, TemplateLog } from '../types';
 
 // Production configuration: Uses environment variable for backend routing with robust fallbacks.
 const getBaseUrl = (): string => {
@@ -60,13 +60,34 @@ const handleResponse = async (response: Response) => {
     if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         if (!response.ok) {
-            const error = (data && data.error) || response.statusText;
+            const error = (data && (data.error || data.message)) || response.statusText || 'An unexpected error occurred.';
             throw new Error(error);
         }
         return data; 
     } else {
-         const text = await response.text();
-         throw new Error(`Expected JSON, but got ${response.statusText}. Response: ${text.substring(0, 100)}...`);
+        const text = await response.text();
+        try {
+            const data = JSON.parse(text);
+            if (!response.ok) {
+                const error = (data && (data.error || data.message)) || response.statusText || 'An unexpected error occurred.';
+                throw new Error(error);
+            }
+            return data;
+        } catch (e) {
+            if (response.status === 404) {
+                throw new Error('Requested service or page was not found. Please try again later.');
+            }
+            if (response.status === 401 || response.status === 403) {
+                throw new Error('Access denied or session expired. Please log in again.');
+            }
+            if (response.status === 502 || response.status === 503 || response.status === 504) {
+                throw new Error('Server is temporarily unreachable. Please try again in a few moments.');
+            }
+            if (response.status >= 500) {
+                throw new Error('A server error occurred. Please try again later.');
+            }
+            throw new Error('Unable to connect to the server. Please check your connection and try again.');
+        }
     }
 };
 
@@ -159,6 +180,40 @@ export const login = async (email: string, password: string): Promise<{ token: s
     return { token: result.token, data: result.data };
 };
 
+export const verifyEmail = async (code: string): Promise<{ success: boolean; data: User; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/verify-email`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ code }),
+    });
+    return handleResponse(response);
+};
+
+export const verifyWhatsapp = async (code: string): Promise<{ success: boolean; data: User; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/verify-whatsapp`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ code }),
+    });
+    return handleResponse(response);
+};
+
+export const resendEmailVerification = async (): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/resend-email`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    return handleResponse(response);
+};
+
+export const resendWhatsappVerification = async (): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`${API_BASE_URL}/users/resend-whatsapp`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    return handleResponse(response);
+};
+
 export const adjustUserWallet = async (id: string, adjustmentData: any): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${id}/adjust-wallet`, {
         method: 'POST',
@@ -169,11 +224,11 @@ export const adjustUserWallet = async (id: string, adjustmentData: any): Promise
     return result.data;
 };
 
-export const purchasePlan = async (userId: string, planId: string): Promise<{ user: User; transaction: Transaction }> => {
+export const purchasePlan = async (userId: string, planId: string, useHeldBalance: boolean = true): Promise<{ user: User; transaction: Transaction }> => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/purchase-plan`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, useHeldBalance }),
     });
     const result = await handleResponse(response);
     return result.data;
@@ -621,7 +676,7 @@ export const getUserTaskSubmissions = async (): Promise<any[]> => {
     return result.data;
 };
 
-export const submitUserTaskProof = async (taskId: string, proofData: { userId: string; proofText?: string; proofImage?: string }): Promise<any> => {
+export const submitUserTaskProof = async (taskId: string, proofData: { userId: string; proofText?: string; proofUsername?: string; proofUserIdVal?: string; proofEmail?: string; proofImage?: string; submittedProofs?: any[] }): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/submit-proof`, {
         method: 'POST',
         headers: getHeaders(),
@@ -638,7 +693,7 @@ export const updateSubmissionStatus = async (subId: string, updates: { status: s
         body: JSON.stringify(updates)
     });
     const result = await handleResponse(response);
-    return result.data;
+    return result;
 };
 
 export const deleteSubmission = async (subId: string): Promise<{}> => {
@@ -660,7 +715,7 @@ export const convertUserCurrency = async (data: { userId: string; amount: number
     return result.data;
 };
 
-export const convertTaskWalletBalance = async (data: { userId: string }): Promise<any> => {
+export const convertTaskWalletBalance = async (data: { userId: string; amountUSD?: number }): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/convert-task-wallet`, {
         method: 'POST',
         headers: getHeaders(),
@@ -668,6 +723,62 @@ export const convertTaskWalletBalance = async (data: { userId: string }): Promis
     });
     const result = await handleResponse(response);
     return result.data;
+};
+
+export const transferInvestmentToTaskWallet = async (data: { userId: string; amountUserCurr?: number; amountUSD?: number }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/transfer-investment-to-task`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const transferTaskEarningsToCampaignWallet = async (data: { userId: string; amountUSD: number }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/transfer-task-earnings-to-campaign`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const transferWalletToCampaign = async (data: { userId: string; amountUserCurr?: number; amountUSD?: number; sourceWallet?: 'Main' | 'Investment' }): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/transfer-wallet-to-campaign`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const adminResetWorkAndEarnData = async (payload: {
+    userIds?: string[];
+    resetAllMatching?: boolean;
+    activePlanFilter?: string;
+    allowedAccessFilter?: string;
+    resetOptions?: {
+        campaigns?: boolean;
+        submissions?: boolean;
+        disputes?: boolean;
+        transactions?: boolean;
+        hubWithdrawals?: boolean;
+        hubDeposits?: boolean;
+        resetBalances?: boolean;
+        logs?: boolean;
+        notifications?: boolean;
+    };
+}): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/admin-reset-data`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+    });
+    const result = await handleResponse(response);
+    return result;
 };
 
 // --- [Dispute API Functions] ---

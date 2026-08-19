@@ -33,7 +33,7 @@ export const UserPopupModal: React.FC = () => {
             if (!n.isPopup) return false;
             
             // Check target user or broadcast
-            const isForUser = currentUser && n.userId === currentUser._id;
+            const isForUser = currentUser && String(n.userId) === String(currentUser._id);
             const isForGuestOrHomepage = isHomepage; // Broadcast or homepage popups
             
             if (!isForUser && !isForGuestOrHomepage) return false;

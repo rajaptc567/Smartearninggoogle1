@@ -723,6 +723,20 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
         });
     };
 
+    const handleToggleSlotHoldLevel = (slotIdx: number, level: number) => {
+        setFormData(prev => {
+            const newComms = [...(prev!.directCommissions || [])];
+            const held = [...(newComms[slotIdx].heldLevels || [])];
+            
+            const newHeld = held.includes(level) 
+                ? held.filter(l => l !== level) 
+                : [...held, level];
+                
+            newComms[slotIdx] = { ...newComms[slotIdx], heldLevels: newHeld };
+            return { ...prev, directCommissions: newComms };
+        });
+    };
+
     const addIndirectLevel = () => {
         setFormData(prev => {
             if (!prev) return prev;
@@ -897,11 +911,16 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                                             )}
                                         </span>
                                     </div>
-                                    {comm.disabledLevels && comm.disabledLevels.length > 0 && (
+                                    {(comm.disabledLevels?.length > 0 || comm.heldLevels?.length > 0) && (
                                         <div className="mt-2 flex flex-wrap gap-1">
-                                            {comm.disabledLevels.map(lvl => (
-                                                <span key={lvl} className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 px-1.5 py-0.5 rounded font-bold uppercase">
+                                            {comm.disabledLevels?.map(lvl => (
+                                                <span key={`dis-${lvl}`} className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 px-1.5 py-0.5 rounded font-bold uppercase">
                                                     L{lvl} Blocked
+                                                </span>
+                                            ))}
+                                            {comm.heldLevels?.map(lvl => (
+                                                <span key={`held-${lvl}`} className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-0.5">
+                                                    🔒 L{lvl} Held
                                                 </span>
                                             ))}
                                         </div>
@@ -950,30 +969,56 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
                     </fieldset>
 
                     <fieldset className="p-4 border rounded-md dark:border-gray-600">
-                        <legend className="px-2 font-semibold">Advanced Options</legend>
+                        <legend className="px-2 font-semibold">Auto-Upgrade & Upgrade Rules</legend>
                         <div className="space-y-4">
                             <div>
                                 <label className="flex items-center space-x-2 cursor-pointer">
                                     <input type="checkbox" name="autoUpgrade.enabled" checked={formData.autoUpgrade?.enabled} onChange={handleChange} className="rounded" />
-                                    <span className="text-sm font-medium">Enable Auto Upgrade upon completion</span>
+                                    <span className="text-sm font-medium">Enable Auto Upgrade / Upgrade Rule</span>
                                 </label>
                                 {formData.autoUpgrade?.enabled && (
-                                    <select 
-                                        name="autoUpgrade.toPlanId" 
-                                        value={formData.autoUpgrade.toPlanId} 
-                                        onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} 
-                                        className="mt-2 block w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
-                                    >
-                                        <option value="">- Select Target Plan -</option>
-                                        {state.investmentPlans
-                                            .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
-                                            .map(p => (
-                                                <option key={p._id} value={p._id}>
-                                                    {p.name} ({formatCurrency(p.price, p.currency)})
-                                                </option>
-                                            ))
-                                        }
-                                    </select>
+                                    <div className="mt-3 p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-lg border border-indigo-100 dark:border-indigo-900/50 space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                Target Plan for Upgrade:
+                                            </label>
+                                            <select 
+                                                name="autoUpgrade.toPlanId" 
+                                                value={formData.autoUpgrade.toPlanId || ''} 
+                                                onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, toPlanId: e.target.value}}))} 
+                                                className="block w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
+                                            >
+                                                <option value="">- Select Target Plan -</option>
+                                                {state.investmentPlans
+                                                    .filter(p => p._id !== plan?._id && p.status === Status.Active && p.currency === formData.currency)
+                                                    .map(p => (
+                                                        <option key={p._id} value={p._id}>
+                                                            {p.name} ({formatCurrency(p.price, p.currency)})
+                                                        </option>
+                                                    ))
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                                Upgrade Rule Mode:
+                                            </label>
+                                            <select 
+                                                name="autoUpgrade.type" 
+                                                value={formData.autoUpgrade.type || 'auto'} 
+                                                onChange={(e) => setFormData(prev => ({...prev, autoUpgrade: {...prev!.autoUpgrade!, type: e.target.value as 'auto' | 'manual'}}))} 
+                                                className="block w-full rounded-md dark:bg-gray-700 dark:border-gray-600 text-sm"
+                                            >
+                                                <option value="auto">Automatic (System automatically purchases target plan when held funds suffice)</option>
+                                                <option value="manual">Manual (Hold commissions in user's Upgrade Balance for user/admin to apply)</option>
+                                            </select>
+                                        </div>
+
+                                        <p className="text-xs text-indigo-700 dark:text-indigo-300 italic">
+                                            💡 You can mark direct or indirect slots to be held for upgrade by clicking <strong>⚙️ Configure Downline</strong> under Direct Commissions above.
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -989,39 +1034,78 @@ const PlanFormModal: React.FC<PlanFormModalProps> = ({ plan, onClose, onSave }) 
             {/* PER-SLOT DOWNLINE CONFIG MODAL */}
             {configSlotIndex !== null && (
                 <Modal isOpen={true} onClose={() => setConfigSlotIndex(null)}>
-                    <div className="p-6 w-[400px] max-w-full">
-                        <h3 className="text-lg font-bold mb-2">Slot #{configSlotIndex + 1} Earning Controls</h3>
-                        <p className="text-sm text-gray-500 mb-6">Select which downline levels are ENABLED for commissions in this specific referral slot.</p>
+                    <div className="p-6 w-[450px] max-w-full">
+                        <h3 className="text-lg font-bold mb-1">Slot #{configSlotIndex + 1} Earning & Upgrade Controls</h3>
+                        <p className="text-sm text-gray-500 mb-5">Configure level commission availability and hold rules for referrals in this specific slot.</p>
                         
-                        <div className="space-y-3">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                             {/* Direct Commission Toggle */}
-                            <label className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 cursor-pointer hover:bg-gray-100">
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-sm">Level 1 (Direct)</span>
-                                    <span className="text-xs text-gray-500">Value: {formData.directCommissions![configSlotIndex].value}{formData.directCommissions![configSlotIndex].type === 'percentage' ? '%' : ' FIX'}</span>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm">Level 1 (Direct)</span>
+                                        <span className="text-xs text-gray-500">Value: {formData.directCommissions![configSlotIndex].value}{formData.directCommissions![configSlotIndex].type === 'percentage' ? '%' : ' FIX'}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-xs text-gray-500">{formData.directCommissions![configSlotIndex].disabledLevels?.includes(1) ? 'Disabled' : 'Enabled'}</span>
+                                        <ToggleSwitch 
+                                            checked={!formData.directCommissions![configSlotIndex].disabledLevels?.includes(1)} 
+                                            onChange={() => handleToggleSlotLevel(configSlotIndex, 1)} 
+                                        />
+                                    </div>
                                 </div>
-                                <ToggleSwitch 
-                                    checked={!formData.directCommissions![configSlotIndex].disabledLevels?.includes(1)} 
-                                    onChange={() => handleToggleSlotLevel(configSlotIndex, 1)} 
-                                />
-                            </label>
+                                {!formData.directCommissions![configSlotIndex].disabledLevels?.includes(1) && (
+                                    <label className="flex items-center justify-between pt-2 border-t dark:border-gray-600/50 cursor-pointer">
+                                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                            🔒 Hold Commission for Plan Upgrade
+                                        </span>
+                                        <ToggleSwitch 
+                                            checked={!!formData.directCommissions![configSlotIndex].heldLevels?.includes(1)} 
+                                            onChange={() => handleToggleSlotHoldLevel(configSlotIndex, 1)} 
+                                            size="sm"
+                                        />
+                                    </label>
+                                )}
+                            </div>
 
                             {/* Indirect Levels Toggles */}
-                            {(formData.indirectCommissions || []).map((lvl, idx) => (
-                                <label key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 cursor-pointer hover:bg-gray-100">
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-sm">Level {idx + 2} (Indirect)</span>
-                                        <span className="text-xs text-gray-500">Global Value: {lvl.value}{lvl.type === 'percentage' ? '%' : ' FIX'}</span>
+                            {(formData.indirectCommissions || []).map((lvl, idx) => {
+                                const levelNum = idx + 2;
+                                const isDisabled = formData.directCommissions![configSlotIndex].disabledLevels?.includes(levelNum);
+                                const isHeld = formData.directCommissions![configSlotIndex].heldLevels?.includes(levelNum);
+                                return (
+                                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-sm">Level {levelNum} (Indirect)</span>
+                                                <span className="text-xs text-gray-500">Global Value: {lvl.value}{lvl.type === 'percentage' ? '%' : ' FIX'}</span>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-xs text-gray-500">{isDisabled ? 'Disabled' : 'Enabled'}</span>
+                                                <ToggleSwitch 
+                                                    checked={!isDisabled} 
+                                                    onChange={() => handleToggleSlotLevel(configSlotIndex, levelNum)} 
+                                                />
+                                            </div>
+                                        </div>
+                                        {!isDisabled && (
+                                            <label className="flex items-center justify-between pt-2 border-t dark:border-gray-600/50 cursor-pointer">
+                                                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                                    🔒 Hold Commission for Plan Upgrade
+                                                </span>
+                                                <ToggleSwitch 
+                                                    checked={!!isHeld} 
+                                                    onChange={() => handleToggleSlotHoldLevel(configSlotIndex, levelNum)} 
+                                                    size="sm"
+                                                />
+                                            </label>
+                                        )}
                                     </div>
-                                    <ToggleSwitch 
-                                        checked={!formData.directCommissions![configSlotIndex].disabledLevels?.includes(idx + 2)} 
-                                        onChange={() => handleToggleSlotLevel(configSlotIndex, idx + 2)} 
-                                    />
-                                </label>
-                            ))}
+                                );
+                            })}
                         </div>
 
-                        <div className="mt-8 pt-4 border-t dark:border-gray-700 flex justify-end">
+                        <div className="mt-6 pt-4 border-t dark:border-gray-700 flex justify-end">
                             <Button onClick={() => setConfigSlotIndex(null)}>Close Configurator</Button>
                         </div>
                     </div>

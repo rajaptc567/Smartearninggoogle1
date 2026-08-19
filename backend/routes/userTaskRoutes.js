@@ -13,7 +13,12 @@ import {
     convertUserCurrency,
     openTaskDispute,
     convertTaskWalletBalance,
-    renewUserTask
+    renewUserTask,
+    simulateTaskReward,
+    transferInvestmentToTaskWallet,
+    transferTaskEarningsToCampaignWallet,
+    transferWalletToCampaign,
+    resetWorkAndEarnData
 } from '../controllers/userTasksController.js';
 
 // Multer for memory storage (Base64)
@@ -47,6 +52,21 @@ router.route('/convert')
 
 router.route('/convert-task-wallet')
     .post(convertTaskWalletBalance);
+
+router.route('/transfer-investment-to-task')
+    .post(transferInvestmentToTaskWallet);
+
+router.route('/transfer-task-earnings-to-campaign')
+    .post(transferTaskEarningsToCampaignWallet);
+
+router.route('/transfer-wallet-to-campaign')
+    .post(transferWalletToCampaign);
+
+router.route('/admin-reset-data')
+    .post(authorize(['admin', 'super_admin']), resetWorkAndEarnData);
+
+router.route('/simulate-reward')
+    .post(simulateTaskReward);
 
 router.route('/:id')
     .put(updateUserTaskStatus)

@@ -165,7 +165,7 @@ const Messages: React.FC = () => {
     // Active stats mapping
     const stats = useMemo(() => {
         if (!currentUser) return { total: 0, unread: 0, read: 0 };
-        const totalUserNotifs = notifications.filter(n => n.userId === currentUser._id);
+        const totalUserNotifs = notifications.filter(n => String(n.userId) === String(currentUser._id));
         const unread = totalUserNotifs.filter(n => !n.read).length;
         const read = totalUserNotifs.filter(n => n.read).length;
         return {

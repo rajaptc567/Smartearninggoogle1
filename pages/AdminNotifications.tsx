@@ -6,6 +6,7 @@ import Table from '../components/ui/Table';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { deleteNotification, bulkDeleteNotifications, updateNotification, createNotification, getNotifications, getBulkPopups, createBulkPopup as createBulkPopupApi, updateBulkPopup, deleteBulkPopup } from '../services/api';
+import { AdminNotificationRulesManager } from '../components/AdminNotificationRulesManager';
 
 interface ResolvedNotificationInfo {
   notification: Notification;
@@ -38,7 +39,7 @@ const AdminNotifications: React.FC = () => {
   const [isMarking, setIsMarking] = useState(false);
 
   // Bulk Pop-up Form State
-  const [activeTab, setActiveTab] = useState<'history' | 'bulk_popup'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'bulk_popup' | 'notification_rules'>('history');
   const [bulkPopupSubTab, setBulkPopupSubTab] = useState<'send' | 'active' | 'history'>('send');
   const [bulkPopupsList, setBulkPopupsList] = useState<any[]>([]);
   const [popupSubject, setPopupSubject] = useState('');
@@ -589,7 +590,21 @@ const AdminNotifications: React.FC = () => {
           </svg>
           Bulk Pop-up Broadcasts 🚀
         </button>
+        <button
+          onClick={() => setActiveTab('notification_rules')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'notification_rules'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span>📲</span> Notification Channels & Templates
+        </button>
       </div>
+
+      {activeTab === 'notification_rules' && (
+        <AdminNotificationRulesManager />
+      )}
 
       {activeTab === 'bulk_popup' && (
         <div className="space-y-6">

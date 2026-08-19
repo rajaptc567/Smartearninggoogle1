@@ -4,7 +4,8 @@ import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import UserWorkAndEarnDashboard from './user/UserWorkAndEarnDashboard';
 import Badge from '../components/ui/Badge';
 import ShareButtons from '../components/ui/ShareButtons';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
@@ -80,6 +81,9 @@ const UserDashboard: React.FC = () => {
     const { currentUser, deposits, withdrawals, transactions, users, investmentPlans, settings } = state;
     const navigate = useNavigate();
     
+    const outletCtx = useOutletContext<{ dashboardMode?: 'work_and_earn' | 'investment' }>() || {};
+    const dashboardMode = outletCtx.dashboardMode || 'work_and_earn';
+    
     const [visibleWidgets, setVisibleWidgets] = useState({
       balance: true, deposits: true, commission: true, withdrawals: true,
       pending: true, referrals: true, plan: true, monthly: true, breakdown: true,
@@ -87,6 +91,10 @@ const UserDashboard: React.FC = () => {
     });
     const [showCustomize, setShowCustomize] = useState(false);
     const [isMobileView, setIsMobileView] = useState(true);
+    const [viewMode, setViewMode] = useState<'auto' | 'mobile' | 'desktop'>(() => {
+        const cached = localStorage.getItem('dashboard_view_mode');
+        return (cached as 'auto' | 'mobile' | 'desktop') || 'auto';
+    });
 
     useEffect(() => {
         const handleResize = () => {
@@ -96,6 +104,8 @@ const UserDashboard: React.FC = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    const activeViewMode = viewMode === 'auto' ? (isMobileView ? 'mobile' : 'desktop') : viewMode;
 
     if (!currentUser) {
         return (
@@ -178,6 +188,10 @@ const UserDashboard: React.FC = () => {
     const recentTransactions = userTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
+    if (dashboardMode === 'work_and_earn') {
+        return <UserWorkAndEarnDashboard />;
+    }
+    
     const toggleWidget = (widget: keyof typeof visibleWidgets) => {
       setVisibleWidgets(prev => ({ ...prev, [widget]: !prev[widget] }));
     };
@@ -230,7 +244,7 @@ const UserDashboard: React.FC = () => {
         );
     };
 
-    const isCompact = settings?.userDashboardVersion === 'compact' && isMobileView;
+    const isCompact = settings?.userDashboardVersion === 'compact' && activeViewMode === 'mobile';
 
     if (isCompact) {
         const totalActive = Object.values(networkBreakdown.active).reduce((s: number, c: number) => s + c, 0);
@@ -267,13 +281,22 @@ const UserDashboard: React.FC = () => {
                     </Button>
                 </div>
 
-                {/* Compact Layout Customizer Toggle */}
-                <div className="w-full flex justify-center">
+                {/* Compact Layout View / Customizer Toggles */}
+                <div className="w-full flex justify-center items-center gap-2">
                     <button 
                         onClick={() => setShowCustomize(!showCustomize)} 
                         className="px-2.5 py-1 text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700 shadow-sm transition-all"
                     >
                         {showCustomize ? 'Hide Customizer' : 'Customize Cards'}
+                    </button>
+                    <button 
+                        onClick={() => {
+                            setViewMode('desktop');
+                            localStorage.setItem('dashboard_view_mode', 'desktop');
+                        }} 
+                        className="px-2.5 py-1 text-[10px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50/50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/30 shadow-sm transition-all"
+                    >
+                        Desktop View
                     </button>
                 </div>
                 {showCustomize && (
@@ -407,7 +430,21 @@ const UserDashboard: React.FC = () => {
             </div>
 
             <div className="relative">
-                <Button onClick={() => setShowCustomize(!showCustomize)} size="sm" variant="secondary" className="absolute top-0 right-0 -mt-8">Customize</Button>
+                <div className="absolute top-0 right-0 -mt-8 flex items-center gap-2">
+                    <Button onClick={() => setShowCustomize(!showCustomize)} size="sm" variant="secondary">Customize</Button>
+                    {isMobileView && (
+                        <button 
+                            onClick={() => {
+                                const newMode = activeViewMode === 'mobile' ? 'desktop' : 'mobile';
+                                setViewMode(newMode);
+                                localStorage.setItem('dashboard_view_mode', newMode);
+                            }} 
+                            className="px-2.5 py-1 text-[10px] sm:text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50/50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-900/30 shadow-sm transition-all h-[32px] flex items-center"
+                        >
+                            {activeViewMode === 'mobile' ? 'Desktop View' : 'Mobile View'}
+                        </button>
+                    )}
+                </div>
                 {showCustomize && (
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg mb-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-sm">
                         {Object.keys(visibleWidgets).map(key => (

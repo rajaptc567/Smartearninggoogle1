@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { login as apiLogin } from '../services/api';
+import { SEOHead } from '../components/SEOHead';
 
 const AdminLogin: React.FC = () => {
     const navigate = useNavigate();
@@ -53,14 +54,21 @@ const AdminLogin: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-[#0f172a]">
+        <div className="flex items-center justify-center min-h-screen bg-[#0f172a] px-4">
+            <SEOHead 
+                title="System Management Login | Restricted" 
+                robots="noindex, nofollow" 
+                canonical="https://smartexn.com/secure-admin-login56" 
+            />
             <div className="w-full max-w-md p-8 space-y-6 bg-[#111827] rounded-xl shadow-2xl border border-gray-800/50">
                 <div className="text-center">
                     <div className="flex justify-center mb-4">
                         <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-lg"></div>
-                            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400">
-                                SmartEarning
+                            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-sky-500 rounded-lg flex items-center justify-center text-white">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            </div>
+                            <span className="text-2xl font-bold text-white">
+                                Smart<span className="text-sky-500">Exn</span>
                             </span>
                         </Link>
                     </div>

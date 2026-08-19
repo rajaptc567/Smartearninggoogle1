@@ -7,7 +7,7 @@ import { completeTask } from '../../services/api';
 
 const UserTasks: React.FC = () => {
     const { state, dispatch } = useData();
-    const { tasks, currentUser } = state;
+    const { tasks, currentUser, settings } = state;
 
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [activeVideoTask, setActiveVideoTask] = useState<Task | null>(null);
@@ -137,16 +137,24 @@ const UserTasks: React.FC = () => {
     };
 
     return (
-        <div className="space-y-10 max-w-7xl mx-auto pb-20">
-            <div className="bg-[#0f172a] p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none"></div>
-                <div className="relative z-10">
-                    <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">Engagement HQ</h1>
-                    <p className="mt-2 text-blue-100/70 font-medium uppercase text-xs tracking-widest ml-1">Unlock rewards and eligibility through social missions</p>
+        <div className="space-y-8 max-w-7xl mx-auto pb-20">
+            <div className="bg-slate-900/90 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-slate-800 relative overflow-hidden group">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                            <span>⚡ System Engagement Missions</span>
+                        </div>
+                        <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">Engagement HQ</h1>
+                        <p className="mt-1 text-slate-400 font-medium text-xs sm:text-sm">Unlock rewards and eligibility through quick social tasks</p>
+                    </div>
+                    <div className="bg-slate-950/80 px-4 py-2.5 rounded-2xl border border-slate-800 text-right self-start sm:self-auto">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available Tasks</span>
+                        <span className="text-lg font-extrabold text-amber-300 font-mono">{visibleTasks.length} Missions</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {visibleTasks.map((task) => {
                     const submissions = (currentUser.completedTasks || []).filter(ct => ct.taskId.toString() === task._id.toString());
                     const lastSub = submissions.length > 0 ? submissions[submissions.length - 1] : null;
@@ -167,71 +175,71 @@ const UserTasks: React.FC = () => {
                     const cooldownString = remainingSeconds > 0 ? `${Math.floor(remainingSeconds/3600)}h ${Math.floor((remainingSeconds%3600)/60)}m` : null;
 
                     return (
-                        <div key={task._id} className={`relative flex flex-col bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-xl border-2 transition-all group overflow-hidden 
-                            ${isFullyDone ? 'border-green-500 opacity-60' : isPending ? 'border-orange-500 ring-4 ring-orange-500/10' : isRejected ? 'border-red-500 animate-pulse' : 'border-gray-100 dark:border-gray-700 hover:border-blue-500'}`}>
+                        <div key={task._id} className={`relative flex flex-col bg-slate-950/80 rounded-2xl p-5 shadow-lg border transition-all group overflow-hidden 
+                            ${isFullyDone ? 'border-emerald-500/50 opacity-60' : isPending ? 'border-amber-500/80 ring-2 ring-amber-500/10' : isRejected ? 'border-rose-500 animate-pulse' : 'border-slate-800 hover:border-amber-500/50'}`}>
                             
                             {task.isRequiredForWithdrawal && !isApproved && !isPending && (
-                                <div className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-black px-4 py-2 rounded-bl-3xl uppercase tracking-widest z-10 shadow-xl">Guard Required</div>
+                                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[9px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider z-10 shadow-md">Guard Required</div>
                             )}
 
-                            <div className="p-8 flex-grow">
-                                <div className="flex justify-between items-start mb-6">
+                            <div className="flex-grow space-y-4">
+                                <div className="flex justify-between items-start gap-2">
                                     <div className="flex flex-col gap-1">
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-[10px] font-black uppercase text-blue-500 tracking-[0.2em]">{task.platform}</span>
-                                            <span className="text-gray-300">/</span>
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{task.category}</span>
+                                            <span className="text-[10px] font-bold uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">{task.platform}</span>
+                                            <span className="text-slate-600">/</span>
+                                            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">{task.category}</span>
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight mt-1">{task.title}</h3>
+                                        <h3 className="text-base font-bold text-white leading-snug mt-1 group-hover:text-amber-300 transition-colors">{task.title}</h3>
                                     </div>
                                     <div className="shrink-0">
-                                        {isApproved ? <div className="w-10 h-10 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center font-bold">✓</div> : 
-                                         isPending ? <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center animate-spin">⟳</div> :
-                                         isRejected ? <div className="w-10 h-10 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center font-bold">!</div> :
-                                         <div className="text-xs font-black text-gray-400 uppercase tracking-tighter">{task.action}</div>}
+                                        {isApproved ? <div className="w-8 h-8 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-bold text-xs">✓</div> : 
+                                         isPending ? <div className="w-8 h-8 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl flex items-center justify-center animate-spin text-xs">⟳</div> :
+                                         isRejected ? <div className="w-8 h-8 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl flex items-center justify-center font-bold text-xs">!</div> :
+                                         <div className="text-[10px] font-bold text-slate-400 uppercase">{task.action}</div>}
                                     </div>
                                 </div>
 
-                                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-8 line-clamp-3 italic">"{task.description}"</p>
+                                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">"{task.description}"</p>
 
-                                <div className="grid grid-cols-2 gap-4 mt-auto">
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border dark:border-gray-700 text-center">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Potential</p>
-                                        <p className="text-lg font-black text-green-600">{formatCurrency(task.rewardAmount, currentUser.currency)}</p>
+                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Potential Reward</p>
+                                        <p className="text-sm font-extrabold text-emerald-400 font-mono">{formatCurrency(task.rewardAmount, currentUser.currency)}</p>
                                     </div>
-                                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border dark:border-gray-700 text-center">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Cycle</p>
-                                        <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase">{task.frequency}</p>
+                                    <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Frequency Cycle</p>
+                                        <p className="text-xs font-bold text-slate-200 uppercase">{task.frequency}</p>
                                     </div>
                                 </div>
 
                                 {isRejected && lastSub?.adminNotes && (
-                                    <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-2xl">
-                                        <p className="text-[10px] font-black text-red-600 uppercase mb-1">Rejection Reason</p>
-                                        <p className="text-xs text-red-700 dark:text-red-300 font-medium">"{lastSub.adminNotes}"</p>
+                                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                                        <p className="text-[9px] font-bold text-rose-400 uppercase mb-0.5">Rejection Reason</p>
+                                        <p className="text-xs text-rose-300 font-medium">"{lastSub.adminNotes}"</p>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="p-8 bg-gray-50 dark:bg-gray-900/40 border-t dark:border-gray-700">
+                            <div className="pt-4 mt-4 border-t border-slate-800/80">
                                 {isFullyDone ? (
-                                    <div className="text-center font-black text-xs text-green-600 uppercase tracking-[0.2em]">MISSION COMPLETE</div>
+                                    <div className="text-center font-bold text-xs text-emerald-400 uppercase tracking-wider py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">✓ MISSION COMPLETE</div>
                                 ) : isPending ? (
-                                    <div className="text-center font-black text-xs text-orange-500 uppercase tracking-[0.2em] animate-pulse">UNDER VERIFICATION</div>
+                                    <div className="text-center font-bold text-xs text-amber-400 uppercase tracking-wider py-2 bg-amber-500/10 rounded-xl border border-amber-500/20 animate-pulse">UNDER VERIFICATION</div>
                                 ) : isLockedByCooldown ? (
-                                    <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-2xl border dark:border-gray-700">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Next Run In:</span>
-                                        <span className="text-xs font-black text-blue-600 font-mono">{cooldownString}</span>
+                                    <div className="flex justify-between items-center bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Next Available In:</span>
+                                        <span className="text-xs font-bold text-amber-300 font-mono">{cooldownString}</span>
                                     </div>
                                 ) : isProcessing === task._id ? (
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         {task.requireProof && (
-                                            <div className="flex flex-col gap-2">
-                                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest ml-1">{task.proofInstructions}</p>
+                                            <div className="flex flex-col gap-1.5">
+                                                <p className="text-[10px] font-bold text-amber-300 uppercase">{task.proofInstructions}</p>
                                                 <input 
                                                     type="file" 
                                                     accept="image/*" 
-                                                    className="w-full text-[10px] text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-blue-600 file:text-white" 
+                                                    className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400" 
                                                     onChange={e => {
                                                         const file = e.target.files?.[0];
                                                         if (file) {
@@ -247,10 +255,10 @@ const UserTasks: React.FC = () => {
                                                 />
                                             </div>
                                         )}
-                                        <Button onClick={() => handleVerify(task)} className="w-full py-4 rounded-2xl bg-green-600 hover:bg-green-700 shadow-xl shadow-green-500/20" disabled={task.requireProof && !proofFiles[task._id]}>Finalize Submission</Button>
+                                        <Button onClick={() => handleVerify(task)} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase" disabled={task.requireProof && !proofFiles[task._id]}>Finalize Submission</Button>
                                     </div>
                                 ) : (
-                                    <button onClick={() => handleTaskAction(task)} className="w-full py-4 bg-[#0f172a] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-blue-600 transition-all transform active:scale-95 shadow-xl shadow-blue-500/10">{getActionVerb(task)} &rarr;</button>
+                                    <button onClick={() => handleTaskAction(task)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2 min-h-[40px]">{getActionVerb(task)} &rarr;</button>
                                 )}
                             </div>
                         </div>

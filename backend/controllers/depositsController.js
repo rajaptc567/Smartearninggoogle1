@@ -45,6 +45,11 @@ export const getDeposit = async (req, res) => {
 export const createDeposit = async (req, res) => {
     try {
         const depositData = { ...req.body };
+        if (depositData.isHub === 'true' || depositData.isHub === true) {
+            depositData.isHub = true;
+        } else {
+            depositData.isHub = false;
+        }
         if (depositData.confirmationAnswers && typeof depositData.confirmationAnswers === 'string') {
             try {
                 depositData.confirmationAnswers = JSON.parse(depositData.confirmationAnswers);
@@ -144,7 +149,11 @@ export const updateDeposit = async (req, res) => {
 
         let user = await User.findById(deposit.userId);
         if (originalStatus !== 'Approved' && status === 'Approved') {
-            user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
+            if (deposit.isHub) {
+                user.taskWalletBalance = Number((user.taskWalletBalance + deposit.amount).toFixed(2));
+            } else {
+                user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
+            }
             await user.save();
             await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
             

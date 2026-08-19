@@ -6,6 +6,7 @@ import { useData } from '../hooks/useData';
 import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../types';
 import { updateSettings } from '../services/api';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
+import { SmartexnLandingPage } from '../components/SmartexnLandingPage';
 import { 
     defaultPrivacyPolicyContent, defaultPrivacyPolicyTitle, defaultPrivacyPolicyUpdated, 
     defaultRefundPolicyContent, defaultRefundPolicyTitle, defaultRefundPolicyUpdated, 
@@ -247,24 +248,26 @@ const HomePage: React.FC = () => {
     }, [settings]);
 
     useEffect(() => {
-        const defaultTitle = "SmartEarning - Earn Money Online, Daily Micro Gigs & Passive Investments";
+        const defaultTitle = "SmartExn | Online Micro-Tasks, Surveys & Global Gigs";
+        const defaultDesc = "Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce.";
         const seoTitle = settings.seoTitle || defaultTitle;
+        const seoDescription = settings.seoDescription || defaultDesc;
         document.title = seoTitle;
 
         // Structured SEO Metadata containing high-yield organic search term triggers
         const metaTags: Record<string, string> = {
-            description: settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
-            keywords: settings.seoKeywords || "earn money online, online earning in Pakistan, complete micro tasks, easy tasks, passive income, MLM referral marketing, EasyPaisa earning app, earn money at home, make money online, micro gigs, smart earning",
-            author: "SmartEarning Global",
+            description: seoDescription,
+            keywords: settings.seoKeywords || "online micro tasks, micro jobs, earn money completing tasks, paid online tasks, online surveys, crowdsourced workforce, micro-task campaigns, hire micro workers, create task campaigns, global task marketplace",
+            author: "SmartExn Global",
             robots: "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1",
             "og:title": seoTitle,
-            "og:description": settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
+            "og:description": seoDescription,
             "og:type": "website",
-            "og:url": window.location.origin,
-            "og:site_name": "SmartEarning",
+            "og:url": "https://smartexn.com/",
+            "og:site_name": "SmartExn",
             "twitter:card": "summary_large_image",
             "twitter:title": seoTitle,
-            "twitter:description": settings.seoDescription || "SmartEarning is the #1 online earning platform. Earn daily passive income through high-yield plans, or complete easy micro-tasks, gigs, and social jobs. Instant EasyPaisa & JazzCash withdrawals.",
+            "twitter:description": seoDescription,
         };
 
         Object.entries(metaTags).forEach(([key, val]) => {
@@ -288,7 +291,7 @@ const HomePage: React.FC = () => {
             canonical.setAttribute('rel', 'canonical');
             document.head.appendChild(canonical);
         }
-        canonical.setAttribute('href', window.location.href);
+        canonical.setAttribute('href', "https://smartexn.com/");
 
         // JSON-LD Schema.org Multi-Graph generation for search engine rich snippets
         let schemaScript = document.getElementById('seo-schema-jsonld') as HTMLScriptElement;
@@ -313,36 +316,39 @@ const HomePage: React.FC = () => {
             "@context": "https://schema.org",
             "@graph": [
                 {
+                    "@type": "Organization",
+                    "@id": "https://smartexn.com/#organization",
+                    "name": "SmartExn",
+                    "url": "https://smartexn.com",
+                    "logo": "https://smartexn.com/favicon.svg",
+                    "description": "SmartExn is a global crowdsourcing and digital micro-task network connecting task earners with advertisers and businesses.",
+                    "contactPoint": {
+                        "@type": "ContactPoint",
+                        "contactType": "customer support",
+                        "email": "support@smartexn.com",
+                        "url": "https://smartexn.com/faqs"
+                    }
+                },
+                {
                     "@type": "WebSite",
-                    "@id": `${window.location.origin}/#website`,
-                    "url": window.location.origin,
-                    "name": "SmartEarning",
-                    "description": metaTags.description,
+                    "@id": "https://smartexn.com/#website",
+                    "url": "https://smartexn.com",
+                    "name": "SmartExn",
+                    "description": seoDescription,
+                    "publisher": {
+                        "@id": "https://smartexn.com/#organization"
+                    },
                     "potentialAction": [
                         {
                             "@type": "SearchAction",
-                            "target": `${window.location.origin}/#search?q={search_term_string}`,
+                            "target": "https://smartexn.com/faqs?q={search_term_string}",
                             "query-input": "required name=search_term_string"
                         }
                     ]
                 },
-                {
-                    "@type": "SoftwareApplication",
-                    "@id": `${window.location.origin}/#software`,
-                    "name": "SmartEarning Ecosystem",
-                    "applicationCategory": "FinancialApplication, BusinessApplication",
-                    "operatingSystem": "All",
-                    "url": window.location.origin,
-                    "description": "SmartEarning is an online earning platform. Users can complete daily micro-tasks, gigs, and social jobs or select packages to earn rewards with multiple referral tiers.",
-                    "offers": {
-                        "@type": "Offer",
-                        "price": "0.00",
-                        "priceCurrency": "USD"
-                    }
-                },
                 ...(faqsSchema.length > 0 ? [{
                     "@type": "FAQPage",
-                    "@id": `${window.location.origin}/#faq`,
+                    "@id": "https://smartexn.com/#faq",
                     "mainEntity": faqsSchema
                 }] : [])
             ]
@@ -498,6 +504,89 @@ const HomePage: React.FC = () => {
         if (editMode) return localFaqs;
         return localFaqs.filter(f => f.showOnHomepage);
     }, [localFaqs, editMode]);
+
+    if ((settings.landingPageStyle || 'smartexn') === 'smartexn' && !editMode) {
+        return (
+            <div className="min-h-screen relative">
+                {currentUser?.username === 'admin' && (
+                    <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 border border-sky-500/50 text-white p-2.5 rounded-xl shadow-2xl flex items-center gap-3 text-xs">
+                        <span className="font-bold text-sky-400">Admin Mode</span>
+                        <button 
+                            onClick={() => setEditMode(true)} 
+                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-1.5 rounded-lg transition-all"
+                        >
+                            Edit Page
+                        </button>
+                        <button 
+                            onClick={() => navigate('/settings')} 
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-1.5 rounded-lg border border-slate-700 transition-all"
+                        >
+                            Layout Settings
+                        </button>
+                    </div>
+                )}
+                
+                <SmartexnLandingPage onOpenPolicy={(policy) => {
+                    if (policy === 'privacy' || policy === 'refund' || policy === 'terms') {
+                        setActivePolicyModal(policy);
+                    }
+                }} />
+
+                {/* Policy Modals */}
+                {activePolicyModal && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm transition-all animate-fade-in" onClick={() => setActivePolicyModal(null)}>
+                        <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative transition-transform transform scale-100" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                                onClick={() => setActivePolicyModal(null)} 
+                                className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-all cursor-pointer"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                            
+                            {activePolicyModal === 'privacy' && (
+                                <div>
+                                    <span className="text-xs font-black tracking-widest text-blue-500 uppercase block mb-2">Security & Data Safeguards</span>
+                                    <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.privacyPolicyTitle || defaultPrivacyPolicyTitle}</h2>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.privacyPolicyUpdated || defaultPrivacyPolicyUpdated}</p>
+                                    <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                        {settings.privacyPolicyContent || defaultPrivacyPolicyContent}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {activePolicyModal === 'refund' && (
+                                <div>
+                                    <span className="text-xs font-black tracking-widest text-red-500 uppercase block mb-2">Important Financial Notice</span>
+                                    <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.refundPolicyTitle || defaultRefundPolicyTitle}</h2>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.refundPolicyUpdated || defaultRefundPolicyUpdated}</p>
+                                    <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                        {settings.refundPolicyContent || defaultRefundPolicyContent}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {activePolicyModal === 'terms' && (
+                                <div>
+                                    <span className="text-xs font-black tracking-widest text-blue-500 uppercase block mb-2">Rules & Guidelines</span>
+                                    <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white mb-2">{settings.termsOfUseTitle || defaultTermsOfUseTitle}</h2>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 font-medium">{settings.termsOfUseUpdated || defaultTermsOfUseUpdated}</p>
+                                    <div className="text-gray-600 dark:text-gray-300 space-y-4 whitespace-pre-line text-sm md:text-base leading-relaxed">
+                                        {settings.termsOfUseContent || defaultTermsOfUseContent}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div className="mt-8 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                                <Button onClick={() => setActivePolicyModal(null)} className="rounded-xl px-6 py-2">
+                                    Acknowledge & Close
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen font-sans">
@@ -1139,31 +1228,87 @@ const HomePage: React.FC = () => {
                 )}
             </main>
 
-            {/* Footer */}
-            <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800">
-                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                    <div className="flex flex-col md:flex-row justify-between items-center">
-                        <div className="mb-6 md:mb-0">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">SmartEarning</h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Empowering financial growth globally.</p>
+            {/* Professional Footer */}
+            <footer className="bg-gray-100 dark:bg-gray-950 text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-800 text-left">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 max-w-7xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
+                        {/* Column 1: Brand Profile */}
+                        <div className="lg:col-span-2 space-y-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.751h-.013A11.959 11.959 0 0112 2.714z" />
+                                    </svg>
+                                </div>
+                                <span className="text-xl font-black uppercase tracking-tighter text-gray-900 dark:text-white">SmartEarning</span>
+                            </div>
+                            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 font-light leading-relaxed max-w-sm">
+                                SmartEarning is an innovative crowdsourced advertising and social multi-level marketing platform. We connect sponsors with verified global network builders to yield mutual digital promotional growth.
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-400 font-mono">Status: Secure Ledger (MFA enabled)</span>
+                            </div>
                         </div>
-                        <div className="flex flex-col items-center md:items-end gap-3 text-center md:text-right">
-                            <div className="flex flex-wrap gap-4 justify-center md:justify-end text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                <Link to="/privacy-policy" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-                                    Privacy Policy
-                                </Link>
-                                <span className="text-gray-300 dark:text-gray-700 select-none">•</span>
-                                <Link to="/refund-policy" className="hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer">
-                                    Refund Policy
-                                </Link>
-                                <span className="text-gray-300 dark:text-gray-700 select-none">•</span>
-                                <Link to="/terms-of-use" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-                                    Terms of Use
-                                </Link>
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                &copy; {new Date().getFullYear()} SmartEarning. All rights reserved.
-                            </div>
+
+                        {/* Column 2: Legal Agreements */}
+                        <div>
+                            <h4 className="text-xs font-black uppercase text-gray-400 dark:text-gray-500 tracking-wider mb-4">Core Agreements</h4>
+                            <ul className="space-y-2.5 text-xs font-medium">
+                                <li>
+                                    <Link to="/privacy-policy?tab=privacy" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Privacy Policy</Link>
+                                </li>
+                                <li>
+                                    <Link to="/terms-of-use?tab=terms" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Terms of Service</Link>
+                                </li>
+                                <li>
+                                    <Link to="/privacy-policy?tab=cookie" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Cookie Policy</Link>
+                                </li>
+                                <li>
+                                    <Link to="/privacy-policy?tab=antifraud" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Anti-Fraud Policy</Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Column 3: Payouts & Disclaimers */}
+                        <div>
+                            <h4 className="text-xs font-black uppercase text-gray-400 dark:text-gray-500 tracking-wider mb-4">Financial Policy</h4>
+                            <ul className="space-y-2.5 text-xs font-medium">
+                                <li>
+                                    <Link to="/privacy-policy?tab=withdrawal" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Withdrawal Policy</Link>
+                                </li>
+                                <li>
+                                    <Link to="/refund-policy?tab=refund" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Refund Policy</Link>
+                                </li>
+                                <li>
+                                    <Link to="/privacy-policy?tab=disclaimer" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Income Disclaimer</Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Column 4: Contact & Corp Info */}
+                        <div>
+                            <h4 className="text-xs font-black uppercase text-gray-400 dark:text-gray-500 tracking-wider mb-4">Corporate Info</h4>
+                            <ul className="space-y-2.5 text-xs font-medium">
+                                <li>
+                                    <Link to="/privacy-policy?tab=about" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">About Us</Link>
+                                </li>
+                                <li>
+                                    <Link to="/privacy-policy?tab=contact" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Contact Support</Link>
+                                </li>
+                                <li>
+                                    <Link to="/privacy-policy?tab=dmca" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">DMCA Takedowns</Link>
+                                </li>
+                                <li>
+                                    <Link to="/faqs" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">FAQs Knowledgebase</Link>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 dark:border-gray-800/80 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-400">
+                        <p>&copy; {new Date().getFullYear()} SmartEarning (smartexn.com). All rights reserved.</p>
+                        <div className="flex gap-4">
+                            <span className="font-mono text-[10px] text-gray-400 dark:text-gray-600">Built with 128-bit AES Encryption Protocols</span>
                         </div>
                     </div>
                 </div>

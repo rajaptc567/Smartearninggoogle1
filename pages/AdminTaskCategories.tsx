@@ -163,12 +163,12 @@ const AdminTaskCategories: React.FC = () => {
                 taskCategoryPresets: presets
             };
             const response = await updateSettings(updatedSettings);
-            if (response.success) {
+            if (response) {
                 dispatch({ type: 'UPDATE_USER', payload: state.currentUser }); // Trigger refresh
-                dispatch({ type: 'UPDATE_SETTINGS', payload: response.data });
+                dispatch({ type: 'UPDATE_SETTINGS', payload: response });
                 setMessage({ type: 'success', text: 'Task Preset Categories updated successfully!' });
             } else {
-                setMessage({ type: 'error', text: response.error || 'Failed to update settings.' });
+                setMessage({ type: 'error', text: 'Failed to update settings.' });
             }
         } catch (error: any) {
             setMessage({ type: 'error', text: error.message || 'Server error saving settings.' });
