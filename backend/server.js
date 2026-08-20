@@ -159,8 +159,11 @@ app.use('/api/v1/templates', templateRoutes);
 app.use('/api/v1/user-tasks', userTaskRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
 
-// Explicit 404 handler for unmatched API routes
-app.all('/api/*', (req, res) => {
+// Explicit 404 handler for unmatched API routes (Named wildcard compatible with Express 5 / path-to-regexp)
+app.all('/api/*path', (req, res) => {
+    res.status(404).json({ success: false, error: 'API endpoint not found' });
+});
+app.all('/api', (req, res) => {
     res.status(404).json({ success: false, error: 'API endpoint not found' });
 });
 
@@ -177,7 +180,7 @@ if (fs.existsSync(distPath)) {
 }
 
 // Production SPA Fallback: Serves index.html for all valid frontend paths (Googlebot / direct URL access)
-app.get('*', (req, res, next) => {
+app.get('*path', (req, res, next) => {
     // 1. Never catch API or uploads routes in SPA fallback
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
         return next();
@@ -211,11 +214,22 @@ app.use((err, req, res, next) => {
     res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-let PORT = process.env.PORT || 5000;
-// In AI Studio workspace environment, port 8080/3000 are reserved, so we bind the backend to 5000 and proxy to it
-if (process.env.APPLET_ID) {
-    PORT = 5000;
-}
+// Environment-aware Port Strategy
+// In production (Render, etc.), use platform-assigned process.env.PORT.
+// In development, use BACKEND_PORT (defaulting to 5000) so it never conflicts with Vite on port 3000.
+const isProduction = process.env.NODE_ENV === 'production' && !process.env.APPLET_ID;
+const PORT = isProduction 
+    ? Number(process.env.PORT || 5000) 
+    : Number(process.env.BACKEND_PORT || 5000);
+
+// Gracefully handle EADDRINUSE if another development process is already running on the port
+httpServer.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+        console.log(`Port ${PORT} is already bound. Backend server is actively listening on ${PORT}.`);
+    } else {
+        console.error('HTTP server error:', err);
+    }
+});
 
 /**
  * ASYNC STARTUP
@@ -228,7 +242,7 @@ const startServer = async () => {
         console.warn('Database initialization warning:', error.message);
     } finally {
         httpServer.listen(PORT, () => {
-            console.log(`SmartExn Backend server running on port ${PORT}`);
+            console.log(`SmartExn Backend server running on port ${PORT} (Mode: ${process.env.NODE_ENV || 'development'})`);
         });
     }
 };

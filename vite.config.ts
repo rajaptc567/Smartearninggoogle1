@@ -1,6 +1,36 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { fileURLToPath } from 'url';
+import { fork, ChildProcess } from 'child_process';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Plugin to automatically start the backend Express server during Vite development
+function backendServerPlugin(): Plugin {
+  let backendProcess: ChildProcess | null = null;
+  return {
+    name: 'backend-server-runner',
+    configureServer(server) {
+      const serverPath = path.resolve(__dirname, 'backend/server.js');
+      try {
+        backendProcess = fork(serverPath, [], {
+          env: { ...process.env, BACKEND_PORT: '5000', PORT: '5000' },
+          stdio: 'inherit'
+        });
+      } catch (err) {
+        console.warn('Could not automatically start backend process:', err);
+      }
+
+      server.httpServer?.on('close', () => {
+        if (backendProcess) {
+          backendProcess.kill();
+        }
+      });
+    }
+  };
+}
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -12,11 +42,22 @@ export default defineConfig(({ mode }) => {
           '/api': {
             target: 'http://localhost:5000',
             changeOrigin: true,
-            secure: false
+            secure: false,
+            configure: (proxy) => {
+              proxy.on('error', (_err, _req, res) => {
+                if (res && !('headersSent' in res && res.headersSent) && typeof (res as any).writeHead === 'function') {
+                  (res as any).writeHead(503, { 'Content-Type': 'application/json' });
+                  (res as any).end(JSON.stringify({ 
+                    success: false, 
+                    message: 'Backend service starting up or temporarily offline' 
+                  }));
+                }
+              });
+            }
           }
         }
       },
-      plugins: [react()],
+      plugins: [react(), backendServerPlugin()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -30,3 +71,4 @@ export default defineConfig(({ mode }) => {
       }
     };
 });
+
