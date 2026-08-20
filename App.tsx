@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useData } from './hooks/useData';
 import { FullPageLoader } from './components/ui/LoadingCircle';
 import Layout from './components/Layout';
@@ -123,6 +123,18 @@ import WorkAndEarnHistory from './pages/user/WorkAndEarnHistory';
 import { ModulePageGuard } from './components/ModulePageGuard';
 
 
+// Backward compatibility redirector for legacy hash-based URLs (e.g. /#/how-it-works -> /how-it-works)
+const HashToPathRedirector: React.FC = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
+      const cleanPath = window.location.hash.substring(1);
+      navigate(cleanPath, { replace: true });
+    }
+  }, [navigate]);
+  return null;
+};
+
 const App: React.FC = () => {
   const { state } = useData();
   const [introFinished, setIntroFinished] = useState(false);
@@ -137,7 +149,8 @@ const App: React.FC = () => {
           onFinished={() => setIntroFinished(true)} 
         />
       )}
-      <HashRouter>
+      <BrowserRouter>
+        <HashToPathRedirector />
         <SeoAnalyticsTracker />
         <Routes>
         {/* Public Routes */}
@@ -270,7 +283,7 @@ const App: React.FC = () => {
       </Routes>
       <WhatsAppFloatingButton />
       <UserPopupModal />
-    </HashRouter>
+    </BrowserRouter>
   </>
   );
 };

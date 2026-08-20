@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import mongoose from 'mongoose';
 import connectDB from './config/db.js';
 import User from './models/User.js'; 
 
@@ -101,6 +102,11 @@ app.use('/uploads', express.static(uploadsDir));
 // Seed Admin User Function
 const seedAdminUser = async () => {
     try {
+        if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+            console.log('MongoDB is not connected; skipping admin user seeding.');
+            return;
+        }
+
         const adminEmail = 'studio56.pk@gmail.com';
         const adminPassword = 'raja5207901@'; 
         
@@ -128,10 +134,6 @@ const seedAdminUser = async () => {
     }
 };
 
-app.get('/', (req, res) => {
-    res.send('SmartEarning API is operational.');
-});
-
 // Mount routers
 app.use('/api/v1/users', userRoutes);
 
@@ -157,6 +159,51 @@ app.use('/api/v1/templates', templateRoutes);
 app.use('/api/v1/user-tasks', userTaskRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
 
+// Explicit 404 handler for unmatched API routes
+app.all('/api/*', (req, res) => {
+    res.status(404).json({ success: false, error: 'API endpoint not found' });
+});
+
+// Serve static assets from public (sitemap.xml, robots.txt, icons)
+const publicPath = path.resolve(__dirname, '../public');
+if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+}
+
+// Serve production static assets from dist
+const distPath = path.resolve(__dirname, '../dist');
+if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+}
+
+// Production SPA Fallback: Serves index.html for all valid frontend paths (Googlebot / direct URL access)
+app.get('*', (req, res, next) => {
+    // 1. Never catch API or uploads routes in SPA fallback
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+        return next();
+    }
+
+    // 2. Missing static asset files with extensions should return a proper 404
+    const ext = path.extname(req.path);
+    if (ext) {
+        return res.status(404).send('Resource not found');
+    }
+
+    // 3. Serve production compiled index.html
+    const indexPath = path.resolve(__dirname, '../dist/index.html');
+    if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+    }
+
+    // 4. Fallback for local development environments
+    const devIndexPath = path.resolve(__dirname, '../index.html');
+    if (fs.existsSync(devIndexPath)) {
+        return res.sendFile(devIndexPath);
+    }
+
+    res.status(200).send('SmartExn is operational. Run build to compile the web frontend.');
+});
+
 // Custom Error Handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -177,13 +224,12 @@ const startServer = async () => {
     try {
         await connectDB();
         await seedAdminUser();
-        
-        httpServer.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
     } catch (error) {
-        console.error('SERVER FATAL ERROR:', error.message);
-        process.exit(1);
+        console.warn('Database initialization warning:', error.message);
+    } finally {
+        httpServer.listen(PORT, () => {
+            console.log(`SmartExn Backend server running on port ${PORT}`);
+        });
     }
 };
 
