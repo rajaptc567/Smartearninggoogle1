@@ -105,6 +105,53 @@ export function sanitizePublicPath(pathname: string): string {
 export const GA4_MEASUREMENT_ID = 'G-42724E1TLB';
 
 /**
+ * Sensitive key pattern blacklist to guarantee zero-PII and zero-financial leakage
+ */
+const SENSITIVE_KEY_PATTERNS = [
+  'email', 'password', 'token', 'phone', 'mobile', 'address', 'name', 'username',
+  'balance', 'amount', 'wallet', 'deposit', 'withdraw', 'secret', 'proof',
+  'image', 'screenshot', 'file', 'content', 'url', 'userid', 'user_id', 'description'
+];
+
+/**
+ * Generic Privacy-Safe Analytics Event Dispatcher (GA4 Conversion & Interaction Events)
+ *
+ * Enforces zero-PII sanitization:
+ * - Strips personal identifiers, credentials, contact details, proof attachments, and financial metrics.
+ * - Safely checks window.gtag / window.dataLayer without throwing errors.
+ */
+export function trackAnalyticsEvent(eventName: string, parameters: Record<string, unknown> = {}): void {
+  try {
+    if (!eventName || typeof eventName !== 'string') return;
+
+    // Build sanitized parameters allowing only safe non-PII keys
+    const sanitizedParams: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parameters)) {
+      const lowerKey = key.toLowerCase();
+      const isAllowedKey = ['method', 'task_id', 'task_category', 'campaign_type', 'search_context', 'filter_type', 'placement', 'source'].includes(lowerKey);
+      const containsSensitiveTerm = SENSITIVE_KEY_PATTERNS.some(pat => lowerKey.includes(pat));
+      
+      if (isAllowedKey || !containsSensitiveTerm) {
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          sanitizedParams[key] = typeof value === 'string' ? value.substring(0, 100) : value;
+        }
+      }
+    }
+
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', eventName, sanitizedParams);
+    } else if (Array.isArray(window.dataLayer)) {
+      window.dataLayer.push({
+        event: eventName,
+        ...sanitizedParams
+      });
+    }
+  } catch (err) {
+    // Fail silently in production without impacting user experience
+  }
+}
+
+/**
  * Core privacy-safe event dispatcher
  */
 export function trackSeoEvent(eventName: string, payload: SeoEventPayload = {}): void {
@@ -275,6 +322,96 @@ export const seoAnalytics = {
     trackSeoEvent('login_cta_click', {
       page_location: sanitizePublicPath(sourcePage),
       seo_cluster: cluster || getSeoClusterFromPath(sourcePage)
+    });
+  },
+
+  /**
+   * Tracks user registration completion (Phase P20-A)
+   * Parameter: method (e.g. "email_or_platform_method")
+   */
+  trackSignUp: (method = 'platform_registration'): void => {
+    trackAnalyticsEvent('sign_up', {
+      method: method || 'platform_registration'
+    });
+  },
+
+  /**
+   * Tracks user authentication completion (Phase P20-A)
+   * Parameter: method ("platform_login")
+   */
+  trackLogin: (method = 'platform_login'): void => {
+    trackAnalyticsEvent('login', {
+      method: method || 'platform_login'
+    });
+  },
+
+  /**
+   * Tracks when a user views a task or campaign detail (Phase P20-A)
+   * Parameters: task_id, task_category
+   */
+  trackViewTask: (taskId: string, category?: string): void => {
+    trackAnalyticsEvent('view_task', {
+      task_id: String(taskId || ''),
+      task_category: category || 'general'
+    });
+  },
+
+  /**
+   * Tracks when a user starts/accepts a task (Phase P20-A)
+   * Parameters: task_id, task_category
+   */
+  trackStartTask: (taskId: string, category?: string): void => {
+    trackAnalyticsEvent('start_task', {
+      task_id: String(taskId || ''),
+      task_category: category || 'general'
+    });
+  },
+
+  /**
+   * Tracks when a user successfully submits task proof (Phase P20-A)
+   * Parameters: task_id, task_category
+   */
+  trackSubmitTaskProof: (taskId: string, category?: string): void => {
+    trackAnalyticsEvent('submit_task_proof', {
+      task_id: String(taskId || ''),
+      task_category: category || 'general'
+    });
+  },
+
+  /**
+   * Tracks when a user begins campaign creation (Phase P20-A)
+   */
+  trackCampaignCreateStarted: (): void => {
+    trackAnalyticsEvent('campaign_create_started');
+  },
+
+  /**
+   * Tracks when a campaign is successfully created (Phase P20-A)
+   * Parameters: campaign_type
+   */
+  trackCampaignCreated: (campaignType?: string): void => {
+    trackAnalyticsEvent('campaign_created', {
+      campaign_type: campaignType || 'standard'
+    });
+  },
+
+  /**
+   * Tracks task search interaction (Phase P20-A)
+   * Parameters: search_context ("tasks")
+   */
+  trackSearchTasks: (searchContext = 'tasks'): void => {
+    trackAnalyticsEvent('search_tasks', {
+      search_context: searchContext
+    });
+  },
+
+  /**
+   * Tracks task filter or sort application (Phase P20-A)
+   * Parameters: filter_type
+   */
+  trackFilterTasks: (filterType: string): void => {
+    trackAnalyticsEvent('filter_tasks', {
+      filter_type: filterType
     });
   }
 };

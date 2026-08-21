@@ -7,6 +7,7 @@ import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute
 import { canUserAccessTasks } from '../../utils/taskAccess';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
+import { seoAnalytics } from '../../services/seoAnalytics';
 
 export interface UserTasksSubmitProps {
     initialTab?: 'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs';
@@ -1521,6 +1522,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
 
+            // Trigger non-financial GA4 campaign_created event (Phase P20-A)
+            seoAnalytics.trackCampaignCreated(result.task?.category || category);
+
             // Dispatch transaction so history tracks campaign creation immediately
             const userCurr = currentUser.currency || 'USD';
             const rate = rates[userCurr] || 1;
@@ -1625,6 +1629,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 submittedProofs: proofsToSubmit
             });
             dispatch({ type: 'ADD_USER_TASK_SUBMISSION', payload: submission });
+            
+            // Trigger non-financial GA4 submit_task_proof event (Phase P20-A)
+            seoAnalytics.trackSubmitTaskProof(selectedTaskForProof._id, selectedTaskForProof.category);
+
             alert('Proof submitted successfully! Awaiting campaign creator review for USD reward.');
             setSelectedTaskForProof(null);
             setProofText('');
@@ -2271,7 +2279,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             ].map((tab, idx) => (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as any)}
+                                    onClick={() => {
+                                        setActiveTab(tab.id as any);
+                                        if (tab.id === 'submit') {
+                                            seoAnalytics.trackCampaignCreateStarted();
+                                        }
+                                    }}
                                     className={`flex items-center justify-center gap-1.5 px-3 py-2 md:px-4 md:py-2.5 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-wider transition-all duration-300 select-none ${
                                         idx === 6 ? 'col-span-2 lg:col-span-1' : ''
                                     } ${
@@ -2890,6 +2903,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 onChange={(e) => {
                                     setBrowseSearch(e.target.value);
                                     setBrowsePage(1); // Reset page on filter change
+                                    if (e.target.value.trim().length > 2) {
+                                        seoAnalytics.trackSearchTasks('tasks');
+                                    }
                                 }}
                                 className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium focus:border-amber-500 focus:outline-none text-slate-200 placeholder:text-slate-500"
                             />
@@ -2918,6 +2934,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     onChange={(e) => {
                                         setBrowseCategory(e.target.value);
                                         setBrowsePage(1); // Reset page on filter change
+                                        seoAnalytics.trackFilterTasks('category');
                                     }}
                                     className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] md:text-xs font-bold text-slate-200 focus:border-amber-500 focus:outline-none"
                                 >
@@ -2933,6 +2950,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     onChange={(e) => {
                                         setBrowseSort(e.target.value);
                                         setBrowsePage(1); // Reset page on filter change
+                                        seoAnalytics.trackFilterTasks('sort');
                                     }}
                                     className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] md:text-xs font-bold text-slate-200 focus:border-amber-500 focus:outline-none"
                                 >
@@ -3005,6 +3023,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                             onClick={() => {
                                                                 setSelectedTaskForProof(task);
                                                                 setProofStep(1); // Start at step 1 (View Details)
+                                                                seoAnalytics.trackViewTask(task._id, task.category);
                                                                 setProofText('');
                                                                 setProofUsername('');
                                                                 setProofUserIdVal('');
@@ -4107,6 +4126,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <button
                                                         onClick={() => {
                                                             setSelectedCampaignForDetail(task);
+                                                            seoAnalytics.trackViewTask(task._id, task.category);
                                                             setDetailSubmissionTab('Pending');
                                                             setSelectedSubmissions({});
                                                         }}
@@ -4257,6 +4277,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 <button
                                                                     onClick={() => {
                                                                         setSelectedCampaignForDetail(task);
+                                                                        seoAnalytics.trackViewTask(task._id, task.category);
                                                                         setDetailSubmissionTab('Pending');
                                                                         setSelectedSubmissions({});
                                                                     }}
@@ -4975,6 +4996,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         variant="primary" 
                                         className="flex-[2] py-3 text-xs font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg hover:scale-[1.02] active:scale-95 transition-all text-center"
                                         onClick={() => {
+                                            seoAnalytics.trackStartTask(selectedTaskForProof._id, selectedTaskForProof.category);
                                             if (selectedTaskForProof.link) {
                                                 window.open(selectedTaskForProof.link, '_blank', 'noopener,noreferrer');
                                             }

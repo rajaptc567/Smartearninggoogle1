@@ -4,6 +4,7 @@ import { useData } from '../../hooks/useData';
 import { formatCurrency, Task } from '../../types';
 import Button from '../../components/ui/Button';
 import { completeTask } from '../../services/api';
+import { seoAnalytics } from '../../services/seoAnalytics';
 
 const UserTasks: React.FC = () => {
     const { state, dispatch } = useData();
@@ -97,6 +98,8 @@ const UserTasks: React.FC = () => {
     }, [tasks, currentUser, currentTime]);
 
     const handleTaskAction = (task: Task) => {
+        seoAnalytics.trackViewTask(task._id, task.type || 'system_task');
+        seoAnalytics.trackStartTask(task._id, task.type || 'system_task');
         if (task.type === 'Video') {
             setActiveVideoTask(task);
             setTimeLeft(task.videoDurationValue || 60);
@@ -113,6 +116,7 @@ const UserTasks: React.FC = () => {
         try {
             const updatedUser = await completeTask(task._id, currentUser._id, proofFiles[task._id]);
             dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+            seoAnalytics.trackSubmitTaskProof(task._id, task.type || 'system_task');
             alert(task.requireProof ? 'Submission received! Awaiting review.' : 'Task completed successfully!');
             setActiveVideoTask(null);
         } catch (error) {

@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { login as apiLogin } from '../services/api';
 import { SEOHead } from '../components/SEOHead';
+import { seoAnalytics } from '../services/seoAnalytics';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
@@ -46,6 +47,10 @@ const Login: React.FC = () => {
             const loginResult = await apiLogin(email, password);
             // FIX: apiLogin returns { token, data: User }. Map these to the expected payload structure { user, token }.
             dispatch({ type: 'SET_CURRENT_USER', payload: { user: loginResult.data, token: loginResult.token } });
+            
+            // Trigger non-financial GA4 login event with no PII
+            seoAnalytics.trackLogin('platform_login');
+
             navigate('/member');
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';

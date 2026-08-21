@@ -5,6 +5,7 @@ import { useData } from '../hooks/useData';
 import { User, Status, countries } from '../types';
 import { createUser as apiCreateUser } from '../services/api';
 import { SEOHead } from '../components/SEOHead';
+import { seoAnalytics } from '../services/seoAnalytics';
 
 const Register: React.FC = () => {
     const navigate = useNavigate();
@@ -215,6 +216,9 @@ const Register: React.FC = () => {
             
             // Set the new user as the currently logged-in user
             dispatch({ type: 'SET_CURRENT_USER', payload: { user: createdUser } });
+
+            // Trigger non-financial GA4 sign_up event with no PII
+            seoAnalytics.trackSignUp('platform_registration');
 
             alert('Registration successful! Redirecting to your dashboard...');
             navigate('/member');
