@@ -7,6 +7,7 @@ import { InvestmentPlan, formatCurrency, HomepageContent, FaqItem } from '../typ
 import { updateSettings } from '../services/api';
 import { LoadingCircle } from '../components/ui/LoadingCircle';
 import { SmartexnLandingPage } from '../components/SmartexnLandingPage';
+import { SEOHead } from '../components/SEOHead';
 import { 
     defaultPrivacyPolicyContent, defaultPrivacyPolicyTitle, defaultPrivacyPolicyUpdated, 
     defaultRefundPolicyContent, defaultRefundPolicyTitle, defaultRefundPolicyUpdated, 
@@ -590,6 +591,12 @@ const HomePage: React.FC = () => {
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen font-sans">
+            <SEOHead 
+                title="SmartExn | Online Micro-Tasks, Surveys & Global Gigs"
+                description="Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce."
+                canonicalUrl="https://smartexn.com/"
+                robots="index, follow"
+            />
             <style>
                 {`
                 @keyframes slide-left {

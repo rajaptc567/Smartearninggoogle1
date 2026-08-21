@@ -316,7 +316,7 @@ const SettingSchema = new mongoose.Schema({
     whatsappNumber: { type: String, default: "" },
     whatsappFloatingEnabled: { type: Boolean, default: true },
     whatsappDepositProofEnabled: { type: Boolean, default: true },
-    seoTitle: { type: String, default: "SmartEarning - Invest & Grow Your Network" },
+    seoTitle: { type: String, default: "SmartExn | Online Micro-Tasks, Surveys & Global Gigs" },
     seoDescription: { type: String, default: "SmartEarning is a premier Multi-Level Marketing and passive investment ecosystem designed to help you secure stable growth." },
     seoKeywords: { type: String, default: "SmartEarning, investment, MLM, multi-level marketing, passive income" },
     privacyPolicyTitle: { type: String, default: "Privacy Policy" },
