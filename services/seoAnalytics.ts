@@ -102,6 +102,8 @@ export function sanitizePublicPath(pathname: string): string {
   return pathname.split('?')[0].split('#')[0] || '/';
 }
 
+export const GA4_MEASUREMENT_ID = 'G-42724E1TLB';
+
 /**
  * Core privacy-safe event dispatcher
  */
@@ -113,9 +115,13 @@ export function trackSeoEvent(eventName: string, payload: SeoEventPayload = {}):
     }
 
     // 2. Build sanitized payload with canonical domain context
+    const cleanPath = payload.page_location?.startsWith('http') 
+      ? payload.page_location 
+      : `https://smartexn.com${payload.page_location || window.location.pathname}`;
+
     const cleanPayload: SeoEventPayload = {
       ...payload,
-      page_location: `https://smartexn.com${payload.page_location || window.location.pathname}`,
+      page_location: cleanPath,
       timestamp: new Date().toISOString()
     };
 
@@ -130,7 +136,6 @@ export function trackSeoEvent(eventName: string, payload: SeoEventPayload = {}):
     }
 
     // 4. Safe non-blocking execution in browser
-    // In production, events dispatch cleanly to window.gtag or window.dataLayer
   } catch (err) {
     // Fail silently in production without impacting user experience
   }
@@ -149,11 +154,27 @@ export const seoAnalytics = {
 
     if (cluster === 'private') return;
 
-    trackSeoEvent('page_view', {
-      page_location: cleanPath,
-      page_title: title || document.title,
-      seo_cluster: cluster
-    });
+    const pageTitle = title || document.title || 'SmartExn';
+    const pageLocation = `https://smartexn.com${cleanPath}`;
+
+    // 1. Send standard GA4 page_view configuration update
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_title: pageTitle,
+        page_location: pageLocation,
+        page_path: cleanPath,
+        send_to: GA4_MEASUREMENT_ID,
+        seo_cluster: cluster
+      });
+    } else if (Array.isArray(window.dataLayer)) {
+      window.dataLayer.push({
+        event: 'page_view',
+        page_title: pageTitle,
+        page_location: pageLocation,
+        page_path: cleanPath,
+        seo_cluster: cluster
+      });
+    }
   },
 
   /**
