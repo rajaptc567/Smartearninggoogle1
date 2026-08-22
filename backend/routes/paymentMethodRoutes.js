@@ -4,6 +4,7 @@ import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
 import {
     getPaymentMethods,
+    getPublicPaymentMethods,
     createPaymentMethod,
     updatePaymentMethod,
     deletePaymentMethod
@@ -25,6 +26,9 @@ const cpUpload = upload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'qrCode', maxCount: 1 }
 ]);
+
+// Dedicated lightweight public endpoint for homepage render performance
+router.get('/public', getPublicPaymentMethods);
 
 router.route('/')
     .get(getPaymentMethods) // Publicly accessible to show logos on homepage

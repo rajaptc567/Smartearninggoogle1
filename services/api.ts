@@ -413,6 +413,17 @@ export const markNotificationPopupAsShown = async (id: string): Promise<Notifica
 };
 
 // --- [Payment Method API Functions] ---
+export const getPublicPaymentMethods = async (): Promise<PaymentMethod[]> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/payment-methods/public`);
+        const result = await handleResponse(response);
+        return result.data || [];
+    } catch (e) {
+        console.warn("Public payment methods fallback to standard:", e);
+        return getPaymentMethods();
+    }
+};
+
 export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const response = await fetch(`${API_BASE_URL}/payment-methods`, {
         headers: getHeaders()
@@ -527,6 +538,17 @@ export const deleteRule = async (id: string): Promise<{}> => {
 };
 
 // --- [Settings API Functions] ---
+export const getPublicSettings = async (): Promise<Settings> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/settings/public`);
+        const result = await handleResponse(response);
+        return result.data || {};
+    } catch (e) {
+        console.warn("Public settings fallback to standard:", e);
+        return getSettings();
+    }
+};
+
 export const getSettings = async (): Promise<Settings> => {
     const response = await fetch(`${API_BASE_URL}/settings`, {
         headers: getHeaders()

@@ -3,8 +3,8 @@ import React, { createContext, useReducer, ReactNode, useEffect, useRef } from '
 import { io } from 'socket.io-client';
 import { User, Deposit, Withdrawal, PaymentMethod, InvestmentPlan, Transaction, Rule, Status, Transfer, Settings, Notification, Log, PasswordResetRequest, Dispute, Task, HomepageContent, UserTask, UserTaskSubmission } from '../types';
 import { 
-    getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, 
-    getInvestmentPlans, getRules, getSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
+    getUsers, getDeposits, getWithdrawals, getTransactions, getNotifications, getPaymentMethods, getPublicPaymentMethods,
+    getInvestmentPlans, getRules, getSettings, getPublicSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
     getDataVersion
 } from '../services/api';
 
@@ -132,7 +132,7 @@ const initialState: AppState = {
     passwordResetRequests: [],
     disputes: [],
     currentUser: null,
-    isLoading: true,
+    isLoading: false,
 };
 
 type Action =
@@ -426,67 +426,100 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const lastVersionRef = useRef<number>(0);
     const isSyncingRef = useRef<boolean>(false);
 
-    // Initial Data Fetch with AllSettled for Resilience
+    // Fast Non-Blocking Initial Handshake + Deferred Lazy Background Fetch
     useEffect(() => {
-        const fetchData = async () => {
+        let isMounted = true;
+
+        const executeInitialLoad = async () => {
             const token = localStorage.getItem('authToken');
             const isLoggedIn = !!token;
 
+            // Phase 1: Ultra-fast critical public handshake (< 5 KB) - never blocks render
             try {
-                // Public data always fetched
-                const publicPromises = [
-                    getPaymentMethods(),
-                    getInvestmentPlans(),
-                    getSettings(),
+                const [publicSettings, serverVersion] = await Promise.all([
+                    getPublicSettings(),
                     getDataVersion()
-                ];
-
-                // Private data only fetched if logged in
-                const privatePromises = isLoggedIn ? [
-                    getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), 
-                    getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                ] : [];
-
-                const [publicResults, privateResults] = await Promise.all([
-                    Promise.allSettled(publicPromises),
-                    Promise.allSettled(privatePromises)
                 ]);
 
-                const getValue = (results: any[], idx: number, fallback: any) => 
-                    (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
-
-                const currentVersion = getValue(publicResults, 3, 0);
-                lastVersionRef.current = currentVersion;
-
-                dispatch({ 
-                    type: 'SET_ALL_DATA', 
-                    payload: { 
-                        paymentMethods: getValue(publicResults, 0, state.paymentMethods),
-                        investmentPlans: getValue(publicResults, 1, state.investmentPlans),
-                        settings: getValue(publicResults, 2, state.settings),
-                        users: getValue(privateResults, 0, state.users),
-                        deposits: getValue(privateResults, 1, state.deposits),
-                        withdrawals: getValue(privateResults, 2, state.withdrawals),
-                        transactions: getValue(privateResults, 3, state.transactions),
-                        notifications: getValue(privateResults, 4, state.notifications),
-                        rules: getValue(privateResults, 5, state.rules),
-                        transfers: getValue(privateResults, 6, state.transfers),
-                        logs: getValue(privateResults, 7, state.logs),
-                        passwordResetRequests: getValue(privateResults, 8, state.passwordResetRequests),
-                        disputes: getValue(privateResults, 9, state.disputes),
-                        tasks: getValue(privateResults, 10, state.tasks),
-                        userTasks: getValue(privateResults, 11, state.userTasks),
-                        userTaskSubmissions: getValue(privateResults, 12, state.userTaskSubmissions)
-                    } 
-                });
-                dispatch({ type: 'SET_LOADING', payload: false });
-            } catch (error) {
-                console.error("Critical error during initial data handshake:", error);
-                dispatch({ type: 'SET_LOADING', payload: false });
+                if (isMounted && publicSettings) {
+                    lastVersionRef.current = serverVersion || 1;
+                    dispatch({
+                        type: 'SET_ALL_DATA',
+                        payload: {
+                            settings: publicSettings as any
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn("Public settings handshake error:", err);
+            } finally {
+                if (isMounted) {
+                    dispatch({ type: 'SET_LOADING', payload: false });
+                }
             }
+
+            // Phase 2: Deferred non-critical background loading (Payment Methods, Plans, Private Member Data)
+            // Scheduled via requestIdleCallback or setTimeout to yield main thread to immediate rendering
+            const scheduleBackgroundFetch = typeof window !== 'undefined' && 'requestIdleCallback' in window
+                ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 1500 })
+                : (cb: () => void) => setTimeout(cb, 50);
+
+            scheduleBackgroundFetch(async () => {
+                if (!isMounted) return;
+
+                try {
+                    // Fetch public payment methods and investment plans in background
+                    const backgroundPublic = [
+                        getPublicPaymentMethods(),
+                        getInvestmentPlans()
+                    ];
+
+                    const backgroundPrivate = isLoggedIn ? [
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
+                        getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                    ] : [];
+
+                    const [publicResults, privateResults] = await Promise.all([
+                        Promise.allSettled(backgroundPublic),
+                        Promise.allSettled(backgroundPrivate)
+                    ]);
+
+                    if (!isMounted) return;
+
+                    const getValue = (results: any[], idx: number, fallback: any) =>
+                        (results[idx] && results[idx].status === 'fulfilled') ? (results[idx] as PromiseFulfilledResult<any>).value : fallback;
+
+                    dispatch({
+                        type: 'SET_ALL_DATA',
+                        payload: {
+                            paymentMethods: getValue(publicResults, 0, state.paymentMethods),
+                            investmentPlans: getValue(publicResults, 1, state.investmentPlans),
+                            users: getValue(privateResults, 0, state.users),
+                            deposits: getValue(privateResults, 1, state.deposits),
+                            withdrawals: getValue(privateResults, 2, state.withdrawals),
+                            transactions: getValue(privateResults, 3, state.transactions),
+                            notifications: getValue(privateResults, 4, state.notifications),
+                            rules: getValue(privateResults, 5, state.rules),
+                            transfers: getValue(privateResults, 6, state.transfers),
+                            logs: getValue(privateResults, 7, state.logs),
+                            passwordResetRequests: getValue(privateResults, 8, state.passwordResetRequests),
+                            disputes: getValue(privateResults, 9, state.disputes),
+                            tasks: getValue(privateResults, 10, state.tasks),
+                            userTasks: getValue(privateResults, 11, state.userTasks),
+                            userTaskSubmissions: getValue(privateResults, 12, state.userTaskSubmissions)
+                        }
+                    });
+                } catch (bgError) {
+                    console.warn("Background data load error:", bgError);
+                }
+            });
         };
 
-        fetchData();
+        executeInitialLoad();
+
+        return () => {
+            isMounted = false;
+        };
     }, [state.currentUser?._id]);
 
     // --- REAL-TIME LIVE SYNCHRONIZATION WITH SOCKET.IO ---

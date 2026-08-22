@@ -1,8 +1,69 @@
 import PaymentMethod from '../models/PaymentMethod.js';
 import Setting from '../models/Setting.js';
 
+// Clean standard fallback logos map for popular gateways
+const STANDARD_FALLBACK_LOGOS = {
+    'easypaisa': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Easypaisa_logo.png/320px-Easypaisa_logo.png',
+    'jazzcash': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Jazzcash_logo.png/320px-Jazzcash_logo.png',
+    'bank transfer': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
+    'paypal': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg',
+    'stripe': 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg',
+    'payoneer': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/Payoneer_logo.svg',
+    'crypto': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'usdt': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'usdt (trc20)': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'visa': 'https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg',
+    'perfect money': 'https://upload.wikimedia.org/wikipedia/commons/0/07/Perfect_Money_logo.png',
+    'payeer': 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Payeer_logo.png'
+};
+
+/**
+ * Public lightweight payment methods endpoint:
+ * Returns only the minimal fields required for homepage / public rendering.
+ * Strips Base64 image blobs, admin credentials, instructions, account numbers, and confirmation configs.
+ */
+export const getPublicPaymentMethods = async (req, res) => {
+    try {
+        const methods = await PaymentMethod.find({ status: { $ne: 'Disabled' } })
+            .select('name currency type minAmount maxAmount status logoUrl')
+            .lean();
+
+        // Sanitize any large Base64 logos to keep payload ultra-light (< 5 KB total)
+        const sanitized = methods.map(m => {
+            let logoUrl = m.logoUrl || '';
+            // If logo is a huge Base64 string (> 500 chars), replace with lightweight fallback if available
+            if (logoUrl.startsWith('data:image/') && logoUrl.length > 500) {
+                const lowerName = (m.name || '').toLowerCase().trim();
+                const matchedLogo = Object.keys(STANDARD_FALLBACK_LOGOS).find(k => lowerName.includes(k));
+                logoUrl = matchedLogo ? STANDARD_FALLBACK_LOGOS[matchedLogo] : '';
+            }
+            return {
+                _id: m._id,
+                name: m.name,
+                currency: m.currency,
+                type: m.type,
+                minAmount: m.minAmount,
+                maxAmount: m.maxAmount,
+                status: m.status,
+                logoUrl
+            };
+        });
+
+        // Set caching headers for optimal public delivery
+        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        return res.status(200).json({ success: true, data: sanitized });
+    } catch (err) {
+        return res.status(200).json({ success: false, data: [], error: err.message });
+    }
+};
+
 export const getPaymentMethods = async (req, res) => {
     try {
+        // If caller explicitly requested lightweight public data
+        if (req.query.public === 'true') {
+            return getPublicPaymentMethods(req, res);
+        }
+
         let methods = await PaymentMethod.find();
         
         // Seed default methods if none exist
