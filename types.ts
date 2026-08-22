@@ -248,6 +248,7 @@ export interface Settings {
     homepagePaymentLogos?: HomepagePaymentLogo[];
     featuredPlanIds?: string[];
     isInitialPageLoaderEnabled?: boolean;
+    dataVersion?: number;
     whatsappNumber?: string;
     whatsappFloatingEnabled?: boolean;
     whatsappDepositProofEnabled?: boolean;

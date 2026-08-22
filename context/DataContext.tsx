@@ -116,7 +116,7 @@ const initialState: AppState = {
         featuredPlanIds: [],
         faqs: [],
         homepagePaymentLogos: [],
-        isInitialPageLoaderEnabled: true,
+        isInitialPageLoaderEnabled: false,
         hubEnabled: true,
         hubMinDeposit: 5,
         hubMaxDeposit: 1000,
@@ -210,7 +210,7 @@ const dataReducer = (state: AppState, action: Action): AppState => {
         if (newSettings.restrictDepositAmount === undefined) newSettings.restrictDepositAmount = false;
         if (newSettings.faqs === undefined) newSettings.faqs = [];
         if (newSettings.homepagePaymentLogos === undefined) newSettings.homepagePaymentLogos = [];
-        if (newSettings.isInitialPageLoaderEnabled === undefined) newSettings.isInitialPageLoaderEnabled = true;
+        if (newSettings.isInitialPageLoaderEnabled === undefined) newSettings.isInitialPageLoaderEnabled = false;
         if (newSettings.hubEnabled === undefined) newSettings.hubEnabled = true;
         if (newSettings.hubMinDeposit === undefined) newSettings.hubMinDeposit = 5;
         if (newSettings.hubMaxDeposit === undefined) newSettings.hubMaxDeposit = 1000;
@@ -434,15 +434,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const token = localStorage.getItem('authToken');
             const isLoggedIn = !!token;
 
-            // Phase 1: Ultra-fast critical public handshake (< 5 KB) - never blocks render
+            // Phase 1: Ultra-fast critical public handshake (< 3 KB) - never blocks render
             try {
-                const [publicSettings, serverVersion] = await Promise.all([
-                    getPublicSettings(),
-                    getDataVersion()
-                ]);
+                const publicSettings = await getPublicSettings();
 
                 if (isMounted && publicSettings) {
-                    lastVersionRef.current = serverVersion || 1;
+                    lastVersionRef.current = publicSettings.dataVersion || 1;
                     dispatch({
                         type: 'SET_ALL_DATA',
                         payload: {
@@ -458,31 +455,26 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
             }
 
-            // Phase 2: Deferred non-critical background loading (Payment Methods, Plans, Private Member Data)
-            // Scheduled via requestIdleCallback or setTimeout to yield main thread to immediate rendering
+            // Phase 2: Deferred non-critical background loading ONLY for authenticated users
+            // Public homepage visitors never fetch payment methods, investment plans, or private data on startup!
+            if (!isLoggedIn) {
+                return;
+            }
+
             const scheduleBackgroundFetch = typeof window !== 'undefined' && 'requestIdleCallback' in window
-                ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 1500 })
-                : (cb: () => void) => setTimeout(cb, 50);
+                ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
+                : (cb: () => void) => setTimeout(cb, 1000);
 
             scheduleBackgroundFetch(async () => {
                 if (!isMounted) return;
 
                 try {
-                    // Fetch public payment methods and investment plans in background
-                    const backgroundPublic = [
-                        getPublicPaymentMethods(),
-                        getInvestmentPlans()
+                    const backgroundPrivate = [
+                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
+                        getInvestmentPlans(), getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ];
 
-                    const backgroundPrivate = isLoggedIn ? [
-                        getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(),
-                        getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
-                    ] : [];
-
-                    const [publicResults, privateResults] = await Promise.all([
-                        Promise.allSettled(backgroundPublic),
-                        Promise.allSettled(backgroundPrivate)
-                    ]);
+                    const privateResults = await Promise.allSettled(backgroundPrivate);
 
                     if (!isMounted) return;
 
@@ -492,21 +484,21 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     dispatch({
                         type: 'SET_ALL_DATA',
                         payload: {
-                            paymentMethods: getValue(publicResults, 0, state.paymentMethods),
-                            investmentPlans: getValue(publicResults, 1, state.investmentPlans),
                             users: getValue(privateResults, 0, state.users),
                             deposits: getValue(privateResults, 1, state.deposits),
                             withdrawals: getValue(privateResults, 2, state.withdrawals),
                             transactions: getValue(privateResults, 3, state.transactions),
                             notifications: getValue(privateResults, 4, state.notifications),
-                            rules: getValue(privateResults, 5, state.rules),
-                            transfers: getValue(privateResults, 6, state.transfers),
-                            logs: getValue(privateResults, 7, state.logs),
-                            passwordResetRequests: getValue(privateResults, 8, state.passwordResetRequests),
-                            disputes: getValue(privateResults, 9, state.disputes),
-                            tasks: getValue(privateResults, 10, state.tasks),
-                            userTasks: getValue(privateResults, 11, state.userTasks),
-                            userTaskSubmissions: getValue(privateResults, 12, state.userTaskSubmissions)
+                            paymentMethods: getValue(privateResults, 5, state.paymentMethods),
+                            investmentPlans: getValue(privateResults, 6, state.investmentPlans),
+                            rules: getValue(privateResults, 7, state.rules),
+                            transfers: getValue(privateResults, 8, state.transfers),
+                            logs: getValue(privateResults, 9, state.logs),
+                            passwordResetRequests: getValue(privateResults, 10, state.passwordResetRequests),
+                            disputes: getValue(privateResults, 11, state.disputes),
+                            tasks: getValue(privateResults, 12, state.tasks),
+                            userTasks: getValue(privateResults, 13, state.userTasks),
+                            userTaskSubmissions: getValue(privateResults, 14, state.userTaskSubmissions)
                         }
                     });
                 } catch (bgError) {

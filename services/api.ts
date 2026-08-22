@@ -544,8 +544,8 @@ export const getPublicSettings = async (): Promise<Settings> => {
         const result = await handleResponse(response);
         return result.data || {};
     } catch (e) {
-        console.warn("Public settings fallback to standard:", e);
-        return getSettings();
+        console.warn("Public settings network fetch error:", e);
+        return {} as Settings;
     }
 };
 

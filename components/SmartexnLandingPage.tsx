@@ -378,18 +378,21 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         )}
       </header>
 
+      {/* --- MAIN CONTENT LANDMARK --- */}
+      <main id="main-content" className="w-full">
+
       {/* --- HERO SECTION --- */}
       <section className="relative pt-12 md:pt-20 pb-16 md:pb-24 overflow-hidden bg-gradient-to-b from-[#0b1e36] via-[#0e2742] to-[#12355b]">
-        {/* Ambient background blur elements */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="absolute top-10 right-10 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+        {/* Ambient background blur elements with strict layout containment */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none contain-strict" aria-hidden="true"></div>
+        <div className="absolute top-10 right-10 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none contain-strict" aria-hidden="true"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             
             {/* Hero Text */}
             <div className="lg:col-span-7 text-center lg:text-left space-y-6">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-sky-500/10 border border-sky-400/30 rounded-full text-sky-300 font-semibold text-xs uppercase tracking-wider">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-sky-500/10 border border-sky-400/40 rounded-full text-sky-200 font-semibold text-xs uppercase tracking-wider">
                 <span>⚡ Global Crowdsourced Task & Gig Marketplace</span>
               </div>
 
@@ -400,7 +403,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                 )}
               </h1>
 
-              <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+              <p className="text-base sm:text-lg text-slate-200 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                 {sc.heroSubtitle || "Complete available online tasks, surveys and gigs, submit the required proof, and earn rewards when your work is approved. Businesses can also create campaigns and reach a global task-based workforce."}
               </p>
 
@@ -417,7 +420,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                     <span>{sc.heroStartBtn || "Start Earning"}</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                   </button>
-                  <span className="block text-[11px] text-sky-300/80 mt-1.5 font-medium">Free to create an account</span>
+                  <span className="block text-[11px] text-sky-200 mt-1.5 font-medium">Free to create an account</span>
                 </div>
 
                 <div className="w-full sm:w-auto text-center sm:text-left">
@@ -430,16 +433,16 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                         navigate('/register');
                       }
                     }}
-                    className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#caa14e] hover:bg-[#b8913d] text-slate-900 font-bold text-base shadow-xl hover:shadow-amber-500/10 transition-all transform active:scale-95"
+                    className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#caa14e] hover:bg-[#b8913d] text-slate-950 font-bold text-base shadow-xl hover:shadow-amber-500/10 transition-all transform active:scale-95"
                   >
                     {sc.heroPublishBtn || "Create a Campaign"}
                   </button>
-                  <span className="block text-[11px] text-amber-300/80 mt-1.5 font-medium">Reach verified crowdsourced workers</span>
+                  <span className="block text-[11px] text-amber-200 mt-1.5 font-medium">Reach verified crowdsourced workers</span>
                 </div>
               </div>
 
               {/* Trust signals mini-row */}
-              <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-slate-400">
+              <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
                   <span className="text-emerald-400 font-bold">✓</span> 100% Escrow Protected
                 </div>
@@ -455,7 +458,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
             {/* Hero Vector Banner Illustration */}
             <div className="lg:col-span-5 flex justify-center">
               <div className="relative w-full max-w-md lg:max-w-none bg-gradient-to-br from-slate-800/40 to-slate-900/60 p-6 md:p-8 rounded-3xl border border-sky-500/20 shadow-2xl backdrop-blur-sm">
-                <svg viewBox="0 0 500 380" className="w-full h-auto drop-shadow-xl" xmlns="http://www.w3.org/2000/svg">
+                <svg viewBox="0 0 500 380" className="w-full h-auto drop-shadow-xl" xmlns="http://www.w3.org/2000/svg" width="500" height="380">
                   <defs>
                     <linearGradient id="bgGlow" x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
@@ -543,13 +546,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center max-w-3xl mx-auto mb-14">
-            <span className="text-xs font-black uppercase tracking-widest text-sky-600 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-200">
+            <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
               Simple 4-Step Process
             </span>
             <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mt-3">
               {sc.howItWorksTitle || "How SmartExn Works"}
             </h2>
-            <p className="text-slate-600 mt-2 text-sm sm:text-base">
+            <p className="text-slate-700 mt-2 text-sm sm:text-base">
               A transparent, escrow-backed workflow connecting task workers with campaign creators.
             </p>
           </div>
@@ -570,7 +573,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step1Desc || "Create your free account as an earner or advertiser in less than a minute."}
                 </p>
               </div>
-              <span className="text-[11px] font-semibold text-sky-600 mt-4 block">Zero registration fees</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Zero registration fees</span>
             </div>
 
             {/* Step 2 */}
@@ -586,7 +589,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step2Desc || "Browse available social tasks, surveys, app feedback gigs, and data tagging opportunities."}
                 </p>
               </div>
-              <span className="text-[11px] font-semibold text-sky-600 mt-4 block">Clear instructions & rewards</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Clear instructions & rewards</span>
             </div>
 
             {/* Step 3 */}
@@ -602,7 +605,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step3Desc || "Follow the exact steps and upload verification proofs (screenshots, usernames, or answers)."}
                 </p>
               </div>
-              <span className="text-[11px] font-semibold text-sky-600 mt-4 block">Escrow-backed reward protection</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Escrow-backed reward protection</span>
             </div>
 
             {/* Step 4 */}
@@ -618,7 +621,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step4Desc || "Receive rewards in your Task Earnings wallet and withdraw via supported payment gateways."}
                 </p>
               </div>
-              <span className="text-[11px] font-semibold text-sky-600 mt-4 block">Fast processing & low minimums</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Fast processing & low minimums</span>
             </div>
 
           </div>
@@ -631,7 +634,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           {/* Section Header */}
           <div className="text-center max-w-3xl mx-auto space-y-3">
-            <span className="text-xs font-black uppercase tracking-widest text-sky-400 bg-sky-950/80 px-3.5 py-1 rounded-full border border-sky-800">
+            <span className="text-xs font-black uppercase tracking-widest text-sky-300 bg-sky-950/80 px-3.5 py-1 rounded-full border border-sky-800">
               Versatile Earning Categories
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">
@@ -700,7 +703,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           </div>
 
           {/* Responsible earnings disclosure */}
-          <div className="p-4 bg-sky-950/60 rounded-2xl border border-sky-800/60 text-center text-xs text-sky-200/90 max-w-3xl mx-auto">
+          <div className="p-4 bg-sky-950/60 rounded-2xl border border-sky-800/60 text-center text-xs text-sky-200 max-w-3xl mx-auto">
             <span className="font-bold text-sky-300">Earnings Disclosure:</span> Earnings vary depending on task availability, requirements, completion quality, and advertiser verification. SmartExn does not guarantee fixed or passive hourly income.
           </div>
 
@@ -713,7 +716,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <span className="text-xs font-black uppercase tracking-widest text-sky-600 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-200">
+              <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
                 Advertiser & Campaign Solutions
               </span>
               <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight mt-3">
@@ -740,7 +743,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               
               {/* Feature 1 */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-lg shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center font-bold text-lg shrink-0">
                   🌍
                 </div>
                 <div>
@@ -755,7 +758,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
 
               {/* Feature 2 */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-lg shrink-0">
                   🛡️
                 </div>
                 <div>
@@ -770,7 +773,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
 
               {/* Feature 3 */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-lg shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-lg shrink-0">
                   📊
                 </div>
                 <div>
@@ -785,7 +788,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
 
               {/* Feature 4 */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-lg shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-lg shrink-0">
                   ⚡
                 </div>
                 <div>
@@ -809,7 +812,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
-            <span className="text-xs font-black uppercase tracking-widest text-emerald-400 bg-emerald-950/80 px-3.5 py-1 rounded-full border border-emerald-800">
+            <span className="text-xs font-black uppercase tracking-widest text-emerald-300 bg-emerald-950/80 px-3.5 py-1 rounded-full border border-emerald-800">
               Security & Fairness Guaranteed
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">
@@ -876,7 +879,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-10">
             {/* Header */}
             <div className="text-center max-w-3xl mx-auto space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-sky-500/10 border border-sky-400/30 rounded-full text-sky-400 font-semibold text-xs uppercase tracking-widest">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-sky-500/10 border border-sky-400/30 rounded-full text-sky-300 font-semibold text-xs uppercase tracking-widest">
                 ⚡ Supported Multi-Currency Payment Networks
               </div>
               <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -930,7 +933,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           
           <div className="text-center space-y-3">
-            <span className="text-xs font-black uppercase tracking-widest text-sky-600 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-200">
+            <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
               Got Questions?
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -957,10 +960,10 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                         seoAnalytics.trackFaqOpen(faq.q, '/');
                       }
                     }}
-                    className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-slate-900 hover:text-sky-600 transition-colors"
+                    className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-slate-900 hover:text-sky-700 transition-colors"
                   >
                     <span className="text-base sm:text-lg">{faq.q}</span>
-                    <span className="text-xl text-sky-600 shrink-0">{isOpen ? '−' : '+'}</span>
+                    <span className="text-xl text-sky-700 shrink-0">{isOpen ? '−' : '+'}</span>
                   </button>
                   {isOpen && (
                     <div className="px-5 pb-5 text-sm text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
@@ -1020,6 +1023,8 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           </div>
         </div>
       </section>
+
+      </main>
 
       {/* --- FOOTER --- */}
       <footer className="bg-[#091a2e] text-slate-300 pt-12 pb-24 lg:pb-12 border-t border-blue-900/50">

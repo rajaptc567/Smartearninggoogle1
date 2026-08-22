@@ -1,0 +1,43 @@
+# SmartExn - Global Online Micro-Tasks, Paid Surveys & Crowdsourced Workforce Platform
+
+> SmartExn is a global digital micro-task, opinion survey, and crowdsourcing platform connecting task earners with verified campaign creators and advertisers.
+
+## Overview
+- **Name**: SmartExn
+- **Website**: https://smartexn.com/
+- **Industry**: Micro-task marketplace, crowdsourcing, survey research, digital marketing & user engagement.
+- **Audience**: Global workers (earners) looking for task-based rewards; businesses & advertisers needing crowdsourced task fulfillment.
+
+## Core Capabilities & Services
+
+### For Workers (Earners)
+- **Micro-Tasks**: Social media engagement, website testing, app installation & reviews, data verification, research tasks.
+- **Paid Surveys**: Consumer opinion questionnaires, brand studies, qualification-gated market research.
+- **Escrow Guarantee**: Funds are locked in escrow upon campaign creation, ensuring guaranteed payment for verified task submissions.
+- **Dispute Resolution**: Two-tier dispute arbitration mechanism for proof validation fairness.
+- **Payout Gateways**: Multi-gateway support including EasyPaisa, JazzCash, USDT TRC-20, Visa/MasterCard, PayPal, and Bank Transfer.
+
+### For Advertisers (Campaign Creators)
+- **Targeted Campaigns**: Custom step-by-step instructions, device targeting, geolocation rules, and proof verification questions.
+- **Escrow Budgeting**: 100% money-back refund on unspent escrow budget when stopping or canceling campaigns.
+- **Proof Auditing**: Real-time review and validation of submitted screenshots, usernames, and proof IDs.
+
+## Platform Policies & Safety
+- **Trust & Safety**: Zero tolerance for fraud, multi-accounting, and botting. Verified human worker validation.
+- **Privacy Policy**: Adheres to strict data protection standards and user confidentiality.
+- **Terms of Use**: Clear community guidelines protecting both advertisers and task workers.
+
+## Canonical URLs
+- Homepage: https://smartexn.com/
+- How It Works: https://smartexn.com/how-it-works
+- For Workers: https://smartexn.com/how-it-works-for-workers
+- For Advertisers: https://smartexn.com/advertise
+- Micro-Tasks Guide: https://smartexn.com/micro-tasks
+- Paid Surveys Guide: https://smartexn.com/paid-surveys
+- Task Proof Guide: https://smartexn.com/task-proof
+- Trust & Safety: https://smartexn.com/trust-and-safety
+- Knowledge Base: https://smartexn.com/knowledge-base
+- FAQs: https://smartexn.com/faqs
+- Terms of Use: https://smartexn.com/terms-of-use
+- Privacy Policy: https://smartexn.com/privacy-policy
+- Refund Policy: https://smartexn.com/refund-policy

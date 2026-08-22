@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { fork, ChildProcess } from 'child_process';
 import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,7 +58,7 @@ export default defineConfig(({ mode }) => {
           }
         }
       },
-      plugins: [react(), backendServerPlugin()],
+      plugins: [tailwindcss(), react(), backendServerPlugin()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -67,6 +68,31 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
+        }
+      },
+      build: {
+        target: 'es2020',
+        sourcemap: false,
+        chunkSizeWarningLimit: 600,
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules')) {
+                if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+                  return 'vendor-react';
+                }
+                if (id.includes('lucide-react')) {
+                  return 'vendor-icons';
+                }
+                if (id.includes('socket.io-client')) {
+                  return 'vendor-socket';
+                }
+                if (id.includes('axios')) {
+                  return 'vendor-axios';
+                }
+              }
+            }
+          }
         }
       }
     };

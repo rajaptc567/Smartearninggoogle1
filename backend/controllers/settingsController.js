@@ -1,29 +1,93 @@
 
 import Setting from '../models/Setting.js';
 
+// Clean standard fallback logos map for popular gateways
+const STANDARD_FALLBACK_LOGOS = {
+    'easypaisa': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Easypaisa_logo.png/320px-Easypaisa_logo.png',
+    'jazzcash': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Jazzcash_logo.png/320px-Jazzcash_logo.png',
+    'bank transfer': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
+    'paypal': 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg',
+    'stripe': 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg',
+    'payoneer': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/Payoneer_logo.svg',
+    'crypto': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'usdt': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'usdt (trc20)': 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+    'visa': 'https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg',
+    'mastercard': 'https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg',
+    'perfect money': 'https://upload.wikimedia.org/wikipedia/commons/0/07/Perfect_Money_logo.png',
+    'payeer': 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Payeer_logo.png'
+};
+
 /**
  * Public lightweight settings endpoint:
  * Returns only the necessary branding, SEO, exchange rates, and homepage configs.
- * Eliminates all multi-megabyte audit logs, legal text walls, demo profiles, and private tokens.
+ * Eliminates all multi-megabyte audit logs, legal text walls, demo profiles, Base64 image blobs, and private tokens.
  */
 export const getPublicSettings = async (req, res) => {
     try {
         const settings = await Setting.getSettings();
         
-        // Filter faqs to only homepage faqs
+        // Filter faqs to only homepage faqs and extract only necessary fields
         const homepageFaqs = Array.isArray(settings.faqs)
-            ? settings.faqs.filter(f => f.showOnHomepage).map(f => ({ question: f.question, answer: f.answer }))
+            ? settings.faqs
+                .filter(f => f.showOnHomepage)
+                .slice(0, 10) // Limit to top homepage FAQs
+                .map(f => ({ question: String(f.question || ''), answer: String(f.answer || '') }))
             : [];
 
-        // Build compact public response (~3-5 KB)
+        // Extract and strictly sanitize smartexnContent - exclude all Base64 images
+        const rawSmartexn = (settings.homepageContent && settings.homepageContent.smartexnContent) || {};
+        const cleanSmartexn = {};
+        const allowedSmartexnKeys = [
+            'heroTitle', 'heroSubtitle', 'heroStartBtn', 'heroPublishBtn',
+            'howItWorksTitle', 'step1Title', 'step1Desc', 'step2Title', 'step2Desc',
+            'step3Title', 'step3Desc', 'step4Title', 'step4Desc',
+            'oppsTitle', 'opp1Title', 'opp1Desc', 'opp2Title', 'opp2Desc', 'opp3Title', 'opp3Desc', 'opp4Title', 'opp4Desc',
+            'bizTitle', 'bizPoint1Title', 'bizPoint1Desc', 'bizPoint2Title', 'bizPoint2Desc', 'bizPoint3Title', 'bizPoint3Desc', 'bizPoint4Title', 'bizPoint4Desc',
+            'footerCopyright'
+        ];
+
+        for (const key of allowedSmartexnKeys) {
+            if (typeof rawSmartexn[key] === 'string' && rawSmartexn[key].trim()) {
+                cleanSmartexn[key] = rawSmartexn[key].trim();
+            }
+        }
+
+        // Clean and sanitize homepage payment logos - strip large Base64 blobs
+        const rawLogos = Array.isArray(settings.homepagePaymentLogos) ? settings.homepagePaymentLogos : [];
+        const sanitizedPaymentLogos = rawLogos.map(item => {
+            let logoUrl = item.logoUrl || '';
+            if (typeof logoUrl === 'string' && (logoUrl.startsWith('data:image/') || logoUrl.length > 500)) {
+                const lowerName = (item.name || '').toLowerCase().trim();
+                const matchedKey = Object.keys(STANDARD_FALLBACK_LOGOS).find(k => lowerName.includes(k));
+                logoUrl = matchedKey ? STANDARD_FALLBACK_LOGOS[matchedKey] : '';
+            }
+            return {
+                name: item.name || '',
+                logoUrl
+            };
+        });
+
+        // Build compact public response (~2-3 KB total payload)
         const publicData = {
             seoTitle: settings.seoTitle || "SmartExn | Online Micro-Tasks, Surveys & Global Gigs",
             seoDescription: settings.seoDescription || "SmartExn is a premier micro-task crowdsourcing marketplace.",
             seoKeywords: settings.seoKeywords || "micro-tasks, surveys, gig economy, earn online",
             landingPageStyle: settings.landingPageStyle || 'smartexn',
-            homepageContent: settings.homepageContent || {},
-            homepagePaymentLogos: settings.homepagePaymentLogos || [],
-            homepageVideoUrl: settings.homepageVideoUrl || '',
+            homepageContent: {
+                smartexnContent: cleanSmartexn,
+                showHero: settings.homepageContent?.showHero !== false,
+                showFeatures: settings.homepageContent?.showFeatures !== false,
+                showPaymentMethods: settings.homepageContent?.showPaymentMethods !== false,
+                showFAQ: settings.homepageContent?.showFAQ !== false,
+                showCTA: settings.homepageContent?.showCTA !== false,
+                paymentMethodsTitle: settings.homepageContent?.paymentMethodsTitle || "Global Payment & Withdrawal Partners",
+                paymentMethodsDesc: settings.homepageContent?.paymentMethodsDesc || "Fast, secure deposits & instant withdrawals supported through top global networks, local e-wallets, and cryptocurrency channels.",
+                paymentMethodsDisplayType: settings.homepageContent?.paymentMethodsDisplayType || 'static',
+                paymentMethodsColorStyle: settings.homepageContent?.paymentMethodsColorStyle || 'color'
+            },
+            homepagePaymentLogos: sanitizedPaymentLogos,
+            homepageVideoUrl: (typeof settings.homepageVideoUrl === 'string' && settings.homepageVideoUrl.length < 500) ? settings.homepageVideoUrl : '',
             exchangeRates: settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.00 },
             whatsappNumber: settings.whatsappNumber || '',
             whatsappFloatingEnabled: settings.whatsappFloatingEnabled !== false,
@@ -40,6 +104,12 @@ export const getPublicSettings = async (req, res) => {
             dataVersion: settings.dataVersion || 1,
             isInitialPageLoaderEnabled: false // Do not block initial public paint with loader
         };
+
+        // Temporary development diagnostics to verify serialized payload size
+        if (process.env.NODE_ENV !== 'production') {
+            const serialized = JSON.stringify({ success: true, data: publicData });
+            console.log(`[Diagnostic] /settings/public response payload: ${Buffer.byteLength(serialized, 'utf8')} bytes, keys: ${Object.keys(publicData).join(', ')}`);
+        }
 
         // Public caching headers
         res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
