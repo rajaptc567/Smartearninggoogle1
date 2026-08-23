@@ -120,7 +120,16 @@ const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colo
         {/* Logo container - Takes remaining space */}
         <div className={`w-full flex-grow flex items-center justify-center p-2.5 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
             {pm.logoUrl ? (
-                <img src={pm.logoUrl} alt={pm.name} className="max-w-[85%] max-h-[85%] object-contain drop-shadow-sm" title={pm.name} />
+                <img 
+                    src={pm.logoUrl} 
+                    alt={pm.name} 
+                    className="max-w-[85%] max-h-[85%] object-contain drop-shadow-sm" 
+                    title={pm.name} 
+                    loading="lazy"
+                    decoding="async"
+                    width="120"
+                    height="50"
+                />
             ) : (
                 <GenericPaymentIcon />
             )}

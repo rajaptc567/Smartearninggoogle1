@@ -9,6 +9,108 @@ interface SmartexnLandingPageProps {
   onOpenPolicy?: (policy: 'privacy' | 'refund' | 'terms' | 'faq' | 'about' | 'contact') => void;
 }
 
+// Payment Brand Vector Badges for 100% resilient rendering without external CDN failures
+const PaymentBrandIcon: React.FC<{ name: string }> = ({ name }) => {
+  const normalized = name.toLowerCase();
+
+  if (normalized.includes('easypaisa')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
+          <span className="text-white font-black text-xs tracking-tighter">ep</span>
+        </div>
+        <span className="text-[10px] font-bold text-emerald-400 mt-1">EasyPaisa</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('jazzcash') || normalized.includes('jazz')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center shadow-md">
+          <span className="text-slate-950 font-black text-xs tracking-tighter">JC</span>
+        </div>
+        <span className="text-[10px] font-bold text-amber-400 mt-1">JazzCash</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('usdt') || normalized.includes('tether') || normalized.includes('crypto')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-teal-500 flex items-center justify-center shadow-md">
+          <span className="text-white font-black text-xs">₮</span>
+        </div>
+        <span className="text-[10px] font-bold text-teal-300 mt-1">USDT TRC20</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('mastercard') || normalized.includes('visa')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="flex items-center -space-x-2">
+          <div className="w-6 h-6 rounded-full bg-red-500 opacity-90"></div>
+          <div className="w-6 h-6 rounded-full bg-amber-400 opacity-90"></div>
+        </div>
+        <span className="text-[10px] font-bold text-sky-200 mt-1">Visa / MC</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('paypal')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-md">
+          <span className="text-white font-black text-xs italic">P</span>
+        </div>
+        <span className="text-[10px] font-bold text-blue-300 mt-1">PayPal</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('perfect')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center shadow-md">
+          <span className="text-white font-black text-xs">PM</span>
+        </div>
+        <span className="text-[10px] font-bold text-red-300 mt-1">Perfect Money</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('payeer')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center shadow-md">
+          <span className="text-slate-950 font-black text-xs">P</span>
+        </div>
+        <span className="text-[10px] font-bold text-sky-300 mt-1">Payeer</span>
+      </div>
+    );
+  }
+
+  if (normalized.includes('bank')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center shadow-md">
+          <svg className="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 3l9 7H3l9-7z" />
+          </svg>
+        </div>
+        <span className="text-[10px] font-bold text-slate-300 mt-1">Bank Wire</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400 font-bold text-lg sm:text-xl">
+      💳
+    </div>
+  );
+};
+
 const SmartexnPaymentCard: React.FC<{ pm: { name: string; logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => {
   const [imgError, setImgError] = useState(false);
 
@@ -23,13 +125,12 @@ const SmartexnPaymentCard: React.FC<{ pm: { name: string; logoUrl?: string }; co
             className="max-h-12 sm:max-h-16 max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300" 
             title={pm.name} 
             loading="lazy"
+            decoding="async"
             width="120"
             height="50"
           />
         ) : (
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400 font-bold text-lg sm:text-xl">
-            💳
-          </div>
+          <PaymentBrandIcon name={pm.name} />
         )}
       </div>
       <div className="w-full pt-2 border-t border-sky-900/40 text-center">
