@@ -57,16 +57,58 @@ try {
 const app = express();
 const httpServer = createServer(app);
 
-// Dynamic CORS configuration supporting environment-configured origins and local dev
+// Dynamic CORS configuration supporting environment-configured origins, production domains, and local dev
 const isProduction = process.env.NODE_ENV === 'production' && !process.env.APPLET_ID;
 
+const defaultOrigins = [
+    'https://smartexn.com',
+    'https://www.smartexn.com',
+    'http://localhost:3000',
+    'http://localhost:5000',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5000'
+];
+
 const rawOrigins = [
+    ...defaultOrigins,
     ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : []),
     ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [])
 ];
 const allowedOriginsList = Array.from(
     new Set(rawOrigins.map(o => o.trim().replace(/\/+$/, '')).filter(Boolean))
 );
+
+const isOriginPermitted = (origin) => {
+    if (!origin) return true;
+    const normalized = origin.trim().replace(/\/+$/, '').toLowerCase();
+    
+    // Check exact whitelist match
+    if (allowedOriginsList.some(o => o.toLowerCase() === normalized)) {
+        return true;
+    }
+    
+    // Check known domain matches (e.g. smartexn.com, www.smartexn.com, subdomains, google dev domains)
+    try {
+        const parsed = new URL(normalized);
+        const hostname = parsed.hostname.toLowerCase();
+        
+        if (
+            hostname === 'smartexn.com' ||
+            hostname.endsWith('.smartexn.com') ||
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname.endsWith('.run.app') ||
+            hostname.endsWith('.googleusercontent.com') ||
+            hostname.endsWith('.aistudio.google.com')
+        ) {
+            return true;
+        }
+    } catch {
+        // Fall through
+    }
+    
+    return false;
+};
 
 const corsOptions = {
     origin: (origin, callback) => {
@@ -75,27 +117,17 @@ const corsOptions = {
             return callback(null, true);
         }
 
-        const normalizedOrigin = origin.replace(/\/+$/, '');
-
-        // 2. If configured whitelist has origins, strictly check if origin is in the whitelist
-        if (allowedOriginsList.length > 0) {
-            if (allowedOriginsList.includes(normalizedOrigin)) {
-                return callback(null, true);
-            }
-            if (isProduction) {
-                const corsError = new Error(`CORS blocked: Origin ${origin} not permitted by policy`);
-                corsError.status = 403;
-                return callback(corsError, false);
-            }
+        if (isOriginPermitted(origin)) {
+            return callback(null, true);
         }
 
-        // 3. In non-production environments (development / AI Studio preview), allow dev origins
+        // 2. In non-production environments (development / AI Studio preview), allow dev origins
         if (!isProduction) {
             return callback(null, true);
         }
 
-        // 4. In production when no explicit origin list is configured
-        const corsError = new Error(`CORS blocked: Origin ${origin} not permitted`);
+        // 3. In production when an unknown origin is detected
+        const corsError = new Error(`CORS blocked: Origin ${origin} not permitted by policy`);
         corsError.status = 403;
         return callback(corsError, false);
     },
