@@ -313,7 +313,7 @@ const startServer = async () => {
     } catch (error) {
         console.warn('Database initialization warning:', error.message);
     } finally {
-        httpServer.listen(PORT, () => {
+        httpServer.listen(PORT, '0.0.0.0', () => {
             console.log(`SmartExn Backend server running on port ${PORT} (Mode: ${process.env.NODE_ENV || 'development'})`);
         });
     }

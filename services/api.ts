@@ -7,36 +7,28 @@ const getBaseUrl = (): string => {
     if (typeof process !== 'undefined' && process.env) {
         // @ts-ignore
         const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
-        if (envUrl) return envUrl;
-    }
-    
-    // 2. Check window.location to dynamically use proxying in dev/container environments
-    if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        
-        // Local development or AI Studio preview container
-        if (
-            hostname === 'localhost' || 
-            hostname === '127.0.0.1' || 
-            hostname.includes('run.app') || 
-            hostname.includes('googleusercontent.com') || 
-            hostname.includes('aistudio')
-        ) {
-            return window.location.origin; // Routes through Vite's local dev server proxy
+        if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+            return envUrl.trim().replace(/\/+$/, '');
         }
     }
+    
+    // 2. In browser environments, use current origin (same-origin API / Vite local dev proxy)
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+        return window.location.origin;
+    }
 
-    return 'https://smartearning-api.onrender.com';
+    return '';
 };
 
 const BASE_URL = getBaseUrl();
 
 function getApiBaseUrl() {
-  return `${BASE_URL}/api/v1`;
+  const base = getBaseUrl();
+  return base ? `${base}/api/v1` : '/api/v1';
 }
 
 export function getUploadsBaseUrl() {
-    return BASE_URL;
+    return getBaseUrl();
 }
 
 const API_BASE_URL = getApiBaseUrl();

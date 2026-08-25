@@ -527,17 +527,16 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 if (typeof process !== 'undefined' && process.env) {
                     // @ts-ignore
                     const envUrl = process.env.REACT_APP_API_URL || process.env.VITE_API_URL;
-                    if (envUrl) return envUrl;
-                }
-                
-                if (typeof window !== 'undefined') {
-                    const hostname = window.location.hostname;
-                    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                        return 'http://localhost:5000';
+                    if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+                        return envUrl.trim().replace(/\/+$/, '');
                     }
                 }
+                
+                if (typeof window !== 'undefined' && window.location && window.location.origin) {
+                    return window.location.origin;
+                }
             } catch (e) {}
-            return 'https://smartearning-api.onrender.com';
+            return '';
         };
 
         const socketUrl = getSocketUrl();
