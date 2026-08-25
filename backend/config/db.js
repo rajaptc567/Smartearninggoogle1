@@ -1,21 +1,28 @@
 import mongoose from 'mongoose';
+import { sanitizeMongoUri } from './envValidator.js';
 
 const connectDB = async () => {
     try {
-        // Mongoose will throw an error if the MONGO_URI is not set in the environment variables
         if (!process.env.MONGO_URI) {
             throw new Error('MONGO_URI is not defined in the environment variables.');
         }
-        const conn = await mongoose.connect(process.env.MONGO_URI);
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
+
+        const mongooseOptions = {
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+            family: 4
+        };
+
+        const conn = await mongoose.connect(process.env.MONGO_URI, mongooseOptions);
+        console.log(`MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
     } catch (error) {
-        // Log a more detailed error message to help with debugging connection issues.
-        console.error(`Error connecting to MongoDB: ${error.message}`);
-        console.error('This can happen if:');
-        console.error('1. The MONGO_URI environment variable is incorrect (check username, password, and cluster URL).');
-        console.error('2. The database user does not have the correct permissions (should be "Read and write to any database").');
-        console.error('3. The IP address of the Render server is not whitelisted in MongoDB Atlas.');
-        // Do not process.exit(1) so Express server can continue running
+        const sanitizedUri = sanitizeMongoUri(process.env.MONGO_URI);
+        console.error(`Error connecting to MongoDB [${sanitizedUri}]: ${error.message}`);
+        console.error('Troubleshooting checklist:');
+        console.error('1. Check username/password credentials in MONGO_URI.');
+        console.error('2. Ensure database user has read/write permissions.');
+        console.error('3. Whitelist server outbound IP addresses in MongoDB Atlas (Network Access).');
     }
 };
 

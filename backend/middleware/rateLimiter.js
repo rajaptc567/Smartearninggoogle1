@@ -45,3 +45,18 @@ export const financeLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
 });
+
+/**
+ * TASK ACTION LIMITER
+ * Protects task submissions, campaigns, disputes, and conversions from rapid automation.
+ */
+export const taskActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60, // 60 actions per 15 mins
+    message: {
+        success: false,
+        error: 'Too many task operations. Please wait a moment before trying again.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});

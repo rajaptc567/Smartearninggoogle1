@@ -52,17 +52,24 @@ const Register: React.FC = () => {
     };
 
     useEffect(() => {
-        // Parse sponsor from URL hash for HashRouter compatibility
-        const hash = window.location.hash;
-        const queryIndex = hash.indexOf('?');
-        if (queryIndex !== -1) {
-            const searchParams = new URLSearchParams(hash.substring(queryIndex));
-            const sponsorUsername = searchParams.get('sponsor');
-
-            if (sponsorUsername) {
-                setFormData(prev => ({ ...prev, sponsor: sponsorUsername }));
-                setIsSponsorFromUrl(true);
+        // Parse sponsor from standard query params or URL hash
+        let sponsorUsername: string | null = null;
+        if (typeof window !== 'undefined' && window.location.search) {
+            const searchParams = new URLSearchParams(window.location.search);
+            sponsorUsername = searchParams.get('sponsor');
+        }
+        if (!sponsorUsername && typeof window !== 'undefined' && window.location.hash) {
+            const hash = window.location.hash;
+            const queryIndex = hash.indexOf('?');
+            if (queryIndex !== -1) {
+                const searchParams = new URLSearchParams(hash.substring(queryIndex));
+                sponsorUsername = searchParams.get('sponsor');
             }
+        }
+
+        if (sponsorUsername) {
+            setFormData(prev => ({ ...prev, sponsor: sponsorUsername }));
+            setIsSponsorFromUrl(true);
         }
     }, []);
 

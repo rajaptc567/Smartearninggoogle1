@@ -74,6 +74,18 @@ const TransactionSchema = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'UserTask'
     },
+    depositId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Deposit'
+    },
+    withdrawalId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Withdrawal'
+    },
+    transferId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Transfer'
+    },
     // Source of funds and Wallet attribution
     sourceWallet: {
         type: String,
@@ -107,6 +119,10 @@ const TransactionSchema = new mongoose.Schema({
 
 TransactionSchema.index({ userId: 1, date: -1 });
 TransactionSchema.index({ submissionId: 1 });
+TransactionSchema.index({ depositId: 1 }, { sparse: true });
+TransactionSchema.index({ withdrawalId: 1 }, { sparse: true });
+TransactionSchema.index({ transferId: 1 }, { sparse: true });
+TransactionSchema.index({ type: 1, status: 1 });
 TransactionSchema.index({ offerwallProvider: 1, externalTransactionId: 1 }, { sparse: true });
 
 export default mongoose.model('Transaction', TransactionSchema);

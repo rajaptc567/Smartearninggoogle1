@@ -106,6 +106,8 @@ export interface HistoryUnifiedItem {
     accountNumber?: string;
     rewardAmountUSD?: number;
     rewardAmountBase?: number;
+    taskId?: string;
+    subType?: string;
 }
 
 const WorkAndEarnHistory: React.FC = () => {

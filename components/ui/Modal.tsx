@@ -4,10 +4,13 @@ import React from 'react';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
+  title?: string;
+  maxW?: string;
+  className?: string;
   children: React.ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, maxW, className, children }) => {
   if (!isOpen) return null;
 
   return (
@@ -18,9 +21,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
       role="dialog"
     >
       <div
-        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-auto max-w-4xl max-h-[90vh] flex flex-col"
+        className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-auto ${maxW ? maxW : 'max-w-4xl'} max-h-[90vh] flex flex-col ${className || ''}`}
         onClick={(e) => e.stopPropagation()}
       >
+        {title && (
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
+          </div>
+        )}
         <div className="p-4 overflow-y-auto">
             {children}
         </div>

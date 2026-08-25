@@ -66,4 +66,7 @@ const WithdrawalSchema = new mongoose.Schema({
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
+WithdrawalSchema.index({ userId: 1, date: -1 });
+WithdrawalSchema.index({ status: 1, date: -1 });
+
 export default mongoose.model('Withdrawal', WithdrawalSchema);

@@ -1102,7 +1102,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 disputeReason: disputeDescription,
                 disputeProofImage
             });
-            dispatch({ type: 'UPDATE_USER_TASK_SUBMISSION', payload: updated });
+            dispatch({ type: 'UPDATE_USER_TASK_SUBMISSION', payload: updated as any });
             setDisputeSubmission(null);
             setDisputeDescription('');
             setDisputeProofImage('');
@@ -1133,6 +1133,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 payload: {
                     _id: 'trx_conv_' + Date.now(),
                     userId: currentUser._id,
+                    userName: currentUser.username || currentUser.fullName || 'User',
                     type: 'Task Wallet Conversion',
                     amount: data.convertedTaskBalance || currentUser.taskWalletBalance || 0,
                     currency: data.currency || currentUser.currency,
@@ -1175,6 +1176,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 payload: {
                     _id: 'trx_conv_' + Date.now(),
                     userId: currentUser._id,
+                    userName: currentUser.username || currentUser.fullName || 'User',
                     type: 'Task Wallet Conversion',
                     amount: amt,
                     currency: currentUser.currency,
@@ -1242,6 +1244,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 payload: {
                     _id: gigTrxId,
                     userId: currentUser._id,
+                    userName: currentUser.username || currentUser.fullName || 'User',
                     type: 'Task Reward',
                     amount: selectedGig.rewardUSD,
                     currency: 'USD',

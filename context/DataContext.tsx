@@ -244,12 +244,14 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             break;
         }
 
-        case 'SET_CURRENT_USER':
+        case 'SET_CURRENT_USER': {
+            const user = action.payload && typeof action.payload === 'object' && 'user' in action.payload ? (action.payload as any).user : action.payload;
+            const token = action.payload && typeof action.payload === 'object' && 'token' in action.payload ? (action.payload as any).token : undefined;
             try {
-                if (action.payload && action.payload.user) {
-                    localStorage.setItem('currentUser', JSON.stringify(action.payload.user));
-                    if (action.payload.token) {
-                        localStorage.setItem('authToken', action.payload.token);
+                if (user) {
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                    if (token) {
+                        localStorage.setItem('authToken', token);
                     }
                 } else {
                     localStorage.removeItem('currentUser');
@@ -259,8 +261,9 @@ const dataReducer = (state: AppState, action: Action): AppState => {
             } catch (error: any) {
                 console.error("Could not access localStorage:", error.message);
             }
-            newState = { ...state, currentUser: action.payload?.user || null };
+            newState = { ...state, currentUser: user || null };
             break;
+        }
 
         case 'SET_USERS': newState = { ...state, users: action.payload || [] }; break;
         case 'ADD_USER': newState = { ...state, users: [action.payload, ...state.users.filter(u => String(u._id) !== String(action.payload._id))] }; break;
@@ -673,7 +676,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 console.log("Inactivity limit exceeded (10 minutes). Logging out...");
                 localStorage.setItem('inactivityLogout', 'true');
                 dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
-                window.location.hash = '#/login';
+                if (window.location.pathname.startsWith('/member') || window.location.pathname.startsWith('/admin')) {
+                    window.location.href = '/login';
+                }
             }
         };
 
@@ -699,7 +704,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     // Session destroyed on another tab, align state & log out immediately
                     console.log("Authentication credentials removed on another tab. Synchronizing logout...");
                     dispatch({ type: 'SET_CURRENT_USER', payload: { user: null } });
-                    window.location.hash = '#/login';
+                    if (window.location.pathname.startsWith('/member') || window.location.pathname.startsWith('/admin')) {
+                        window.location.href = '/login';
+                    }
                 } else {
                     // Session created / updated on another tab, align state & resume
                     try {

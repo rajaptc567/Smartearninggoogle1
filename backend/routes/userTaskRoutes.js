@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
+import { taskActionLimiter } from '../middleware/rateLimiter.js';
 import {
     getUserTasks,
     createUserTask,
@@ -32,47 +33,47 @@ const router = express.Router();
 
 router.route('/')
     .get(getUserTasks)
-    .post(createUserTask);
+    .post(taskActionLimiter, authorize(['user', 'admin']), createUserTask);
 
 router.route('/submissions')
     .get(getUserTaskSubmissions);
 
 router.route('/submissions/:subId')
-    .put(updateSubmissionStatus)
-    .delete(deleteSubmission);
+    .put(authorize(['user', 'admin']), updateSubmissionStatus)
+    .delete(authorize(['user', 'admin']), deleteSubmission);
 
 router.route('/submissions/:subId/dispute')
-    .post(upload.single('proof'), authorize(['user', 'admin']), openTaskDispute);
+    .post(taskActionLimiter, upload.single('proof'), authorize(['user', 'admin']), openTaskDispute);
 
 router.route('/:id/submit-proof')
-    .post(submitUserTaskProof);
+    .post(taskActionLimiter, authorize(['user', 'admin']), submitUserTaskProof);
 
 router.route('/convert')
-    .post(convertUserCurrency);
+    .post(taskActionLimiter, authorize(['user', 'admin']), convertUserCurrency);
 
 router.route('/convert-task-wallet')
-    .post(convertTaskWalletBalance);
+    .post(taskActionLimiter, authorize(['user', 'admin']), convertTaskWalletBalance);
 
 router.route('/transfer-investment-to-task')
-    .post(transferInvestmentToTaskWallet);
+    .post(taskActionLimiter, authorize(['user', 'admin']), transferInvestmentToTaskWallet);
 
 router.route('/transfer-task-earnings-to-campaign')
-    .post(transferTaskEarningsToCampaignWallet);
+    .post(taskActionLimiter, authorize(['user', 'admin']), transferTaskEarningsToCampaignWallet);
 
 router.route('/transfer-wallet-to-campaign')
-    .post(transferWalletToCampaign);
+    .post(taskActionLimiter, authorize(['user', 'admin']), transferWalletToCampaign);
 
 router.route('/admin-reset-data')
     .post(authorize(['admin', 'super_admin']), resetWorkAndEarnData);
 
 router.route('/simulate-reward')
-    .post(simulateTaskReward);
+    .post(authorize(['admin', 'super_admin']), simulateTaskReward);
 
 router.route('/:id')
-    .put(updateUserTaskStatus)
-    .delete(deleteUserTask);
+    .put(authorize(['user', 'admin']), updateUserTaskStatus)
+    .delete(authorize(['user', 'admin']), deleteUserTask);
 
 router.route('/:id/renew')
-    .post(renewUserTask);
+    .post(taskActionLimiter, authorize(['user', 'admin']), renewUserTask);
 
 export default router;

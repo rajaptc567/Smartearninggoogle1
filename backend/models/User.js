@@ -205,4 +205,7 @@ UserSchema.methods.matchPassword = async function(enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
+UserSchema.index({ role: 1, status: 1 });
+UserSchema.index({ sponsor: 1 });
+
 export default mongoose.model('User', UserSchema);

@@ -38,12 +38,25 @@ export const createTransfer = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot initiate transfer on behalf of other users.' });
         }
 
+        const amountNum = Number(amount);
+        if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Please provide a valid, positive transfer amount.' });
+        }
+
         const sender = await User.findById(senderId);
         const recipient = await User.findById(recipientId);
         const settings = await Setting.getSettings();
 
         if (!sender || !recipient) {
             return res.status(404).json({ success: false, error: 'Sender or recipient not found.' });
+        }
+
+        if (String(sender._id) === String(recipient._id)) {
+            return res.status(400).json({ success: false, error: 'Cannot transfer funds to yourself.' });
+        }
+
+        if (recipient.status === 'Blocked' || recipient.status === 'Banned' || recipient.status === 'Suspended') {
+            return res.status(400).json({ success: false, error: 'Recipient account is not eligible to receive transfers.' });
         }
 
         // 1. Check User Restrictions
@@ -105,6 +118,7 @@ export const createTransfer = async (req, res) => {
             currency: sender.currency,
             type: 'Transfer Request',
             amount: -totalDeduction,
+            transferId: transfer._id,
             description: `Transfer Request #${transfer._id} to ${recipient.username}. Fee: ${sender.currency}${fee.toFixed(2)}`,
             status: 'Pending'
         });
@@ -141,8 +155,13 @@ export const createTransfer = async (req, res) => {
 export const updateTransfer = async (req, res) => {
     const { status, adminNotes } = req.body;
     try {
-        let transfer = await Transfer.findById(req.params.id);
-        if (!transfer || transfer.status !== 'Pending') {
+        // Atomic conditional check ensuring status is Pending and transitioning atomically
+        const transfer = await Transfer.findOneAndUpdate(
+            { _id: req.params.id, status: 'Pending' },
+            { $set: { status, adminNotes } },
+            { new: false }
+        );
+        if (!transfer) {
             return res.status(400).json({ success: false, error: 'Transfer not found or already processed.' });
         }
 
@@ -215,6 +234,7 @@ export const updateTransfer = async (req, res) => {
                 currency: recipient.currency,
                 type: 'Transfer Received',
                 amount: receivedAmount,
+                transferId: transfer._id,
                 description: recipientDesc,
                 sourceUserId: sender._id,
                 status: 'Approved',

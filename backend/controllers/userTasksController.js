@@ -29,6 +29,27 @@ export const createUserTask = async (req, res) => {
             requireScreenshot, screenshotInstruction,
             requiredProofs
         } = req.body;
+
+        const effectiveUserId = (req.user && req.user.role !== 'admin' && req.user.role !== 'super_admin') 
+            ? req.user.id 
+            : (userId || req.user?.id);
+
+        if (!effectiveUserId) {
+            return res.status(400).json({ success: false, error: 'User ID is required.' });
+        }
+
+        if (link) {
+            const urlString = String(link).trim();
+            if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+                return res.status(400).json({ success: false, error: 'Task URL must start with http:// or https://' });
+            }
+        }
+
+        const qtyNum = Number(targetQuantity);
+        const rewardNum = Number(rewardPerTask);
+        if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0 || isNaN(rewardNum) || !isFinite(rewardNum) || rewardNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Target quantity and reward per task must be valid positive numbers.' });
+        }
         
         const settings = await Setting.getSettings();
         if (settings.isUserTaskEnabled === false) {
@@ -85,7 +106,7 @@ export const createUserTask = async (req, res) => {
             return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
         }
 
-        const user = await User.findById(userId);
+        const user = await User.findById(effectiveUserId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found.' });
         }
@@ -607,6 +628,14 @@ export const deleteUserTask = async (req, res) => {
         const task = await UserTask.findById(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
 
+        if (req.user) {
+            const isOwner = String(task.userId) === String(req.user.id);
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            if (!isOwner && !isAdmin) {
+                return res.status(403).json({ success: false, error: 'You are not authorized to delete this campaign.' });
+            }
+        }
+
         const user = await User.findById(task.userId);
         if (user) {
             const settings = await Setting.getSettings();
@@ -711,6 +740,14 @@ export const renewUserTask = async (req, res) => {
 
         const task = await UserTask.findById(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+
+        if (req.user) {
+            const isOwner = String(task.userId) === String(req.user.id);
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            if (!isOwner && !isAdmin) {
+                return res.status(403).json({ success: false, error: 'You are not authorized to renew this campaign.' });
+            }
+        }
 
         const user = await User.findById(task.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
@@ -933,10 +970,22 @@ export const getUserTaskSubmissions = async (req, res) => {
 export const submitUserTaskProof = async (req, res) => {
     try {
         const taskId = req.params.id || req.body.taskId;
-        const workerId = req.body.workerId || req.body.userId;
-        const { proofText, proofUsername, proofUserIdVal, proofEmail, proofImage, submittedProofs } = req.body;
         const task = await UserTask.findById(taskId);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+
+        const workerId = (req.user && req.user.role !== 'admin' && req.user.role !== 'super_admin') 
+            ? req.user.id 
+            : (req.body.workerId || req.body.userId || req.user?.id);
+
+        if (!workerId) {
+            return res.status(400).json({ success: false, error: 'Worker ID is required' });
+        }
+
+        if (req.user && req.user.role !== 'admin' && req.user.role !== 'super_admin' && String(task.userId) === String(req.user.id)) {
+            return res.status(400).json({ success: false, error: 'You cannot submit proof to your own campaign.' });
+        }
+
+        const { proofText, proofUsername, proofUserIdVal, proofEmail, proofImage, submittedProofs } = req.body;
         if (task.status === 'On Hold') {
             return res.status(400).json({ success: false, error: 'This task campaign is currently paused by the creator.' });
         }
@@ -1026,6 +1075,22 @@ export const updateSubmissionStatus = async (req, res) => {
         const submission = await UserTaskSubmission.findById(req.params.subId);
         if (!submission) return res.status(404).json({ success: false, error: 'Submission not found' });
 
+        const task = await UserTask.findById(submission.taskId);
+
+        // Ownership and Role Verification
+        if (req.user) {
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isCreator = task && String(task.userId) === String(req.user.id);
+            const isWorker = String(submission.workerId) === String(req.user.id);
+
+            if (isWorker && !isAdmin && !isCreator) {
+                return res.status(403).json({ success: false, error: 'Workers cannot approve or review their own submissions.' });
+            }
+            if (!isAdmin && !isCreator) {
+                return res.status(403).json({ success: false, error: 'You are not authorized to review this submission.' });
+            }
+        }
+
         const oldStatus = submission.status;
         submission.status = status || submission.status;
         if (adminNotes !== undefined) submission.adminNotes = adminNotes;
@@ -1055,8 +1120,6 @@ export const updateSubmissionStatus = async (req, res) => {
                 submission.disputeOpened = false; // Reset disputeOpened so they can dispute again if rejected again
             }
         }
-
-        const task = await UserTask.findById(submission.taskId);
 
         let targetSubmission = submission;
 
@@ -1224,6 +1287,17 @@ export const updateSubmissionStatus = async (req, res) => {
 
 export const deleteSubmission = async (req, res) => {
     try {
+        const submission = await UserTaskSubmission.findById(req.params.subId);
+        if (!submission) return res.status(404).json({ success: false, error: 'Submission not found' });
+
+        if (req.user) {
+            const isWorker = String(submission.workerId) === String(req.user.id);
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            if (!isWorker && !isAdmin) {
+                return res.status(403).json({ success: false, error: 'You are not authorized to delete this submission.' });
+            }
+        }
+
         await UserTaskSubmission.findByIdAndDelete(req.params.subId);
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: {} });
@@ -1235,6 +1309,13 @@ export const deleteSubmission = async (req, res) => {
 export const convertUserCurrency = async (req, res) => {
     try {
         const { userId, amount, fromCurrency, toCurrency } = req.body;
+
+        const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You can only convert currency for your own account.' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
@@ -1484,6 +1565,13 @@ export const openTaskDispute = async (req, res) => {
 export const convertTaskWalletBalance = async (req, res) => {
     try {
         const { userId } = req.body;
+
+        const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
@@ -1597,6 +1685,13 @@ export const simulateTaskReward = async (req, res) => {
 export const transferInvestmentToTaskWallet = async (req, res) => {
     try {
         const { userId, amountUserCurr, amountUSD } = req.body;
+
+        const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
@@ -1686,6 +1781,13 @@ export const transferInvestmentToTaskWallet = async (req, res) => {
 export const transferTaskEarningsToCampaignWallet = async (req, res) => {
     try {
         const { userId, amountUSD } = req.body;
+
+        const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
@@ -1763,6 +1865,13 @@ export const transferTaskEarningsToCampaignWallet = async (req, res) => {
 export const transferWalletToCampaign = async (req, res) => {
     try {
         const { userId, amountUserCurr, amountUSD, sourceWallet } = req.body;
+
+        const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 

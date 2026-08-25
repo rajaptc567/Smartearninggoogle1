@@ -62,4 +62,8 @@ const DepositSchema = new mongoose.Schema({
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
+DepositSchema.index({ userId: 1, date: -1 });
+DepositSchema.index({ status: 1, date: -1 });
+DepositSchema.index({ transactionId: 1 });
+
 export default mongoose.model('Deposit', DepositSchema);

@@ -57,6 +57,12 @@ export const createWithdrawal = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot withdraw on behalf of other users.' });
         }
 
+        const amountNum = Number(req.body.amount);
+        if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Please provide a valid, positive withdrawal amount.' });
+        }
+        req.body.amount = Number(amountNum.toFixed(2));
+
         const user = await User.findById(req.body.userId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found' });
@@ -138,6 +144,7 @@ export const createWithdrawal = async (req, res) => {
             type: 'Withdrawal Request',
             amount: -withdrawal.amount,
             status: 'Pending',
+            withdrawalId: withdrawal._id,
             description: `Pending Withdrawal #${withdrawal._id}`
         });
 
@@ -230,6 +237,17 @@ export const updateWithdrawal = async (req, res) => {
         });
 
         if ((originalStatus === 'Pending' || originalStatus === 'Matching') && status === 'Rejected') {
+            const updatedWithdrawal = await Withdrawal.findOneAndUpdate(
+                { _id: req.params.id, status: { $in: ['Pending', 'Matching'] } },
+                { $set: { status: 'Rejected', adminNotes: adminNotes || withdrawal.adminNotes } },
+                { new: true }
+            );
+
+            if (!updatedWithdrawal) {
+                const currentW = await Withdrawal.findById(req.params.id);
+                return res.status(200).json({ success: true, data: { withdrawal: currentW, user, message: 'Withdrawal already processed.' } });
+            }
+
             if (withdrawal.isHub) {
                 user.taskWalletBalance = Number((user.taskWalletBalance + withdrawal.amount).toFixed(2));
             } else {
@@ -243,6 +261,7 @@ export const updateWithdrawal = async (req, res) => {
                 type: 'Withdrawal Refund',
                 amount: withdrawal.amount,
                 status: 'Approved',
+                withdrawalId: withdrawal._id,
                 description: `Refund for rejected withdrawal #${withdrawal._id}`
             });
 
@@ -252,7 +271,7 @@ export const updateWithdrawal = async (req, res) => {
                 await originalTransaction.save();
             }
 
-             await Notification.create({
+            await Notification.create({
                 userId: user._id,
                 message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your ${withdrawal.isHub ? 'task wallet' : 'wallet'}.`
             });
@@ -266,9 +285,25 @@ export const updateWithdrawal = async (req, res) => {
             };
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_email', variables }).catch(err => console.error(err));
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_whatsapp', variables }).catch(err => console.error(err));
+
+            await user.save();
+            await Setting.bumpVersion();
+            req.app.get('io')?.emit('DATA_CHANGED');
+            return res.status(200).json({ success: true, data: { withdrawal: updatedWithdrawal, user } });
         }
         
         if (status === 'Paid' || status === 'Approved') {
+            const updatedWithdrawal = await Withdrawal.findOneAndUpdate(
+                { _id: req.params.id, status: { $ne: status } },
+                { $set: { status, adminNotes: adminNotes || withdrawal.adminNotes } },
+                { new: true }
+            );
+
+            if (!updatedWithdrawal) {
+                const currentW = await Withdrawal.findById(req.params.id);
+                return res.status(200).json({ success: true, data: { withdrawal: currentW, user, message: 'Withdrawal already updated.' } });
+            }
+
             if (originalTransaction) {
                 originalTransaction.status = status === 'Paid' ? 'Approved' : status;
                 originalTransaction.description = `${status} Withdrawal #${withdrawal._id}`;
@@ -288,6 +323,10 @@ export const updateWithdrawal = async (req, res) => {
             };
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_success_email', variables }).catch(err => console.error(err));
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_success_whatsapp', variables }).catch(err => console.error(err));
+
+            await Setting.bumpVersion();
+            req.app.get('io')?.emit('DATA_CHANGED');
+            return res.status(200).json({ success: true, data: { withdrawal: updatedWithdrawal, user } });
         }
         
         withdrawal.status = status;

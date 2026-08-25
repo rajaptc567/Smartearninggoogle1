@@ -48,4 +48,8 @@ const TransferSchema = new mongoose.Schema({
     timestamps: { createdAt: 'date', updatedAt: true }
 });
 
+TransferSchema.index({ senderId: 1, date: -1 });
+TransferSchema.index({ recipientId: 1, date: -1 });
+TransferSchema.index({ status: 1 });
+
 export default mongoose.model('Transfer', TransferSchema);

@@ -70,6 +70,12 @@ export const createDeposit = async (req, res) => {
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         
+        const amountNum = Number(depositData.amount);
+        if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Please provide a valid, positive deposit amount.' });
+        }
+        depositData.amount = Number(amountNum.toFixed(2));
+
         if (user.status === 'Blocked' || (user.restrictions && user.restrictions.deposit)) {
             return res.status(403).json({ success: false, error: `Deposits disabled.` });
         }
@@ -93,6 +99,7 @@ export const createDeposit = async (req, res) => {
             type: 'Deposit',
             amount: deposit.amount,
             status: 'Pending',
+            depositId: deposit._id,
             description: `Pending Deposit #${deposit._id}`
         });
         
@@ -144,18 +151,40 @@ export const updateDeposit = async (req, res) => {
         if (!deposit) return res.status(404).json({ success: false, error: 'Deposit not found' });
 
         const originalStatus = deposit.status;
-        deposit.status = status;
-        deposit.adminNotes = adminNotes;
 
-        let user = await User.findById(deposit.userId);
-        if (originalStatus !== 'Approved' && status === 'Approved') {
-            if (deposit.isHub) {
-                user.taskWalletBalance = Number((user.taskWalletBalance + deposit.amount).toFixed(2));
-            } else {
-                user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
+        if (originalStatus === status) {
+            deposit.adminNotes = adminNotes !== undefined ? adminNotes : deposit.adminNotes;
+            await deposit.save();
+            return res.status(200).json({ success: true, data: { deposit } });
+        }
+
+        if (status === 'Approved' && originalStatus !== 'Approved') {
+            // Atomic conditional update ensuring only one approval executes
+            const updatedDeposit = await Deposit.findOneAndUpdate(
+                { _id: req.params.id, status: { $ne: 'Approved' } },
+                { $set: { status: 'Approved', adminNotes: adminNotes !== undefined ? adminNotes : deposit.adminNotes } },
+                { new: true }
+            );
+
+            if (!updatedDeposit) {
+                const currentDep = await Deposit.findById(req.params.id);
+                return res.status(200).json({ success: true, data: { deposit: currentDep, message: 'Deposit already approved.' } });
             }
-            await user.save();
-            await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Approved' });
+
+            let user = await User.findById(deposit.userId);
+            if (user) {
+                if (deposit.isHub) {
+                    user.taskWalletBalance = Number((user.taskWalletBalance + deposit.amount).toFixed(2));
+                } else {
+                    user.walletBalance = Number((user.walletBalance + deposit.amount).toFixed(2));
+                }
+                await user.save();
+            }
+
+            await Transaction.findOneAndUpdate(
+                { $or: [{ depositId: deposit._id }, { description: { $regex: deposit._id } }] },
+                { $set: { status: 'Approved', depositId: deposit._id } }
+            );
             
             // Send dynamic templated notification in the background
             const variables = {
@@ -166,8 +195,26 @@ export const updateDeposit = async (req, res) => {
             };
             sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_success_email', variables }).catch(err => console.error(err));
             sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_success_whatsapp', variables }).catch(err => console.error(err));
-        } else if (originalStatus !== 'Rejected' && status === 'Rejected') {
-            await Transaction.findOneAndUpdate({ description: { $regex: deposit._id } }, { status: 'Rejected' });
+
+            await Setting.bumpVersion();
+            req.app.get('io')?.emit('DATA_CHANGED');
+            return res.status(200).json({ success: true, data: { deposit: updatedDeposit, user } });
+        } else if (status === 'Rejected' && originalStatus !== 'Rejected') {
+            const updatedDeposit = await Deposit.findOneAndUpdate(
+                { _id: req.params.id, status: { $ne: 'Rejected' } },
+                { $set: { status: 'Rejected', adminNotes: adminNotes !== undefined ? adminNotes : deposit.adminNotes } },
+                { new: true }
+            );
+
+            if (!updatedDeposit) {
+                const currentDep = await Deposit.findById(req.params.id);
+                return res.status(200).json({ success: true, data: { deposit: currentDep, message: 'Deposit already rejected.' } });
+            }
+
+            await Transaction.findOneAndUpdate(
+                { $or: [{ depositId: deposit._id }, { description: { $regex: deposit._id } }] },
+                { $set: { status: 'Rejected', depositId: deposit._id } }
+            );
             
             // Send dynamic templated notification in the background
             const variables = {
@@ -178,11 +225,18 @@ export const updateDeposit = async (req, res) => {
             };
             sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_rejected_email', variables }).catch(err => console.error(err));
             sendTemplateNotification({ userId: deposit.userId, templateKey: 'deposit_rejected_whatsapp', variables }).catch(err => console.error(err));
+
+            await Setting.bumpVersion();
+            req.app.get('io')?.emit('DATA_CHANGED');
+            return res.status(200).json({ success: true, data: { deposit: updatedDeposit } });
         }
+
+        deposit.status = status;
+        if (adminNotes !== undefined) deposit.adminNotes = adminNotes;
         await deposit.save();
         await Setting.bumpVersion();
         req.app.get('io')?.emit('DATA_CHANGED');
-        res.status(200).json({ success: true, data: { deposit, user } });
+        res.status(200).json({ success: true, data: { deposit } });
     } catch (err) { res.status(400).json({ success: false, error: err.message }); }
 };
 

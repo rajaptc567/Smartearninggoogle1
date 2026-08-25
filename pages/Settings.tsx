@@ -722,7 +722,13 @@ const Settings: React.FC = () => {
       e.preventDefault();
       setIsSaving(true);
       try {
-          const updatedSettings = await updateSettings(localSettings);
+          const sanitizedPayload = {
+              ...localSettings,
+              homepagePaymentLogos: (localSettings.homepagePaymentLogos || [])
+                  .filter(l => l && (l.name || l.logoUrl))
+                  .map(l => ({ name: String(l.name || '').trim(), logoUrl: String(l.logoUrl || '').trim() }))
+          };
+          const updatedSettings = await updateSettings(sanitizedPayload);
           dispatch({ type: 'UPDATE_SETTINGS', payload: updatedSettings });
           alert('Settings saved successfully!');
           setIsDirty(false);

@@ -4,14 +4,14 @@ import React from 'react';
 import { Status } from '../../types';
 
 interface BadgeProps {
-  status?: Status | 'Enabled' | 'Disabled';
+  status?: Status | 'Enabled' | 'Disabled' | 'Pending' | 'Approved' | 'Rejected' | 'Paid' | 'Matching' | 'Active' | 'Blocked' | 'Paused' | string;
   variant?: 'success' | 'warning' | 'danger' | 'info' | 'gray' | 'primary' | 'secondary';
   className?: string;
   children?: React.ReactNode;
 }
 
 // FIX: Added 'Matching' and 'Paused' status to support all possible Status enum values.
-const statusColors: { [key in Status | 'Enabled' | 'Disabled']: string } = {
+const statusColors: { [key: string]: string } = {
   [Status.Active]: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   [Status.Pending]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
   [Status.Blocked]: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',

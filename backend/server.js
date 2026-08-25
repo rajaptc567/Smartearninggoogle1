@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
+import validateEnvironment from './config/envValidator.js';
 import User from './models/User.js'; 
 
 // Middleware
@@ -43,16 +44,68 @@ import {
 // Load env vars
 dotenv.config();
 
+// Validate Environment & Enforce Production Security Policies
+try {
+    validateEnvironment();
+} catch (envError) {
+    if (process.env.NODE_ENV === 'production' && !process.env.APPLET_ID) {
+        console.error('Fatal initialization error:', envError.message);
+        process.exit(1);
+    }
+}
+
 const app = express();
 const httpServer = createServer(app);
 
-// Initialize Socket.io with robust CORS and transports for Render/Vercel environments
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*", // Secure and flexible for dynamic Vercel deployments
-        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        credentials: true
+// Dynamic CORS configuration supporting environment-configured origins and local dev
+const isProduction = process.env.NODE_ENV === 'production' && !process.env.APPLET_ID;
+
+const rawOrigins = [
+    ...(process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : []),
+    ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [])
+];
+const allowedOriginsList = Array.from(
+    new Set(rawOrigins.map(o => o.trim().replace(/\/+$/, '')).filter(Boolean))
+);
+
+const corsOptions = {
+    origin: (origin, callback) => {
+        // 1. Allow requests with no origin (e.g. mobile apps, curl, server-to-server, health checks)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        const normalizedOrigin = origin.replace(/\/+$/, '');
+
+        // 2. If configured whitelist has origins, strictly check if origin is in the whitelist
+        if (allowedOriginsList.length > 0) {
+            if (allowedOriginsList.includes(normalizedOrigin)) {
+                return callback(null, true);
+            }
+            if (isProduction) {
+                const corsError = new Error(`CORS blocked: Origin ${origin} not permitted by policy`);
+                corsError.status = 403;
+                return callback(corsError, false);
+            }
+        }
+
+        // 3. In non-production environments (development / AI Studio preview), allow dev origins
+        if (!isProduction) {
+            return callback(null, true);
+        }
+
+        // 4. In production when no explicit origin list is configured
+        const corsError = new Error(`CORS blocked: Origin ${origin} not permitted`);
+        corsError.status = 403;
+        return callback(corsError, false);
     },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+};
+
+// Initialize Socket.io with matching robust CORS
+const io = new Server(httpServer, {
+    cors: corsOptions,
     transports: ['websocket', 'polling'] // WebSocket native with polling fallback for stability
 });
 
@@ -77,7 +130,7 @@ app.set('trust proxy', 1);
 app.use('/api', globalLimiter);
 
 // Enable CORS
-app.use(cors());
+app.use(cors(corsOptions));
 
 // Security Headers Middleware
 app.use((req, res, next) => {
@@ -217,17 +270,26 @@ app.get('*path', (req, res, next) => {
     res.status(200).send('SmartExn is operational. Run build to compile the web frontend.');
 });
 
-// Custom Error Handler
+// Custom Production-Safe Error Handler
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    const status = err.status || 500;
-    res.status(status).json({ success: false, error: err.message || 'Internal Server Error' });
+    const isProd = process.env.NODE_ENV === 'production' && !process.env.APPLET_ID;
+    if (isProd) {
+        console.error(`[Server Error] ${err.name || 'Error'}: ${err.message}`);
+    } else {
+        console.error(err.stack);
+    }
+    
+    const status = err.status || (err.name === 'ValidationError' ? 400 : 500);
+    const clientMessage = (isProd && status === 500)
+        ? 'An unexpected internal error occurred. Please try again later.'
+        : (err.message || 'Internal Server Error');
+
+    res.status(status).json({ success: false, error: clientMessage });
 });
 
 // Environment-aware Port Strategy
 // In production (Render, etc.), use platform-assigned process.env.PORT.
 // In development, use BACKEND_PORT (defaulting to 5000) so it never conflicts with Vite on port 3000.
-const isProduction = process.env.NODE_ENV === 'production' && !process.env.APPLET_ID;
 const PORT = isProduction 
     ? Number(process.env.PORT || 5000) 
     : Number(process.env.BACKEND_PORT || 5000);

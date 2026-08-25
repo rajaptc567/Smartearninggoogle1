@@ -85,6 +85,7 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
 
 UserTaskSubmissionSchema.index({ taskId: 1, workerId: 1 });
 UserTaskSubmissionSchema.index({ workerId: 1, status: 1 });
+UserTaskSubmissionSchema.index({ taskId: 1, status: 1 });
 UserTaskSubmissionSchema.index({ status: 1 });
 
 export default mongoose.model('UserTaskSubmission', UserTaskSubmissionSchema);

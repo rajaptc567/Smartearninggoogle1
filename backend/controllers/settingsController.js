@@ -149,6 +149,17 @@ export const updateSettings = async (req, res) => {
         const emailBecameRequired = req.body.emailVerificationRequired && (!prevSettings || !prevSettings.emailVerificationRequired);
         const whatsappBecameRequired = req.body.whatsappVerificationRequired && (!prevSettings || !prevSettings.whatsappVerificationRequired);
 
+        // Sanitize homepage payment logos to remove empty/invalid items
+        if (Array.isArray(req.body.homepagePaymentLogos)) {
+            req.body.homepagePaymentLogos = req.body.homepagePaymentLogos
+                .filter(item => item && typeof item === 'object')
+                .map(item => ({
+                    name: String(item.name || '').trim(),
+                    logoUrl: String(item.logoUrl || '').trim()
+                }))
+                .filter(item => item.name || item.logoUrl);
+        }
+
         const settings = await Setting.findOneAndUpdate({}, { 
             ...req.body, 
             dataVersion: Date.now() 

@@ -129,10 +129,18 @@ const WorkAndEarnHistory = lazy(() => import('./pages/user/WorkAndEarnHistory'))
 const HashToPathRedirector: React.FC = () => {
   const navigate = useNavigate();
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
-      const cleanPath = window.location.hash.substring(1);
-      navigate(cleanPath, { replace: true });
-    }
+    const handleHash = () => {
+      if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
+        const cleanPath = window.location.hash.substring(1);
+        try {
+          window.history.replaceState(null, '', cleanPath);
+        } catch (e) {}
+        navigate(cleanPath, { replace: true });
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
   }, [navigate]);
   return null;
 };
@@ -236,6 +244,7 @@ const App: React.FC = () => {
             {/* Admin Panel Routes */}
             <Route path="/admin" element={<Layout />}>
               <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<Users />} />
               <Route path="deposits" element={<Deposits />} />
               <Route path="withdrawals" element={<Withdrawals />} />
@@ -268,6 +277,9 @@ const App: React.FC = () => {
             {/* User Member Area Routes */}
             <Route path="/member" element={<UserLayout />}>
               <Route index element={<UserDashboard />} />
+              <Route path="dashboard" element={<UserDashboard />} />
+              <Route path="work-and-earn" element={<UserDashboard />} />
+              <Route path="dashboard-hub" element={<UserDashboard />} />
               <Route path="deposit" element={<ModulePageGuard category="investment" pageId="deposit"><DepositFunds /></ModulePageGuard>} />
               <Route path="withdraw" element={<ModulePageGuard category="investment" pageId="withdraw"><WithdrawFunds /></ModulePageGuard>} />
               <Route path="transfer" element={<ModulePageGuard category="investment" pageId="transfer"><TransferFunds /></ModulePageGuard>} />

@@ -82,8 +82,8 @@ const FaqSchema = new mongoose.Schema({
 }, { _id: false });
 
 const HomepagePaymentLogoSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    logoUrl: { type: String, required: true }
+    name: { type: String, default: '' },
+    logoUrl: { type: String, default: '' }
 }, { _id: false });
 
 const SmartexnContentSchema = new mongoose.Schema({
