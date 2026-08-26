@@ -645,7 +645,7 @@ export interface UserTaskSubmission {
     disputeId?: string;
     disputeReviewDeadline?: string;
     secondDisputeDeadline?: string;
-    disputeStage?: 'None' | 'CreatorReview' | 'RejectedByCreator' | 'Escalated' | 'Resolved';
+    disputeStage?: 'None' | 'Submitted' | 'Rejected' | 'CreatorReview' | 'RejectedByCreator' | 'Escalated' | 'AdminReview' | 'Resolved';
     disputeCreatorNotes?: string;
     disputeReason?: string;
     disputeProofUrl?: string;

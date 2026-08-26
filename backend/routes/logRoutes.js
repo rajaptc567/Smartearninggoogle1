@@ -6,7 +6,7 @@ import { getLogs, clearLogs } from '../controllers/logsController.js';
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['super_admin']), getLogs)
-    .delete(authorize(['super_admin']), clearLogs);
+    .get(authorize(['admin', 'super_admin']), getLogs)
+    .delete(authorize(['admin', 'super_admin']), clearLogs);
 
 export default router;

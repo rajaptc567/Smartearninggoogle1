@@ -2175,6 +2175,54 @@ const Settings: React.FC = () => {
         {/* TRANSFERS TAB */}
         {activeTab === 'transfers' && (
             <div className="space-y-6 animate-fade-in">
+                {/* Master Transfer Controls */}
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wider text-xs">Master Transfer Controls</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="transferConfig_enabled_tab" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">User-to-User Transfers</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Enable or disable wallet transfers between members.</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                <input 
+                                    id="transferConfig_enabled_tab"
+                                    name="transferConfig.enabled"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.transferConfig?.enabled ?? true}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="transferConfig_enabled_tab" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.enabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
+                                <label htmlFor="transferConfig_cross_tab" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">Cross-Currency Transfers</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Allow sending between different currencies (e.g. PKR to EUR).</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                <input
+                                    id="transferConfig_cross_tab"
+                                    name="transferConfig.allowCrossCurrency"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.transferConfig?.allowCrossCurrency ?? false}
+                                    onChange={() => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            transferConfig: { ...prev.transferConfig, allowCrossCurrency: !prev.transferConfig?.allowCrossCurrency }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                />
+                                <label htmlFor="transferConfig_cross_tab" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.transferConfig?.allowCrossCurrency ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                  <div>
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white">Transfer Fee Structure</h3>

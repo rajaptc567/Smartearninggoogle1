@@ -293,6 +293,13 @@ const Deposits: React.FC = () => {
                             </div>
                          )}
 
+                        {selectedDeposit.status === Status.Rejected && selectedDeposit.adminNotes && (
+                            <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs">
+                                <span className="font-bold text-red-600 dark:text-red-400 block uppercase tracking-wide">Recorded Rejection Reason:</span>
+                                <p className="text-red-800 dark:text-red-300 mt-1 font-medium">{selectedDeposit.adminNotes}</p>
+                            </div>
+                        )}
+
                          <div className="mt-6">
                             <label htmlFor="status" className="block text-sm font-semibold mb-2">Status</label>
                             <select 

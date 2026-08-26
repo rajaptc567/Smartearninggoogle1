@@ -382,6 +382,13 @@ const Withdrawals: React.FC = () => {
                       </div>
                    )}
 
+                   {selectedWithdrawal.status === Status.Rejected && selectedWithdrawal.adminNotes && (
+                       <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs">
+                           <span className="font-bold text-red-600 dark:text-red-400 block uppercase tracking-wide">Recorded Rejection Reason:</span>
+                           <p className="text-red-800 dark:text-red-300 mt-1 font-medium">{selectedWithdrawal.adminNotes}</p>
+                       </div>
+                   )}
+
                    {/* P2P MATCHING SECTION */}
                    {selectedWithdrawal.status === Status.Matching && (
                        <div className="mt-6 p-5 border border-orange-200 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-900/50 rounded-[2.5rem] shadow-sm">
