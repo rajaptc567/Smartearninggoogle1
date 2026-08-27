@@ -108,6 +108,7 @@ export interface HistoryUnifiedItem {
     rewardAmountBase?: number;
     taskId?: string;
     subType?: string;
+    isAutoApproved?: boolean;
 }
 
 const WorkAndEarnHistory: React.FC = () => {
@@ -393,7 +394,8 @@ const WorkAndEarnHistory: React.FC = () => {
                     secondDisputeDeadline: s.secondDisputeDeadline,
                     disputeReviewDeadline: s.disputeReviewDeadline,
                     disputeCreatorNotes: s.disputeCreatorNotes,
-                    disputeOpened: s.disputeOpened
+                    disputeOpened: s.disputeOpened,
+                    isAutoApproved: Boolean(s.isAutoApproved || s.autoApproved || s.approvalType === 'auto' || (s.adminNotes && s.adminNotes.toLowerCase().includes('auto-approved')) || (matchingTx?.description && matchingTx.description.toLowerCase().includes('auto-approved')))
                 });
             });
 
@@ -444,7 +446,8 @@ const WorkAndEarnHistory: React.FC = () => {
                     trxId: txIdStr,
                     flow: 'Task Escrow ➔ Task Wallet',
                     remainingBalanceUSD: 0,
-                    remainingBalanceBase: 0
+                    remainingBalanceBase: 0,
+                    isAutoApproved: Boolean((t as any).isAutoApproved || (t as any).autoApproved || (t.description && t.description.toLowerCase().includes('auto-approved')))
                 });
             });
 
@@ -1074,8 +1077,10 @@ const WorkAndEarnHistory: React.FC = () => {
                             {/* Bottom Footer Row: Status, TRX ID, Date, Remaining Balance, Details Button */}
                             <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
                                 <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px]">
-                                    <span className={`font-black px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border uppercase tracking-wider ${getItemBadgeStyle(item.status)}`}>
-                                        {item.disputeStage === 'Resolved' || item.disputeStage === 'Closed' || item.disputeStage === 'Admin Rejected'
+                                    <span className={`font-black px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg border uppercase tracking-wider ${item.isAutoApproved ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-400/50' : getItemBadgeStyle(item.status)}`}>
+                                        {item.isAutoApproved
+                                            ? '⚡ Auto Approved'
+                                            : item.disputeStage === 'Resolved' || item.disputeStage === 'Closed' || item.disputeStage === 'Admin Rejected'
                                             ? '⚖️ Dispute Resolved'
                                             : item.disputeStage === 'Escalated' 
                                             ? '⚖️ Disputed (Admin)' 
@@ -1258,7 +1263,9 @@ const WorkAndEarnHistory: React.FC = () => {
                                         {selectedItem.typeLabel}
                                     </span>
                                     <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase border shadow-sm ${
-                                        selectedItem.status === 'Disputed' || selectedItem.disputeOpened
+                                        selectedItem.isAutoApproved
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                                            : selectedItem.status === 'Disputed' || selectedItem.disputeOpened
                                             ? selectedItem.disputeStage === 'Escalated'
                                                 ? 'bg-purple-500/20 text-purple-300 border-purple-400/50'
                                                 : selectedItem.disputeStage === 'RejectedByCreator'
@@ -1270,7 +1277,9 @@ const WorkAndEarnHistory: React.FC = () => {
                                             ? 'bg-rose-500/20 text-rose-300 border-rose-400/50'
                                             : getItemBadgeStyle(selectedItem.status)
                                     }`}>
-                                        {selectedItem.status === 'Disputed' || selectedItem.disputeOpened
+                                        {selectedItem.isAutoApproved
+                                            ? '⚡ Auto Approved'
+                                            : selectedItem.status === 'Disputed' || selectedItem.disputeOpened
                                             ? selectedItem.disputeStage === 'Escalated'
                                                 ? '⚖️ Disputed (Level 2: Admin Review)'
                                                 : selectedItem.disputeStage === 'RejectedByCreator'

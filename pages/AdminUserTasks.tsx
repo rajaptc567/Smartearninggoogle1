@@ -705,20 +705,26 @@ const AdminUserTasks: React.FC = () => {
                                                 <td className="p-4 font-mono text-emerald-500 font-bold">+{sub.rewardAmount} USD</td>
                                                 <td className="p-4">
                                                     <div className="space-y-1.5">
-                                                        <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
-                                                            {sub.status === 'Approved' ? '✅ Accepted' : sub.status === 'Pending' ? '⏳ Pending' : '❌ Rejected'}
-                                                        </Badge>
+                                                        {(sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) ? (
+                                                            <span className="px-2.5 py-1 text-xs font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-sm flex items-center gap-1 inline-flex">
+                                                                ⚡ Auto Approved
+                                                            </span>
+                                                        ) : (
+                                                            <Badge variant={sub.status === 'Approved' ? 'success' : sub.status === 'Pending' ? 'warning' : 'danger'}>
+                                                                {sub.status === 'Approved' ? '✅ Accepted' : sub.status === 'Pending' ? '⏳ Pending' : '❌ Rejected'}
+                                                            </Badge>
+                                                        )}
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                            {sub.status === 'Approved' && (
+                                                            {(sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) ? (
+                                                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">System Auto-Approved (Time Limit Expired)</span>
+                                                            ) : sub.status === 'Approved' ? (
                                                                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">Approved by Campaign Creator @{creatorName}</span>
-                                                            )}
-                                                            {sub.status === 'Rejected' && (
+                                                            ) : sub.status === 'Rejected' ? (
                                                                 <div className="text-red-500 dark:text-red-400 font-medium">
                                                                     <div>Rejected by @{creatorName}</div>
                                                                     <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 italic">Reason: "{sub.adminNotes || 'No reason specified'}"</div>
                                                                 </div>
-                                                            )}
-                                                            {sub.status === 'Pending' && (
+                                                            ) : (
                                                                 <span className="text-amber-600 dark:text-amber-400 font-medium">Awaiting Creator review</span>
                                                             )}
                                                         </div>
@@ -1261,9 +1267,15 @@ const AdminUserTasks: React.FC = () => {
                                         Category: {selectedSubmissionForDetails.taskCategory || 'General'}
                                     </p>
                                 </div>
-                                <Badge variant={selectedSubmissionForDetails.status === 'Approved' ? 'success' : selectedSubmissionForDetails.status === 'Pending' ? 'warning' : 'danger'}>
-                                    {selectedSubmissionForDetails.status}
-                                </Badge>
+                                {(selectedSubmissionForDetails.isAutoApproved || selectedSubmissionForDetails.autoApproved || selectedSubmissionForDetails.approvalType === 'auto' || (selectedSubmissionForDetails.adminNotes && selectedSubmissionForDetails.adminNotes.toLowerCase().includes('auto-approved'))) ? (
+                                    <span className="px-3 py-1 text-xs font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shadow-sm flex items-center gap-1">
+                                        ⚡ Auto Approved
+                                    </span>
+                                ) : (
+                                    <Badge variant={selectedSubmissionForDetails.status === 'Approved' ? 'success' : selectedSubmissionForDetails.status === 'Pending' ? 'warning' : 'danger'}>
+                                        {selectedSubmissionForDetails.status}
+                                    </Badge>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-3 text-xs border-t dark:border-gray-800 pt-3">
                                 <div>

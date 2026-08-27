@@ -35,6 +35,13 @@ export const getRemainingTimeString = (targetDate?: string | Date) => {
 };
 
 export const renderDisputeStageBadge = (sub: any) => {
+    if (sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) {
+        return (
+            <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-sm flex items-center gap-1 inline-flex">
+                ⚡ Auto Approved
+            </span>
+        );
+    }
     if (sub.status === 'Approved' || sub.status === 'Paid') {
         return <Badge variant="success">Completed</Badge>;
     }
@@ -3536,7 +3543,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         <td className="p-4 text-gray-900 dark:text-white font-bold">{sub.workerName}</td>
                                                         <td className="p-4 text-gray-500 text-xs">{new Date(sub.createdAt).toLocaleString()}</td>
                                                         <td className="p-4">
-                                                            {sub.status === 'Approved' || sub.status === 'Paid' ? (
+                                                            {(sub.isAutoApproved || sub.autoApproved || sub.approvalType === 'auto' || (sub.adminNotes && sub.adminNotes.toLowerCase().includes('auto-approved'))) ? (
+                                                                <span className="px-2.5 py-1 text-[10px] font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-sm flex items-center gap-1 inline-flex">
+                                                                    ⚡ Auto Approved
+                                                                </span>
+                                                            ) : sub.status === 'Approved' || sub.status === 'Paid' ? (
                                                                 <Badge variant="success">Approved</Badge>
                                                             ) : sub.status === 'Pending' ? (
                                                                 <Badge variant="warning">Pending Review</Badge>

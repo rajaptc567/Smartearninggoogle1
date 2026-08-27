@@ -636,6 +636,9 @@ export interface UserTaskSubmission {
     createdAt?: string;
     updatedAt?: string;
     autoApproveAt?: string;
+    isAutoApproved?: boolean;
+    autoApproved?: boolean;
+    approvalType?: string;
     taskTitle?: string;
     taskCategory?: string;
     rejectionReason?: string;

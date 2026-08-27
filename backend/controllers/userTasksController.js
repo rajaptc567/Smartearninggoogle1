@@ -826,6 +826,9 @@ const autoApproveStaleSubmissions = async () => {
                     $set: {
                         status: 'Approved',
                         paid: true,
+                        isAutoApproved: true,
+                        autoApproved: true,
+                        approvalType: 'auto',
                         rewardClaimed: true,
                         rewardPaidAt: new Date(),
                         adminNotes: `Auto-approved: creator did not review within the ${timeoutDays}-day limit.`
@@ -892,6 +895,9 @@ const autoApproveStaleSubmissions = async () => {
                     $set: {
                         status: 'Approved',
                         paid: true,
+                        isAutoApproved: true,
+                        autoApproved: true,
+                        approvalType: 'auto',
                         rewardClaimed: true,
                         rewardPaidAt: new Date(),
                         disputeStage: 'Resolved',
