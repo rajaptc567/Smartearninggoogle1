@@ -1,3 +1,5 @@
+import { WorkAndEarnModuleConfig } from './types/workAndEarnEditor';
+
 export type Currency = 'USD' | 'EUR' | 'PKR';
 
 export enum Status {
@@ -390,6 +392,7 @@ export interface Settings {
     workAndEarnPayoutTierConfig?: WorkAndEarnPayoutTierConfig;
     ruleEvaluationLogs?: RuleEvaluationLog[];
     modulePagesConfig?: ModulePageControlsConfig;
+    workAndEarnConfig?: WorkAndEarnModuleConfig;
 }
 
 export interface ModulePageControl {

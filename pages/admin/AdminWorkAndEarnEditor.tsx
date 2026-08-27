@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WorkAndEarnModuleConfig, WorkAndEarnPageEditableConfig } from '../../types/workAndEarnEditor';
-import { getWorkAndEarnConfig, saveWorkAndEarnConfig, resetWorkAndEarnConfig } from '../../services/workAndEarnConfigService';
+import { getWorkAndEarnConfig, saveWorkAndEarnConfig, resetWorkAndEarnConfig, defaultWorkAndEarnConfig } from '../../services/workAndEarnConfigService';
+import { useData } from '../../context/DataContext';
+import { updateSettings } from '../../services/api';
 
 type SubmenuKey = keyof WorkAndEarnModuleConfig['submenus'];
 
 export const AdminWorkAndEarnEditor: React.FC = () => {
     const navigate = useNavigate();
-    const [config, setConfig] = useState<WorkAndEarnModuleConfig>(getWorkAndEarnConfig());
-    const [selectedTab, setSelectedTab] = useState<SubmenuKey>('myCampaigns');
+    const { state, dispatch } = useData();
+    const serverSettings = state?.settings;
+
+    const [config, setConfig] = useState<WorkAndEarnModuleConfig>(() => 
+        getWorkAndEarnConfig(serverSettings?.workAndEarnConfig)
+    );
+    const [selectedTab, setSelectedTab] = useState<SubmenuKey>('dashboard');
     const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
 
     useEffect(() => {
-        setConfig(getWorkAndEarnConfig());
-    }, []);
+        if (serverSettings?.workAndEarnConfig) {
+            setConfig(getWorkAndEarnConfig(serverSettings.workAndEarnConfig));
+        }
+    }, [serverSettings?.workAndEarnConfig]);
 
-    const currentPageConfig = config.submenus[selectedTab];
+    const currentPageConfig = config.submenus[selectedTab] || defaultWorkAndEarnConfig.submenus[selectedTab];
 
     const handleModuleFieldChange = (field: keyof WorkAndEarnModuleConfig, value: string) => {
         setConfig(prev => ({
@@ -47,18 +58,54 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
         handlePageFieldChange('visibleColumns', updated);
     };
 
-    const handleSave = () => {
-        saveWorkAndEarnConfig(config);
-        setSaveSuccess('Work & Earn module customization saved successfully! All user pages have been updated live.');
-        setTimeout(() => setSaveSuccess(null), 4000);
+    const handleSave = async () => {
+        setIsSaving(true);
+        setSaveSuccess(null);
+        setSaveError(null);
+        try {
+            const updatedSettings = {
+                ...serverSettings,
+                workAndEarnConfig: config
+            };
+            const savedResult = await updateSettings(updatedSettings);
+            if (savedResult) {
+                dispatch({ type: 'SET_SETTINGS', payload: savedResult });
+            }
+            saveWorkAndEarnConfig(config);
+            setSaveSuccess('Work & Earn module customization saved successfully to database! All user pages and dashboard controls are updated live.');
+            setTimeout(() => setSaveSuccess(null), 5000);
+        } catch (err) {
+            console.error('Failed to save Work & Earn settings:', err);
+            setSaveError(`Failed to save settings: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleReset = () => {
-        if (window.confirm('Are you sure you want to reset all Work & Earn pages and menus to default settings?')) {
-            const defaultConfig = resetWorkAndEarnConfig();
-            setConfig(defaultConfig);
-            setSaveSuccess('Restored default Work & Earn configuration.');
-            setTimeout(() => setSaveSuccess(null), 4000);
+    const handleReset = async () => {
+        if (window.confirm('Are you sure you want to reset all Work & Earn pages and menus to default settings? This will persist defaults to the database.')) {
+            setIsSaving(true);
+            setSaveSuccess(null);
+            setSaveError(null);
+            try {
+                const updatedSettings = {
+                    ...serverSettings,
+                    workAndEarnConfig: defaultWorkAndEarnConfig
+                };
+                const savedResult = await updateSettings(updatedSettings);
+                if (savedResult) {
+                    dispatch({ type: 'SET_SETTINGS', payload: savedResult });
+                }
+                const defaultConfig = resetWorkAndEarnConfig();
+                setConfig(defaultConfig);
+                setSaveSuccess('Restored default Work & Earn configuration in database.');
+                setTimeout(() => setSaveSuccess(null), 5000);
+            } catch (err) {
+                console.error('Failed to reset Work & Earn settings:', err);
+                setSaveError(`Failed to reset: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            } finally {
+                setIsSaving(false);
+            }
         }
     };
 
@@ -86,7 +133,7 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                         Work & Earn Page Editor
                     </h1>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                        Fully customize menus, pages, headings, tabs, buttons, popups, comment boxes, rows, columns, and design styles for all Work & Earn pages.
+                        Fully customize menus, pages, headings, tabs, buttons, popups, comment boxes, rows, columns, and feature toggles for all Work & Earn pages.
                     </p>
                 </div>
 
@@ -96,11 +143,12 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                         className="px-4 py-2.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all flex items-center gap-2"
                         title="Manage enable/disable & hide/unhide toggles for pages"
                     >
-                        🔒 Page Visibility & Access Controls
+                        🔒 General Settings & Controls
                     </button>
                     <button
                         onClick={handleReset}
-                        className="px-4 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs transition-all flex items-center gap-2"
+                        disabled={isSaving}
+                        className="px-4 py-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                         🔄 Reset Defaults
                     </button>
@@ -112,9 +160,20 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 transition-all transform active:scale-95"
+                        disabled={isSaving}
+                        className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-500/30 transition-all transform active:scale-95 flex items-center gap-2 disabled:opacity-60"
                     >
-                        💾 Save & Apply Changes
+                        {isSaving ? (
+                            <>
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                <span>Saving to DB...</span>
+                            </>
+                        ) : (
+                            <>
+                                <span>💾</span>
+                                <span>Save & Apply Changes</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -129,85 +188,277 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                     <button onClick={() => setSaveSuccess(null)} className="text-emerald-400 hover:text-white font-black">✕</button>
                 </div>
             )}
+            {saveError && (
+                <div className="p-4 bg-rose-500/20 border border-rose-500/40 text-rose-300 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>{saveError}</span>
+                    </div>
+                    <button onClick={() => setSaveError(null)} className="text-rose-400 hover:text-white font-black">✕</button>
+                </div>
+            )}
 
-            {/* Module Global Settings */}
-            <div className="bg-slate-800/60 p-6 rounded-3xl border border-slate-700 space-y-4">
-                <h2 className="text-sm font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                    📁 Global Module Navigation & Header Settings
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Global Module Settings Header Card */}
+            <div className="bg-slate-800/80 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+                <div className="flex items-center gap-2 text-indigo-400 font-extrabold text-sm uppercase tracking-wider">
+                    <span>🌐</span> Main Work & Earn Module Global Name
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Module Name</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">
+                            Main Menu Navigation Label
+                        </label>
                         <input
                             type="text"
-                            value={config.moduleName}
+                            value={config.menuTitle || config.moduleName || 'Work & Earn'}
+                            onChange={(e) => {
+                                handleModuleFieldChange('menuTitle', e.target.value);
+                                handleModuleFieldChange('moduleName', e.target.value);
+                            }}
+                            placeholder="Work & Earn"
+                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">
+                            Module Main Display Title
+                        </label>
+                        <input
+                            type="text"
+                            value={config.moduleName || 'Work & Earn'}
                             onChange={(e) => handleModuleFieldChange('moduleName', e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Work & Earn Hub"
+                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Sidebar Menu Title</label>
-                        <input
-                            type="text"
-                            value={config.menuTitle}
-                            onChange={(e) => handleModuleFieldChange('menuTitle', e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Module Global Description</label>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">
+                            Global Module Tagline / Description
+                        </label>
                         <input
                             type="text"
                             value={config.moduleDescription}
                             onChange={(e) => handleModuleFieldChange('moduleDescription', e.target.value)}
-                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Complete micro-tasks, earn rewards, and launch advertising campaigns"
+                            className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:ring-2 focus:ring-indigo-500"
                         />
                     </div>
                 </div>
             </div>
 
-            {/* Page / Submenu Selection Tabs */}
-            <div className="space-y-3">
+            {/* Main Layout: Submenu Tabs & Editor Form */}
+            <div className="space-y-4">
                 <span className="text-xs font-black uppercase text-slate-400 tracking-wider block">
                     Select Work & Earn Page to Edit:
                 </span>
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
                     {submenuList.map(item => {
                         const isActive = selectedTab === item.key;
+                        const itemConfig = config.submenus[item.key];
+                        const isEnabled = itemConfig?.isPageEnabled !== false;
                         return (
                             <button
                                 key={item.key}
                                 onClick={() => setSelectedTab(item.key)}
-                                className={`px-4 py-3 rounded-2xl font-black text-xs flex items-center gap-2 whitespace-nowrap transition-all ${
+                                className={`px-4 py-3 rounded-2xl font-black text-xs flex items-center gap-2 whitespace-nowrap transition-all border ${
                                     isActive
-                                        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/20 border border-indigo-400/40'
-                                        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700/80 border border-slate-700'
+                                        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-500/20 border-indigo-400/40'
+                                        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700/80 border-slate-700'
                                 }`}
                             >
                                 <span>{item.icon}</span>
                                 <span>{item.label}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ml-1 ${
+                                    isEnabled
+                                        ? isActive ? 'bg-indigo-800 text-indigo-200' : 'bg-emerald-500/20 text-emerald-300'
+                                        : 'bg-rose-500/20 text-rose-300'
+                                }`}>
+                                    {isEnabled ? 'ON' : 'OFF'}
+                                </span>
                             </button>
                         );
                     })}
                 </div>
             </div>
 
-            {/* Editor Grid for Selected Page */}
+            {/* Main Layout: 2 Columns (Form Editor & Real-time Preview) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Column 1 & 2: Main Editable Controls */}
+                
+                {/* Column 1 & 2: Deep Customization Form */}
                 <div className="lg:col-span-2 space-y-6 bg-slate-800/80 p-6 sm:p-8 rounded-3xl border border-slate-700 shadow-xl">
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-700">
+                    
+                    {/* Tab Header & Master Page Visibility Toggle */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-700">
                         <div className="space-y-0.5">
                             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
                                 Editing Page Configuration
                             </span>
-                            <h2 className="text-xl font-black text-white">
-                                {currentPageConfig.pageTitle || 'Work & Earn Page'}
+                            <h2 className="text-xl font-black text-white flex items-center gap-2">
+                                <span>{submenuList.find(s => s.key === selectedTab)?.icon}</span>
+                                <span>{currentPageConfig.pageTitle || 'Work & Earn Page'}</span>
                             </h2>
                         </div>
-                        <span className="text-2xl">
-                            {submenuList.find(s => s.key === selectedTab)?.icon}
-                        </span>
+                        <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-2xl border border-slate-700">
+                            <span className="text-[11px] font-bold text-slate-300">Page Status:</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.isPageEnabled !== false}
+                                    onChange={(e) => handlePageFieldChange('isPageEnabled', e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                            </label>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                currentPageConfig.isPageEnabled !== false
+                                    ? 'bg-emerald-500/20 text-emerald-300'
+                                    : 'bg-rose-500/20 text-rose-300'
+                            }`}>
+                                {currentPageConfig.isPageEnabled !== false ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Section 0: Interactive Feature & Card Controls */}
+                    <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-700 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-2">
+                                ⚙️ Card, Widget & Feature Enable/Disable Controls
+                            </h3>
+                            <span className="text-[10px] text-slate-400">Toggle any card or feature</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Feature 1: Top Notice Banner */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">📢 Top Notice Banner</span>
+                                    <span className="text-[10px] text-slate-500">Show alert banner at top</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.showNoticeBanner || false}
+                                    onChange={(e) => handlePageFieldChange('showNoticeBanner', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Feature 2: Custom Instructions / Card */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">💡 Custom Guidance Card</span>
+                                    <span className="text-[10px] text-slate-500">Display instructions card</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.showCustomInstructions !== false}
+                                    onChange={(e) => handlePageFieldChange('showCustomInstructions', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Feature 3: Pop-up / Details Modal */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">💬 Detail Pop-up / Modal</span>
+                                    <span className="text-[10px] text-slate-500">Allow popup details view</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.showDetailsModal !== false}
+                                    onChange={(e) => handlePageFieldChange('showDetailsModal', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Feature 4: Search & Filters Bar */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">🔍 Search & Filter Bar</span>
+                                    <span className="text-[10px] text-slate-500">Enable user search controls</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.showSearchFilter !== false}
+                                    onChange={(e) => handlePageFieldChange('showSearchFilter', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Feature 5: Category Filters */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">🏷️ Category Filter Tabs</span>
+                                    <span className="text-[10px] text-slate-500">Platform category filters</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.showCategoryFilter !== false}
+                                    onChange={(e) => handlePageFieldChange('showCategoryFilter', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {selectedTab === 'dashboard' && (
+                                <>
+                                    {/* Dashboard Feature: Live Stats Cards */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">📈 Activity Stats Cards</span>
+                                            <span className="text-[10px] text-slate-500">Today done, earned, in review</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={currentPageConfig.showStatsCards !== false}
+                                            onChange={(e) => handlePageFieldChange('showStatsCards', e.target.checked)}
+                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {/* Dashboard Feature: Quick Action Buttons */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">⚡ Quick Action Buttons</span>
+                                            <span className="text-[10px] text-slate-500">Tasks, Campaign, Withdraw row</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={currentPageConfig.showActionButtons !== false}
+                                            onChange={(e) => handlePageFieldChange('showActionButtons', e.target.checked)}
+                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Banner Text Input if Banner Enabled */}
+                        {currentPageConfig.showNoticeBanner && (
+                            <div className="pt-2 border-t border-slate-800">
+                                <label className="block text-[11px] font-bold text-amber-300 mb-1">Notice Banner Message</label>
+                                <input
+                                    type="text"
+                                    value={currentPageConfig.noticeBannerText || ''}
+                                    onChange={(e) => handlePageFieldChange('noticeBannerText', e.target.value)}
+                                    placeholder="📢 Example: Daily task bonus is active! Complete 5 jobs today for an extra reward."
+                                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-amber-300"
+                                />
+                            </div>
+                        )}
+
+                        {/* Custom Instructions HTML/Text if Instructions Enabled */}
+                        {currentPageConfig.showCustomInstructions !== false && (
+                            <div className="pt-2 border-t border-slate-800">
+                                <label className="block text-[11px] font-bold text-indigo-300 mb-1">Custom Guidance / Instructions Text (Supports HTML)</label>
+                                <textarea
+                                    rows={2}
+                                    value={currentPageConfig.customInstructionsHtml || ''}
+                                    onChange={(e) => handlePageFieldChange('customInstructionsHtml', e.target.value)}
+                                    placeholder="💡 Enter custom instructions, rules, or tips for users visiting this page..."
+                                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs font-medium text-slate-200"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* Section 1: Page Titles, Navigation & Headings */}
@@ -382,36 +633,10 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Notice Banner Toggle & Text */}
-                        <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/80 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-extrabold text-slate-200 uppercase tracking-wider">
-                                    📢 Display Top Notice Banner
-                                </span>
-                                <input
-                                    type="checkbox"
-                                    checked={currentPageConfig.showNoticeBanner}
-                                    onChange={(e) => handlePageFieldChange('showNoticeBanner', e.target.checked)}
-                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                />
-                            </div>
-                            {currentPageConfig.showNoticeBanner && (
-                                <div>
-                                    <label className="block text-[11px] font-bold text-slate-400 mb-1">Banner Notice Text</label>
-                                    <input
-                                        type="text"
-                                        value={currentPageConfig.noticeBannerText}
-                                        onChange={(e) => handlePageFieldChange('noticeBannerText', e.target.value)}
-                                        className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-amber-300"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
                         {/* Visible Columns / Fields Toggles */}
                         <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/80 space-y-2">
                             <span className="text-xs font-extrabold text-slate-200 uppercase tracking-wider block mb-1">
-                                👁️ Table & Grid Column Visibility Options
+                                👁️ Table & Grid Column / Card Field Visibility Options
                             </span>
                             <div className="flex flex-wrap gap-3">
                                 {Object.keys(currentPageConfig.visibleColumns || {}).map(colKey => {

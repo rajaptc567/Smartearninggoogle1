@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { WorkAndEarnModuleConfig } from '../types/workAndEarnEditor';
 import { getWorkAndEarnConfig } from '../services/workAndEarnConfigService';
+import { useData } from './useData';
 
 export function useWorkAndEarnConfig(): WorkAndEarnModuleConfig {
-    const [config, setConfig] = useState<WorkAndEarnModuleConfig>(getWorkAndEarnConfig());
+    const { state } = useData();
+    const serverConfig = state?.settings?.workAndEarnConfig;
+    const [localRevision, setLocalRevision] = useState(0);
 
     useEffect(() => {
         const handleUpdate = () => {
-            setConfig(getWorkAndEarnConfig());
+            setLocalRevision(r => r + 1);
         };
 
         window.addEventListener('workAndEarnConfigUpdated', handleUpdate);
@@ -19,5 +22,7 @@ export function useWorkAndEarnConfig(): WorkAndEarnModuleConfig {
         };
     }, []);
 
-    return config;
+    return useMemo(() => {
+        return getWorkAndEarnConfig(serverConfig);
+    }, [serverConfig, localRevision]);
 }

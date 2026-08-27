@@ -456,7 +456,8 @@ const SettingSchema = new mongoose.Schema({
     workAndEarnWithdrawalRules: { type: mongoose.Schema.Types.Mixed, default: [] },
     workAndEarnPayoutTierConfig: { type: mongoose.Schema.Types.Mixed, default: null },
     ruleEvaluationLogs: { type: mongoose.Schema.Types.Mixed, default: [] },
-    modulePagesConfig: { type: mongoose.Schema.Types.Mixed, default: null }
+    modulePagesConfig: { type: mongoose.Schema.Types.Mixed, default: null },
+    workAndEarnConfig: { type: mongoose.Schema.Types.Mixed, default: null }
 }, { timestamps: true });
 
 SettingSchema.statics.getSettings = async function() {

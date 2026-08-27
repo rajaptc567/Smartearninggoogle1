@@ -2,18 +2,53 @@ import { WorkAndEarnModuleConfig, defaultWorkAndEarnConfig } from '../types/work
 
 const STORAGE_KEY = 'smartearning_work_and_earn_config';
 
-export function getWorkAndEarnConfig(): WorkAndEarnModuleConfig {
+export function getWorkAndEarnConfig(serverConfig?: WorkAndEarnModuleConfig | null): WorkAndEarnModuleConfig {
+    if (serverConfig && typeof serverConfig === 'object') {
+        const mergedSubmenus = { ...defaultWorkAndEarnConfig.submenus };
+        if (serverConfig.submenus) {
+            (Object.keys(defaultWorkAndEarnConfig.submenus) as (keyof typeof defaultWorkAndEarnConfig.submenus)[]).forEach(key => {
+                if (serverConfig.submenus[key]) {
+                    mergedSubmenus[key] = {
+                        ...defaultWorkAndEarnConfig.submenus[key],
+                        ...serverConfig.submenus[key],
+                        visibleColumns: {
+                            ...defaultWorkAndEarnConfig.submenus[key].visibleColumns,
+                            ...(serverConfig.submenus[key].visibleColumns || {})
+                        }
+                    };
+                }
+            });
+        }
+        return {
+            ...defaultWorkAndEarnConfig,
+            ...serverConfig,
+            submenus: mergedSubmenus
+        };
+    }
+
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
+            const mergedSubmenus = { ...defaultWorkAndEarnConfig.submenus };
+            if (parsed.submenus) {
+                (Object.keys(defaultWorkAndEarnConfig.submenus) as (keyof typeof defaultWorkAndEarnConfig.submenus)[]).forEach(key => {
+                    if (parsed.submenus[key]) {
+                        mergedSubmenus[key] = {
+                            ...defaultWorkAndEarnConfig.submenus[key],
+                            ...parsed.submenus[key],
+                            visibleColumns: {
+                                ...defaultWorkAndEarnConfig.submenus[key].visibleColumns,
+                                ...(parsed.submenus[key].visibleColumns || {})
+                            }
+                        };
+                    }
+                });
+            }
             return {
                 ...defaultWorkAndEarnConfig,
                 ...parsed,
-                submenus: {
-                    ...defaultWorkAndEarnConfig.submenus,
-                    ...(parsed.submenus || {})
-                }
+                submenus: mergedSubmenus
             };
         }
     } catch (e) {

@@ -1322,6 +1322,22 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 </div>
             )}
 
+            {/* Admin Notice Banner (If Enabled) */}
+            {dashboardAdminConfig?.showNoticeBanner && dashboardAdminConfig?.noticeBannerText && (
+                <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border border-amber-500/40 text-amber-200 px-4 py-3 rounded-2xl shadow-lg flex items-center gap-3 text-xs sm:text-sm font-semibold animate-in fade-in">
+                    <span className="text-lg shrink-0">📢</span>
+                    <span className="flex-1">{dashboardAdminConfig.noticeBannerText}</span>
+                </div>
+            )}
+
+            {/* Admin Custom Instructions Card (If Enabled) */}
+            {dashboardAdminConfig?.showCustomInstructions !== false && dashboardAdminConfig?.customInstructionsHtml && (
+                <div className="bg-slate-900/90 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl shadow-lg flex items-start gap-3 text-xs sm:text-sm animate-in fade-in">
+                    <span className="text-lg shrink-0 text-indigo-400">💡</span>
+                    <div className="flex-1 font-medium leading-relaxed" dangerouslySetInnerHTML={{ __html: dashboardAdminConfig.customInstructionsHtml }} />
+                </div>
+            )}
+
             {/* Captivating Header Card & Referral Link */}
             <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 shadow-2xl border border-slate-800/80">
                 <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1557,190 +1573,194 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             </div>
 
             {/* C. Quick Action Row */}
-            <div className="bg-slate-900/90 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-xl space-y-1.5 sm:space-y-2">
-                <div className="flex items-center justify-between px-1">
-                    <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1 sm:gap-1.5">
-                        <ZapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> Quick Actions
-                    </span>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Instant Shortcuts</span>
+            {dashboardAdminConfig?.showActionButtons !== false && (
+                <div className="bg-slate-900/90 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-xl space-y-1.5 sm:space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1 sm:gap-1.5">
+                            <ZapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> Quick Actions
+                        </span>
+                        <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Instant Shortcuts</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
+                        {/* 1. Tasks */}
+                        <button
+                            onClick={() => navigate('/member/available-tasks')}
+                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                        >
+                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
+                                <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Tasks</span>
+                            <span className="text-[9px] text-slate-400 hidden lg:inline">Browse & do jobs</span>
+                        </button>
+
+                        {/* 2. Campaign */}
+                        <button
+                            onClick={() => navigate('/member/create-campaign')}
+                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                        >
+                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-all">
+                                <MegaphoneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Campaign</span>
+                            <span className="text-[9px] text-slate-400 hidden lg:inline">Create promotion</span>
+                        </button>
+
+                        {/* 3. Withdraw */}
+                        <button
+                            onClick={() => navigate('/member/withdraw')}
+                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-teal-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                        >
+                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-teal-500/10 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-950 transition-all">
+                                <WithdrawalIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Withdraw</span>
+                            <span className="text-[9px] text-slate-400 hidden lg:inline">Cashout funds</span>
+                        </button>
+
+                        {/* 4. Deposit */}
+                        <button
+                            onClick={() => navigate('/member/deposit')}
+                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-indigo-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                        >
+                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                                <DepositIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Deposit</span>
+                            <span className="text-[9px] text-slate-400 hidden lg:inline">Add campaign funds</span>
+                        </button>
+
+                        {/* 5. Convert / Transfer */}
+                        <button
+                            onClick={() => setIsConvertModalOpen(true)}
+                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-purple-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                        >
+                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                                <ConvertIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </div>
+                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Transfer</span>
+                            <span className="text-[9px] text-slate-400 hidden lg:inline">To campaign wallet</span>
+                        </button>
+                    </div>
                 </div>
-
-                <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
-                    {/* 1. Tasks */}
-                    <button
-                        onClick={() => navigate('/member/available-tasks')}
-                        className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                    >
-                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
-                            <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Tasks</span>
-                        <span className="text-[9px] text-slate-400 hidden lg:inline">Browse & do jobs</span>
-                    </button>
-
-                    {/* 2. Campaign */}
-                    <button
-                        onClick={() => navigate('/member/create-campaign')}
-                        className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                    >
-                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-all">
-                            <MegaphoneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Campaign</span>
-                        <span className="text-[9px] text-slate-400 hidden lg:inline">Create promotion</span>
-                    </button>
-
-                    {/* 3. Withdraw */}
-                    <button
-                        onClick={() => navigate('/member/withdraw')}
-                        className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-teal-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                    >
-                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-teal-500/10 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-950 transition-all">
-                            <WithdrawalIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Withdraw</span>
-                        <span className="text-[9px] text-slate-400 hidden lg:inline">Cashout funds</span>
-                    </button>
-
-                    {/* 4. Deposit */}
-                    <button
-                        onClick={() => navigate('/member/deposit')}
-                        className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-indigo-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                    >
-                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                            <DepositIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Deposit</span>
-                        <span className="text-[9px] text-slate-400 hidden lg:inline">Add campaign funds</span>
-                    </button>
-
-                    {/* 5. Convert / Transfer */}
-                    <button
-                        onClick={() => setIsConvertModalOpen(true)}
-                        className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-purple-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                    >
-                        <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
-                            <ConvertIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Transfer</span>
-                        <span className="text-[9px] text-slate-400 hidden lg:inline">To campaign wallet</span>
-                    </button>
-                </div>
-            </div>
+            )}
 
             {/* D. Bento Performance Summary */}
-            <div className="space-y-2 sm:space-y-3">
-                <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                        <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-400"></span>
-                        <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300">
-                            Activity Overview
-                        </h3>
+            {dashboardAdminConfig?.showStatsCards !== false && (
+                <div className="space-y-2 sm:space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-400"></span>
+                            <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300">
+                                Activity Overview
+                            </h3>
+                        </div>
+                        <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Updated Live</span>
                     </div>
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Updated Live</span>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
+                        {/* Card 1: Tasks Today */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-amber-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-amber-300">
+                                    <TaskIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" /> Tasks Today
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-amber-500/20 text-amber-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">24h</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-white font-mono pt-0.5 sm:pt-1">
+                                {tasksTodayCount} <span className="text-[10px] sm:text-xs font-normal text-slate-400">Done</span>
+                            </div>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Tasks completed in last 24h</p>
+                        </div>
+
+                        {/* Card 2: Earned Today */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1.5 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-emerald-300">
+                                    <DollarIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 shrink-0" /> Earned Today
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-emerald-500/20 text-emerald-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Income</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-emerald-300 font-mono pt-0.5 sm:pt-1">
+                                ${earnedTodayUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-emerald-400 font-mono">USD</span>
+                            </div>
+                            {currentUser.currency !== 'USD' && (
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
+                                    ({getCurrencySymbol()}{(earnedTodayUSD * exchangeRate).toFixed(2)} {currentUser.currency})
+                                </p>
+                            )}
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Income earned today</p>
+                        </div>
+
+                        {/* Card 3: Pending Review */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-purple-300">
+                                    <ClockIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400 shrink-0" /> In Review
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-purple-500/20 text-purple-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-purple-300 font-mono pt-0.5 sm:pt-1 truncate">
+                                {pendingTaskSubmissions.length} <span className="text-[10px] sm:text-xs font-normal text-slate-400">(${pendingTaskRewardsUSD.toFixed(2)})</span>
+                            </div>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Submissions awaiting approval</p>
+                        </div>
+
+                        {/* Card 4: Referral Income */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-blue-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-blue-300">
+                                    <UsersIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-400 shrink-0" /> Referral Bonus
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-blue-500/20 text-blue-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Invites</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-blue-300 font-mono pt-0.5 sm:pt-1">
+                                ${referralIncomeUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-blue-400 font-mono">USD</span>
+                            </div>
+                            {currentUser.currency !== 'USD' && (
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
+                                    ({getCurrencySymbol()}{(referralIncomeUSD * exchangeRate).toFixed(2)} {currentUser.currency})
+                                </p>
+                            )}
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Earned from referral signups</p>
+                        </div>
+
+                        {/* Card 5: Active Campaigns */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-teal-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-teal-300">
+                                    <MegaphoneIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-teal-400 shrink-0" /> Campaigns
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-teal-500/20 text-teal-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Running</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-teal-300 font-mono pt-0.5 sm:pt-1">
+                                {activeCampaignsCount} <span className="text-[10px] sm:text-xs font-normal text-slate-400">Live</span>
+                            </div>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Your running campaigns</p>
+                        </div>
+
+                        {/* Card 6: Lifetime Task Earnings */}
+                        <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-amber-500/40 transition-all">
+                            <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+                                <span className="truncate flex items-center gap-1 sm:gap-1.5 text-amber-300">
+                                    <RewardIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" /> Total Earned
+                                </span>
+                                <span className="text-[7px] sm:text-[8px] bg-amber-500/20 text-amber-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">All Time</span>
+                            </div>
+                            <div className="text-base sm:text-2xl font-bold text-white font-mono pt-0.5 sm:pt-1">
+                                ${totalLifetimeTaskEarningsUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-amber-400 font-mono">USD</span>
+                            </div>
+                            {currentUser.currency !== 'USD' && (
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
+                                    ({getCurrencySymbol()}{(totalLifetimeTaskEarningsUSD * exchangeRate).toFixed(2)} {currentUser.currency})
+                                </p>
+                            )}
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Total completed gig rewards</p>
+                        </div>
+                    </div>
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
-                    {/* Card 1: Tasks Today */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-amber-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-amber-300">
-                                <TaskIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" /> Tasks Today
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-amber-500/20 text-amber-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">24h</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-white font-mono pt-0.5 sm:pt-1">
-                            {tasksTodayCount} <span className="text-[10px] sm:text-xs font-normal text-slate-400">Done</span>
-                        </div>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Tasks completed in last 24h</p>
-                    </div>
-
-                    {/* Card 2: Earned Today */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1.5 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-emerald-300">
-                                <DollarIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 shrink-0" /> Earned Today
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-emerald-500/20 text-emerald-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Income</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-emerald-300 font-mono pt-0.5 sm:pt-1">
-                            ${earnedTodayUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-emerald-400 font-mono">USD</span>
-                        </div>
-                        {currentUser.currency !== 'USD' && (
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
-                                ({getCurrencySymbol()}{(earnedTodayUSD * exchangeRate).toFixed(2)} {currentUser.currency})
-                            </p>
-                        )}
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Income earned today</p>
-                    </div>
-
-                    {/* Card 3: Pending Review */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-purple-300">
-                                <ClockIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400 shrink-0" /> In Review
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-purple-500/20 text-purple-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Pending</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-purple-300 font-mono pt-0.5 sm:pt-1 truncate">
-                            {pendingTaskSubmissions.length} <span className="text-[10px] sm:text-xs font-normal text-slate-400">(${pendingTaskRewardsUSD.toFixed(2)})</span>
-                        </div>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Submissions awaiting approval</p>
-                    </div>
-
-                    {/* Card 4: Referral Income */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-blue-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-blue-300">
-                                <UsersIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-400 shrink-0" /> Referral Bonus
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-blue-500/20 text-blue-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Invites</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-blue-300 font-mono pt-0.5 sm:pt-1">
-                            ${referralIncomeUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-blue-400 font-mono">USD</span>
-                        </div>
-                        {currentUser.currency !== 'USD' && (
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
-                                ({getCurrencySymbol()}{(referralIncomeUSD * exchangeRate).toFixed(2)} {currentUser.currency})
-                            </p>
-                        )}
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Earned from referral signups</p>
-                    </div>
-
-                    {/* Card 5: Active Campaigns */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-teal-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-teal-300">
-                                <MegaphoneIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-teal-400 shrink-0" /> Campaigns
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-teal-500/20 text-teal-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">Running</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-teal-300 font-mono pt-0.5 sm:pt-1">
-                            {activeCampaignsCount} <span className="text-[10px] sm:text-xs font-normal text-slate-400">Live</span>
-                        </div>
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Your running campaigns</p>
-                    </div>
-
-                    {/* Card 6: Lifetime Task Earnings */}
-                    <div className="bg-slate-900/90 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 space-y-1 sm:space-y-1.5 shadow-lg relative overflow-hidden group hover:border-amber-500/40 transition-all">
-                        <div className="flex items-center justify-between text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
-                            <span className="truncate flex items-center gap-1 sm:gap-1.5 text-amber-300">
-                                <RewardIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" /> Total Earned
-                            </span>
-                            <span className="text-[7px] sm:text-[8px] bg-amber-500/20 text-amber-300 px-1 sm:px-1.5 py-0.5 rounded font-bold uppercase shrink-0">All Time</span>
-                        </div>
-                        <div className="text-base sm:text-2xl font-bold text-white font-mono pt-0.5 sm:pt-1">
-                            ${totalLifetimeTaskEarningsUSD.toFixed(2)} <span className="text-[10px] sm:text-xs font-bold text-amber-400 font-mono">USD</span>
-                        </div>
-                        {currentUser.currency !== 'USD' && (
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate">
-                                ({getCurrencySymbol()}{(totalLifetimeTaskEarningsUSD * exchangeRate).toFixed(2)} {currentUser.currency})
-                            </p>
-                        )}
-                        <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Total completed gig rewards</p>
-                    </div>
-                </div>
-            </div>
+            )}
 
             {/* E. Fixed Bottom Navigation Bar for Mobile */}
             <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 px-2 py-2 flex items-center justify-around text-slate-300 shadow-2xl">
