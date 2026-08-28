@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WorkAndEarnModuleConfig, WorkAndEarnPageEditableConfig } from '../../types/workAndEarnEditor';
 import { getWorkAndEarnConfig, saveWorkAndEarnConfig, resetWorkAndEarnConfig, defaultWorkAndEarnConfig } from '../../services/workAndEarnConfigService';
-import { useData } from '../../context/DataContext';
+import { useData } from '../../hooks/useData';
 import { updateSettings } from '../../services/api';
 
 type SubmenuKey = keyof WorkAndEarnModuleConfig['submenus'];
@@ -325,10 +325,24 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                             <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-2">
                                 ⚙️ Card, Widget & Feature Enable/Disable Controls
                             </h3>
-                            <span className="text-[10px] text-slate-400">Toggle any card or feature</span>
+                            <span className="text-[10px] text-slate-400">Toggle any card, menu, or feature</span>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Feature 0: Enable / Disable Page Entirely */}
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-bold text-slate-200 block">🌐 Enable Page / Menu Access</span>
+                                    <span className="text-[10px] text-slate-500">Allow users to access this tab/page</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={currentPageConfig.isPageEnabled !== false}
+                                    onChange={(e) => handlePageFieldChange('isPageEnabled', e.target.checked)}
+                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
                             {/* Feature 1: Top Notice Banner */}
                             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
                                 <div>
@@ -401,11 +415,39 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
 
                             {selectedTab === 'dashboard' && (
                                 <>
+                                    {/* Dashboard Feature: Balance & Wallets Hero Card */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">💰 Available Earnings & Wallets Card</span>
+                                            <span className="text-[10px] text-slate-500">Hero balance & wallet breakdown</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={currentPageConfig.showBalanceCard !== false}
+                                            onChange={(e) => handlePageFieldChange('showBalanceCard', e.target.checked)}
+                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {/* Dashboard Feature: Referral & Invite Card */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">👥 Referral Code & Invite Card</span>
+                                            <span className="text-[10px] text-slate-500">User header invite link & copy button</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={currentPageConfig.showInviteCard !== false}
+                                            onChange={(e) => handlePageFieldChange('showInviteCard', e.target.checked)}
+                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
+
                                     {/* Dashboard Feature: Live Stats Cards */}
                                     <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
                                         <div>
-                                            <span className="text-xs font-bold text-slate-200 block">📈 Activity Stats Cards</span>
-                                            <span className="text-[10px] text-slate-500">Today done, earned, in review</span>
+                                            <span className="text-xs font-bold text-slate-200 block">📈 Activity Overview Stats Cards</span>
+                                            <span className="text-[10px] text-slate-500">Bento grid (today done, earned, in review)</span>
                                         </div>
                                         <input
                                             type="checkbox"
@@ -419,7 +461,7 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                                     <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
                                         <div>
                                             <span className="text-xs font-bold text-slate-200 block">⚡ Quick Action Buttons</span>
-                                            <span className="text-[10px] text-slate-500">Tasks, Campaign, Withdraw row</span>
+                                            <span className="text-[10px] text-slate-500">Tasks, Campaign, Withdraw, Deposit row</span>
                                         </div>
                                         <input
                                             type="checkbox"
@@ -428,9 +470,70 @@ export const AdminWorkAndEarnEditor: React.FC = () => {
                                             className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                         />
                                     </div>
+
+                                    {/* Dashboard Feature: Financial History by Purpose Future Control */}
+                                    <div className="bg-slate-950 p-3 rounded-xl border border-indigo-900/50 flex items-center justify-between sm:col-span-2">
+                                        <div>
+                                            <span className="text-xs font-bold text-indigo-300 block">📊 Financial History by Purpose Control</span>
+                                            <span className="text-[10px] text-slate-400">Categorized audit trail by worker rewards, conversions, campaign fund transfers, and expenditures</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={currentPageConfig.showPurposeFinancialHistory !== false}
+                                            onChange={(e) => handlePageFieldChange('showPurposeFinancialHistory', e.target.checked)}
+                                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
                                 </>
                             )}
                         </div>
+
+                        {/* Financial History by Purpose Future Control Customization (when enabled on Dashboard) */}
+                        {selectedTab === 'dashboard' && currentPageConfig.showPurposeFinancialHistory !== false && (
+                            <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-500/30 space-y-3">
+                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+                                    <span>⚙️</span>
+                                    <span>Financial History by Purpose Settings</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Section Heading Text</label>
+                                        <input
+                                            type="text"
+                                            value={currentPageConfig.purposeHistoryHeading || 'Financial History by Purpose'}
+                                            onChange={(e) => handlePageFieldChange('purposeHistoryHeading', e.target.value)}
+                                            placeholder="Financial History by Purpose"
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Default Records Per Page</label>
+                                        <select
+                                            value={currentPageConfig.purposeHistoryDefaultPerPage || 10}
+                                            onChange={(e) => handlePageFieldChange('purposeHistoryDefaultPerPage', Number(e.target.value))}
+                                            className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                                        >
+                                            <option value={10}>10 records per page</option>
+                                            <option value={15}>15 records per page</option>
+                                            <option value={20}>20 records per page</option>
+                                            <option value={25}>25 records per page</option>
+                                            <option value={30}>30 records per page</option>
+                                            <option value={50}>50 records per page</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Section Description Text</label>
+                                    <input
+                                        type="text"
+                                        value={currentPageConfig.purposeHistoryDescription || 'Comprehensive audit trail categorized by worker rewards, conversions, campaign fund transfers, and expenditures.'}
+                                        onChange={(e) => handlePageFieldChange('purposeHistoryDescription', e.target.value)}
+                                        placeholder="Audit trail description..."
+                                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-semibold text-slate-200 focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Banner Text Input if Banner Enabled */}
                         {currentPageConfig.showNoticeBanner && (

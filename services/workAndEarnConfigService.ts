@@ -1,5 +1,7 @@
 import { WorkAndEarnModuleConfig, defaultWorkAndEarnConfig } from '../types/workAndEarnEditor';
 
+export { defaultWorkAndEarnConfig };
+
 const STORAGE_KEY = 'smartearning_work_and_earn_config';
 
 export function getWorkAndEarnConfig(serverConfig?: WorkAndEarnModuleConfig | null): WorkAndEarnModuleConfig {

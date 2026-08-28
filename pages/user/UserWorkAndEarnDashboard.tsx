@@ -1330,6 +1330,14 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                 </div>
             )}
 
+            {/* Page Disabled Banner if Admin Disabled Work & Earn Main Dashboard */}
+            {dashboardAdminConfig?.isPageEnabled === false && (
+                <div className="bg-rose-500/20 border border-rose-500/50 text-rose-200 px-4 py-3 rounded-2xl shadow-lg flex items-center gap-3 text-xs sm:text-sm font-semibold animate-in fade-in">
+                    <span className="text-lg shrink-0">⚠️</span>
+                    <span className="flex-1">Notice: Work & Earn dashboard modules have been temporarily paused or restricted by platform administration.</span>
+                </div>
+            )}
+
             {/* Admin Custom Instructions Card (If Enabled) */}
             {dashboardAdminConfig?.showCustomInstructions !== false && dashboardAdminConfig?.customInstructionsHtml && (
                 <div className="bg-slate-900/90 border border-indigo-500/30 text-slate-200 px-4 py-3 rounded-2xl shadow-lg flex items-start gap-3 text-xs sm:text-sm animate-in fade-in">
@@ -1377,33 +1385,36 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                     </div>
 
                     {/* Referral Code Quick Share */}
-                    <div className="bg-slate-950/80 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-800 w-full md:w-auto flex items-center justify-between gap-2.5 sm:gap-3">
-                        <div className="text-left min-w-0">
-                            <span className="text-[8px] sm:text-[9px] font-bold uppercase text-slate-400 tracking-wider block truncate">Your Invite Link</span>
-                            <span className="text-xs font-mono font-bold text-amber-300 truncate block">{currentUser.referralCode || currentUser.username}</span>
+                    {dashboardAdminConfig?.showInviteCard !== false && (
+                        <div className="bg-slate-950/80 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-800 w-full md:w-auto flex items-center justify-between gap-2.5 sm:gap-3">
+                            <div className="text-left min-w-0">
+                                <span className="text-[8px] sm:text-[9px] font-bold uppercase text-slate-400 tracking-wider block truncate">Your Invite Link</span>
+                                <span className="text-xs font-mono font-bold text-amber-300 truncate block">{currentUser.referralCode || currentUser.username}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                    onClick={handleCopyReferral}
+                                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center gap-1 min-h-[36px] sm:min-h-[44px]"
+                                >
+                                    <CopyIcon className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>{copiedReferral ? 'Copied!' : 'Copy'}</span>
+                                </button>
+                                <button
+                                    onClick={handleShareReferral}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center gap-1 min-h-[36px] sm:min-h-[44px]"
+                                >
+                                    <ShareIcon className="w-3.5 h-3.5" />
+                                    <span>Share</span>
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                                onClick={handleCopyReferral}
-                                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center gap-1 min-h-[36px] sm:min-h-[44px]"
-                            >
-                                <CopyIcon className="w-3.5 h-3.5 text-amber-400" />
-                                <span>{copiedReferral ? 'Copied!' : 'Copy'}</span>
-                            </button>
-                            <button
-                                onClick={handleShareReferral}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs font-bold transition-all flex items-center gap-1 min-h-[36px] sm:min-h-[44px]"
-                            >
-                                <ShareIcon className="w-3.5 h-3.5" />
-                                <span>Share</span>
-                            </button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
             {/* B. Gradient Hero Balance Card */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 border border-indigo-500/40 shadow-2xl space-y-3 sm:space-y-5">
+            {dashboardAdminConfig?.showBalanceCard !== false && (
+                <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 border border-indigo-500/40 shadow-2xl space-y-3 sm:space-y-5">
                 <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -1571,6 +1582,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
 
             {/* C. Quick Action Row */}
             {dashboardAdminConfig?.showActionButtons !== false && (
