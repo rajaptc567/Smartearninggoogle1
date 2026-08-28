@@ -14,20 +14,39 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
     const navigate = useNavigate();
     const { settings, currentUser } = state;
 
-    const pageControl = getEffectiveModulePageControl(settings?.modulePagesConfig, category, pageId);
-    const isAdmin = currentUser?.role === 'admin';
+    const currentMode = (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null) as 'work_and_earn' | 'investment' | null || 'work_and_earn';
+
+    // Determine effective category based on user's current module context
+    const effectiveCategory = (category === 'workAndEarn' && currentMode === 'investment' && pageId === 'userTasks')
+        ? 'investment'
+        : category;
+
+    const pageControl = getEffectiveModulePageControl(settings?.modulePagesConfig, effectiveCategory, pageId);
+    const workAndEarnControl = getEffectiveModulePageControl(settings?.modulePagesConfig, 'workAndEarn', pageId);
+    const investmentControl = getEffectiveModulePageControl(settings?.modulePagesConfig, 'investment', pageId);
+
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'manager' || currentUser?.role === 'accountant';
 
     // Legacy sync checks
     let isLegacyEnabled = true;
-    if (category === 'investment') {
-        if (pageId === 'transfer' && settings?.isUserTransferEnabled === false) isLegacyEnabled = false;
+    if (category === 'investment' || effectiveCategory === 'investment') {
+        if (pageId === 'transfer' && (settings?.isUserTransferEnabled === false || settings?.transferConfig?.enabled === false)) isLegacyEnabled = false;
         if (pageId === 'tasks' && settings?.isTasksEnabled === false) isLegacyEnabled = false;
-    } else if (category === 'workAndEarn') {
+        if (pageId === 'userTasks' && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
+    } 
+    if (category === 'workAndEarn' || effectiveCategory === 'workAndEarn') {
         if (settings?.hubEnabled === false) isLegacyEnabled = false;
-        if ((pageId === 'availableTasks' || pageId === 'createCampaign') && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
+        if ((pageId === 'availableTasks' || pageId === 'createCampaign' || pageId === 'userTasks') && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
     }
 
-    const isEffectivelyEnabled = pageControl.isEnabled && isLegacyEnabled;
+    let isEffectivelyEnabled = pageControl.isEnabled && isLegacyEnabled;
+    if (pageId === 'userTasks') {
+        if (currentMode === 'investment' && investmentControl && !investmentControl.isEnabled) {
+            isEffectivelyEnabled = false;
+        } else if (workAndEarnControl && !workAndEarnControl.isEnabled) {
+            isEffectivelyEnabled = false;
+        }
+    }
 
     if (!isEffectivelyEnabled) {
         if (isAdmin) {

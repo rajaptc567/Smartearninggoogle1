@@ -53,6 +53,40 @@ export const AdminModulePagesManager: React.FC = () => {
         };
     });
 
+    React.useEffect(() => {
+        if (settings?.modulePagesConfig) {
+            const defaults = getDefaultModulePagesConfig();
+            const mergedInvestment: Record<string, ModulePageControl> = {};
+            Object.keys(defaults.investment).forEach(key => {
+                const def = defaults.investment[key];
+                const saved = settings.modulePagesConfig?.investment?.[key];
+                mergedInvestment[key] = {
+                    ...def,
+                    isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
+                    isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
+                    disabledNotice: saved?.disabledNotice || def.disabledNotice
+                };
+            });
+
+            const mergedWorkAndEarn: Record<string, ModulePageControl> = {};
+            Object.keys(defaults.workAndEarn).forEach(key => {
+                const def = defaults.workAndEarn[key];
+                const saved = settings.modulePagesConfig?.workAndEarn?.[key];
+                mergedWorkAndEarn[key] = {
+                    ...def,
+                    isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
+                    isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
+                    disabledNotice: saved?.disabledNotice || def.disabledNotice
+                };
+            });
+
+            setLocalConfig({
+                investment: mergedInvestment,
+                workAndEarn: mergedWorkAndEarn
+            });
+        }
+    }, [settings?.modulePagesConfig]);
+
     const handleToggleEnable = (category: 'investment' | 'workAndEarn', pageId: string) => {
         setLocalConfig(prev => {
             const current = prev[category]?.[pageId] || (category === 'investment' ? defaultInvestmentPages[pageId] : defaultWorkAndEarnPages[pageId]);

@@ -309,11 +309,31 @@ const Settings: React.FC = () => {
             ...prev,
             withdrawalFrequency: { ...prev.withdrawalFrequency, [field]: checked }
         }));
-    } else if (name === 'transferConfig.enabled') {
+    } else if (name === 'transferConfig.enabled' || name === 'isUserTransferEnabled') {
         setLocalSettings(prev => ({
             ...prev,
-            transferConfig: { ...prev.transferConfig, enabled: checked },
+            transferConfig: {
+                ...(prev.transferConfig || { tiers: [] }),
+                enabled: checked
+            },
             isUserTransferEnabled: checked // Sync legacy field
+        }));
+    } else if (name === 'transferConfig.allowCrossCurrency') {
+        setLocalSettings(prev => ({
+            ...prev,
+            transferConfig: {
+                ...(prev.transferConfig || { tiers: [] }),
+                allowCrossCurrency: checked
+            }
+        }));
+    } else if (name.startsWith('transferConfig.')) {
+        const field = name.split('.')[1];
+        setLocalSettings(prev => ({
+            ...prev,
+            transferConfig: {
+                ...(prev.transferConfig || { tiers: [] }),
+                [field]: checked
+            }
         }));
     } else if (name.startsWith('homepageContent.show')) {
         const field = name.split('.')[1];
@@ -321,6 +341,18 @@ const Settings: React.FC = () => {
             ...prev, 
             homepageContent: { ...prev.homepageContent, [field]: checked } as any 
         }));
+    } else if (name.includes('.')) {
+        const parts = name.split('.');
+        if (parts.length === 2) {
+            const [parent, child] = parts;
+            setLocalSettings(prev => ({
+                ...prev,
+                [parent]: {
+                    ...((prev as any)[parent] || {}),
+                    [child]: checked
+                }
+            }));
+        }
     } else {
         setLocalSettings(prev => ({ ...prev, [name]: checked }));
     }
