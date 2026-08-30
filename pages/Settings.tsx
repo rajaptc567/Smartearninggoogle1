@@ -157,8 +157,8 @@ const Settings: React.FC = () => {
         enableContactUsBox: settings.enableContactUsBox !== false,
         enableContactViaEmail: settings.enableContactViaEmail !== false,
         enableContactViaWhatsApp: settings.enableContactViaWhatsApp !== false,
-        contactUsEmailAddress: settings.contactUsEmailAddress || 'support@international-payouts.com',
-        contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+1 (555) 019-2834',
+        contactUsEmailAddress: settings.contactUsEmailAddress || 'smartexn.com@gmail.com',
+        contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
         contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
         contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
         aboutUsTitle: settings.aboutUsTitle || defaultAboutUsTitle,
@@ -2072,7 +2072,7 @@ const Settings: React.FC = () => {
                                                 name="contactUsEmailAddress"
                                                 value={localSettings.contactUsEmailAddress || ''}
                                                 onChange={handleTextChange}
-                                                placeholder="support@international-payouts.com"
+                                                placeholder="smartexn.com@gmail.com"
                                                 className="w-full text-xs p-2.5 rounded-xl border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                                             />
                                         </div>
@@ -2086,7 +2086,7 @@ const Settings: React.FC = () => {
                                                 name="contactUsWhatsAppNumber"
                                                 value={localSettings.contactUsWhatsAppNumber || ''}
                                                 onChange={handleTextChange}
-                                                placeholder="+1 (555) 019-2834"
+                                                placeholder="+447846775662"
                                                 className="w-full text-xs p-2.5 rounded-xl border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-mono"
                                             />
                                         </div>
@@ -3124,102 +3124,6 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Deposit & Withdrawal Limits */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Deposits Limits */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">💵 Hub Deposit Controls</h4>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="block text-xs font-semibold text-gray-500">Minimum Deposit (USD)</label>
-                                <input 
-                                    type="number"
-                                    value={localSettings.hubMinDeposit ?? 5}
-                                    onChange={(e) => {
-                                        setLocalSettings(prev => ({ ...prev, hubMinDeposit: parseFloat(e.target.value) || 0 }));
-                                        setIsDirty(true);
-                                    }}
-                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-900 dark:border-gray-700"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="block text-xs font-semibold text-gray-500">Maximum Deposit (USD)</label>
-                                <input 
-                                    type="number"
-                                    value={localSettings.hubMaxDeposit ?? 1000}
-                                    onChange={(e) => {
-                                        setLocalSettings(prev => ({ ...prev, hubMaxDeposit: parseFloat(e.target.value) || 0 }));
-                                        setIsDirty(true);
-                                    }}
-                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-900 dark:border-gray-700"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Deposit Methods Selection */}
-                        <div className="space-y-2 pt-2">
-                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider">Permitted Deposit Gateways</label>
-                            {paymentMethods.length === 0 ? (
-                                <p className="text-xs text-gray-400 italic">No deposit methods defined in system settings.</p>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-900/50">
-                                    {paymentMethods.map((m: any) => {
-                                        const isChecked = (localSettings.hubDepositMethods || []).includes(m._id || m.name);
-                                        return (
-                                            <label key={m._id || m.name} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => toggleDepositMethodAllowed(m._id || m.name)}
-                                                    className="rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <span>{m.name}</span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Withdrawal Limits */}
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">💸 Hub Withdrawal Controls</h4>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="block text-xs font-semibold text-gray-500">Minimum Payout (USD)</label>
-                                <input 
-                                    type="number"
-                                    value={localSettings.hubMinWithdrawal ?? 1}
-                                    onChange={(e) => {
-                                        setLocalSettings(prev => ({ ...prev, hubMinWithdrawal: parseFloat(e.target.value) || 0 }));
-                                        setIsDirty(true);
-                                    }}
-                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-900 dark:border-gray-700"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="block text-xs font-semibold text-gray-500">Maximum Payout (USD)</label>
-                                <input 
-                                    type="number"
-                                    value={localSettings.hubMaxWithdrawal ?? 1000}
-                                    onChange={(e) => {
-                                        setLocalSettings(prev => ({ ...prev, hubMaxWithdrawal: parseFloat(e.target.value) || 0 }));
-                                        setIsDirty(true);
-                                    }}
-                                    className="w-full text-sm p-2.5 rounded-lg border dark:bg-gray-900 dark:border-gray-700"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-xs text-blue-800 dark:text-blue-300 border dark:border-blue-900/30">
-                            <strong>Note:</strong> Withdrawals requested inside the Micro Task Hub will draw directly from the user's task earnings and will be subject to these limits instead of the investment limits.
-                        </div>
-                    </div>
-                </div>
-
                 {/* User Access Controls */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
                     <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">🛡️ Target Audience Eligibility Filters</h4>
@@ -3615,7 +3519,7 @@ const Settings: React.FC = () => {
                                         value={localSettings.contactUsEmailAddress || ''} 
                                         onChange={handleTextChange} 
                                         className="w-full mt-1 text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white" 
-                                        placeholder="support@international-payouts.com" 
+                                        placeholder="smartexn.com@gmail.com" 
                                     />
                                 </div>
                                 <div>
@@ -3626,7 +3530,7 @@ const Settings: React.FC = () => {
                                         value={localSettings.contactUsWhatsAppNumber || ''} 
                                         onChange={handleTextChange} 
                                         className="w-full mt-1 text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white font-mono" 
-                                        placeholder="+1 (555) 019-2834" 
+                                        placeholder="+447846775662" 
                                     />
                                 </div>
                                 <div>

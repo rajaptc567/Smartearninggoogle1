@@ -436,7 +436,7 @@ const SettingSchema = new mongoose.Schema({
     hubCookiePolicyContent: { type: String, default: "We use essential cookies and local storage tokens to keep you securely authenticated in the Micro Task Hub, remember your dashboard view preferences, and protect our forms from Cross-Site Request Forgery (CSRF) attempts. By accessing the Work & Earn module, you consent to our use of these technical cookies." },
     hubContactUsTitle: { type: String, default: "Hub Contact Us" },
     hubContactUsUpdated: { type: String, default: "Last updated: July 21, 2026" },
-    hubContactUsContent: { type: String, default: "If you have questions, disputes, or issues regarding task completion or withdrawal processing inside the Hub, you can contact us directly by opening a dispute/support ticket inside the 'Disputes & Support' panel or email us at support@taskhub.payouts." },
+    hubContactUsContent: { type: String, default: "If you have questions, disputes, or issues regarding task completion or withdrawal processing inside the Hub, you can contact us directly by opening a dispute/support ticket or contacting our Customer Support Office (UK): 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom. Phone/WhatsApp: +447846775662, Email: smartexn.com@gmail.com." },
     hubAboutUsTitle: { type: String, default: "Hub About Us" },
     hubAboutUsUpdated: { type: String, default: "Last updated: July 21, 2026" },
     hubAboutUsContent: { type: String, default: "The Work & Earn Micro Task Hub is a specialized division designed to bridge independent digital gig workers with platform campaigns. We facilitate frictionless nano-campaign verification, secure micro-wallets, and transparent social promotion payouts for members worldwide." },

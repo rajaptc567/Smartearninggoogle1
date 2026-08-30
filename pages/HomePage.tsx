@@ -341,8 +341,16 @@ const HomePage: React.FC = () => {
                     "contactPoint": {
                         "@type": "ContactPoint",
                         "contactType": "customer support",
-                        "email": "support@smartexn.com",
+                        "email": "smartexn.com@gmail.com",
+                        "telephone": "+447846775662",
                         "url": "https://smartexn.com/faqs"
+                    },
+                    "address": {
+                        "@type": "PostalAddress",
+                        "streetAddress": "71-75 Shelton Street, Covent Garden",
+                        "addressLocality": "London",
+                        "postalCode": "WC2H 9JQ",
+                        "addressCountry": "United Kingdom"
                     }
                 },
                 {

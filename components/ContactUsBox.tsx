@@ -78,8 +78,8 @@ export const ContactUsBox: React.FC<ContactUsBoxProps> = ({
     } | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
 
-    const adminEmail = settings?.contactUsEmailAddress || 'support@international-payouts.com';
-    const adminWhatsApp = settings?.contactUsWhatsAppNumber || '+1 (555) 019-2834';
+    const adminEmail = settings?.contactUsEmailAddress || 'smartexn.com@gmail.com';
+    const adminWhatsApp = settings?.contactUsWhatsAppNumber || '+447846775662';
 
     const handleSendInquiry = (e: React.FormEvent) => {
         e.preventDefault();
@@ -175,20 +175,25 @@ export const ContactUsBox: React.FC<ContactUsBoxProps> = ({
                     </p>
                 </div>
 
-                {/* Destination Badges */}
-                <div className="flex flex-wrap gap-2 justify-center sm:justify-end w-full sm:w-auto">
-                    {isEmailEnabled && (
-                        <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
-                            <span className="text-teal-400">📧</span>
-                            <span>{adminEmail}</span>
-                        </div>
-                    )}
-                    {isWhatsAppEnabled && (
-                        <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
-                            <span className="text-emerald-400">💬</span>
-                            <span>{adminWhatsApp}</span>
-                        </div>
-                    )}
+                {/* Destination Badges & Office Details */}
+                <div className="flex flex-col items-center sm:items-end gap-2 w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-end">
+                        {isEmailEnabled && (
+                            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
+                                <span className="text-teal-400">📧</span>
+                                <span>{adminEmail}</span>
+                            </div>
+                        )}
+                        {isWhatsAppEnabled && (
+                            <div className="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-1.5 text-[10px] font-mono text-slate-300 flex items-center gap-1.5">
+                                <span className="text-emerald-400">💬</span>
+                                <span>{adminWhatsApp}</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-1.5 text-[10px] text-slate-300 text-center sm:text-right">
+                        <span className="text-teal-400 font-bold">Customer Support Office (UK):</span> 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom
+                    </div>
                 </div>
             </div>
 

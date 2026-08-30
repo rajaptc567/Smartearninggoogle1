@@ -30,10 +30,34 @@ export const PublicFooter: React.FC = () => {
                 SmartExn is an international online marketplace connecting task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety.
               </p>
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-950/60 border border-sky-800/40 text-xs text-sky-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span>Escrow Protected & Dispute Supported</span>
+                </div>
+
+                {/* UK Customer Support Office */}
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5 text-xs text-slate-300">
+                  <p className="font-bold text-sky-400 flex items-center gap-1.5">
+                    <span>🇬🇧</span> Customer Support Office (UK):
+                  </p>
+                  <p className="text-slate-400 leading-snug">
+                    71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom
+                  </p>
+                  <p className="pt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>
+                      <span className="text-slate-400">Phone/WhatsApp: </span>
+                      <a href="https://wa.me/447846775662" target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-400 hover:underline">
+                        +447846775662
+                      </a>
+                    </span>
+                    <span>
+                      <span className="text-slate-400">Email: </span>
+                      <a href="mailto:smartexn.com@gmail.com" className="font-bold text-sky-400 hover:underline">
+                        smartexn.com@gmail.com
+                      </a>
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -187,12 +211,26 @@ export const PublicFooter: React.FC = () => {
             <p className="text-slate-300 text-sm leading-relaxed">
               Have a question about a campaign, dispute, or account verification? Our support desk responds to queries within 24 hours.
             </p>
-            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2 text-xs">
+            <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Official Support Email:</span>
-                <span className="font-mono text-sky-400 font-bold">support@smartexn.com</span>
+                <a href="mailto:smartexn.com@gmail.com" className="font-mono text-sky-400 font-bold hover:underline">
+                  smartexn.com@gmail.com
+                </a>
               </div>
               <div className="flex justify-between">
+                <span className="text-slate-400">Phone/WhatsApp:</span>
+                <a href="https://wa.me/447846775662" target="_blank" rel="noopener noreferrer" className="font-mono text-emerald-400 font-bold hover:underline">
+                  +447846775662
+                </a>
+              </div>
+              <div className="pt-1 border-t border-slate-800">
+                <span className="text-slate-400 block mb-0.5 font-semibold">Customer Support Office (UK):</span>
+                <span className="text-slate-300 leading-snug block">
+                  71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom
+                </span>
+              </div>
+              <div className="flex justify-between pt-1">
                 <span className="text-slate-400">Response Window:</span>
                 <span className="text-slate-200">24 – 48 Hours</span>
               </div>

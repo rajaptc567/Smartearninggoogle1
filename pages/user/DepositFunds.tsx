@@ -291,27 +291,11 @@ const DepositFunds: React.FC = () => {
             method.currency === currentUser.currency
         );
 
-        if (isHub) {
-            // Filter by hubAllowedMethods list
-            const allowedMethodsList = settings.hubDepositMethods || [];
-            const hubMethods = activeDepositMethods.filter(method => 
-                allowedMethodsList.includes(method._id) || allowedMethodsList.includes(method.name)
-            );
-
-            // Filter by global hub limits
-            const minDep = settings.hubMinDeposit ?? 5;
-            const maxDep = settings.hubMaxDeposit ?? 1000;
-            if (numericAmount < minDep || numericAmount > maxDep) {
-                return [];
-            }
-            return hubMethods;
-        }
-
         return activeDepositMethods.filter(method => 
             method.minAmount <= numericAmount && 
             method.maxAmount >= numericAmount
         );
-    }, [paymentMethods, amount, currentUser, isHub, settings]);
+    }, [paymentMethods, amount, currentUser]);
 
     const selectedMethod = useMemo(() =>
         availableMethods.find(method => method._id.toString() === selectedMethodId),
@@ -558,10 +542,7 @@ const DepositFunds: React.FC = () => {
                         <div className="text-center space-y-1 mb-2 sm:mb-6">
                             <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Amount Selection</h3>
                             <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest font-mono">
-                                {isHub 
-                                    ? `Limits: Min ${formatCurrency(settings.hubMinDeposit ?? 5, currentUser.currency)} - Max ${formatCurrency(settings.hubMaxDeposit ?? 1000, currentUser.currency)}`
-                                    : "Select an amount based on active plan pricing"
-                                }
+                                Enter custom amount or select from quick amounts below
                             </p>
                         </div>
                         {planPrices.length > 0 && (

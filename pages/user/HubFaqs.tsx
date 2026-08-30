@@ -23,7 +23,7 @@ const HubFaqs: React.FC = () => {
                 },
                 {
                     question: "What are the limits on deposits and withdrawals?",
-                    answer: `Under current admin configurations, the minimum deposit is $${settings.hubMinDeposit ?? 5} and the maximum deposit is $${settings.hubMaxDeposit ?? 1000}. For payouts, the minimum withdrawal is $${settings.hubMinWithdrawal ?? 1} and the maximum withdrawal is $${settings.hubMaxWithdrawal ?? 1000}.`
+                    answer: "Minimum and maximum deposit and withdrawal limits are configured dynamically per payment method (e.g. EasyPaisa, JazzCash, USDT, Bank Transfer). You can view the exact limits directly on the Deposit and Withdrawal screens."
                 },
                 {
                     question: "How long does it take for a task submission to be verified?",

@@ -1006,13 +1006,6 @@ const WithdrawFunds: React.FC = () => {
                         <div className="pt-6">
                             <Button 
                                 onClick={() => {
-                                    const val = parseFloat(amount);
-                                    const minW = isHub ? (settings.hubMinWithdrawal ?? 1) : 0;
-                                    const maxW = isHub ? (settings.hubMaxWithdrawal ?? 1000) : Infinity;
-                                    if (isHub && (val < minW || val > maxW)) {
-                                        alert(`Limit Violation: Withdrawal amount must be between ${formatCurrency(minW, currentUser.currency)} and ${formatCurrency(maxW, currentUser.currency)}`);
-                                        return;
-                                    }
                                     setStep(2);
                                 }} 
                                 disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > currentBalance}
@@ -1423,8 +1416,8 @@ const WithdrawFunds: React.FC = () => {
                             <div className="grid grid-cols-2 gap-2 sm:gap-4 animate-fade-in">
                                 {withdrawalMethods.map(method => {
                                     const numAmount = parseFloat(amount);
-                                    const minWith = isHub ? (settings.hubMinWithdrawal ?? 1) : method.minAmount;
-                                    const maxWith = isHub ? (settings.hubMaxWithdrawal ?? 1000) : method.maxAmount;
+                                    const minWith = method.minAmount;
+                                    const maxWith = method.maxAmount;
                                     const isInvalid = numAmount < minWith || numAmount > maxWith;
                                     
                                     return (

@@ -1253,11 +1253,19 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <p>Have questions about micro-jobs, withdrawals, or advertising campaigns?</p>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
                 <p className="text-xs text-slate-400 font-semibold">Official Support Email:</p>
-                <p className="font-bold text-sky-400">support@smartexn.com</p>
+                <a href="mailto:smartexn.com@gmail.com" className="font-bold text-sky-400 hover:underline">
+                  smartexn.com@gmail.com
+                </a>
               </div>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
-                <p className="text-xs text-slate-400 font-semibold">WhatsApp Business Support:</p>
-                <p className="font-bold text-emerald-400">{settings?.whatsappNumber || '+1 (800) 555-EXN'}</p>
+                <p className="text-xs text-slate-400 font-semibold">Customer Support Office (UK):</p>
+                <p className="text-xs text-slate-200 leading-snug">71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom</p>
+              </div>
+              <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
+                <p className="text-xs text-slate-400 font-semibold">Phone/WhatsApp:</p>
+                <a href="https://wa.me/447846775662" target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-400 hover:underline">
+                  {settings?.whatsappNumber || '+447846775662'}
+                </a>
               </div>
             </div>
 

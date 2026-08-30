@@ -128,7 +128,7 @@ const defaultComprehensiveFaqs: FAQCategoryItem[] = [
   {
     category: 'account',
     question: "How can I reach customer support if I need assistance?",
-    answer: "You can submit an inquiry through our contact desk at support@smartexn.com or use the real-time floating WhatsApp support widget available on the website."
+    answer: "You can submit an inquiry through our contact desk at smartexn.com@gmail.com or use our official WhatsApp support (+447846775662) available on the website."
   }
 ];
 
@@ -313,11 +313,19 @@ const FaqPage: React.FC = () => {
                         </p>
                         <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
                             <a 
-                                href="mailto:support@smartexn.com" 
+                                href="mailto:smartexn.com@gmail.com" 
                                 className="px-6 py-3 bg-white text-slate-900 hover:bg-sky-50 rounded-xl font-bold text-sm shadow-md transition-all inline-flex items-center justify-center gap-2"
                             >
-                                <span>Email Support</span>
+                                <span>Email: smartexn.com@gmail.com</span>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                            </a>
+                            <a 
+                                href="https://wa.me/447846775662"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm shadow-md transition-all inline-flex items-center justify-center gap-2"
+                            >
+                                <span>WhatsApp: +447846775662</span>
                             </a>
                             <Button 
                                 variant="secondary" 
@@ -329,6 +337,11 @@ const FaqPage: React.FC = () => {
                             >
                                 Create Free Account
                             </Button>
+                        </div>
+
+                        <div className="pt-4 border-t border-sky-800/60 max-w-lg mx-auto text-xs text-sky-200">
+                            <p className="font-semibold text-white">🇬🇧 Customer Support Office (UK):</p>
+                            <p className="text-sky-300">71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom</p>
                         </div>
                     </div>
                 </div>
