@@ -28,13 +28,13 @@ export const sendAutomatedMessage = async ({ toEmail, toPhone, subject, messageT
                 const transporter = nodemailer.createTransport({
                     service: 'gmail',
                     auth: {
-                        user: settings.emailSenderAddress || 'studio56.pk@gmail.com',
-                        pass: settings.emailSenderPassword || 'zakr ambh tnsp mrzf'
+                        user: settings.emailSenderAddress || 'smartexn.com@gmail.com',
+                        pass: settings.emailSenderPassword || ''
                     }
                 });
 
                 const mailOptions = {
-                    from: `"SmartEarning Support" <${settings.emailSenderAddress || 'studio56.pk@gmail.com'}>`,
+                    from: `"SmartExn Support" <${settings.emailSenderAddress || 'smartexn.com@gmail.com'}>`,
                     to: toEmail,
                     subject: subject || 'SmartEarning Notification',
                     text: messageText.replace(/<[^>]*>/g, ''), // Strip tags for text fallback

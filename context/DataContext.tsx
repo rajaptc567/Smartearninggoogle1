@@ -198,7 +198,7 @@ type Action =
 const dataReducer = (state: AppState, action: Action): AppState => {
     const sanitizeSettings = (settings: Settings) => {
         if (!settings) return state.settings;
-        const newSettings = { ...settings };
+        const newSettings = { ...(state.settings || {}), ...settings };
         if (newSettings.exchangeRates && (newSettings.exchangeRates.PKR === 1 || !newSettings.exchangeRates.PKR)) {
             newSettings.exchangeRates.PKR = 278.00;
         }
@@ -382,9 +382,16 @@ const dataReducer = (state: AppState, action: Action): AppState => {
     return newState;
 };
 
-export const DataContext = createContext<{ state: AppState; dispatch: React.Dispatch<Action> }>({
+export const DataContext = createContext<{ 
+    state: AppState; 
+    dispatch: React.Dispatch<Action>;
+    refreshSettings: () => Promise<Settings | null>;
+    refreshData: (force?: boolean) => Promise<void>;
+}>({
     state: initialState,
     dispatch: () => null,
+    refreshSettings: async () => null,
+    refreshData: async () => {},
 });
 
 const initializer = (initialState: AppState) => {
@@ -428,6 +435,26 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     const [state, dispatch] = useReducer(dataReducer, initialState, initializer);
     const lastVersionRef = useRef<number>(0);
     const isSyncingRef = useRef<boolean>(false);
+    const masterDataSyncRef = useRef<(force?: boolean) => Promise<void>>(async () => {});
+
+    const refreshSettings = async (): Promise<Settings | null> => {
+        try {
+            const fresh = await getSettings();
+            if (fresh) {
+                dispatch({ type: 'UPDATE_SETTINGS', payload: fresh });
+                return fresh;
+            }
+        } catch (err) {
+            console.warn("Failed to manually refresh settings:", err);
+        }
+        return null;
+    };
+
+    const refreshData = async (force: boolean = true) => {
+        if (masterDataSyncRef.current) {
+            await masterDataSyncRef.current(force);
+        }
+    };
 
     // Fast Non-Blocking Initial Handshake + Deferred Lazy Background Fetch
     useEffect(() => {
@@ -474,7 +501,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 try {
                     const backgroundPrivate = [
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ];
 
                     const privateResults = await Promise.allSettled(backgroundPrivate);
@@ -495,13 +522,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             paymentMethods: getValue(privateResults, 5, state.paymentMethods),
                             investmentPlans: getValue(privateResults, 6, state.investmentPlans),
                             rules: getValue(privateResults, 7, state.rules),
-                            transfers: getValue(privateResults, 8, state.transfers),
-                            logs: getValue(privateResults, 9, state.logs),
-                            passwordResetRequests: getValue(privateResults, 10, state.passwordResetRequests),
-                            disputes: getValue(privateResults, 11, state.disputes),
-                            tasks: getValue(privateResults, 12, state.tasks),
-                            userTasks: getValue(privateResults, 13, state.userTasks),
-                            userTaskSubmissions: getValue(privateResults, 14, state.userTaskSubmissions)
+                            settings: getValue(privateResults, 8, state.settings),
+                            transfers: getValue(privateResults, 9, state.transfers),
+                            logs: getValue(privateResults, 10, state.logs),
+                            passwordResetRequests: getValue(privateResults, 11, state.passwordResetRequests),
+                            disputes: getValue(privateResults, 12, state.disputes),
+                            tasks: getValue(privateResults, 13, state.tasks),
+                            userTasks: getValue(privateResults, 14, state.userTasks),
+                            userTaskSubmissions: getValue(privateResults, 15, state.userTaskSubmissions)
                         }
                     });
                 } catch (bgError) {
@@ -606,6 +634,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 isSyncingRef.current = false;
             }
         };
+
+        masterDataSyncRef.current = masterDataSync;
 
         // Listen for the master real-time trigger event
         socket.on('DATA_CHANGED', () => {
@@ -725,7 +755,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
     return (
         <div id="data-state-container">
-            <DataContext.Provider value={{ state, dispatch }}>
+            <DataContext.Provider value={{ state, dispatch, refreshSettings, refreshData }}>
                 {children}
             </DataContext.Provider>
         </div>

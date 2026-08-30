@@ -141,9 +141,9 @@ const UserLayout: React.FC = () => {
   };
 
   const hasHubAccess = useMemo(() => {
-    if (!currentUser || !settings) return false;
-    if (settings.hubEnabled === false) return false;
-    if (!settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
+    if (!currentUser) return false;
+    if (settings && settings.hubEnabled === false) return false;
+    if (!settings || !settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
     if (settings.hubAccessMode === 'manual') {
         return (settings.hubAllowedUserIds || []).includes(currentUser._id);
     }
@@ -157,20 +157,23 @@ const UserLayout: React.FC = () => {
   const [dashboardMode, setDashboardMode] = useState<'work_and_earn' | 'investment'>(() => {
       const saved = localStorage.getItem('dashboard_mode');
       const mode = (saved as 'work_and_earn' | 'investment') || 'work_and_earn';
-      // Fallback initially if no access
+      // Fallback only if explicitly disabled
       if (mode === 'work_and_earn' && settings && settings.hubEnabled === false) {
           return 'investment';
       }
       return mode;
   });
 
-  // Enforce access changes in real-time
+  // Enforce access changes in real-time safely
   useEffect(() => {
-    if (!hasHubAccess && dashboardMode === 'work_and_earn') {
+    if (settings && settings.hubEnabled === false && dashboardMode === 'work_and_earn') {
+      setDashboardMode('investment');
+      localStorage.setItem('dashboard_mode', 'investment');
+    } else if (settings && settings.hubEnabled !== false && !hasHubAccess && dashboardMode === 'work_and_earn') {
       setDashboardMode('investment');
       localStorage.setItem('dashboard_mode', 'investment');
     }
-  }, [hasHubAccess, dashboardMode]);
+  }, [hasHubAccess, dashboardMode, settings]);
 
   // Popup State
   const [popupNotification, setPopupNotification] = useState<any | null>(null);

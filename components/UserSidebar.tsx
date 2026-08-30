@@ -38,9 +38,9 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
     const navigate = useNavigate();
 
     const hasHubAccess = useMemo(() => {
-        if (!currentUser || !settings) return false;
-        if (settings.hubEnabled === false) return false;
-        if (!settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
+        if (!currentUser) return false;
+        if (settings && settings.hubEnabled === false) return false;
+        if (!settings || !settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
         if (settings.hubAccessMode === 'manual') {
             return (settings.hubAllowedUserIds || []).includes(currentUser._id);
         }

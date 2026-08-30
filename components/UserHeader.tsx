@@ -18,9 +18,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen, dashboardMode, 
   const { currentUser, notifications, settings } = state;
 
   const hasHubAccess = React.useMemo(() => {
-    if (!currentUser || !settings) return false;
-    if (settings.hubEnabled === false) return false;
-    if (!settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
+    if (!currentUser) return false;
+    if (settings && settings.hubEnabled === false) return false;
+    if (!settings || !settings.hubAccessMode || settings.hubAccessMode === 'all') return true;
     if (settings.hubAccessMode === 'manual') {
         return (settings.hubAllowedUserIds || []).includes(currentUser._id);
     }

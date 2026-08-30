@@ -18,6 +18,6 @@ router.get('/public', getPublicSettings);
 
 router.route('/')
     .get(getSettings) // Removed authorize requirement for GET. Public needs rates/ticker settings.
-    .put(authorize(['super_admin']), updateSettings); // Only Super Admin can change settings
+    .put(authorize(['super_admin', 'admin']), updateSettings); // Super Admin & Admin can change settings
 
 export default router;

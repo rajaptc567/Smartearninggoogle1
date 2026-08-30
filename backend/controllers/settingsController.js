@@ -92,7 +92,20 @@ export const getPublicSettings = async (req, res) => {
             whatsappNumber: settings.whatsappNumber || '',
             whatsappFloatingEnabled: settings.whatsappFloatingEnabled !== false,
             isUserTaskEnabled: settings.isUserTaskEnabled !== false,
+            isUserTransferEnabled: settings.isUserTransferEnabled !== false,
+            isTasksEnabled: settings.isTasksEnabled !== false,
+            transferConfig: settings.transferConfig || { enabled: true, tiers: [], allowCrossCurrency: false },
             hubEnabled: settings.hubEnabled !== false,
+            hubAccessMode: settings.hubAccessMode || 'all',
+            hubAllowedUserIds: settings.hubAllowedUserIds || [],
+            hubAllowedPlanIds: settings.hubAllowedPlanIds || [],
+            hubMinDeposit: settings.hubMinDeposit ?? 5,
+            hubMaxDeposit: settings.hubMaxDeposit ?? 1000,
+            hubMinWithdrawal: settings.hubMinWithdrawal ?? 1,
+            hubMaxWithdrawal: settings.hubMaxWithdrawal ?? 1000,
+            hubDepositMethods: settings.hubDepositMethods || [],
+            modulePagesConfig: settings.modulePagesConfig || null,
+            workAndEarnConfig: settings.workAndEarnConfig || null,
             featuredPlanIds: settings.featuredPlanIds || [],
             faqs: homepageFaqs,
             privacyPolicyTitle: settings.privacyPolicyTitle,
@@ -131,8 +144,15 @@ export const getSettings = async (req, res) => {
         // Strip massive evaluation logs from regular settings GET to prevent megabyte payload bloat
         delete settingsObj.ruleEvaluationLogs;
 
-        // Strip sensitive credentials from non-super-admin requests
-        if (!req.user || req.user.role !== 'super_admin') {
+        // Strip sensitive credentials from non-admin requests
+        const isAuthorizedAdmin = req.user && (
+            req.user.role === 'admin' || 
+            req.user.role === 'super_admin' || 
+            req.user.email === 'studio56.pk@gmail.com' ||
+            req.user.email === 'smartexn.com@gmail.com'
+        );
+
+        if (!isAuthorizedAdmin) {
             delete settingsObj.emailSenderPassword;
             delete settingsObj.whatsappToken;
         }
