@@ -905,6 +905,37 @@ const WithdrawFunds: React.FC = () => {
                                     </div>
                                 )}
 
+                                {/* INSUFFICIENT BALANCE NOTIFICATION */}
+                                {currentBalance <= 0 && (
+                                    <div className="p-4 sm:p-5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/80 rounded-2xl flex items-start gap-3.5 text-red-800 dark:text-red-300 animate-fade-in shadow-sm">
+                                        <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-xl text-lg shrink-0">
+                                            ⚠️
+                                        </div>
+                                        <div className="text-xs space-y-1">
+                                            <span className="font-black uppercase text-[11px] tracking-wide block text-red-900 dark:text-red-200">
+                                                Not Sufficient Balance for Withdrawal
+                                            </span>
+                                            <p className="font-medium text-red-700 dark:text-red-300 leading-relaxed">
+                                                Your current withdrawable balance is <strong>{formatCurrency(currentBalance, currentUser.currency)}</strong>. You need to complete micro-tasks and gigs in the Work & Earn Hub to build sufficient balance before requesting a payout.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {amount && parseFloat(amount) > currentBalance && currentBalance > 0 && (
+                                    <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/80 rounded-2xl flex items-start gap-3 text-amber-900 dark:text-amber-200 animate-fade-in shadow-sm">
+                                        <span className="text-xl shrink-0">⚠️</span>
+                                        <div className="text-xs space-y-0.5">
+                                            <span className="font-black uppercase tracking-wide block">
+                                                Not Sufficient Balance for Withdrawal
+                                            </span>
+                                            <p className="font-medium leading-relaxed">
+                                                You selected <strong>{formatCurrency(parseFloat(amount) || 0, currentUser.currency)}</strong>, but your available withdrawable balance is only <strong>{formatCurrency(currentBalance, currentUser.currency)}</strong>. Please select a lower payout tier or complete more tasks.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {isHub ? (
                                     <div className="space-y-4">
                                         {payoutOptions.length > 0 ? (
@@ -1009,9 +1040,17 @@ const WithdrawFunds: React.FC = () => {
                                     setStep(2);
                                 }} 
                                 disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > currentBalance}
-                                className="w-full py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-2xl shadow-teal-600/30 bg-teal-600 hover:bg-teal-700 border-0"
+                                className={`w-full py-5 rounded-2xl font-black uppercase tracking-widest text-sm shadow-2xl border-0 ${
+                                    parseFloat(amount) > currentBalance || currentBalance <= 0
+                                        ? 'bg-gray-400 dark:bg-gray-700 text-gray-200 cursor-not-allowed shadow-none'
+                                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/30'
+                                }`}
                             >
-                                Select Payout Method &rarr;
+                                {currentBalance <= 0 
+                                    ? '⚠️ Not Sufficient Balance for Withdrawal' 
+                                    : (amount && parseFloat(amount) > currentBalance)
+                                    ? '⚠️ Not Sufficient Balance for Selected Amount'
+                                    : 'Select Payout Method →'}
                             </Button>
                         </div>
                     </div>

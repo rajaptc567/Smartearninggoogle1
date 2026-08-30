@@ -10,6 +10,7 @@ import { markNotificationPopupAsShown, verifyEmail, verifyWhatsapp, resendEmailV
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
 import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice } from '../types';
 import { SEOHead } from './SEOHead';
+import Footer from './Footer';
 
 const UserLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -615,127 +616,8 @@ const UserLayout: React.FC = () => {
             <Outlet context={{ dashboardMode, setDashboardMode }} />
           </div>
 
-          {/* Professional Footer */}
-          <footer className="mt-auto border-t border-gray-200/60 dark:border-gray-800/80 pt-8 pb-6 text-left">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-              {/* Branding and status */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
-                    W
-                  </span>
-                  <span className="text-sm font-black tracking-tight text-gray-900 dark:text-white uppercase">
-                    Work & Earn Hub
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 leading-relaxed font-semibold">
-                  The ultimate digital nano-gigs ecosystem. Perform tasks, promote campaigns, and cash out securely.
-                </p>
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 px-2.5 py-1 rounded-full w-fit">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  All Hub Systems Operational
-                </div>
-              </div>
-
-              {/* Legal section */}
-              <div>
-                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
-                  ⚖️ Legal Documents
-                </h5>
-                <ul className="space-y-2 text-xs font-bold">
-                  <li>
-                    <Link to="/member/hub-legal?tab=privacy" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Privacy Policy
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=terms" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Terms of Service
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=cookie" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Cookie Policy
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=dmca" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      DMCA & Copyright
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Compliance & Limits */}
-              <div>
-                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
-                  🛡️ Risk & Compliance
-                </h5>
-                <ul className="space-y-2 text-xs font-bold">
-                  <li>
-                    <Link to="/member/hub-legal?tab=antifraud" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Anti-Fraud Policy
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=withdrawal" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Withdrawal Policy
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=refund" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Refund Policy
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=disclaimer" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Disclaimer Clause
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Information */}
-              <div>
-                <h5 className="text-[11px] font-black uppercase text-gray-400 tracking-wider mb-3">
-                  💡 Information & Help
-                </h5>
-                <ul className="space-y-2 text-xs font-bold">
-                  <li>
-                    <Link to="/member/hub-legal?tab=about" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      About Us
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-legal?tab=contact" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Contact Us
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/hub-faqs" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Hub Knowledge FAQs
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/member/disputes" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                      Disputes & Support
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200/60 dark:border-gray-800/80 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[11px] font-semibold text-gray-400">
-              <div>
-                © 2026 Work & Earn Gigs Hub. All Rights Reserved. Legally regulated and secure environment.
-              </div>
-              <div className="flex gap-4">
-                <span className="hover:text-gray-600 dark:hover:text-gray-200 transition cursor-help">Secure SSL 256-bit</span>
-                <span>•</span>
-                <span className="hover:text-gray-600 dark:hover:text-gray-200 transition cursor-help">PCI DSS Compliant</span>
-              </div>
-            </div>
-          </footer>
+          {/* Professional Footer Component */}
+          <Footer isMemberArea={true} />
         </main>
       </div>
 
