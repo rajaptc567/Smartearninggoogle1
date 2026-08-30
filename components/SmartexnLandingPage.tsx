@@ -104,6 +104,17 @@ const PaymentBrandIcon: React.FC<{ name: string }> = ({ name }) => {
     );
   }
 
+  if (normalized.includes('binance') || normalized.includes('bnb')) {
+    return (
+      <div className="flex flex-col items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-amber-400 flex items-center justify-center shadow-md">
+          <span className="text-slate-950 font-black text-xs font-mono">BNB</span>
+        </div>
+        <span className="text-[10px] font-bold text-amber-300 mt-1">Binance</span>
+      </div>
+    );
+  }
+
   return (
     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-sky-500/10 border border-sky-400/30 flex items-center justify-center text-sky-400 font-bold text-lg sm:text-xl">
       💳
@@ -116,12 +127,13 @@ const SmartexnPaymentCard: React.FC<{ pm: { name: string; logoUrl?: string }; co
 
   return (
     <div className={`bg-[#0a1e36] border border-sky-500/20 hover:border-sky-400/50 rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-between w-32 h-32 sm:w-40 sm:h-40 shrink-0 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-500/10 group ${colorStyle === 'grayscale' ? 'grayscale hover:grayscale-0' : ''}`}>
-      <div className="w-full flex-1 flex items-center justify-center p-1.5">
+      <div className="w-full flex-1 flex items-center justify-center p-1.5 overflow-hidden">
         {pm.logoUrl && !imgError ? (
           <img 
             src={pm.logoUrl} 
             alt={`${pm.name} Payment Method`} 
             onError={() => setImgError(true)}
+            referrerPolicy="no-referrer"
             className="max-h-12 sm:max-h-16 max-w-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300" 
             title={pm.name} 
             loading="lazy"

@@ -5,6 +5,7 @@ import { useData } from '../hooks/useData';
 import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
 import { updateSettings } from '../services/api';
 import { AdminModulePagesManager } from '../components/AdminModulePagesManager';
+import { compressImageFile } from '../utils/imageCompressor';
 import { 
     defaultPrivacyPolicyTitle, 
     defaultPrivacyPolicyUpdated, 
@@ -72,6 +73,8 @@ const Settings: React.FC = () => {
   const [newLogoName, setNewLogoName] = useState('');
   const [newLogoUrl, setNewLogoUrl] = useState(''); // Text input for URL
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
+  const [previewLogoUrl, setPreviewLogoUrl] = useState<string>('');
+  const [isProcessingLogo, setIsProcessingLogo] = useState(false);
 
   // Custom Fields Creator State
   const [newFieldLabel, setNewFieldLabel] = useState('');
@@ -398,40 +401,54 @@ const Settings: React.FC = () => {
     };
 
     // --- Logo Management Handlers ---
-    const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setNewLogoFile(e.target.files[0]);
-            // Clear URL input if file is selected
+            const file = e.target.files[0];
+            setNewLogoFile(file);
             setNewLogoUrl('');
+            setIsProcessingLogo(true);
+            try {
+                const compressed = await compressImageFile(file, { maxWidth: 320, maxHeight: 160, quality: 0.9 });
+                setPreviewLogoUrl(compressed);
+            } catch (err) {
+                console.error("Image compression error:", err);
+                const reader = new FileReader();
+                reader.onload = (ev) => setPreviewLogoUrl(ev.target?.result as string);
+                reader.readAsDataURL(file);
+            } finally {
+                setIsProcessingLogo(false);
+            }
         }
     };
 
     const handleAddLogo = async () => {
-        if (!newLogoName) return alert("Please enter a name for the payment method.");
+        if (!newLogoName.trim()) return alert("Please enter a name for the payment method.");
         
-        let logoData = newLogoUrl;
+        let logoData = newLogoUrl.trim();
 
         if (newLogoFile) {
-            // Convert file to Base64
-            logoData = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(newLogoFile);
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = error => reject(error);
-            });
+            setIsProcessingLogo(true);
+            try {
+                logoData = previewLogoUrl || await compressImageFile(newLogoFile, { maxWidth: 320, maxHeight: 160, quality: 0.9 });
+            } catch {
+                logoData = previewLogoUrl;
+            } finally {
+                setIsProcessingLogo(false);
+            }
         }
 
-        if (!logoData) return alert("Please provide an image URL or upload a file.");
+        if (!logoData) return alert("Please provide an image URL or upload a file / screenshot.");
 
         setLocalSettings(prev => ({
             ...prev,
-            homepagePaymentLogos: [...(prev.homepagePaymentLogos || []), { name: newLogoName, logoUrl: logoData }]
+            homepagePaymentLogos: [...(prev.homepagePaymentLogos || []), { name: newLogoName.trim(), logoUrl: logoData }]
         }));
         
         // Reset inputs
         setNewLogoName('');
         setNewLogoUrl('');
         setNewLogoFile(null);
+        setPreviewLogoUrl('');
         setIsDirty(true);
     };
 
@@ -440,6 +457,13 @@ const Settings: React.FC = () => {
         newLogos.splice(index, 1);
         setLocalSettings(prev => ({ ...prev, homepagePaymentLogos: newLogos }));
         setIsDirty(true);
+    };
+
+    const handleQuickAddPreset = (name: string, fallbackUrl: string) => {
+        setNewLogoName(name);
+        setNewLogoUrl(fallbackUrl);
+        setNewLogoFile(null);
+        setPreviewLogoUrl(fallbackUrl);
     };
 
     // --- FAQ Handlers ---
@@ -874,7 +898,31 @@ const Settings: React.FC = () => {
                         </div>
 
                         {localSettings.transferConfig?.enabled && (
-                            <div className="pl-8 animate-fade-in">
+                            <div className="pl-8 space-y-4 animate-fade-in">
+                                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                                    <div>
+                                        <label htmlFor="transferConfig.allowManualRecipientEntry" className="block text-sm font-medium text-gray-900 dark:text-gray-200">Allow Manual Recipient Entry (Transfer to Any Member)</label>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">When enabled, members can transfer funds to any registered member on the platform by typing their username or email. When disabled, members can only transfer to their own Active Referral Network members.</p>
+                                    </div>
+                                    <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                                        <input
+                                            id="transferConfig.allowManualRecipientEntry"
+                                            name="transferConfig.allowManualRecipientEntry"
+                                            type="checkbox"
+                                            className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                            checked={localSettings.transferConfig?.allowManualRecipientEntry ?? true}
+                                            onChange={() => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    transferConfig: { ...prev.transferConfig, allowManualRecipientEntry: !(prev.transferConfig?.allowManualRecipientEntry ?? true) }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                        />
+                                        <label htmlFor="transferConfig.allowManualRecipientEntry" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${(localSettings.transferConfig?.allowManualRecipientEntry ?? true) ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                                    </div>
+                                </div>
+
                                 <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
                                     <div>
                                         <label htmlFor="transferConfig.allowCrossCurrency" className="block text-sm font-medium text-gray-900 dark:text-gray-200">Allow Cross-Currency Transfers</label>
@@ -1559,55 +1607,136 @@ const Settings: React.FC = () => {
                     </div>
 
                     <div className="mt-4 pt-4 border-t dark:border-gray-600">
-                        <h5 className="font-semibold text-gray-700 dark:text-gray-300 text-sm mb-3">Display Logos Management</h5>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                            <div>
+                                <h5 className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Display Logos Management</h5>
+                                <p className="text-xs text-gray-500">Upload payment gateway screenshots, app logos, or paste image URLs for the homepage.</p>
+                            </div>
+                            <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-800">
+                                {(localSettings.homepagePaymentLogos || []).length} Active Logos
+                            </span>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="mb-4 bg-gray-100 dark:bg-gray-800/80 p-3 rounded-lg border dark:border-gray-700">
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">⚡ Quick Presets (Click to autofill):</span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    { name: 'EasyPaisa', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Easypaisa_logo.png/320px-Easypaisa_logo.png' },
+                                    { name: 'JazzCash', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Jazzcash_logo.png/320px-Jazzcash_logo.png' },
+                                    { name: 'USDT (TRC20)', url: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
+                                    { name: 'Bank Transfer', url: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png' },
+                                    { name: 'Binance Pay', url: 'https://cryptologos.cc/logos/binance-coin-bnb-logo.png' },
+                                    { name: 'Visa / MasterCard', url: 'https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg' },
+                                    { name: 'PayPal', url: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg' },
+                                    { name: 'Perfect Money', url: 'https://upload.wikimedia.org/wikipedia/commons/0/07/Perfect_Money_logo.png' },
+                                    { name: 'Payeer', url: 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Payeer_logo.png' }
+                                ].map((preset) => (
+                                    <button
+                                        key={preset.name}
+                                        type="button"
+                                        onClick={() => handleQuickAddPreset(preset.name, preset.url)}
+                                        className="text-[11px] font-medium bg-white dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-2.5 py-1 rounded-md border dark:border-gray-600 transition-colors shadow-xs"
+                                    >
+                                        + {preset.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                        {/* Existing Logos Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
                             {(localSettings.homepagePaymentLogos || []).map((logo, index) => (
-                                <div key={index} className="relative p-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-800 flex flex-col items-center group">
+                                <div key={index} className="relative p-2.5 border dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 flex flex-col items-center justify-between group shadow-sm hover:border-blue-400 transition-all">
                                     <button 
                                         type="button" 
                                         onClick={() => handleRemoveLogo(index)}
-                                        className="absolute top-1 right-1 text-red-500 bg-gray-100 dark:bg-gray-700 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute top-1 right-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-full p-1 transition-colors"
                                         title="Remove Logo"
                                     >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                     </button>
-                                    <img src={logo.logoUrl} alt={logo.name} className="h-8 object-contain mb-1" />
-                                    <span className="text-xs text-center truncate w-full">{logo.name}</span>
+                                    <div className="w-full h-12 flex items-center justify-center mb-1.5 p-1 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                                        {logo.logoUrl ? (
+                                            <img 
+                                                src={logo.logoUrl} 
+                                                alt={logo.name} 
+                                                referrerPolicy="no-referrer"
+                                                className="max-h-10 max-w-full object-contain" 
+                                            />
+                                        ) : (
+                                            <span className="text-xs text-gray-400 font-mono">No Image</span>
+                                        )}
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 text-center truncate w-full">{logo.name}</span>
                                 </div>
                             ))}
+                            {(localSettings.homepagePaymentLogos || []).length === 0 && (
+                                <div className="col-span-full text-center py-6 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900/30">
+                                    <p className="text-xs text-gray-400 italic">No custom payment logos uploaded yet. The landing page is currently displaying standard default gateway icons. Upload custom screenshots/logos or pick quick presets above to customize.</p>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-2 items-end bg-white dark:bg-gray-800 p-3 rounded border dark:border-gray-600">
-                            <div className="flex-grow">
-                                <label className="text-xs font-bold text-gray-500">Method Name</label>
-                                <input 
-                                    type="text" 
-                                    placeholder="e.g. Bitcoin" 
-                                    value={newLogoName} 
-                                    onChange={(e) => setNewLogoName(e.target.value)} 
-                                    className="w-full text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
-                                />
-                            </div>
-                            <div className="flex-grow">
-                                <label className="text-xs font-bold text-gray-500">Image Source</label>
-                                <div className="flex flex-col gap-1">
-                                    <input 
-                                        type="file" 
-                                        accept="image/*" 
-                                        onChange={handleLogoFileChange} 
-                                        className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                    />
+                        {/* Add Logo Box */}
+                        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700 space-y-3">
+                            <h6 className="text-xs font-bold uppercase text-gray-600 dark:text-gray-400 tracking-wider">Add New Payment Logo or Screenshot</h6>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                <div className="md:col-span-4">
+                                    <label className="text-xs font-bold text-gray-500">Method Name *</label>
                                     <input 
                                         type="text" 
-                                        placeholder="OR Paste Image URL" 
-                                        value={newLogoUrl} 
-                                        onChange={(e) => { setNewLogoUrl(e.target.value); setNewLogoFile(null); }} 
-                                        className="w-full text-xs rounded-md dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1"
+                                        placeholder="e.g. EasyPaisa, JazzCash" 
+                                        value={newLogoName} 
+                                        onChange={(e) => setNewLogoName(e.target.value)} 
+                                        className="w-full text-sm rounded-lg dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-2 mt-1"
                                     />
                                 </div>
+                                
+                                <div className="md:col-span-5">
+                                    <label className="text-xs font-bold text-gray-500">Upload Screenshot / Photo OR Paste URL *</label>
+                                    <div className="flex flex-col gap-1.5 mt-1">
+                                        <input 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={handleLogoFileChange} 
+                                            className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                                        />
+                                        <input 
+                                            type="text" 
+                                            placeholder="OR Paste Image URL (https://...)" 
+                                            value={newLogoUrl} 
+                                            onChange={(e) => { 
+                                                setNewLogoUrl(e.target.value); 
+                                                setNewLogoFile(null); 
+                                                setPreviewLogoUrl(e.target.value);
+                                            }} 
+                                            className="w-full text-xs rounded-lg dark:bg-gray-700 dark:border-gray-600 border-gray-300 p-1.5"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="md:col-span-3 flex items-center gap-2">
+                                    {(previewLogoUrl || isProcessingLogo) && (
+                                        <div className="w-14 h-14 bg-white dark:bg-gray-900 border rounded-lg p-1 flex items-center justify-center shrink-0">
+                                            {isProcessingLogo ? (
+                                                <span className="text-[9px] text-blue-500 animate-pulse">Resizing...</span>
+                                            ) : (
+                                                <img src={previewLogoUrl} alt="Preview" className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" />
+                                            )}
+                                        </div>
+                                    )}
+                                    <Button 
+                                        type="button" 
+                                        onClick={handleAddLogo} 
+                                        disabled={!newLogoName.trim() || (!newLogoUrl.trim() && !newLogoFile) || isProcessingLogo}
+                                        className="w-full"
+                                    >
+                                        {isProcessingLogo ? 'Optimizing...' : '+ Add to List'}
+                                    </Button>
+                                </div>
                             </div>
-                            <Button type="button" size="sm" onClick={handleAddLogo} disabled={!newLogoName || (!newLogoUrl && !newLogoFile)}>Add</Button>
                         </div>
                     </div>
                 </div>
@@ -2210,13 +2339,13 @@ const Settings: React.FC = () => {
                 {/* Master Transfer Controls */}
                 <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
                     <h3 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wider text-xs">Master Transfer Controls</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
                             <div>
                                 <label htmlFor="transferConfig_enabled_tab" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">User-to-User Transfers</label>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Enable or disable wallet transfers between members.</p>
                             </div>
-                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out shrink-0 ml-2">
                                 <input 
                                     id="transferConfig_enabled_tab"
                                     name="transferConfig.enabled"
@@ -2231,10 +2360,34 @@ const Settings: React.FC = () => {
 
                         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
                             <div>
+                                <label htmlFor="transferConfig_manual_tab" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">Manual Recipient Entry</label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Allow sending to any registered member by typing username/email.</p>
+                            </div>
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out shrink-0 ml-2">
+                                <input
+                                    id="transferConfig_manual_tab"
+                                    name="transferConfig.allowManualRecipientEntry"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-green-400"
+                                    checked={localSettings.transferConfig?.allowManualRecipientEntry ?? true}
+                                    onChange={() => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            transferConfig: { ...prev.transferConfig, allowManualRecipientEntry: !(prev.transferConfig?.allowManualRecipientEntry ?? true) }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                />
+                                <label htmlFor="transferConfig_manual_tab" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${(localSettings.transferConfig?.allowManualRecipientEntry ?? true) ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
+                            <div>
                                 <label htmlFor="transferConfig_cross_tab" className="block text-sm font-semibold text-gray-900 dark:text-gray-200">Cross-Currency Transfers</label>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Allow sending between different currencies (e.g. PKR to EUR).</p>
                             </div>
-                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out">
+                            <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out shrink-0 ml-2">
                                 <input
                                     id="transferConfig_cross_tab"
                                     name="transferConfig.allowCrossCurrency"

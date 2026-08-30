@@ -765,21 +765,6 @@ const WorkAndEarnHistory: React.FC = () => {
                         View detailed transaction logs, campaign records, task completions, and wallet activities.
                     </p>
                 </div>
-
-                {/* Compact Task Wallet Badge */}
-                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/70 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shrink-0">
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                        <WalletIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <span className="text-[10px] font-extrabold uppercase text-slate-400 block tracking-wider">
-                            Task Wallet
-                        </span>
-                        <div className="text-sm font-black text-slate-900 dark:text-white">
-                            ${(currentUser.taskWalletBalance || 0).toFixed(2)} <span className="text-xs font-normal text-slate-400">USD</span>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Filter Navigation Tabs - Responsive for Desktop & Mobile */}

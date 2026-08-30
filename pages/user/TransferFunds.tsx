@@ -78,6 +78,15 @@ const TransferFunds: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    const allowManualEntry = settings.transferConfig?.allowManualRecipientEntry !== false;
+
+    useEffect(() => {
+        if (!allowManualEntry && isManualEntry) {
+            setIsManualEntry(false);
+            setRecipientIdentifier('');
+        }
+    }, [allowManualEntry, isManualEntry]);
+
     const availableRecipients = useMemo(() => {
         if (!currentUser) return [];
 
@@ -420,23 +429,31 @@ const TransferFunds: React.FC = () => {
                                         <span className="text-xl font-bold bg-white/10 px-4 py-2 rounded-xl group-hover:bg-white/20 transition-colors">&rarr;</span>
                                     </button>
 
-                                    <div className="flex items-center justify-between px-2 pt-2">
-                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Or enter ID manually</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsManualEntry(!isManualEntry);
-                                                if (!isManualEntry) setRecipientIdentifier('');
-                                            }}
-                                            className="text-xs font-black text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wider"
-                                        >
-                                            {isManualEntry ? 'Close Manual Entry' : 'Manual Username / Email'}
-                                        </button>
-                                    </div>
+                                    {allowManualEntry ? (
+                                        <div className="flex items-center justify-between px-2 pt-2">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Or enter ID manually</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsManualEntry(!isManualEntry);
+                                                    if (!isManualEntry) setRecipientIdentifier('');
+                                                }}
+                                                className="text-xs font-black text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wider"
+                                            >
+                                                {isManualEntry ? 'Close Manual Entry' : 'Manual Username / Email'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/40 text-center">
+                                            <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                                                🔒 Transfers are restricted to your Active Referral Network members.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {isManualEntry && (
+                            {isManualEntry && allowManualEntry && (
                                 <div className="animate-slide-up bg-gray-50 dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
                                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Target Username / Email</label>
                                     <input

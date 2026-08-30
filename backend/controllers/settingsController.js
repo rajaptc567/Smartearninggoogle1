@@ -53,20 +53,28 @@ export const getPublicSettings = async (req, res) => {
             }
         }
 
-        // Clean and sanitize homepage payment logos - strip large Base64 blobs
+        // Clean and sanitize homepage payment logos - keep admin uploaded logo data and apply fallbacks when empty
         const rawLogos = Array.isArray(settings.homepagePaymentLogos) ? settings.homepagePaymentLogos : [];
-        const sanitizedPaymentLogos = rawLogos.map(item => {
-            let logoUrl = item.logoUrl || '';
-            if (typeof logoUrl === 'string' && (logoUrl.startsWith('data:image/') || logoUrl.length > 500)) {
-                const lowerName = (item.name || '').toLowerCase().trim();
-                const matchedKey = Object.keys(STANDARD_FALLBACK_LOGOS).find(k => lowerName.includes(k));
-                logoUrl = matchedKey ? STANDARD_FALLBACK_LOGOS[matchedKey] : '';
-            }
-            return {
-                name: item.name || '',
-                logoUrl
-            };
-        });
+        const sanitizedPaymentLogos = rawLogos
+            .filter(item => item && typeof item === 'object' && (item.name || item.logoUrl))
+            .map(item => {
+                let logoUrl = typeof item.logoUrl === 'string' ? item.logoUrl.trim() : '';
+                const name = typeof item.name === 'string' ? item.name.trim() : '';
+
+                // If logoUrl is missing or empty, attempt standard fallback mapping by name
+                if (!logoUrl && name) {
+                    const lowerName = name.toLowerCase();
+                    const matchedKey = Object.keys(STANDARD_FALLBACK_LOGOS).find(k => lowerName.includes(k));
+                    if (matchedKey) {
+                        logoUrl = STANDARD_FALLBACK_LOGOS[matchedKey];
+                    }
+                }
+
+                return {
+                    name,
+                    logoUrl
+                };
+            });
 
         // Build compact public response (~2-3 KB total payload)
         const publicData = {
@@ -94,7 +102,7 @@ export const getPublicSettings = async (req, res) => {
             isUserTaskEnabled: settings.isUserTaskEnabled !== false,
             isUserTransferEnabled: settings.isUserTransferEnabled !== false,
             isTasksEnabled: settings.isTasksEnabled !== false,
-            transferConfig: settings.transferConfig || { enabled: true, tiers: [], allowCrossCurrency: false },
+            transferConfig: settings.transferConfig || { enabled: true, tiers: [], allowCrossCurrency: false, allowManualRecipientEntry: true },
             hubEnabled: settings.hubEnabled !== false,
             hubAccessMode: settings.hubAccessMode || 'all',
             hubAllowedUserIds: settings.hubAllowedUserIds || [],

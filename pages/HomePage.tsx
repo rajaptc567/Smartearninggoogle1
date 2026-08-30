@@ -115,34 +115,40 @@ const EarnBagIcon = () => (
 );
 
 // Reusable Payment Method Card Component - MAXIMIZED VISIBILITY & FIXED SPACING
-const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => (
-    <div className="bg-white dark:bg-gray-800 p-0 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 flex flex-col items-center w-28 h-32 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-xl group overflow-hidden">
-        {/* Logo container - Takes remaining space */}
-        <div className={`w-full flex-grow flex items-center justify-center p-2.5 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
-            {pm.logoUrl ? (
-                <img 
-                    src={pm.logoUrl} 
-                    alt={pm.name} 
-                    className="max-w-[85%] max-h-[85%] object-contain drop-shadow-sm" 
-                    title={pm.name} 
-                    loading="lazy"
-                    decoding="async"
-                    width="120"
-                    height="50"
-                />
-            ) : (
-                <GenericPaymentIcon />
-            )}
+const PaymentMethodCard: React.FC<{ pm: { name: string, logoUrl?: string }; colorStyle: string }> = ({ pm, colorStyle }) => {
+    const [imgError, setImgError] = React.useState(false);
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-0 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 flex flex-col items-center w-28 h-32 md:w-44 md:h-48 transition-all duration-300 transform hover:scale-105 hover:shadow-xl group overflow-hidden">
+            {/* Logo container - Takes remaining space */}
+            <div className={`w-full flex-grow flex items-center justify-center p-2.5 ${colorStyle === 'grayscale' ? 'grayscale group-hover:grayscale-0' : ''} transition-all duration-300 bg-white dark:bg-gray-900/10`}>
+                {pm.logoUrl && !imgError ? (
+                    <img 
+                        src={pm.logoUrl} 
+                        alt={pm.name} 
+                        onError={() => setImgError(true)}
+                        referrerPolicy="no-referrer"
+                        className="max-w-[85%] max-h-[85%] object-contain drop-shadow-sm" 
+                        title={pm.name} 
+                        loading="lazy"
+                        decoding="async"
+                        width="120"
+                        height="50"
+                    />
+                ) : (
+                    <GenericPaymentIcon />
+                )}
+            </div>
+            
+            {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
+            <div className="w-full min-h-[36px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-1.5 border-t border-blue-500/50">
+                <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-white text-center leading-tight break-words w-full flex items-center justify-center">
+                    {pm.name}
+                </span>
+            </div>
         </div>
-        
-        {/* Title Bar - Fixed Height & High Contrast to prevent text clipping */}
-        <div className="w-full min-h-[36px] md:min-h-[48px] bg-blue-600 dark:bg-blue-700 flex items-center justify-center flex-shrink-0 shadow-inner px-1.5 border-t border-blue-500/50">
-            <span className="text-[10px] md:text-xs font-black uppercase tracking-wider text-white text-center leading-tight break-words w-full flex items-center justify-center">
-                {pm.name}
-            </span>
-        </div>
-    </div>
-);
+    );
+};
 
 // --- MLM Diagram Component ---
 const MLMDiagram = () => ( 

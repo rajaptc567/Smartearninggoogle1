@@ -177,6 +177,7 @@ export interface Settings {
         enabled: boolean;
         tiers: TransferFeeTier[];
         allowCrossCurrency: boolean;
+        allowManualRecipientEntry?: boolean;
     };
     exchangeRates: {
         USD: number;

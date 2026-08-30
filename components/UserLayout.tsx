@@ -761,66 +761,144 @@ const UserLayout: React.FC = () => {
       )}
 
       {/* Mobile Sticky Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-1.5 flex items-center justify-around text-slate-300 shadow-2xl">
-        <Link 
-          to="/member" 
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            location.pathname === '/member' || location.pathname === '/member/' 
-              ? 'text-amber-400 font-bold bg-amber-500/10' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span className="text-lg">🏠</span>
-          <span className="text-[10px] font-bold">Home</span>
-        </Link>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/80 px-1 py-1.5 flex items-center justify-around text-slate-300 shadow-2xl">
+        {dashboardMode === 'investment' ? (
+          <>
+            <Link 
+              to="/member" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname === '/member' || location.pathname === '/member/' 
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">🏠</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Home</span>
+            </Link>
 
-        <Link 
-          to="/member/available-tasks" 
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            location.pathname.includes('/member/available-tasks') || location.pathname.includes('/member/pending-reviews') || location.pathname.includes('/member/tasks-history')
-              ? 'text-amber-400 font-bold bg-amber-500/10' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span className="text-lg">📋</span>
-          <span className="text-[10px] font-bold">Task</span>
-        </Link>
+            <Link 
+              to="/member/deposit" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/deposit') 
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">💳</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Deposit</span>
+            </Link>
 
-        <Link 
-          to="/member/my-campaigns" 
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            location.pathname.includes('/member/my-campaigns') || location.pathname.includes('/member/create-campaign') || location.pathname.includes('/member/review-proofs')
-              ? 'text-amber-400 font-bold bg-amber-500/10' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span className="text-lg">📢</span>
-          <span className="text-[10px] font-bold">Campaign</span>
-        </Link>
+            <Link 
+              to="/member/withdraw" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/withdraw') 
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">💸</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Withdraw</span>
+            </Link>
 
-        <Link 
-          to="/member/withdraw" 
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            location.pathname.includes('/member/withdraw') 
-              ? 'text-amber-400 font-bold bg-amber-500/10' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span className="text-lg">💸</span>
-          <span className="text-[10px] font-bold">Withdraw</span>
-        </Link>
+            <Link 
+              to="/member/plans" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/plans') || location.pathname.includes('/member/active-plans')
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">📈</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Plans</span>
+            </Link>
 
-        <Link 
-          to="/member/profile" 
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
-            location.pathname.includes('/member/profile') 
-              ? 'text-amber-400 font-bold bg-amber-500/10' 
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span className="text-lg">👤</span>
-          <span className="text-[10px] font-bold">Profile</span>
-        </Link>
+            <Link 
+              to="/member/referrals" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/referrals') 
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">👥</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Ref Network</span>
+            </Link>
+
+            <Link 
+              to="/member/profile" 
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/profile') 
+                  ? 'text-sky-400 font-bold bg-sky-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base sm:text-lg">👤</span>
+              <span className="text-[9px] sm:text-[10px] font-bold whitespace-nowrap">Profile</span>
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link 
+              to="/member" 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+                location.pathname === '/member' || location.pathname === '/member/' 
+                  ? 'text-amber-400 font-bold bg-amber-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-lg">🏠</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">Home</span>
+            </Link>
+
+            <Link 
+              to="/member/available-tasks" 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/available-tasks') || location.pathname.includes('/member/pending-reviews') || location.pathname.includes('/member/tasks-history')
+                  ? 'text-amber-400 font-bold bg-amber-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-lg">📋</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">Task</span>
+            </Link>
+
+            <Link 
+              to="/member/my-campaigns" 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/my-campaigns') || location.pathname.includes('/member/create-campaign') || location.pathname.includes('/member/review-proofs')
+                  ? 'text-amber-400 font-bold bg-amber-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-lg">📢</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">Campaign</span>
+            </Link>
+
+            <Link 
+              to="/member/withdraw" 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/withdraw') 
+                  ? 'text-amber-400 font-bold bg-amber-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-lg">💸</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">Withdraw</span>
+            </Link>
+
+            <Link 
+              to="/member/profile" 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+                location.pathname.includes('/member/profile') 
+                  ? 'text-amber-400 font-bold bg-amber-500/10' 
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-lg">👤</span>
+              <span className="text-[10px] font-bold whitespace-nowrap">Profile</span>
+            </Link>
+          </>
+        )}
       </nav>
     </div>
   );

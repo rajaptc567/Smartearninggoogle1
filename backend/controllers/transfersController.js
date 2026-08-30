@@ -76,6 +76,25 @@ export const createTransfer = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Cross-currency transfers are currently disabled by the administrator.' });
         }
 
+        // 3.1 Check Manual/Outside Network Recipient Setting
+        if (config.allowManualRecipientEntry === false) {
+            const allUsers = await User.find({}).select('username sponsor').lean();
+            const downlineUsernames = new Set();
+            const buildDownline = (sponsorUsername) => {
+                const directRefs = allUsers.filter(u => u.sponsor && u.sponsor.toLowerCase() === sponsorUsername.toLowerCase());
+                for (const ref of directRefs) {
+                    if (!downlineUsernames.has(ref.username.toLowerCase())) {
+                        downlineUsernames.add(ref.username.toLowerCase());
+                        buildDownline(ref.username);
+                    }
+                }
+            };
+            buildDownline(sender.username);
+            if (!downlineUsernames.has(recipient.username.toLowerCase())) {
+                return res.status(403).json({ success: false, error: 'Direct transfers to members outside your referral network are currently restricted by the administrator.' });
+            }
+        }
+
         // 4. Determine Fee based on Tiers (always based on sender's currency)
         const tier = config.tiers.find(t => 
             t.currency === sender.currency &&

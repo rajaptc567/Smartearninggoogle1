@@ -256,7 +256,8 @@ const SettingSchema = new mongoose.Schema({
     transferConfig: {
         enabled: { type: Boolean, default: true },
         tiers: [TransferTierSchema],
-        allowCrossCurrency: { type: Boolean, default: false }
+        allowCrossCurrency: { type: Boolean, default: false },
+        allowManualRecipientEntry: { type: Boolean, default: true }
     },
     exchangeRates: {
         USD: { type: Number, default: 1 }, 

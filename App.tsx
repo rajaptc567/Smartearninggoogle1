@@ -335,7 +335,7 @@ const WhatsAppFloatingButton: React.FC = () => {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="fixed bottom-5 right-5 md:bottom-6 md:right-6 z-50 flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-emerald-500 rounded-full shadow-2xl hover:bg-emerald-600 active:bg-emerald-700 transition-all duration-300 hover:scale-110 group cursor-pointer"
+            className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 flex items-center justify-center w-12 h-12 md:w-14 md:h-14 bg-emerald-500 rounded-full shadow-2xl hover:bg-emerald-600 active:bg-emerald-700 transition-all duration-300 hover:scale-110 group cursor-pointer"
             aria-label="Contact support on WhatsApp"
             style={{ boxShadow: '0 8px 30px rgba(16, 185, 129, 0.4)' }}
         >
