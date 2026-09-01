@@ -156,14 +156,30 @@ const UserLayout: React.FC = () => {
   }, [currentUser, settings]);
 
   const [dashboardMode, setDashboardMode] = useState<'work_and_earn' | 'investment'>(() => {
+      const adminDefault = settings?.defaultUserDashboardModule || 'work_and_earn';
       const saved = localStorage.getItem('dashboard_mode');
-      const mode = (saved as 'work_and_earn' | 'investment') || 'work_and_earn';
+      const mode = (saved as 'work_and_earn' | 'investment') || adminDefault;
       // Fallback only if explicitly disabled
       if (mode === 'work_and_earn' && settings && settings.hubEnabled === false) {
           return 'investment';
       }
+      if (mode === 'work_and_earn' && settings && !hasHubAccess) {
+          return 'investment';
+      }
       return mode;
   });
+
+  // Keep dashboardMode in sync with admin defaults or restrictions
+  useEffect(() => {
+    if (settings?.defaultUserDashboardModule && !localStorage.getItem('dashboard_mode')) {
+      const targetMode = settings.defaultUserDashboardModule;
+      if (targetMode === 'work_and_earn' && (settings.hubEnabled === false || !hasHubAccess)) {
+        setDashboardMode('investment');
+      } else {
+        setDashboardMode(targetMode);
+      }
+    }
+  }, [settings?.defaultUserDashboardModule, hasHubAccess]);
 
   // Enforce access changes in real-time safely
   useEffect(() => {

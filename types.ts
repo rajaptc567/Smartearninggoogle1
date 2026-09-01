@@ -321,6 +321,7 @@ export interface Settings {
     autoWelcomeEnabled?: boolean;
     autoPasswordResetEnabled?: boolean;
     isUserTaskEnabled?: boolean;
+    defaultUserDashboardModule?: 'work_and_earn' | 'investment'; // Choose which module users land on after login (Work & Earn vs Investment)
     userDashboardVersion?: 'old' | 'compact';
     landingPageStyle?: 'standard' | 'smartexn';
     userTaskAccessMode?: 'all' | 'manual' | 'plan';

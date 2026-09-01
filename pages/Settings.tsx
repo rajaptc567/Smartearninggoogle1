@@ -212,6 +212,7 @@ const Settings: React.FC = () => {
         },
         userDashboardVersion: settings.userDashboardVersion || 'compact',
         landingPageStyle: settings.landingPageStyle || 'smartexn',
+        defaultUserDashboardModule: settings.defaultUserDashboardModule || 'work_and_earn',
         hubEnabled: settings.hubEnabled !== false,
         hubMinDeposit: settings.hubMinDeposit ?? 5,
         hubMaxDeposit: settings.hubMaxDeposit ?? 1000,
@@ -1004,6 +1005,25 @@ const Settings: React.FC = () => {
                                 >
                                     <option value="old">Standard (Old Version)</option>
                                     <option value="compact">Compact (New Version)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 bg-purple-50/60 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                            <div>
+                                <label htmlFor="defaultUserDashboardModule" className="block text-sm font-bold text-purple-950 dark:text-purple-200">Default Post-Login Landing Module (پوسٹ لاگ ان ڈیفالٹ ماڈیول)</label>
+                                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Select which module members are directed to immediately upon logging in (Work & Earn vs Investment).</p>
+                            </div>
+                            <div>
+                                <select 
+                                    id="defaultUserDashboardModule"
+                                    name="defaultUserDashboardModule"
+                                    value={localSettings.defaultUserDashboardModule || 'work_and_earn'}
+                                    onChange={handleSelectChange}
+                                    className="rounded-md border-purple-300 dark:bg-gray-700 dark:border-gray-600 focus:ring-purple-500 focus:border-purple-500 text-gray-900 dark:text-white text-sm py-1.5 px-3 font-semibold shadow-sm"
+                                >
+                                    <option value="work_and_earn">💼 Work & Earn Module (مائیکرو ٹاسک و ورکر ڈیش بورڈ)</option>
+                                    <option value="investment">📈 Investment Module (انویسٹمنٹ و ڈپازٹ ڈیش بورڈ)</option>
                                 </select>
                             </div>
                         </div>
@@ -3473,6 +3493,28 @@ const Settings: React.FC = () => {
                             }}
                         />
                         <label htmlFor="hubEnabled" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${localSettings.hubEnabled ? 'bg-green-400' : 'bg-gray-300'}`}></label>
+                    </div>
+                </div>
+
+                {/* Default Post-Login Module */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200">Default Post-Login Landing Module (پوسٹ لاگ ان ڈیفالٹ ماڈیول)</h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Choose which primary module members see immediately after logging in. When Work & Earn is selected, members land on Micro Tasks; when Investment is selected, members land on Investment Plans.
+                        </p>
+                    </div>
+                    <div className="shrink-0">
+                        <select 
+                            id="hub_defaultUserDashboardModule"
+                            name="defaultUserDashboardModule"
+                            value={localSettings.defaultUserDashboardModule || 'work_and_earn'}
+                            onChange={handleSelectChange}
+                            className="w-full sm:w-auto text-xs font-bold p-2.5 rounded-xl border border-gray-300 dark:border-gray-700 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-blue-500"
+                        >
+                            <option value="work_and_earn">💼 Work & Earn (Micro Tasks & Gigs)</option>
+                            <option value="investment">📈 Investment Dashboard (Plans & Deposits)</option>
+                        </select>
                     </div>
                 </div>
 

@@ -8,7 +8,7 @@ import { seoAnalytics } from '../services/seoAnalytics';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
-    const { dispatch } = useData();
+    const { state, dispatch } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +48,10 @@ const Login: React.FC = () => {
             // FIX: apiLogin returns { token, data: User }. Map these to the expected payload structure { user, token }.
             dispatch({ type: 'SET_CURRENT_USER', payload: { user: loginResult.data, token: loginResult.token } });
             
+            // Set initial post-login module based on Admin setting
+            const defaultModule = state.settings?.defaultUserDashboardModule || 'work_and_earn';
+            localStorage.setItem('dashboard_mode', defaultModule);
+
             // Trigger non-financial GA4 login event with no PII
             seoAnalytics.trackLogin('platform_login');
 
