@@ -8,11 +8,14 @@ import { canUserAccessTasks } from '../../utils/taskAccess';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
 import { seoAnalytics } from '../../services/seoAnalytics';
+import OtherTasksCard from '../../components/OtherTasksCard';
+import { Layers as TaskIcon, Globe as GlobeIcon } from 'lucide-react';
 
 export interface UserTasksSubmitProps {
     initialTab?: 'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs';
     hideHeaderAndTabs?: boolean;
     hideHeroBanner?: boolean;
+    hideSubTabs?: boolean;
 }
 
 export const getRemainingTimeString = (targetDate?: string | Date) => {
@@ -186,7 +189,7 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
     return null;
 };
 
-const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false }) => {
+const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false }) => {
     const { state, dispatch } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -435,6 +438,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     };
 
     const [activeTab, setActiveTab] = useState<'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs'>(initialTab);
+    const [availableTasksSubTab, setAvailableTasksSubTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
 
     useEffect(() => {
         const tab = searchParams.get('tab');
@@ -2831,7 +2835,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             {/* TAB 2: BROWSE & EARN TASKS */}
             {activeTab === 'browse' && (
                 <div className="space-y-6">
-                    {/* Available Tasks Purpose & Hero Summary Header */}
+                    {/* 1. Description / Detail Hero Summary Card (Topmost) */}
                     {!hideHeroBanner && (
                         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-6 md:p-8 rounded-[2rem] text-white shadow-xl space-y-6 border border-blue-400/20">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2862,7 +2866,6 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
                             </div>
-
                             {/* How It Works - 4 Steps Banner */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-white/15">
                                 <div className="bg-white/10 backdrop-blur-sm p-3 rounded-2xl border border-white/10 space-y-1">
@@ -2885,21 +2888,65 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     )}
 
-                    {!hideHeaderAndTabs && (
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <h3 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
-                                    Available Tasks to Complete & Earn USD
-                                    <span className="px-3 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-xs font-mono font-bold">
-                                        {filteredBrowseableTasks.length} Total
-                                    </span>
-                                </h3>
-                                <p className="text-xs text-slate-400 mt-1">Browse active micro-tasks approved by admin, follow instructions carefully, and earn rewards paid in USD.</p>
+                    {/* 2. Navigation Tabs (Available Jobs vs Other Tasks) - Placed below description card and above search bar */}
+                    {!hideSubTabs && (
+                        <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800 space-y-3 sm:space-y-4">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAvailableTasksSubTab('available_jobs')}
+                                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                                            availableTasksSubTab === 'available_jobs'
+                                                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        <TaskIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                        <span>Available Jobs</span>
+                                        <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold font-mono ${
+                                            availableTasksSubTab === 'available_jobs' ? 'bg-slate-950/80 text-amber-300' : 'bg-slate-950/60 text-slate-400'
+                                        }`}>
+                                            {filteredBrowseableTasks.length}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAvailableTasksSubTab('other_tasks')}
+                                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                                            availableTasksSubTab === 'other_tasks'
+                                                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                        <span>Other Tasks</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Filter & Search Bar */}
+                    {/* 3. Content Section: Other Tasks Card OR Available Jobs Search + List */}
+                    {availableTasksSubTab === 'other_tasks' ? (
+                        <OtherTasksCard hideHeader={false} />
+                    ) : (
+                        <div className="space-y-6">
+                            {!hideHeaderAndTabs && (
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
+                                            Available Tasks to Complete & Earn USD
+                                            <span className="px-3 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-full text-xs font-mono font-bold">
+                                                {filteredBrowseableTasks.length} Total
+                                            </span>
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mt-1">Browse active micro-tasks approved by admin, follow instructions carefully, and earn rewards paid in USD.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Filter & Search Bar */}
                     <div className="bg-slate-950/80 p-4 md:p-5 rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between">
                         <div className="relative w-full md:w-96">
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">üîç</span>
@@ -3054,11 +3101,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
 
                             {renderPagination(browsePage, totalBrowsePages, setBrowsePage)}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
             )}
-
             {/* TAB 3: MY CAMPAIGNS */}
             {activeTab === 'my-tasks' && (() => {
                 const activeCampaignsCount = mySubmittedTasks.filter(t => (t.status === 'Approved' || t.status === 'Active') && t.currentCompletions < t.targetQuantity).length;
@@ -6915,54 +6963,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-100 dark:border-purple-900/40">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Average Campaign Cost</span>
                                 <div className="text-xl font-mono font-black text-purple-700 dark:text-purple-300 mt-1">
-                                    ${mySubmittedTasks.length > 0 ? (campaignPurchasesUSD / mySubmittedTasks.length).toFixed(2) : '0.00'} USD
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-400 mt-1 block">Across {mySubmittedTasks.length} launched campaign(s)</span>
-                            </div>
-
-                            {/* Metric 3 */}
-                            <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Approved Work Items</span>
-                                <div className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-300 mt-1">
-                                    {mySubmittedTasks.reduce((acc, t) => acc + (t.completedQuantity || 0), 0)} Items
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-400 mt-1 block">Fulfilled by workers</span>
-                            </div>
-                        </div>
-
-                        {/* Audit Summary Box */}
-                        <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border dark:border-gray-700 space-y-3 text-xs">
-                            <h4 className="font-black uppercase tracking-wider text-gray-900 dark:text-white text-xs">üìã Audit & Health Summary</h4>
-                            <div className="space-y-2 font-medium">
-                                <div className="flex justify-between py-1 border-b dark:border-gray-700">
-                                    <span className="text-gray-500">Total Transferred In (Investment / Funded):</span>
-                                    <span className="font-mono font-bold text-gray-900 dark:text-white">${transferredInUSD.toFixed(2)} USD</span>
-                                </div>
-                                <div className="flex justify-between py-1 border-b dark:border-gray-700">
-                                    <span className="text-gray-500">Total Spent on Campaign Launches:</span>
-                                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">-${campaignPurchasesUSD.toFixed(2)} USD</span>
-                                </div>
-                                <div className="flex justify-between py-1">
-                                    <span className="text-purple-600 dark:text-purple-400 font-black">Net Available Exclusive Campaign Balance:</span>
-                                    <span className="font-mono font-black text-purple-700 dark:text-purple-300 text-sm">${remainingTransferredBalanceUSD.toFixed(2)} USD</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowAnalyticsModal(false)}
-                                className="w-full py-3 bg-gray-900 hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 text-white rounded-xl text-xs font-black uppercase tracking-wider"
-                            >
-                                Close Analytics Overview
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-export default UserTasksSubmit;
+                                    ${mySubmittedTasks.length > 0 ? (campaignPurchasesxúÃV›é⁄FæÁ)éP‘@/ﬁÖlö˝A"õ¨∫Rí∂bWΩ®z1∂x x∆öÉ-¬Ù2–WÏ#t¸Ü8ÿUiëx8Ã|Á|Á;ﬂ<Lﬂ¿ Çd9’Ω{¢ÍÑ!ükø¢≈-ç—Îùı·û⁄'∂˝t”7hx]<∫7á©êppQÍ	∫´1÷÷ßvˇ	3¡µÂÊA∂:ó$±F∂Å∂N¡a¬]t«W
+•`˝Ö6¿Hƒ]=pI:Á=’ø§«GW$p4f=xÔQKÍ¬û6«74˚U3≠8sîÑy÷{pnÉG‰‚¢≤˙ ,mê"‚z÷YÃ¿“CY|lOÌÚœ˚ÎØl{0≤ªﬂÑ	F‹Daà“%
+AKÛL˘‹Z—P_{^¬Ÿ[5‰u«˜Bì0îbih˘]»‹iTVÍ
+ôa
+ìÅU∏{Áø¨E5,Z™Eë2“?k5â^‰bØG\˜9Ë>\è¡|Ö°ßO\ÑMËo·öÍ>~ªˇ‹º7y⁄èFJ∑õQ∆'N+C Vú4‡kR*¢I‰Q”(àL‡µàè™ÈJ íz±”Pˆúˆˇy≠Ä™j…B”Ó0Ÿ∫h%÷0ØS¨ö‚ Uë¥÷Iâ≠“é+üj‹˚Ô?ü˛.ÍÚ¸åÑiø,–’¿5¿:®Pô÷Y!Ùh¥
+˚Ã∆W§4ù%ñÉzÖ»!L“ È‘ñµ•≤Í;∏†u;9Ó%·jÜ“®Ó8ÙÓ¯ïêkcd∑Õ˝ã∂≥§ˆÿ√A≤/õ÷∫„'kΩÉu«çCV¨3sÃ÷”≠•⁄!3”0%Ap∏)¨ﬁÂÊ´æ$pL.˚^ìØeNc=Yó¶ˇk$]ﬂàQ="fæ™ˆa$çØ‰^,¶É}7â∫„®a≤$îá!ºç])∫ƒMØ	#‹≈oÀ“Œ~X/Î∞¶Êõ=´ UëƒÄPnÜeEÂ∫ÔÀ‹Wöÿgñ§≠≥&Îp"≠oØì–lòw£øa‘]\Ø{Ÿ=D°û˙b5·Ñ%ö∫ÍΩÎÕSÿ?~]M_ïÑV÷,b,Ì€!Tº|sâì[∑˝…>∞ﬂ-Á˚qÁ%ÎπÈïÓlÃπø67Œ„≈hÓä&Ãû€“¿/·í‚™°Or&[Â¸T≥\!ßÚkˇ≤≥πÏt0Ö‘‡·åDL√ÉBô]DÛkÈeÁ?   ˇˇ ¡´®Ô

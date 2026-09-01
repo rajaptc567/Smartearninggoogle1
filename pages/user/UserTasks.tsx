@@ -5,11 +5,14 @@ import { formatCurrency, Task } from '../../types';
 import Button from '../../components/ui/Button';
 import { completeTask } from '../../services/api';
 import { seoAnalytics } from '../../services/seoAnalytics';
+import OtherTasksCard from '../../components/OtherTasksCard';
+import { Zap as ZapIcon, Globe as GlobeIcon } from 'lucide-react';
 
 const UserTasks: React.FC = () => {
     const { state, dispatch } = useData();
     const { tasks, currentUser, settings } = state;
 
+    const [activeTab, setActiveTab] = useState<'missions' | 'other_tasks'>('missions');
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [activeVideoTask, setActiveVideoTask] = useState<Task | null>(null);
     const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -158,117 +161,155 @@ const UserTasks: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {visibleTasks.map((task) => {
-                    const submissions = (currentUser.completedTasks || []).filter(ct => ct.taskId.toString() === task._id.toString());
-                    const lastSub = submissions.length > 0 ? submissions[submissions.length - 1] : null;
-                    const isPending = lastSub?.status === 'Pending';
-                    const isApproved = lastSub?.status === 'Approved';
-                    const isRejected = lastSub?.status === 'Rejected';
+            {/* Tab Navigation */}
+            <div className="bg-slate-900/90 rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-xl border border-slate-800">
+                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
+                    <button
+                        onClick={() => setActiveTab('missions')}
+                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                            activeTab === 'missions'
+                                 ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        }`}
+                    >
+                        <ZapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span>System Missions</span>
+                        <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold font-mono ${
+                            activeTab === 'missions' ? 'bg-slate-950/80 text-amber-300' : 'bg-slate-950/60 text-slate-400'
+                        }`}>
+                            {visibleTasks.length}
+                        </span>
+                    </button>
 
-                    // Cooldown Logic
-                    let cooldownMs = task.cooldownHours * 60 * 60 * 1000;
-                    if (task.frequency === 'Daily') cooldownMs = Math.max(cooldownMs, 24 * 60 * 60 * 1000);
-                    if (task.frequency === 'Weekly') cooldownMs = Math.max(cooldownMs, 7 * 24 * 60 * 60 * 1000);
-                    
-                    const nextAvailable = lastSub ? new Date(lastSub.completedAt).getTime() + cooldownMs : 0;
-                    const isLockedByCooldown = isApproved && task.frequency !== 'Once' && currentTime < nextAvailable;
-                    const isFullyDone = isApproved && task.frequency === 'Once';
-
-                    const remainingSeconds = Math.max(0, Math.floor((nextAvailable - currentTime) / 1000));
-                    const cooldownString = remainingSeconds > 0 ? `${Math.floor(remainingSeconds/3600)}h ${Math.floor((remainingSeconds%3600)/60)}m` : null;
-
-                    return (
-                        <div key={task._id} className={`relative flex flex-col bg-slate-950/80 rounded-2xl p-5 shadow-lg border transition-all group overflow-hidden 
-                            ${isFullyDone ? 'border-emerald-500/50 opacity-60' : isPending ? 'border-amber-500/80 ring-2 ring-amber-500/10' : isRejected ? 'border-rose-500 animate-pulse' : 'border-slate-800 hover:border-amber-500/50'}`}>
-                            
-                            {task.isRequiredForWithdrawal && !isApproved && !isPending && (
-                                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[9px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider z-10 shadow-md">Guard Required</div>
-                            )}
-
-                            <div className="flex-grow space-y-4">
-                                <div className="flex justify-between items-start gap-2">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[10px] font-bold uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">{task.platform}</span>
-                                            <span className="text-slate-600">/</span>
-                                            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">{task.category}</span>
-                                        </div>
-                                        <h3 className="text-base font-bold text-white leading-snug mt-1 group-hover:text-amber-300 transition-colors">{task.title}</h3>
-                                    </div>
-                                    <div className="shrink-0">
-                                        {isApproved ? <div className="w-8 h-8 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-bold text-xs">✓</div> : 
-                                         isPending ? <div className="w-8 h-8 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl flex items-center justify-center animate-spin text-xs">⟳</div> :
-                                         isRejected ? <div className="w-8 h-8 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl flex items-center justify-center font-bold text-xs">!</div> :
-                                         <div className="text-[10px] font-bold text-slate-400 uppercase">{task.action}</div>}
-                                    </div>
-                                </div>
-
-                                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">"{task.description}"</p>
-
-                                <div className="grid grid-cols-2 gap-3 pt-2">
-                                    <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Potential Reward</p>
-                                        <p className="text-sm font-extrabold text-emerald-400 font-mono">{formatCurrency(task.rewardAmount, currentUser.currency)}</p>
-                                    </div>
-                                    <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Frequency Cycle</p>
-                                        <p className="text-xs font-bold text-slate-200 uppercase">{task.frequency}</p>
-                                    </div>
-                                </div>
-
-                                {isRejected && lastSub?.adminNotes && (
-                                    <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
-                                        <p className="text-[9px] font-bold text-rose-400 uppercase mb-0.5">Rejection Reason</p>
-                                        <p className="text-xs text-rose-300 font-medium">"{lastSub.adminNotes}"</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="pt-4 mt-4 border-t border-slate-800/80">
-                                {isFullyDone ? (
-                                    <div className="text-center font-bold text-xs text-emerald-400 uppercase tracking-wider py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">✓ MISSION COMPLETE</div>
-                                ) : isPending ? (
-                                    <div className="text-center font-bold text-xs text-amber-400 uppercase tracking-wider py-2 bg-amber-500/10 rounded-xl border border-amber-500/20 animate-pulse">UNDER VERIFICATION</div>
-                                ) : isLockedByCooldown ? (
-                                    <div className="flex justify-between items-center bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Next Available In:</span>
-                                        <span className="text-xs font-bold text-amber-300 font-mono">{cooldownString}</span>
-                                    </div>
-                                ) : isProcessing === task._id ? (
-                                    <div className="space-y-3">
-                                        {task.requireProof && (
-                                            <div className="flex flex-col gap-1.5">
-                                                <p className="text-[10px] font-bold text-amber-300 uppercase">{task.proofInstructions}</p>
-                                                <input 
-                                                    type="file" 
-                                                    accept="image/*" 
-                                                    className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400" 
-                                                    onChange={e => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) {
-                                                            const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
-                                                            if (file.size > maxMB * 1024 * 1024) {
-                                                                alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
-                                                                e.target.value = '';
-                                                                return;
-                                                            }
-                                                            setProofFiles(p => ({...p, [task._id]: file}));
-                                                        }
-                                                    }} 
-                                                />
-                                            </div>
-                                        )}
-                                        <Button onClick={() => handleVerify(task)} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase" disabled={task.requireProof && !proofFiles[task._id]}>Finalize Submission</Button>
-                                    </div>
-                                ) : (
-                                    <button onClick={() => handleTaskAction(task)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2 min-h-[40px]">{getActionVerb(task)} &rarr;</button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
+                    <button
+                        onClick={() => setActiveTab('other_tasks')}
+                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                            activeTab === 'other_tasks'
+                                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        }`}
+                    >
+                        <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span>Other Tasks</span>
+                    </button>
+                </div>
             </div>
+
+            {activeTab === 'other_tasks' ? (
+                <OtherTasksCard hideHeader={false} />
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {visibleTasks.map((task) => {
+                        const submissions = (currentUser.completedTasks || []).filter(ct => ct.taskId.toString() === task._id.toString());
+                        const lastSub = submissions.length > 0 ? submissions[submissions.length - 1] : null;
+                        const isPending = lastSub?.status === 'Pending';
+                        const isApproved = lastSub?.status === 'Approved';
+                        const isRejected = lastSub?.status === 'Rejected';
+
+                        // Cooldown Logic
+                        let cooldownMs = task.cooldownHours * 60 * 60 * 1000;
+                        if (task.frequency === 'Daily') cooldownMs = Math.max(cooldownMs, 24 * 60 * 60 * 1000);
+                        if (task.frequency === 'Weekly') cooldownMs = Math.max(cooldownMs, 7 * 24 * 60 * 60 * 1000);
+                        
+                        const nextAvailable = lastSub ? new Date(lastSub.completedAt).getTime() + cooldownMs : 0;
+                        const isLockedByCooldown = isApproved && task.frequency !== 'Once' && currentTime < nextAvailable;
+                        const isFullyDone = isApproved && task.frequency === 'Once';
+
+                        const remainingSeconds = Math.max(0, Math.floor((nextAvailable - currentTime) / 1000));
+                        const cooldownString = remainingSeconds > 0 ? `${Math.floor(remainingSeconds/3600)}h ${Math.floor((remainingSeconds%3600)/60)}m` : null;
+
+                        return (
+                            <div key={task._id} className={`relative flex flex-col bg-slate-950/80 rounded-2xl p-5 shadow-lg border transition-all group overflow-hidden 
+                                ${isFullyDone ? 'border-emerald-500/50 opacity-60' : isPending ? 'border-amber-500/80 ring-2 ring-amber-500/10' : isRejected ? 'border-rose-500 animate-pulse' : 'border-slate-800 hover:border-amber-500/50'}`}>
+                                
+                                {task.isRequiredForWithdrawal && !isApproved && !isPending && (
+                                    <div className="absolute top-0 right-0 bg-rose-600 text-white text-[9px] font-extrabold px-3 py-1 rounded-bl-xl uppercase tracking-wider z-10 shadow-md">Guard Required</div>
+                                )}
+
+                                <div className="flex-grow space-y-4">
+                                    <div className="flex justify-between items-start gap-2">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-bold uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">{task.platform}</span>
+                                                <span className="text-slate-600">/</span>
+                                                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">{task.category}</span>
+                                            </div>
+                                            <h3 className="text-base font-bold text-white leading-snug mt-1 group-hover:text-amber-300 transition-colors">{task.title}</h3>
+                                        </div>
+                                        <div className="shrink-0">
+                                            {isApproved ? <div className="w-8 h-8 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center justify-center font-bold text-xs">✓</div> : 
+                                             isPending ? <div className="w-8 h-8 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl flex items-center justify-center animate-spin text-xs">⟳</div> :
+                                             isRejected ? <div className="w-8 h-8 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl flex items-center justify-center font-bold text-xs">!</div> :
+                                             <div className="text-[10px] font-bold text-slate-400 uppercase">{task.action}</div>}
+                                        </div>
+                                    </div>
+
+                                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">"{task.description}"</p>
+
+                                    <div className="grid grid-cols-2 gap-3 pt-2">
+                                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Potential Reward</p>
+                                            <p className="text-sm font-extrabold text-emerald-400 font-mono">{formatCurrency(task.rewardAmount, currentUser.currency)}</p>
+                                        </div>
+                                        <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Frequency Cycle</p>
+                                            <p className="text-xs font-bold text-slate-200 uppercase">{task.frequency}</p>
+                                        </div>
+                                    </div>
+
+                                    {isRejected && lastSub?.adminNotes && (
+                                        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                                            <p className="text-[9px] font-bold text-rose-400 uppercase mb-0.5">Rejection Reason</p>
+                                            <p className="text-xs text-rose-300 font-medium">"{lastSub.adminNotes}"</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="pt-4 mt-4 border-t border-slate-800/80">
+                                    {isFullyDone ? (
+                                        <div className="text-center font-bold text-xs text-emerald-400 uppercase tracking-wider py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">✓ MISSION COMPLETE</div>
+                                    ) : isPending ? (
+                                        <div className="text-center font-bold text-xs text-amber-400 uppercase tracking-wider py-2 bg-amber-500/10 rounded-xl border border-amber-500/20 animate-pulse">UNDER VERIFICATION</div>
+                                    ) : isLockedByCooldown ? (
+                                        <div className="flex justify-between items-center bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Next Available In:</span>
+                                            <span className="text-xs font-bold text-amber-300 font-mono">{cooldownString}</span>
+                                        </div>
+                                    ) : isProcessing === task._id ? (
+                                        <div className="space-y-3">
+                                            {task.requireProof && (
+                                                <div className="flex flex-col gap-1.5">
+                                                    <p className="text-[10px] font-bold text-amber-300 uppercase">{task.proofInstructions}</p>
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/*" 
+                                                        className="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400" 
+                                                        onChange={e => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) {
+                                                                const maxMB = settings?.proofControls?.maxScreenshotSizeMB ?? 5;
+                                                                if (file.size > maxMB * 1024 * 1024) {
+                                                                    alert(`File size exceeds maximum allowed limit of ${maxMB} MB.`);
+                                                                    e.target.value = '';
+                                                                    return;
+                                                                }
+                                                                setProofFiles(p => ({...p, [task._id]: file}));
+                                                            }
+                                                        }} 
+                                                    />
+                                                </div>
+                                            )}
+                                            <Button onClick={() => handleVerify(task)} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase" disabled={task.requireProof && !proofFiles[task._id]}>Finalize Submission</Button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={() => handleTaskAction(task)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-2 min-h-[40px]">{getActionVerb(task)} &rarr;</button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
              {/* Timed Video Player Modal - Enhanced */}
              {activeVideoTask && (

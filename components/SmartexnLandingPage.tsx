@@ -4,6 +4,7 @@ import { useData } from '../hooks/useData';
 import { SEOHead } from './SEOHead';
 import { MobileStickyActionBar } from './MobileStickyActionBar';
 import { seoAnalytics } from '../services/seoAnalytics';
+import { SupportOfficeCard } from './SupportOfficeCard';
 
 interface SmartexnLandingPageProps {
   onOpenPolicy?: (policy: 'privacy' | 'refund' | 'terms' | 'faq' | 'about' | 'contact') => void;
@@ -1101,6 +1102,15 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         </div>
       </section>
 
+      {/* --- OFFICIAL UK CUSTOMER SUPPORT OFFICE SHOWCASE --- */}
+      {settings?.showUkSupportOffice !== false && settings?.homepageContent?.showUkSupportOffice !== false && (
+        <section id="uk-customer-support" className="py-12 md:py-16 bg-[#07192d] border-t border-sky-900/60 relative">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <SupportOfficeCard variant="showcase" theme="dark" />
+          </div>
+        </section>
+      )}
+
       {/* --- FINAL CTA SECTION --- */}
       <section className="py-16 md:py-20 bg-gradient-to-r from-sky-900 via-blue-900 to-indigo-950 text-white text-center">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -1143,93 +1153,136 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
       <footer className="bg-[#091a2e] text-slate-300 pt-12 pb-24 lg:pb-12 border-t border-blue-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          {/* Top Footer Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10">
             
-            {/* Footer Logo */}
-            <div 
-              onClick={() => navigate('/')} 
-              className="flex items-center gap-3 cursor-pointer"
-            >
-              <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-sky-400 rounded-lg flex items-center justify-center shadow-md">
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+            {/* Column 1 & 2: Brand Profile & UK Customer Support Office */}
+            <div className="lg:col-span-2 space-y-4">
+              <div 
+                onClick={() => navigate('/')} 
+                className="flex items-center gap-3 cursor-pointer"
+              >
+                <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-sky-400 rounded-lg flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <span className="text-2xl font-black tracking-tight text-white">
+                  Smart<span className="text-sky-400">Exn</span><span className="text-amber-400 text-lg">.com</span>
+                </span>
               </div>
-              <span className="text-2xl font-black tracking-tight text-white">
-                Smart<span className="text-sky-400">Exn</span><span className="text-amber-400 text-lg">.com</span>
-              </span>
+
+              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
+                SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety.
+              </p>
+
+              {/* Embedded Customer Support Office UK Card */}
+              {settings?.showUkSupportOfficeInFooter !== false && settings?.homepageContent?.showUkSupportOfficeInFooter !== false && (
+                <SupportOfficeCard variant="compact" theme="dark" className="max-w-sm" />
+              )}
             </div>
 
-            {/* Links */}
-            <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-sm font-medium text-slate-300">
-              <button onClick={() => navigate('/how-it-works')} className="hover:text-sky-400 transition-colors">
-                How It Works
-              </button>
-              <button onClick={() => navigate('/how-it-works-for-workers')} className="hover:text-sky-400 transition-colors">
-                For Workers
-              </button>
-              <button onClick={() => navigate('/micro-tasks')} className="hover:text-sky-400 transition-colors">
-                Micro-Tasks
-              </button>
-              <button onClick={() => navigate('/paid-surveys')} className="hover:text-sky-400 transition-colors">
-                Paid Surveys
-              </button>
-              <button onClick={() => navigate('/task-proof')} className="hover:text-sky-400 transition-colors">
-                Task Proof Guide
-              </button>
-              <button onClick={() => navigate('/knowledge-base')} className="hover:text-sky-400 transition-colors font-semibold text-sky-400">
-                Knowledge Base
-              </button>
-              <button onClick={() => navigate('/advertise')} className="hover:text-sky-400 transition-colors">
-                For Advertisers
-              </button>
-              <button onClick={() => navigate('/campaigns')} className="hover:text-sky-400 transition-colors">
-                Campaigns
-              </button>
-              <button onClick={() => navigate('/trust-and-safety')} className="hover:text-sky-400 transition-colors">
-                Trust & Safety
-              </button>
-              <button onClick={() => navigate('/faqs')} className="hover:text-sky-400 transition-colors">
-                FAQs
-              </button>
-              <button onClick={() => navigate('/terms-of-use')} className="hover:text-sky-400 transition-colors">
-                Terms
-              </button>
-              <button onClick={() => navigate('/privacy-policy')} className="hover:text-sky-400 transition-colors">
-                Privacy
-              </button>
-              <button onClick={() => navigate('/refund-policy')} className="hover:text-sky-400 transition-colors">
-                Refunds
-              </button>
-              <button onClick={() => setShowContactModal(true)} className="hover:text-sky-400 transition-colors">
-                Contact Support
-              </button>
+            {/* Column 3: For Workers */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-100">For Workers</h4>
+              <ul className="space-y-2 text-xs text-slate-400 font-medium">
+                <li>
+                  <button onClick={() => navigate('/how-it-works')} className="hover:text-sky-400 transition-colors">
+                    How It Works
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/how-it-works-for-workers')} className="hover:text-sky-400 transition-colors">
+                    For Workers Guide
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/micro-tasks')} className="hover:text-sky-400 transition-colors">
+                    Micro-Tasks
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/paid-surveys')} className="hover:text-sky-400 transition-colors">
+                    Paid Surveys
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/task-proof')} className="hover:text-sky-400 transition-colors">
+                    Task Proof Guide
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/knowledge-base')} className="hover:text-sky-400 transition-colors text-sky-400 font-bold">
+                    Knowledge Base
+                  </button>
+                </li>
+              </ul>
             </div>
 
-            {/* Social Icons */}
-            <div className="flex items-center space-x-5 text-slate-300">
-              <a href="#facebook" onClick={(e) => e.preventDefault()} className="hover:text-sky-400 transition-colors text-lg" title="Facebook">
-                f
-              </a>
-              <a href="#twitter" onClick={(e) => e.preventDefault()} className="hover:text-sky-400 transition-colors text-lg" title="Twitter">
-                𝕏
-              </a>
-              <a href="#instagram" onClick={(e) => e.preventDefault()} className="hover:text-sky-400 transition-colors text-lg" title="Instagram">
-                📷
-              </a>
-              <a href="#linkedin" onClick={(e) => e.preventDefault()} className="hover:text-sky-400 transition-colors text-lg" title="LinkedIn">
-                in
-              </a>
+            {/* Column 4: For Advertisers */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-100">For Advertisers</h4>
+              <ul className="space-y-2 text-xs text-slate-400 font-medium">
+                <li>
+                  <button onClick={() => navigate('/advertise')} className="hover:text-sky-400 transition-colors">
+                    For Advertisers
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/campaigns')} className="hover:text-sky-400 transition-colors">
+                    Crowdsourced Campaigns
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/trust-and-safety')} className="hover:text-sky-400 transition-colors">
+                    Trust & Safety
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/refund-policy')} className="hover:text-sky-400 transition-colors">
+                    Escrow Refund Policy
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 5: Trust & Legal */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-100">Trust & Legal</h4>
+              <ul className="space-y-2 text-xs text-slate-400 font-medium">
+                <li>
+                  <button onClick={() => navigate('/faqs')} className="hover:text-sky-400 transition-colors">
+                    FAQs & Help Desk
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/terms-of-use')} className="hover:text-sky-400 transition-colors">
+                    Terms of Use
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => navigate('/privacy-policy')} className="hover:text-sky-400 transition-colors">
+                    Privacy Policy
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setShowContactModal(true)} className="hover:text-sky-400 transition-colors text-left font-bold text-sky-300">
+                    Contact Support Office
+                  </button>
+                </li>
+              </ul>
             </div>
 
           </div>
 
           <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
             <div>
-              {sc.footerCopyright || `© 2023 ${siteName}. All rights reserved.`}
+              {sc.footerCopyright || `© 2026 ${siteName}. All rights reserved.`}
             </div>
-            <div>
-              SmartExn Global Micro-Task & Crowdsourcing Network
+            <div className="flex items-center gap-4">
+              <span>Customer Support Desk (UK)</span>
+              <span>•</span>
+              <span>100% Escrow Protected</span>
             </div>
           </div>
 

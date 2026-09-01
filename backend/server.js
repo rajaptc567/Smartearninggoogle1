@@ -33,6 +33,8 @@ import taskRoutes from './routes/taskRoutes.js';
 import templateRoutes from './routes/templateRoutes.js';
 import userTaskRoutes from './routes/userTaskRoutes.js';
 import bulkPopupRoutes from './routes/bulkPopupRoutes.js';
+import postbackRoutes from './routes/postbackRoutes.js';
+import { seedVerifiedNetworks } from './controllers/postbackController.js';
 
 // Import password reset actions directly for backward compatibility
 import {
@@ -253,6 +255,7 @@ app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/v1/user-tasks', userTaskRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
+app.use('/api/v1/postbacks', postbackRoutes);
 
 // Explicit 404 handler for unmatched API routes (Named wildcard compatible with Express 5 / path-to-regexp)
 app.all('/api/*path', (req, res) => {
@@ -342,6 +345,7 @@ const startServer = async () => {
     try {
         await connectDB();
         await seedAdminUser();
+        await seedVerifiedNetworks();
     } catch (error) {
         console.warn('Database initialization warning:', error.message);
     } finally {

@@ -158,6 +158,17 @@ export const defaultWorkAndEarnPages: Record<string, ModulePageControl> = {
         isHiddenInNav: false,
         disabledNotice: 'The Dashboard Hub is temporarily unavailable.'
     },
+    offerwalls: {
+        id: 'offerwalls',
+        name: 'Offerwalls & Surveys',
+        route: '/member/offerwalls',
+        icon: '🌐',
+        category: 'work_and_earn',
+        menuLocation: 'Main Navigation',
+        isEnabled: true,
+        isHiddenInNav: false,
+        disabledNotice: 'The Offerwall and Survey Hub is temporarily offline for provider synchronization.'
+    },
     deposit: {
         id: 'deposit',
         name: 'Deposit Hub Funds',

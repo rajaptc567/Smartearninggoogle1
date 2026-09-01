@@ -161,6 +161,16 @@ const Settings: React.FC = () => {
         contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
         contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
         contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
+        showUkSupportOffice: settings.showUkSupportOffice !== false,
+        showUkSupportOfficeInFooter: settings.showUkSupportOfficeInFooter !== false,
+        supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
+        supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
+        supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
+        supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
+        supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
+        supportOfficePhone: settings.supportOfficePhone || '+447846775662',
+        supportOfficeEmail: settings.supportOfficeEmail || 'smartexn.com@gmail.com',
+        supportOfficeHours: settings.supportOfficeHours || '15 – 60 Minutes',
         aboutUsTitle: settings.aboutUsTitle || defaultAboutUsTitle,
         aboutUsUpdated: settings.aboutUsUpdated || defaultAboutUsUpdated,
         aboutUsContent: settings.aboutUsContent || defaultAboutUsContent,
@@ -337,6 +347,18 @@ const Settings: React.FC = () => {
                 ...(prev.transferConfig || { tiers: [] }),
                 [field]: checked
             }
+        }));
+    } else if (name === 'showUkSupportOffice' || name === 'homepageContent.showUkSupportOffice') {
+        setLocalSettings(prev => ({ 
+            ...prev, 
+            showUkSupportOffice: checked,
+            homepageContent: { ...prev.homepageContent, showUkSupportOffice: checked } as any 
+        }));
+    } else if (name === 'showUkSupportOfficeInFooter' || name === 'homepageContent.showUkSupportOfficeInFooter') {
+        setLocalSettings(prev => ({ 
+            ...prev, 
+            showUkSupportOfficeInFooter: checked,
+            homepageContent: { ...prev.homepageContent, showUkSupportOfficeInFooter: checked } as any 
         }));
     } else if (name.startsWith('homepageContent.show')) {
         const field = name.split('.')[1];
@@ -1483,6 +1505,172 @@ const Settings: React.FC = () => {
                        <ToggleSection name="homepageContent.showVideoSection" label="Video Showcase" checked={localSettings.homepageContent?.showVideoSection !== false} onChange={handleCheckboxChange} />
                        <ToggleSection name="homepageContent.showFAQ" label="FAQ Section" checked={localSettings.homepageContent?.showFAQ !== false} onChange={handleCheckboxChange} />
                        <ToggleSection name="homepageContent.showCTA" label="Bottom CTA" checked={localSettings.homepageContent?.showCTA !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="showUkSupportOffice" label="🇬🇧 UK Support Office (Showcase Section)" checked={localSettings.showUkSupportOffice !== false} onChange={handleCheckboxChange} />
+                       <ToggleSection name="showUkSupportOfficeInFooter" label="🇬🇧 UK Support Office in Footers" checked={localSettings.showUkSupportOfficeInFooter !== false} onChange={handleCheckboxChange} />
+                   </div>
+               </div>
+
+               {/* UK Customer Support Office Settings Card */}
+               <div className="p-5 bg-gradient-to-br from-slate-900 via-[#0a1e36] to-[#07192d] rounded-2xl border border-sky-500/30 text-white space-y-4 shadow-xl">
+                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-sky-900/60">
+                       <div className="flex items-center gap-2.5">
+                           <span className="text-2xl filter drop-shadow">🇬🇧</span>
+                           <div>
+                               <h4 className="font-extrabold text-sky-300 text-sm tracking-tight flex items-center gap-2">
+                                   UK Customer Support Office Settings & Visibility
+                               </h4>
+                               <p className="text-[11px] text-slate-300">
+                                   Configure registered UK headquarters desk details, homepage showcase banner, and footer contact cards.
+                               </p>
+                           </div>
+                       </div>
+                       <div className="flex items-center gap-2">
+                           <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                               localSettings.showUkSupportOffice !== false
+                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                               : 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                           }`}>
+                               Showcase: {localSettings.showUkSupportOffice !== false ? 'Active' : 'Disabled'}
+                           </span>
+                           <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${
+                               localSettings.showUkSupportOfficeInFooter !== false
+                               ? 'bg-sky-500/20 text-sky-300 border-sky-400/30'
+                               : 'bg-slate-700 text-slate-400 border-slate-600'
+                           }`}>
+                               Footer: {localSettings.showUkSupportOfficeInFooter !== false ? 'Active' : 'Disabled'}
+                           </span>
+                       </div>
+                   </div>
+
+                   {/* Quick Toggles */}
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                       <label className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                           localSettings.showUkSupportOffice !== false
+                           ? 'bg-sky-950/70 border-sky-500 text-white shadow-md shadow-sky-950/50'
+                           : 'bg-slate-900/60 border-slate-700 text-slate-400'
+                       }`}>
+                           <div className="text-xs font-bold">
+                               <span className="block text-sky-200">Showcase Section (Homepage)</span>
+                               <span className="text-[10px] text-slate-400 font-normal">Display large official support office banner on homepage</span>
+                           </div>
+                           <input 
+                               type="checkbox"
+                               name="showUkSupportOffice"
+                               checked={localSettings.showUkSupportOffice !== false}
+                               onChange={handleCheckboxChange}
+                               className="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 cursor-pointer"
+                           />
+                       </label>
+
+                       <label className={`flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                           localSettings.showUkSupportOfficeInFooter !== false
+                           ? 'bg-sky-950/70 border-sky-500 text-white shadow-md shadow-sky-950/50'
+                           : 'bg-slate-900/60 border-slate-700 text-slate-400'
+                       }`}>
+                           <div className="text-xs font-bold">
+                               <span className="block text-sky-200">Footer Support Card</span>
+                               <span className="text-[10px] text-slate-400 font-normal">Display compact UK office card in landing & dashboard footers</span>
+                           </div>
+                           <input 
+                               type="checkbox"
+                               name="showUkSupportOfficeInFooter"
+                               checked={localSettings.showUkSupportOfficeInFooter !== false}
+                               onChange={handleCheckboxChange}
+                               className="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 cursor-pointer"
+                           />
+                       </label>
+                   </div>
+
+                   {/* Support Desk Customization Inputs */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                       <div>
+                           <label className="text-xs font-bold text-emerald-300">Badge 1 (Primary Verification Badge)</label>
+                           <input 
+                               name="supportOfficeBadge1"
+                               value={localSettings.supportOfficeBadge1 || ''}
+                               onChange={handleTextChange}
+                               placeholder="Official Registered Support Desk"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-sky-300">Badge 2 (Secondary Badge)</label>
+                           <input 
+                               name="supportOfficeBadge2"
+                               value={localSettings.supportOfficeBadge2 || ''}
+                               onChange={handleTextChange}
+                               placeholder="UK Registered Office"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-sky-200">Support Desk Title</label>
+                           <input 
+                               name="supportOfficeTitle"
+                               value={localSettings.supportOfficeTitle || ''}
+                               onChange={handleTextChange}
+                               placeholder="Customer Support Office (UK)"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-bold"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-sky-200">Average Response Time</label>
+                           <input 
+                               name="supportOfficeHours"
+                               value={localSettings.supportOfficeHours || ''}
+                               onChange={handleTextChange}
+                               placeholder="15 – 60 Minutes"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                           />
+                       </div>
+
+                       <div className="md:col-span-2">
+                           <label className="text-xs font-bold text-sky-200">Support Desk Subtitle / Description</label>
+                           <textarea 
+                               name="supportOfficeSubtitle"
+                               rows={2}
+                               value={localSettings.supportOfficeSubtitle || ''}
+                               onChange={handleTextChange}
+                               placeholder="Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners."
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400 leading-relaxed"
+                           />
+                       </div>
+
+                       <div className="md:col-span-2">
+                           <label className="text-xs font-bold text-sky-200">Official Registered Office Address</label>
+                           <input 
+                               name="supportOfficeAddress"
+                               value={localSettings.supportOfficeAddress || ''}
+                               onChange={handleTextChange}
+                               placeholder="71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-emerald-300">Direct Phone / WhatsApp Live Desk</label>
+                           <input 
+                               name="supportOfficePhone"
+                               value={localSettings.supportOfficePhone || ''}
+                               onChange={handleTextChange}
+                               placeholder="+447846775662"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 font-mono"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-sky-300">Official Support Email Desk</label>
+                           <input 
+                               name="supportOfficeEmail"
+                               value={localSettings.supportOfficeEmail || ''}
+                               onChange={handleTextChange}
+                               placeholder="smartexn.com@gmail.com"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-mono"
+                           />
+                       </div>
                    </div>
                </div>
 
@@ -2117,6 +2305,170 @@ const Settings: React.FC = () => {
                                                 placeholder="Have questions regarding your withdrawal, payout settlement, or account verification?"
                                                 className="w-full text-xs p-2.5 rounded-xl border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                                             />
+                                        </div>
+                                    </div>
+
+                                    {/* UK CUSTOMER SUPPORT OFFICE CONTROLS IN LEGAL TAB */}
+                                    <div className="mt-4 pt-4 border-t dark:border-gray-700 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h6 className="font-extrabold text-sky-600 dark:text-sky-400 uppercase tracking-tight text-xs flex items-center gap-2">
+                                                <span>🇬🇧</span> UK Customer Support Office Card Visibility & Details
+                                            </h6>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                                                    localSettings.showUkSupportOffice !== false 
+                                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' 
+                                                    : 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300'
+                                                }`}>
+                                                    Showcase: {localSettings.showUkSupportOffice !== false ? 'Active' : 'Hidden'}
+                                                </span>
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                                                    localSettings.showUkSupportOfficeInFooter !== false 
+                                                    ? 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300' 
+                                                    : 'bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-400'
+                                                }`}>
+                                                    Footer: {localSettings.showUkSupportOfficeInFooter !== false ? 'Active' : 'Hidden'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <label className="flex items-center gap-2.5 p-2.5 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer border dark:border-gray-700">
+                                                <input 
+                                                    type="checkbox" 
+                                                    name="showUkSupportOffice" 
+                                                    checked={localSettings.showUkSupportOffice !== false} 
+                                                    onChange={handleCheckboxChange} 
+                                                    className="w-4 h-4 text-sky-600 rounded" 
+                                                />
+                                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Show Homepage Showcase Banner</span>
+                                            </label>
+
+                                            <label className="flex items-center gap-2.5 p-2.5 bg-gray-50 dark:bg-gray-900 rounded-lg cursor-pointer border dark:border-gray-700">
+                                                <input 
+                                                    type="checkbox" 
+                                                    name="showUkSupportOfficeInFooter" 
+                                                    checked={localSettings.showUkSupportOfficeInFooter !== false} 
+                                                    onChange={handleCheckboxChange} 
+                                                    className="w-4 h-4 text-sky-600 rounded" 
+                                                />
+                                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Show UK Card in Footers</span>
+                                            </label>
+                                        </div>
+
+                                        {/* UK Office Detailed Configuration */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Badge 1 (Primary)
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeBadge1"
+                                                    value={localSettings.supportOfficeBadge1 || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="Official Registered Support Desk"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Badge 2 (Secondary)
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeBadge2"
+                                                    value={localSettings.supportOfficeBadge2 || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="UK Registered Office"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Support Desk Title
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeTitle"
+                                                    value={localSettings.supportOfficeTitle || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="Customer Support Office (UK)"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-bold"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Average Response Time
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeHours"
+                                                    value={localSettings.supportOfficeHours || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="15 – 60 Minutes"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                                                />
+                                            </div>
+
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Subtitle / Intro Description
+                                                </label>
+                                                <textarea 
+                                                    name="supportOfficeSubtitle"
+                                                    rows={2}
+                                                    value={localSettings.supportOfficeSubtitle || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners."
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white leading-relaxed"
+                                                />
+                                            </div>
+
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Registered Office Address
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeAddress"
+                                                    value={localSettings.supportOfficeAddress || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    WhatsApp Live Support Number
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficePhone"
+                                                    value={localSettings.supportOfficePhone || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="+447846775662"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-mono"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Official Support Email
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeEmail"
+                                                    value={localSettings.supportOfficeEmail || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="smartexn.com@gmail.com"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-mono"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

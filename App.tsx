@@ -39,6 +39,7 @@ const AdminTemplates = lazy(() => import('./pages/AdminTemplates'));
 const AdminNotifications = lazy(() => import('./pages/AdminNotifications'));
 const AdminFinancialReconciliation = lazy(() => import('./pages/admin/AdminFinancialReconciliation'));
 const AdminSeoIntelligence = lazy(() => import('./pages/admin/AdminSeoIntelligence'));
+const AdminOfferwalls = lazy(() => import('./pages/admin/AdminOfferwalls'));
 
 // Lazy-loaded Public Knowledge & Static Pages
 const Login = lazy(() => import('./pages/Login'));
@@ -124,6 +125,7 @@ const UserTasksSubmit = lazy(() => import('./pages/user/UserTasksSubmit'));
 const HubFaqs = lazy(() => import('./pages/user/HubFaqs'));
 const HubLegal = lazy(() => import('./pages/user/HubLegal'));
 const WorkAndEarnHistory = lazy(() => import('./pages/user/WorkAndEarnHistory'));
+const OfferwallHub = lazy(() => import('./pages/user/OfferwallHub'));
 
 // Backward compatibility redirector for legacy hash-based URLs (e.g. /#/how-it-works -> /how-it-works)
 const HashToPathRedirector: React.FC = () => {
@@ -272,6 +274,7 @@ const App: React.FC = () => {
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="reconciliation" element={<AdminFinancialReconciliation />} />
               <Route path="seo-intelligence" element={<AdminSeoIntelligence />} />
+              <Route path="offerwalls" element={<AdminOfferwalls />} />
             </Route>
 
             {/* User Member Area Routes */}
@@ -280,6 +283,7 @@ const App: React.FC = () => {
               <Route path="dashboard" element={<UserDashboard />} />
               <Route path="work-and-earn" element={<UserDashboard />} />
               <Route path="dashboard-hub" element={<UserDashboard />} />
+              <Route path="offerwalls" element={<ModulePageGuard category="workAndEarn" pageId="offerwalls"><OfferwallHub /></ModulePageGuard>} />
               <Route path="deposit" element={<ModulePageGuard category="investment" pageId="deposit"><DepositFunds /></ModulePageGuard>} />
               <Route path="withdraw" element={<ModulePageGuard category="investment" pageId="withdraw"><WithdrawFunds /></ModulePageGuard>} />
               <Route path="transfer" element={<ModulePageGuard category="investment" pageId="transfer"><TransferFunds /></ModulePageGuard>} />
@@ -287,7 +291,7 @@ const App: React.FC = () => {
               <Route path="active-plans" element={<ModulePageGuard category="investment" pageId="activePlans"><ActivePlans /></ModulePageGuard>} />
               <Route path="tasks" element={<ModulePageGuard category="investment" pageId="tasks"><UserTasks /></ModulePageGuard>} />
               <Route path="user-tasks" element={<ModulePageGuard category="workAndEarn" pageId="userTasks"><UserTasksSubmit /></ModulePageGuard>} />
-              <Route path="available-tasks" element={<ModulePageGuard category="workAndEarn" pageId="availableTasks"><UserTasksSubmit initialTab="browse" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+              <Route path="available-tasks" element={<ModulePageGuard category="workAndEarn" pageId="availableTasks"><UserTasksSubmit initialTab="browse" hideHeaderAndTabs={true} hideHeroBanner={false} hideSubTabs={false} /></ModulePageGuard>} />
               <Route path="pending-reviews" element={<ModulePageGuard category="workAndEarn" pageId="pendingReviews"><UserTasksSubmit initialTab="pending-payment" hideHeaderAndTabs={true} /></ModulePageGuard>} />
               <Route path="tasks-history" element={<ModulePageGuard category="workAndEarn" pageId="tasksHistory"><UserTasksSubmit initialTab="completed-tasks" hideHeaderAndTabs={true} /></ModulePageGuard>} />
               <Route path="create-campaign" element={<ModulePageGuard category="workAndEarn" pageId="createCampaign"><UserTasksSubmit initialTab="submit" hideHeaderAndTabs={true} /></ModulePageGuard>} />

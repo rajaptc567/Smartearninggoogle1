@@ -1,5 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { SupportOfficeCard } from './SupportOfficeCard';
+import { useData } from '../hooks/useData';
 
 interface FooterProps {
   className?: string;
@@ -7,10 +9,12 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = true }) => {
-  const officeAddress = "71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom";
-  const phoneWhatsApp = "+447846775662";
-  const officialEmail = "smartexn.com@gmail.com";
-  const whatsappUrl = "https://wa.me/447846775662";
+  const { settings } = useData();
+
+  const officialEmail = settings?.supportOfficeEmail || settings?.contactUsEmailAddress || 'smartexn.com@gmail.com';
+  const rawPhone = settings?.supportOfficePhone || settings?.contactUsWhatsAppNumber || '+447846775662';
+  const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+  const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent('Hello SmartExn Support Team, I need assistance.')}`;
 
   return (
     <footer id="app-main-footer" className={`mt-auto border-t border-gray-200/60 dark:border-gray-800/80 pt-8 pb-6 text-left ${className}`}>
@@ -36,44 +40,9 @@ export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = t
         </div>
 
         {/* Official UK Customer Support Office */}
-        <div className="space-y-2.5">
-          <h5 className="text-[11px] font-black uppercase text-gray-900 dark:text-gray-200 tracking-wider flex items-center gap-1.5">
-            <span>🇬🇧</span> Customer Support Office (UK)
-          </h5>
-          <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200/80 dark:border-gray-700/60 space-y-2 text-xs">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">Registered Office Address:</span>
-              <p className="text-gray-700 dark:text-gray-300 font-medium leading-snug">
-                {officeAddress}
-              </p>
-            </div>
-            
-            <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700/60 flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400 text-[11px] font-semibold">Phone/WhatsApp:</span>
-                <a 
-                  href={whatsappUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
-                >
-                  <span>💬</span>
-                  {phoneWhatsApp}
-                </a>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400 text-[11px] font-semibold">Official Support Email:</span>
-                <a 
-                  href={`mailto:${officialEmail}`} 
-                  className="font-mono font-bold text-sky-600 dark:text-sky-400 hover:underline text-[11px]"
-                >
-                  {officialEmail}
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
+        {settings?.showUkSupportOfficeInFooter !== false && (
+          <SupportOfficeCard variant="compact" />
+        )}
 
         {/* Legal & Compliance Links */}
         <div>

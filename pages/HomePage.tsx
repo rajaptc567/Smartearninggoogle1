@@ -13,6 +13,7 @@ import {
     defaultRefundPolicyContent, defaultRefundPolicyTitle, defaultRefundPolicyUpdated, 
     defaultTermsOfUseContent, defaultTermsOfUseTitle, defaultTermsOfUseUpdated 
 } from '../data/legalDefaults';
+import { SupportOfficeCard } from '../components/SupportOfficeCard';
 
 // --- Loading Component ---
 const SectionLoading: React.FC<{ text?: string }> = ({ text = "Fresh data is loading." }) => (
@@ -1256,6 +1257,15 @@ const HomePage: React.FC = () => {
                         </div>
                     </section>
                 )}
+
+                {/* UK Customer Support Office Showcase */}
+                {settings?.showUkSupportOffice !== false && settings?.homepageContent?.showUkSupportOffice !== false && (
+                    <section className="py-12 bg-slate-900 text-white">
+                        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+                            <SupportOfficeCard variant="showcase" theme="dark" />
+                        </div>
+                    </section>
+                )}
             </main>
 
             {/* Professional Footer */}
@@ -1275,9 +1285,9 @@ const HomePage: React.FC = () => {
                             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 font-light leading-relaxed max-w-sm">
                                 SmartEarning is an innovative crowdsourced advertising and social multi-level marketing platform. We connect sponsors with verified global network builders to yield mutual digital promotional growth.
                             </p>
-                            <div className="flex items-center gap-3">
-                                <span className="text-xs text-gray-400 font-mono">Status: Secure Ledger (MFA enabled)</span>
-                            </div>
+                            {settings?.showUkSupportOfficeInFooter !== false && settings?.homepageContent?.showUkSupportOfficeInFooter !== false && (
+                                <SupportOfficeCard variant="compact" />
+                            )}
                         </div>
 
                         {/* Column 2: Legal Agreements */}

@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MobileStickyActionBar } from './MobileStickyActionBar';
+import { SupportOfficeCard } from './SupportOfficeCard';
+import { useData } from '../hooks/useData';
 
 export const PublicFooter: React.FC = () => {
   const [showContactModal, setShowContactModal] = useState(false);
+  const { settings } = useData();
 
   return (
     <>
@@ -30,35 +33,16 @@ export const PublicFooter: React.FC = () => {
                 SmartExn is an international online marketplace connecting task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety.
               </p>
 
-              <div className="pt-2 space-y-2">
+              <div className="pt-2 space-y-3">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-950/60 border border-sky-800/40 text-xs text-sky-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                   <span>Escrow Protected & Dispute Supported</span>
                 </div>
 
                 {/* UK Customer Support Office */}
-                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5 text-xs text-slate-300">
-                  <p className="font-bold text-sky-400 flex items-center gap-1.5">
-                    <span>🇬🇧</span> Customer Support Office (UK):
-                  </p>
-                  <p className="text-slate-400 leading-snug">
-                    71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom
-                  </p>
-                  <p className="pt-0.5 flex flex-wrap gap-x-3 gap-y-1">
-                    <span>
-                      <span className="text-slate-400">Phone/WhatsApp: </span>
-                      <a href="https://wa.me/447846775662" target="_blank" rel="noopener noreferrer" className="font-bold text-emerald-400 hover:underline">
-                        +447846775662
-                      </a>
-                    </span>
-                    <span>
-                      <span className="text-slate-400">Email: </span>
-                      <a href="mailto:smartexn.com@gmail.com" className="font-bold text-sky-400 hover:underline">
-                        smartexn.com@gmail.com
-                      </a>
-                    </span>
-                  </p>
-                </div>
+                {settings?.showUkSupportOfficeInFooter !== false && (
+                  <SupportOfficeCard variant="compact" theme="dark" className="max-w-sm" />
+                )}
               </div>
             </div>
 

@@ -279,7 +279,7 @@ export interface Settings {
     contactUsUpdated?: string;
     contactUsContent?: string;
     
-    // Contact Us Box Controls
+    // Contact Us Box & Support Office Controls
     enableContactUsBox?: boolean; // Enable/disable Contact Us box completely
     enableContactViaEmail?: boolean; // Enable/disable Email contact option
     enableContactViaWhatsApp?: boolean; // Enable/disable WhatsApp contact option
@@ -287,6 +287,16 @@ export interface Settings {
     contactUsWhatsAppNumber?: string; // Admin contact support WhatsApp number
     contactUsBoxTitle?: string; // Custom title for Contact Us Box
     contactUsBoxSubtitle?: string; // Custom subtitle for Contact Us Box
+    showUkSupportOffice?: boolean; // Enable/disable UK Customer Support Office showcase section on Homepage
+    showUkSupportOfficeInFooter?: boolean; // Enable/disable UK Customer Support Office card in Footers
+    supportOfficeBadge1?: string; // e.g. "Official Registered Support Desk"
+    supportOfficeBadge2?: string; // e.g. "UK Registered Office"
+    supportOfficeTitle?: string; // Custom title for UK Support Office, e.g. "Customer Support Office (UK)"
+    supportOfficeSubtitle?: string; // Custom subtitle/description for UK Support Office
+    supportOfficeAddress?: string; // Custom registered address
+    supportOfficePhone?: string; // Custom Phone / WhatsApp
+    supportOfficeEmail?: string; // Custom Email
+    supportOfficeHours?: string; // Average response time / hours window
     aboutUsTitle?: string;
     aboutUsUpdated?: string;
     aboutUsContent?: string;
@@ -885,6 +895,8 @@ export interface SmartexnContent {
     bizPoint4Title?: string;
     bizPoint4Desc?: string;
     footerCopyright?: string;
+    showUkSupportOffice?: boolean;
+    showUkSupportOfficeInFooter?: boolean;
 }
 
 export interface HomepageContent {
@@ -898,6 +910,8 @@ export interface HomepageContent {
     showVideoSection: boolean;
     showFAQ: boolean;
     showCTA: boolean;
+    showUkSupportOffice?: boolean;
+    showUkSupportOfficeInFooter?: boolean;
     heroTitle: string;
     heroSubtitle: string;
     feature1Title: string;

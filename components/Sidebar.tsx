@@ -57,6 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/plan-equivalency', label: 'Plan Equivalency', icon: <LinkIcon /> },
       { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon /> },
       { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon /> },
+      { to: '/admin/offerwalls', label: 'Offerwalls & S2S', icon: <GlobeSearchIcon /> },
       { to: '/admin/task-categories', label: 'Task Configurator', icon: <SettingsIcon /> },
       { to: '/admin/work-and-earn-editor', label: 'Work & Earn Editor', icon: <SettingsIcon /> },
       { to: '/admin/reconciliation', label: 'Reconciliation', icon: <RulesIcon /> },

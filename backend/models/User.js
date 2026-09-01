@@ -74,6 +74,10 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    taskEarningsBalance: {
+        type: Number,
+        default: 0,
+    },
     campaignWalletSources: {
         fromInvestmentUSD: { type: Number, default: 0 },
         fromTaskEarningsUSD: { type: Number, default: 0 },

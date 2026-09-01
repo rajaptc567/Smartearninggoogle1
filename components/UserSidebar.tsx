@@ -125,6 +125,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
 
     const userNavLinks = dashboardMode === 'work_and_earn' ? [
         { to: '/member', label: 'Dashboard Hub', icon: <HomeIcon />, pageId: 'dashboard', condition: null },
+        { to: '/member/offerwalls', label: 'Offerwalls & Surveys', icon: <TaskIcon />, pageId: 'offerwalls', condition: null },
         { to: '/member/deposit', label: 'Deposit Hub Funds', icon: <DepositIcon />, pageId: 'deposit', condition: null },
         { to: '/member/withdraw', label: 'Withdraw Hub Funds', icon: <WithdrawalIcon />, pageId: 'withdraw', condition: null, isInsufficient: isHubWithdrawalInsufficient, insufficientMsg: 'Not sufficient balance for withdrawal' },
         { to: '/member/work-history', label: 'Work & Earn History', icon: <HistoryNavIcon />, pageId: 'workHistory', condition: null },
