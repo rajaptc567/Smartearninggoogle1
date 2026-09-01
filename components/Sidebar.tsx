@@ -37,26 +37,54 @@ const BellIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     const { state } = useData();
-    const pendingResetsCount = state.passwordResetRequests.filter(r => r.status === 'Pending').length;
-    const pendingDisputesCount = state.disputes.filter(d => d.status === 'Open').length;
-    const unreadNotifCount = state.notifications.filter(n => !n.read).length;
 
-    const navLinks = [
-      { to: '/admin', label: 'Dashboard', icon: <HomeIcon /> },
-      { to: '/admin/notifications', label: 'Notifications', icon: <BellIcon />, badge: unreadNotifCount },
-      { to: '/admin/users', label: 'Users', icon: <UsersIcon /> },
+    // Pending count aggregations for real-time admin action badges
+    const pendingResetsCount = state.passwordResetRequests?.filter(r => r.status === 'Pending').length || 0;
+    const pendingDisputesCount = state.disputes?.filter(d => d.status === 'Open' || (d as any).adminUnread).length || 0;
+    const unreadNotifCount = state.notifications?.filter(n => !n.read).length || 0;
+    const pendingDepositsCount = state.deposits?.filter(d => d.status === 'Pending').length || 0;
+    const pendingWithdrawalsCount = state.withdrawals?.filter(w => w.status === 'Pending' || w.status === 'Processing' || w.status === 'Matching').length || 0;
+    const pendingTransfersCount = state.transfers?.filter(t => (t as any).status === 'Pending').length || 0;
+    
+    // User task updates (Pending campaign approvals + Pending worker proof submissions)
+    const pendingCampaignsCount = state.userTasks?.filter(t => t.status === 'Pending').length || 0;
+    const pendingProofsCount = state.userTaskSubmissions?.filter(s => s.status === 'Pending' || s.status === 'Submitted' || s.status === 'In Review').length || 0;
+    const pendingUserTasksTotal = pendingCampaignsCount + pendingProofsCount;
+
+    // Withdraw tasks pending submissions
+    const pendingWithdrawTasksCount = state.tasks?.reduce((acc, t) => acc + ((t as any).submissions?.filter((s: any) => s.status === 'Pending').length || 0), 0) || 0;
+
+    // Pending KYC or unverified users
+    const pendingUsersCount = state.users?.filter(u => (u as any).kycStatus === 'Pending' || (u as any).verificationStatus === 'Pending').length || 0;
+
+    // Total pending updates for the dashboard
+    const totalPendingUpdates = 
+      unreadNotifCount + 
+      pendingResetsCount + 
+      pendingDisputesCount + 
+      pendingDepositsCount + 
+      pendingWithdrawalsCount + 
+      pendingTransfersCount + 
+      pendingUserTasksTotal + 
+      pendingWithdrawTasksCount + 
+      pendingUsersCount;
+
+    const navLinks: { to: string; label: string; icon: React.ReactNode; badge?: number; badgeColor?: string }[] = [
+      { to: '/admin', label: 'Dashboard', icon: <HomeIcon />, badge: totalPendingUpdates, badgeColor: 'bg-blue-600' },
+      { to: '/admin/notifications', label: 'Notifications', icon: <BellIcon />, badge: unreadNotifCount, badgeColor: 'bg-indigo-600' },
+      { to: '/admin/users', label: 'Users', icon: <UsersIcon />, badge: pendingUsersCount, badgeColor: 'bg-sky-600' },
       { to: '/admin/sent-messages', label: 'Sent Messages', icon: <SentIcon /> },
       { to: '/admin/templates', label: 'Message Templates', icon: <TemplateIcon /> },
-      { to: '/admin/password-resets', label: 'Password Resets', icon: <PasswordResetIcon />, badge: pendingResetsCount },
-      { to: '/admin/deposits', label: 'Deposits', icon: <DepositIcon /> },
-      { to: '/admin/withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon /> },
-      { to: '/admin/transfers', label: 'Transfers', icon: <TransferIcon /> },
-      { to: '/admin/disputes', label: 'Disputes', icon: <DisputeIcon />, badge: pendingDisputesCount },
+      { to: '/admin/password-resets', label: 'Password Resets', icon: <PasswordResetIcon />, badge: pendingResetsCount, badgeColor: 'bg-rose-600' },
+      { to: '/admin/deposits', label: 'Deposits', icon: <DepositIcon />, badge: pendingDepositsCount, badgeColor: 'bg-emerald-600' },
+      { to: '/admin/withdrawals', label: 'Withdrawals', icon: <WithdrawalIcon />, badge: pendingWithdrawalsCount, badgeColor: 'bg-amber-600' },
+      { to: '/admin/transfers', label: 'Transfers', icon: <TransferIcon />, badge: pendingTransfersCount, badgeColor: 'bg-purple-600' },
+      { to: '/admin/disputes', label: 'Disputes', icon: <DisputeIcon />, badge: pendingDisputesCount, badgeColor: 'bg-red-600' },
       { to: '/admin/payment-methods', label: 'Payment Methods', icon: <PaymentIcon /> },
       { to: '/admin/investment-plans', label: 'Investment Plans', icon: <PlanIcon /> },
       { to: '/admin/plan-equivalency', label: 'Plan Equivalency', icon: <LinkIcon /> },
-      { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon /> },
-      { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon /> },
+      { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon />, badge: pendingWithdrawTasksCount, badgeColor: 'bg-teal-600' },
+      { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon />, badge: pendingUserTasksTotal, badgeColor: 'bg-blue-500' },
       { to: '/admin/offerwalls', label: 'Offerwalls & S2S', icon: <GlobeSearchIcon /> },
       { to: '/admin/task-categories', label: 'Task Configurator', icon: <SettingsIcon /> },
       { to: '/admin/work-and-earn-editor', label: 'Work & Earn Editor', icon: <SettingsIcon /> },
@@ -83,23 +111,28 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
                  onClick={() => setSidebarOpen(false)}>
             </div>
             <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-gray-800 dark:bg-gray-900 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 flex flex-col`}>
-                <div className="flex items-center justify-center h-20 border-b border-gray-700 flex-shrink-0">
-                    <h1 className="text-2xl font-bold text-white">SmartEarning</h1>
+                <div className="flex items-center justify-between px-4 h-20 border-b border-gray-700 flex-shrink-0">
+                    <h1 className="text-2xl font-bold text-white tracking-tight">SmartEarning</h1>
+                    {totalPendingUpdates > 0 && (
+                        <span className="text-[11px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400">
+                            {totalPendingUpdates} New
+                        </span>
+                    )}
                 </div>
                 <nav className="mt-4 px-4 flex-1 overflow-y-auto space-y-1 custom-scrollbar">
-                    {navLinks.map(({ to, label, icon, badge }) => (
+                    {navLinks.map(({ to, label, icon, badge, badgeColor }) => (
                         <NavLink
                             key={label}
                             to={to}
                             end={to === '/admin'}
                             onClick={() => setSidebarOpen(false)}
-                            className={({isActive}) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} mt-2`}
+                            className={({isActive}) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} mt-1`}
                         >
                             {icon}
-                            <span className="mx-4 font-medium">{label}</span>
+                            <span className="mx-3 font-medium text-sm flex-1 truncate">{label}</span>
                              {badge !== undefined && badge > 0 && (
-                                <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                    {badge}
+                                <span className={`inline-flex items-center justify-center px-2 py-0.5 text-xs font-black leading-none text-white ${badgeColor || 'bg-red-600'} rounded-full shadow-sm shrink-0 min-w-[20px] text-center`}>
+                                    {badge > 99 ? '99+' : badge}
                                 </span>
                             )}
                         </NavLink>

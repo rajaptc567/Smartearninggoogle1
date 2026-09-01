@@ -234,22 +234,40 @@ const AdminUserTasks: React.FC = () => {
                         <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight">Admin Task Management</h1>
                         <p className="mt-1 text-blue-100/70 text-xs font-medium uppercase tracking-widest">Configure exchange rates, task rules, review member campaigns and worker proof submissions</p>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                        <Button variant={activeTab === 'campaigns' ? 'primary' : 'secondary'} onClick={() => setActiveTab('campaigns')}>
-                            Campaigns ({userTasks.length})
-                        </Button>
-                        <Button variant={activeTab === 'submissions' ? 'primary' : 'secondary'} onClick={() => setActiveTab('submissions')}>
-                            Worker Proofs ({userTaskSubmissions.length})
-                        </Button>
-                        <Button variant={activeTab === 'rates' ? 'primary' : 'secondary'} onClick={() => setActiveTab('rates')}>
-                            Rates & Rules
-                        </Button>
-                        <Button variant={activeTab === 'proof-limits' ? 'primary' : 'secondary'} onClick={() => setActiveTab('proof-limits')}>
-                            Proof Limits
-                        </Button>
-                        <Button variant={activeTab === 'reset-data' ? 'danger' : 'secondary'} onClick={() => setActiveTab('reset-data')}>
-                            Reset & Erase Data 🔄
-                        </Button>
+                    <div className="flex gap-2 flex-wrap items-center">
+                        {(() => {
+                            const pendingCampaigns = userTasks.filter(t => t.status === 'Pending').length;
+                            const pendingProofs = userTaskSubmissions.filter(s => s.status === 'Pending' || s.status === 'Submitted' || s.status === 'In Review').length;
+                            return (
+                                <>
+                                    <Button variant={activeTab === 'campaigns' ? 'primary' : 'secondary'} onClick={() => setActiveTab('campaigns')} className="relative">
+                                        <span>Campaigns ({userTasks.length})</span>
+                                        {pendingCampaigns > 0 && (
+                                            <span className="ml-2 px-2 py-0.5 text-[10px] font-black bg-amber-500 text-slate-900 rounded-full shadow-sm">
+                                                {pendingCampaigns} Pending
+                                            </span>
+                                        )}
+                                    </Button>
+                                    <Button variant={activeTab === 'submissions' ? 'primary' : 'secondary'} onClick={() => setActiveTab('submissions')} className="relative">
+                                        <span>Worker Proofs ({userTaskSubmissions.length})</span>
+                                        {pendingProofs > 0 && (
+                                            <span className="ml-2 px-2 py-0.5 text-[10px] font-black bg-amber-500 text-slate-900 rounded-full shadow-sm">
+                                                {pendingProofs} Pending
+                                            </span>
+                                        )}
+                                    </Button>
+                                    <Button variant={activeTab === 'rates' ? 'primary' : 'secondary'} onClick={() => setActiveTab('rates')}>
+                                        Rates & Rules
+                                    </Button>
+                                    <Button variant={activeTab === 'proof-limits' ? 'primary' : 'secondary'} onClick={() => setActiveTab('proof-limits')}>
+                                        Proof Limits
+                                    </Button>
+                                    <Button variant={activeTab === 'reset-data' ? 'danger' : 'secondary'} onClick={() => setActiveTab('reset-data')}>
+                                        Reset & Erase Data 🔄
+                                    </Button>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>

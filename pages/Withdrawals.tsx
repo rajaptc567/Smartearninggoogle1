@@ -279,6 +279,71 @@ const Withdrawals: React.FC = () => {
           </div>
       </div>
       
+      {/* Quick Status Tabs with Badge Counters */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 custom-scrollbar">
+          {(() => {
+              const pendingCount = withdrawals.filter(w => w.status === Status.Pending || w.status === Status.Processing).length;
+              const approvedCount = withdrawals.filter(w => w.status === Status.Approved).length;
+              const rejectedCount = withdrawals.filter(w => w.status === Status.Rejected).length;
+              return (
+                  <>
+                      <button
+                          type="button"
+                          onClick={() => setStatusFilter('')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              statusFilter === '' 
+                                  ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900 shadow-sm' 
+                                  : 'bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                          }`}
+                      >
+                          <span>All Withdrawals</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-gray-600/20">{withdrawals.length}</span>
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setStatusFilter(Status.Pending)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              statusFilter === Status.Pending 
+                                  ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/20' 
+                                  : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 hover:bg-amber-100'
+                          }`}
+                      >
+                          <span>⏳ Pending / Processing</span>
+                          {pendingCount > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black bg-amber-500 text-slate-900">
+                                  {pendingCount}
+                              </span>
+                          )}
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setStatusFilter(Status.Approved)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              statusFilter === Status.Approved 
+                                  ? 'bg-emerald-600 text-white shadow-sm' 
+                                  : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100'
+                          }`}
+                      >
+                          <span>✅ Approved / Paid</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20">{approvedCount}</span>
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setStatusFilter(Status.Rejected)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              statusFilter === Status.Rejected 
+                                  ? 'bg-rose-600 text-white shadow-sm' 
+                                  : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-100'
+                          }`}
+                      >
+                          <span>❌ Rejected</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-500/20">{rejectedCount}</span>
+                      </button>
+                  </>
+              );
+          })()}
+      </div>
+      
       <div className="space-y-4">
         <Table headers={tableHeaders}>
             {paginatedWithdrawals.map((withdrawal: Withdrawal) => (

@@ -17,16 +17,6 @@ export const AdminModulePagesManager: React.FC = () => {
     const [editingNoticePage, setEditingNoticePage] = useState<{ category: 'investment' | 'workAndEarn'; page: ModulePageControl } | null>(null);
     const [customNoticeDraft, setCustomNoticeDraft] = useState('');
 
-    const [defaultLandingModule, setDefaultLandingModule] = useState<'work_and_earn' | 'investment'>(() => {
-        return settings?.defaultUserDashboardModule || 'work_and_earn';
-    });
-
-    React.useEffect(() => {
-        if (settings?.defaultUserDashboardModule) {
-            setDefaultLandingModule(settings.defaultUserDashboardModule);
-        }
-    }, [settings?.defaultUserDashboardModule]);
-
     // Local configuration initialized from settings or default
     const [localConfig, setLocalConfig] = useState<ModulePageControlsConfig>(() => {
         const defaults = getDefaultModulePagesConfig();
@@ -223,12 +213,11 @@ export const AdminModulePagesManager: React.FC = () => {
         try {
             const updatedSettings = {
                 ...settings,
-                defaultUserDashboardModule: defaultLandingModule,
                 modulePagesConfig: localConfig
             };
             const result = await updateSettings(updatedSettings);
             dispatch({ type: 'SET_SETTINGS', payload: result });
-            setFeedbackMsg({ type: 'success', text: 'Page permissions, default landing module, and menu visibility saved live!' });
+            setFeedbackMsg({ type: 'success', text: 'Page permissions and menu visibility saved live!' });
             setTimeout(() => setFeedbackMsg(null), 4000);
         } catch (err: any) {
             setFeedbackMsg({ type: 'error', text: err.message || 'Failed to save page controls.' });
@@ -356,48 +345,6 @@ export const AdminModulePagesManager: React.FC = () => {
                     <button onClick={() => setFeedbackMsg(null)} className="font-black hover:text-white">✕</button>
                 </div>
             )}
-
-            {/* Default Landing Module Switcher Card */}
-            <div className="bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-slate-900/80 border border-blue-500/20 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1 text-left">
-                    <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                        <span className="text-xs font-black uppercase tracking-wider text-blue-300">Post-Login Landing Module (پوسٹ لاگ ان ڈیفالٹ ماڈیول)</span>
-                    </div>
-                    <h4 className="text-base font-black text-white">Default Module Shown to Users Immediately After Login</h4>
-                    <p className="text-xs text-slate-400 max-w-xl">
-                        When a member signs in, they will be automatically redirected to this chosen module view first. They can still switch freely between modules anytime from their header.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => setDefaultLandingModule('work_and_earn')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
-                            defaultLandingModule === 'work_and_earn'
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                : 'text-slate-400 hover:text-white'
-                        }`}
-                    >
-                        <span>💼</span>
-                        <span>Work & Earn</span>
-                        {defaultLandingModule === 'work_and_earn' && <span className="text-[10px] bg-blue-700/80 px-1.5 py-0.5 rounded-md">Default</span>}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setDefaultLandingModule('investment')}
-                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
-                            defaultLandingModule === 'investment'
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
-                                : 'text-slate-400 hover:text-white'
-                        }`}
-                    >
-                        <span>📈</span>
-                        <span>Investment</span>
-                        {defaultLandingModule === 'investment' && <span className="text-[10px] bg-indigo-700/80 px-1.5 py-0.5 rounded-md">Default</span>}
-                    </button>
-                </div>
-            </div>
 
             {/* Category Tabs & Quick Stats */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">

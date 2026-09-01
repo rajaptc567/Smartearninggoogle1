@@ -3496,28 +3496,6 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Default Post-Login Module */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200">Default Post-Login Landing Module (پوسٹ لاگ ان ڈیفالٹ ماڈیول)</h4>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Choose which primary module members see immediately after logging in. When Work & Earn is selected, members land on Micro Tasks; when Investment is selected, members land on Investment Plans.
-                        </p>
-                    </div>
-                    <div className="shrink-0">
-                        <select 
-                            id="hub_defaultUserDashboardModule"
-                            name="defaultUserDashboardModule"
-                            value={localSettings.defaultUserDashboardModule || 'work_and_earn'}
-                            onChange={handleSelectChange}
-                            className="w-full sm:w-auto text-xs font-bold p-2.5 rounded-xl border border-gray-300 dark:border-gray-700 dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-blue-500"
-                        >
-                            <option value="work_and_earn">💼 Work & Earn (Micro Tasks & Gigs)</option>
-                            <option value="investment">📈 Investment Dashboard (Plans & Deposits)</option>
-                        </select>
-                    </div>
-                </div>
-
                 {/* User Access Controls */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
                     <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 border-b dark:border-gray-700 pb-2">🛡️ Target Audience Eligibility Filters</h4>
