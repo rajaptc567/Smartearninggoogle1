@@ -587,6 +587,33 @@ export const purchasePlan = async (req, res) => {
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
         if (user.restrictions?.purchaseBlocked) return res.status(403).json({ success: false, error: 'Purchases disabled.' });
 
+        const settings = await Setting.getSettings();
+        const isMasterEnabled = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
+        
+        let hasAccess = isMasterEnabled || isAdmin;
+        if (!hasAccess) {
+            if (settings.investmentAllowActivePlanUsersWhenDisabled) {
+                const hasActivePlan = (user.activePlans && user.activePlans.length > 0) || (user.activePlan && user.activePlan !== 'None');
+                if (hasActivePlan) hasAccess = true;
+            }
+            if (!hasAccess) {
+                const userIdStr = String(user._id);
+                const userNameStr = user.username ? user.username.toLowerCase() : '';
+                const allowedIds = (settings.investmentAllowedUserIds || []).map(id => String(id));
+                const allowedUsernames = (settings.investmentAllowedUsernames || []).map(u => String(u).toLowerCase());
+                if (allowedIds.includes(userIdStr) || (userNameStr && allowedUsernames.includes(userNameStr))) {
+                    hasAccess = true;
+                }
+            }
+        }
+
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                error: 'The Investment Module is currently disabled. Investment plan purchases are unavailable.'
+            });
+        }
+
         const useHeldBalance = req.body.useHeldBalance !== false;
         const userHeld = user.heldUpgradeBalance || 0;
         let heldUsed = 0;
@@ -619,7 +646,6 @@ export const purchasePlan = async (req, res) => {
         sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_whatsapp', variables: planVars });
 
         await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: 'Plan Purchase', amount: -plan.price, description: `Purchased ${plan.name} plan`, status: 'Approved' });
-        const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         await distributeCommissions(updatedUser, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });

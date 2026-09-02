@@ -1702,6 +1702,32 @@ export const transferInvestmentToTaskWallet = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const settings = await Setting.getSettings();
+        const isMasterEnabled = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
+        
+        let hasAccess = isMasterEnabled || isAdmin;
+        if (!hasAccess) {
+            if (settings.investmentAllowActivePlanUsersWhenDisabled) {
+                const hasActivePlan = (user.activePlans && user.activePlans.length > 0) || (user.activePlan && user.activePlan !== 'None');
+                if (hasActivePlan) hasAccess = true;
+            }
+            if (!hasAccess) {
+                const userIdStr = String(user._id);
+                const userNameStr = user.username ? user.username.toLowerCase() : '';
+                const allowedIds = (settings.investmentAllowedUserIds || []).map(id => String(id));
+                const allowedUsernames = (settings.investmentAllowedUsernames || []).map(u => String(u).toLowerCase());
+                if (allowedIds.includes(userIdStr) || (userNameStr && allowedUsernames.includes(userNameStr))) {
+                    hasAccess = true;
+                }
+            }
+        }
+
+        if (!hasAccess) {
+            return res.status(403).json({
+                success: false,
+                error: 'The Investment Module is currently disabled. Transfers from the Investment Wallet are unavailable.'
+            });
+        }
+
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
         const rate = rates[userCurr] || 1;

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Status, Transaction, User, Deposit, formatCurrency } from '../types';
+import { Status, Transaction, User, Deposit, formatCurrency, canUserAccessInvestment } from '../types';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
@@ -188,7 +188,9 @@ const UserDashboard: React.FC = () => {
     const recentTransactions = userTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
     const referralLink = `${window.location.origin}${window.location.pathname}#/register?sponsor=${currentUser.username}`;
     
-    if (dashboardMode === 'work_and_earn') {
+    const userCanAccessInvestment = canUserAccessInvestment(currentUser, settings);
+
+    if (dashboardMode === 'work_and_earn' || !userCanAccessInvestment) {
         return <UserWorkAndEarnDashboard />;
     }
     

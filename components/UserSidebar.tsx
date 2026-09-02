@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
+import { canUserAccessInvestment } from '../types';
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -50,6 +51,11 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
         }
         return true;
     }, [currentUser, settings]);
+
+    const userCanAccessInvestment = canUserAccessInvestment(currentUser, settings);
+    const isInvestmentEnabled = settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false;
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+    const showSidebarModuleSwitcher = hasHubAccess && userCanAccessInvestment;
 
     const isCampaignActive = location.pathname.includes('/member/create-campaign') ||
         location.pathname.includes('/member/my-campaigns') ||
@@ -174,7 +180,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                 </div>
                 
                 {/* Module Mode Switcher in Sidebar */}
-                {hasHubAccess && (
+                {showSidebarModuleSwitcher && (
                     <div className="mx-3 mt-3 mb-1 p-2 bg-gray-800/80 rounded-2xl border border-gray-700/60 flex flex-col gap-1.5 shrink-0">
                         <div className="flex items-center justify-between px-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400">Module Selection</span>
@@ -213,9 +219,9 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                                         ? 'bg-blue-600 text-white shadow-md' 
                                         : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                                 }`}
-                                title="Secondary Investment & MLM Module"
+                                title={!isInvestmentEnabled ? 'Secondary Investment Module (Admin Preview - Disabled for Users)' : 'Secondary Investment & MLM Module'}
                             >
-                                📈 Investment
+                                📈 Investment {!isInvestmentEnabled && <span className="text-[9px] text-amber-400 font-bold block sm:inline">(Admin)</span>}
                             </button>
                         </div>
                     </div>

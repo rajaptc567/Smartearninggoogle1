@@ -173,6 +173,11 @@ export interface Settings {
     };
     isUserTransferEnabled: boolean;
     isTasksEnabled: boolean; 
+    investmentModuleEnabled?: boolean;
+    isInvestmentModuleEnabled?: boolean;
+    investmentAllowActivePlanUsersWhenDisabled?: boolean;
+    investmentAllowedUserIds?: string[];
+    investmentAllowedUsernames?: string[];
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
@@ -1066,3 +1071,39 @@ export interface TemplateLog {
     date?: string;
     createdAt?: string;
 }
+
+/**
+ * Evaluates whether a user can see and access the Investment Module
+ * - Enabled globally => everyone can access
+ * - Disabled globally => Admin always has access. Normal users only have access if:
+ *     a) investmentAllowActivePlanUsersWhenDisabled is TRUE and user has active plan(s)
+ *     b) user is explicitly in investmentAllowedUserIds or investmentAllowedUsernames
+ */
+export const canUserAccessInvestment = (user?: User | null, settings?: Settings | null): boolean => {
+    if (!settings) return true;
+    const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+    if (isAdmin) return true;
+
+    const isMasterEnabled = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
+    if (isMasterEnabled) return true;
+
+    if (!user) return false;
+
+    // Check if active plan bypass is enabled
+    if (settings.investmentAllowActivePlanUsersWhenDisabled) {
+        const hasActivePlan = (user.activePlans && user.activePlans.length > 0) || (Boolean(user.activePlan) && user.activePlan !== 'None');
+        if (hasActivePlan) return true;
+    }
+
+    // Check manual member whitelist (by ID or Username)
+    const userId = user._id ? String(user._id) : '';
+    const username = user.username ? user.username.toLowerCase() : '';
+
+    const allowedIds = (settings.investmentAllowedUserIds || []).map(id => String(id));
+    const allowedUsernames = (settings.investmentAllowedUsernames || []).map(u => String(u).toLowerCase());
+
+    if (userId && allowedIds.includes(userId)) return true;
+    if (username && allowedUsernames.includes(username)) return true;
+
+    return false;
+};

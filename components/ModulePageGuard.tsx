@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
+import { canUserAccessInvestment } from '../types';
 
 interface ModulePageGuardProps {
     pageId: string;
@@ -29,7 +30,10 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
 
     // Legacy sync checks
     let isLegacyEnabled = true;
+    const userCanAccessInvestment = canUserAccessInvestment(currentUser, settings);
+
     if (category === 'investment' || effectiveCategory === 'investment') {
+        if (!userCanAccessInvestment) isLegacyEnabled = false;
         if (pageId === 'transfer' && (settings?.isUserTransferEnabled === false || settings?.transferConfig?.enabled === false)) isLegacyEnabled = false;
         if (pageId === 'tasks' && settings?.isTasksEnabled === false) isLegacyEnabled = false;
         if (pageId === 'userTasks' && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;

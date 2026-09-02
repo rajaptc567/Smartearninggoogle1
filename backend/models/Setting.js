@@ -321,6 +321,11 @@ const SettingSchema = new mongoose.Schema({
     whatsappDepositProofEnabled: { type: Boolean, default: true },
     showUkSupportOffice: { type: Boolean, default: true },
     showUkSupportOfficeInFooter: { type: Boolean, default: true },
+    investmentModuleEnabled: { type: Boolean, default: true },
+    isInvestmentModuleEnabled: { type: Boolean, default: true },
+    investmentAllowActivePlanUsersWhenDisabled: { type: Boolean, default: false },
+    investmentAllowedUserIds: { type: [String], default: [] },
+    investmentAllowedUsernames: { type: [String], default: [] },
     supportOfficeBadge1: { type: String, default: 'Official Registered Support Desk' },
     supportOfficeBadge2: { type: String, default: 'UK Registered Office' },
     supportOfficeTitle: { type: String, default: 'Customer Support Office (UK)' },
@@ -575,6 +580,23 @@ SettingSchema.statics.getSettings = async function() {
                 activePlanPurchase: { minPayout: 0.50, minSlots: 5 }
             }
         };
+        needsSave = true;
+    }
+    if (settings.investmentModuleEnabled === undefined) {
+        settings.investmentModuleEnabled = settings.isInvestmentModuleEnabled !== undefined ? settings.isInvestmentModuleEnabled : true;
+        settings.isInvestmentModuleEnabled = settings.investmentModuleEnabled;
+        needsSave = true;
+    }
+    if (settings.investmentAllowActivePlanUsersWhenDisabled === undefined) {
+        settings.investmentAllowActivePlanUsersWhenDisabled = false;
+        needsSave = true;
+    }
+    if (!Array.isArray(settings.investmentAllowedUserIds)) {
+        settings.investmentAllowedUserIds = [];
+        needsSave = true;
+    }
+    if (!Array.isArray(settings.investmentAllowedUsernames)) {
+        settings.investmentAllowedUsernames = [];
         needsSave = true;
     }
     if (needsSave) { await settings.save(); }
