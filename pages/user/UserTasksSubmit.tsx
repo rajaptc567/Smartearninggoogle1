@@ -6963,9 +6963,31 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <div className="p-4 bg-purple-50/60 dark:bg-purple-950/30 rounded-2xl border border-purple-100 dark:border-purple-900/40">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Average Campaign Cost</span>
                                 <div className="text-xl font-mono font-black text-purple-700 dark:text-purple-300 mt-1">
-                                    ${mySubmittedTasks.length > 0 ? (campaignPurchasesxœÌVÝŽÚF¾ç)ŽPÔ@/Þ…lšýA"›¬ºR’¶bW½¨z1¶xÊxÆšƒ-Âô2ÐWì#tü†8ØUi‘x8Ì|ç|ç;ß<LßÀ ‚d9Õ½{¢ê„!Ÿk¿¢Å-ÑëõážÚ'¶ýtÓ7hx]<º7‡©ppQê	ðº«1ÖÖ§vÿ	3ÁµåæA¶:—$±F¶¶NÁaÂ]tÇW
-¥`ý…6ÀHÄ]=pI:ç=Õ¿¤ÇGW$p4f=xïQKêÂž6Ç74ûU3­8s”„yÖ{pnƒGäâ¢²úÊ,m"âzÖYÌÀÒCY|lOíòÏûë¯l{0²»ß„	FÜDaˆÒ%
-AKóLùÜZÑP_{^ÂÙ[5äuÇ÷B“0”bihù]ÈÜiTVê
-™a
-“U¸{ç¿¬E5,ZªE‘2Ò?k5‰^äb¯G\÷9è>\Á|…¡§O\„Mèoášê>~»ÿÜ¼7yÚFJ·›QÆ'N+CÊVœ4àkR*¢IäQÓ(ˆLàµˆªéJÊ’z±ÓPöœöÿy­€ªjÉBÓî0Ùºh%Ö0¯S¬šâÊU‘´ÖI‰­ÒŽ+ŸjÜûï?Ÿþ.êòüŒ„i¿,ÐÕÀ5À:¨P™ÖY!ôh´
-ûÌÆðW¤4%–ƒz…È!LÒÊéÔ–µ¥²ê;¸ u;9î%áj†Ò¨î8ôîø•kcd·Íý‹¶³¤öØÃA²/›Öºã'k½ƒuÇCV¬3sÌÖÓ­¥Ú!3Ó0%Ap¸)¬Þåæ«¾$pL.û^“¯eNc=Y—¦ÿk$]ßˆQ="f¾ªöa$¯ä^,¦ƒ}7‰ºã¨a²$”‡!¼])ºÄM¯	#ÜÅoËÒÎ~X/ë°¦æ›=« U‘Ä€Pn†eEåºïËÜWšØg–¤­³&ëp"­o¯“Ðl˜w£¿aÔ]\¯{Ù=D¡žúb5á„%šºê½ðëÍSØ?~]M_•„VÖ,b,íÛ!T¼|s‰“[·ýÉ>°ß-çûqç%ë¹é•îlÌ¹ð¿67ÎãÅhîŠ&ÌžÛÒÀ/á’âª¡Or&[åüT³\!§òkÿ²³¹ìt0…ÔàáŒDLÃƒB™]Dókéeç?   ÿÿ Á«¨ï
+                                    ${mySubmittedTasks.length > 0 ? (campaignPurchasesUSD / mySubmittedTasks.length).toFixed(2) : '0.00'}
+                                </div>
+                            </div>
+                            {/* Metric 3 */}
+                            <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Total Campaign Outlay</span>
+                                <div className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-300 mt-1">
+                                    ${campaignPurchasesUSD.toFixed(2)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => setShowAnalyticsModal(false)}
+                                className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors dark:bg-gray-700 dark:hover:bg-gray-600"
+                            >
+                                Close Analytics
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default UserTasksSubmit;
