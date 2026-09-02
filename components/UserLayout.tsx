@@ -8,7 +8,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { markNotificationPopupAsShown, verifyEmail, verifyWhatsapp, resendEmailVerification, resendWhatsappVerification } from '../services/api';
 import ActivityTicker, { Activity } from './ui/ActivityTicker';
-import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice, canUserAccessInvestment } from '../types';
+import { Deposit, formatCurrency, Transaction, Transfer, User, Withdrawal, Notice } from '../types';
 import { SEOHead } from './SEOHead';
 import Footer from './Footer';
 
@@ -155,13 +155,7 @@ const UserLayout: React.FC = () => {
     return true;
   }, [currentUser, settings]);
 
-  const userCanAccessInvestment = canUserAccessInvestment(currentUser, settings);
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-
   const [dashboardMode, setDashboardMode] = useState<'work_and_earn' | 'investment'>(() => {
-      if (!userCanAccessInvestment) {
-          return 'work_and_earn';
-      }
       const adminDefault = settings?.defaultUserDashboardModule || 'work_and_earn';
       const saved = localStorage.getItem('dashboard_mode');
       const mode = (saved as 'work_and_earn' | 'investment') || adminDefault;
@@ -177,13 +171,6 @@ const UserLayout: React.FC = () => {
 
   // Keep dashboardMode in sync with admin defaults or restrictions
   useEffect(() => {
-    if (!userCanAccessInvestment) {
-      if (dashboardMode !== 'work_and_earn') {
-        setDashboardMode('work_and_earn');
-        localStorage.setItem('dashboard_mode', 'work_and_earn');
-      }
-      return;
-    }
     if (settings?.defaultUserDashboardModule && !localStorage.getItem('dashboard_mode')) {
       const targetMode = settings.defaultUserDashboardModule;
       if (targetMode === 'work_and_earn' && (settings.hubEnabled === false || !hasHubAccess)) {
@@ -192,15 +179,10 @@ const UserLayout: React.FC = () => {
         setDashboardMode(targetMode);
       }
     }
-  }, [settings?.defaultUserDashboardModule, hasHubAccess, userCanAccessInvestment, dashboardMode]);
+  }, [settings?.defaultUserDashboardModule, hasHubAccess]);
 
   // Enforce access changes in real-time safely
   useEffect(() => {
-    if (!userCanAccessInvestment && dashboardMode === 'investment') {
-      setDashboardMode('work_and_earn');
-      localStorage.setItem('dashboard_mode', 'work_and_earn');
-      return;
-    }
     if (settings && settings.hubEnabled === false && dashboardMode === 'work_and_earn') {
       setDashboardMode('investment');
       localStorage.setItem('dashboard_mode', 'investment');
@@ -208,7 +190,7 @@ const UserLayout: React.FC = () => {
       setDashboardMode('investment');
       localStorage.setItem('dashboard_mode', 'investment');
     }
-  }, [hasHubAccess, dashboardMode, settings, userCanAccessInvestment]);
+  }, [hasHubAccess, dashboardMode, settings]);
 
   // Popup State
   const [popupNotification, setPopupNotification] = useState<any | null>(null);

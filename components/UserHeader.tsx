@@ -3,7 +3,7 @@ import React from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import NotificationBell from './ui/NotificationBell';
-import { currencySymbols, Currency, canUserAccessInvestment } from '../types';
+import { currencySymbols, Currency } from '../types';
 
 interface UserHeaderProps {
   setSidebarOpen: (open: boolean) => void;
@@ -30,11 +30,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen, dashboardMode, 
     }
     return true;
   }, [currentUser, settings]);
-
-  const userCanAccessInvestment = canUserAccessInvestment(currentUser, settings);
-  const isInvestmentEnabled = settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false;
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-  const showModeSwitcher = hasHubAccess && userCanAccessInvestment;
 
   const getTitle = () => {
     const path = location.pathname.split('/')[2] || 'dashboard';
@@ -85,7 +80,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen, dashboardMode, 
 
       <div className="flex items-center space-x-2 sm:space-x-4">
         {/* Responsive Dashboard Mode Switcher */}
-        {showModeSwitcher && (
+        {hasHubAccess && (
           <div className="flex items-center bg-gray-100 dark:bg-gray-700/50 p-0.5 sm:p-1 rounded-xl border dark:border-gray-700/50 shrink-0">
             <button 
               onClick={() => {
@@ -105,9 +100,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({ setSidebarOpen, dashboardMode, 
                 navigate('/member');
               }}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-black tracking-tight transition-all duration-200 ${dashboardMode === 'investment' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white'}`}
-              title={!isInvestmentEnabled ? 'Investment (Admin Preview Only - Disabled for Users)' : 'Investment (Secondary)'}
+              title="Investment (Secondary)"
             >
-              <span>📈 Investment {!isInvestmentEnabled && <span className="text-[9px] text-amber-400 font-bold">(Admin)</span>}</span>
+              <span>📈 Investment</span>
             </button>
           </div>
         )}

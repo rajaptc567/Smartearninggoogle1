@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../hooks/useData';
-import { formatCurrency, UserTask, canUserAccessInvestment } from '../../types';
+import { formatCurrency, UserTask } from '../../types';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus, openTaskDispute, updateUserTaskStatus, deleteUserTask, transferInvestmentToTaskWallet, transferTaskEarningsToCampaignWallet, transferWalletToCampaign } from '../../services/api';
@@ -197,8 +197,6 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     const userIdStr = currentUser?._id?.toString() || '';
     const exchangeRate = rates[currentUser?.currency || 'USD'] || 1;
-
-    const allowInvestmentFunding = canUserAccessInvestment(currentUser, settings);
 
     // Calculate Task Earnings Balance dynamically to match Dashboard
     const netAvailableTaskEarningsUSD = useMemo(() => {
@@ -6309,7 +6307,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 <label className="text-[10px] font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
                                     Select Funding Source Option:
                                 </label>
-                                <div className={`grid ${allowInvestmentFunding ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
+                                <div className="grid grid-cols-3 gap-2">
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -6329,47 +6327,43 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </span>
                                     </button>
 
-                                    {allowInvestmentFunding && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setFundingSource('investment');
-                                            }}
-                                            className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
-                                                fundingSource === 'investment'
-                                                    ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
-                                                🏦 Investment
-                                            </span>
-                                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                                {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}
-                                            </span>
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFundingSource('investment');
+                                        }}
+                                        className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
+                                            fundingSource === 'investment'
+                                                ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
+                                                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
+                                            🏦 Investment
+                                        </span>
+                                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                            {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}
+                                        </span>
+                                    </button>
 
-                                    {allowInvestmentFunding && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setFundingSource('combined');
-                                            }}
-                                            className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
-                                                fundingSource === 'combined'
-                                                    ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
-                                                🔀 Combined
-                                            </span>
-                                            <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold mt-0.5">
-                                                ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)} USD
-                                            </span>
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFundingSource('combined');
+                                        }}
+                                        className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
+                                            fundingSource === 'combined'
+                                                ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
+                                                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
+                                            🔀 Combined
+                                        </span>
+                                        <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold mt-0.5">
+                                            ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)} USD
+                                        </span>
+                                    </button>
                                 </div>
                             </div>
 
@@ -6377,14 +6371,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             {(() => {
                                 const rate = rates[insufficientFundsModal.userCurrency] || 1;
                                 const availTaskEarningsUSD = insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0;
-                                const availInvestmentUSD = allowInvestmentFunding ? (insufficientFundsModal.availableInvestmentUSD ?? 0) : 0;
-                                const availInvestmentUserCurr = allowInvestmentFunding ? (insufficientFundsModal.availableInvestmentUserCurr ?? 0) : 0;
+                                const availInvestmentUSD = insufficientFundsModal.availableInvestmentUSD ?? 0;
+                                const availInvestmentUserCurr = insufficientFundsModal.availableInvestmentUserCurr ?? 0;
                                 const shortfallUSD = insufficientFundsModal.shortfallUSD;
                                 const shortfallUserCurr = insufficientFundsModal.shortfallUserCurr;
 
                                 const isTaskEarningsDeficit = fundingSource === 'task_earnings' && availTaskEarningsUSD < shortfallUSD;
-                                const remainingFromInvestmentUSD = isTaskEarningsDeficit && allowInvestmentFunding ? Number((shortfallUSD - availTaskEarningsUSD).toFixed(2)) : 0;
-                                const remainingFromInvestmentUserCurr = isTaskEarningsDeficit && allowInvestmentFunding ? Number((remainingFromInvestmentUSD * rate).toFixed(2)) : 0;
+                                const remainingFromInvestmentUSD = isTaskEarningsDeficit ? Number((shortfallUSD - availTaskEarningsUSD).toFixed(2)) : 0;
+                                const remainingFromInvestmentUserCurr = isTaskEarningsDeficit ? Number((remainingFromInvestmentUSD * rate).toFixed(2)) : 0;
 
                                 const isInvestmentDeficit = fundingSource === 'investment' && availInvestmentUSD < shortfallUSD;
                                 const remainingFromTaskEarningsUSD = isInvestmentDeficit ? Number((shortfallUSD - availInvestmentUSD).toFixed(2)) : 0;
@@ -6402,30 +6396,25 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <span>Task Earnings Balance Insufficient</span>
                                                 </div>
                                                 <p className="text-xs text-amber-900 dark:text-amber-200 font-semibold leading-relaxed">
-                                                    {allowInvestmentFunding 
-                                                        ? '"Your transfer balance is insufficient, so what remaining amount do you want to transfer from the investment module?"'
-                                                        : 'Your available Task Earnings are insufficient to cover the required campaign cost. Please complete more tasks or deposit funds to your Work & Earn hub.'
-                                                    }
+                                                    "Your transfer balance is insufficient, so what remaining amount do you want to transfer from the investment module?"
                                                 </p>
-                                                {allowInvestmentFunding && (
-                                                    <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
-                                                        <div className="flex justify-between">
-                                                            <span>Task Earnings Contribution:</span>
-                                                            <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)} USD</strong>
-                                                        </div>
-                                                        <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
-                                                            <span>Auto Pre-filled from Investment:</span>
-                                                            <strong className="text-emerald-700 dark:text-emerald-400 font-black">
-                                                                {remainingFromInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)} USD)
-                                                            </strong>
-                                                        </div>
+                                                <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
+                                                    <div className="flex justify-between">
+                                                        <span>Task Earnings Contribution:</span>
+                                                        <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)} USD</strong>
                                                     </div>
-                                                )}
+                                                    <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
+                                                        <span>Auto Pre-filled from Investment:</span>
+                                                        <strong className="text-emerald-700 dark:text-emerald-400 font-black">
+                                                            {remainingFromInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)} USD)
+                                                        </strong>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
 
                                         {/* Notice Message when Investment is Insufficient */}
-                                        {allowInvestmentFunding && fundingSource === 'investment' && isInvestmentDeficit && (
+                                        {fundingSource === 'investment' && isInvestmentDeficit && (
                                             <div className="bg-amber-50 dark:bg-amber-950/50 p-4 rounded-2xl border border-amber-300 dark:border-amber-800 space-y-2">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
                                                     <span className="text-base">⚠️</span>
@@ -6448,7 +6437,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         )}
 
                                         {/* Combined Split Mode Summary */}
-                                        {allowInvestmentFunding && fundingSource === 'combined' && (
+                                        {fundingSource === 'combined' && (
                                             <div className="bg-purple-50 dark:bg-purple-950/40 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 space-y-2 text-xs">
                                                 <h4 className="font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
                                                     🔀 Automatic Multi-Wallet Split Funding
@@ -6472,12 +6461,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         {isCombinedSufficient ? (
                                             <div className="bg-emerald-50 dark:bg-emerald-950/50 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-200 font-medium flex items-center gap-2">
                                                 <span className="text-emerald-600 dark:text-emerald-400 text-sm">✅</span>
-                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)} USD.</span>
+                                                <span>Combined available balance (${totalAvailableUSD.toFixed(2)} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)} USD.</span>
                                             </div>
                                         ) : (
                                             <div className="bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-800/60 text-xs text-red-700 dark:text-red-300 font-medium flex items-center gap-2">
                                                 <span className="text-red-500 text-sm">❌</span>
-                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)} USD). {allowInvestmentFunding ? 'Please deposit funds into your Investment Wallet.' : 'Please deposit funds to Work & Earn.'}</span>
+                                                <span>Combined available balance (${totalAvailableUSD.toFixed(2)} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)} USD). Please deposit funds into your Investment Wallet.</span>
                                             </div>
                                         )}
 
@@ -6497,8 +6486,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             })()}
 
                             <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
-                                <Link to={allowInvestmentFunding ? "/member/deposit" : "/member/deposit"} className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
-                                    💳 {allowInvestmentFunding ? 'Deposit to Investment Balance →' : 'Deposit Hub Funds →'}
+                                <Link to="/member/deposit" className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
+                                    💳 Deposit to Investment Balance &rarr;
                                 </Link>
                                 <Button
                                     variant="secondary"
