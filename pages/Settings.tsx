@@ -128,6 +128,8 @@ const Settings: React.FC = () => {
             showVideoSection: true,
             showFAQ: true,
             showCTA: true,
+            showUkSupportOffice: (settings.showUkSupportOffice !== undefined ? settings.showUkSupportOffice !== false : (settings.homepageContent?.showUkSupportOffice !== false)),
+            showUkSupportOfficeInFooter: (settings.showUkSupportOfficeInFooter !== undefined ? settings.showUkSupportOfficeInFooter !== false : (settings.homepageContent?.showUkSupportOfficeInFooter !== false)),
             ...settings.homepageContent // Overwrite with actual DB values
         },
         homepagePaymentLogos: settings.homepagePaymentLogos || [],
@@ -161,8 +163,8 @@ const Settings: React.FC = () => {
         contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
         contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
         contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
-        showUkSupportOffice: settings.showUkSupportOffice !== false,
-        showUkSupportOfficeInFooter: settings.showUkSupportOfficeInFooter !== false,
+        showUkSupportOffice: (settings.showUkSupportOffice !== undefined ? settings.showUkSupportOffice !== false : (settings.homepageContent?.showUkSupportOffice !== false)),
+        showUkSupportOfficeInFooter: (settings.showUkSupportOfficeInFooter !== undefined ? settings.showUkSupportOfficeInFooter !== false : (settings.homepageContent?.showUkSupportOfficeInFooter !== false)),
         supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
         supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
         supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
@@ -801,8 +803,17 @@ const Settings: React.FC = () => {
       e.preventDefault();
       setIsSaving(true);
       try {
+          const isUkOfficeShowcaseActive = localSettings.showUkSupportOffice !== false;
+          const isUkOfficeFooterActive = localSettings.showUkSupportOfficeInFooter !== false;
           const sanitizedPayload = {
               ...localSettings,
+              showUkSupportOffice: isUkOfficeShowcaseActive,
+              showUkSupportOfficeInFooter: isUkOfficeFooterActive,
+              homepageContent: {
+                  ...(localSettings.homepageContent || {}),
+                  showUkSupportOffice: isUkOfficeShowcaseActive,
+                  showUkSupportOfficeInFooter: isUkOfficeFooterActive,
+              },
               homepagePaymentLogos: (localSettings.homepagePaymentLogos || [])
                   .filter(l => l && (l.name || l.logoUrl))
                   .map(l => ({ name: String(l.name || '').trim(), logoUrl: String(l.logoUrl || '').trim() }))

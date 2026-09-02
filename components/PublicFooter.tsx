@@ -40,7 +40,7 @@ export const PublicFooter: React.FC = () => {
                 </div>
 
                 {/* UK Customer Support Office */}
-                {settings?.showUkSupportOfficeInFooter !== false && (
+                {settings?.showUkSupportOfficeInFooter !== false && settings?.homepageContent?.showUkSupportOfficeInFooter !== false && (
                   <SupportOfficeCard variant="compact" theme="dark" className="max-w-sm" />
                 )}
               </div>

@@ -1280,8 +1280,12 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               {sc.footerCopyright || `© 2026 ${siteName}. All rights reserved.`}
             </div>
             <div className="flex items-center gap-4">
-              <span>Customer Support Desk (UK)</span>
-              <span>•</span>
+              {(settings?.showUkSupportOffice !== false || settings?.showUkSupportOfficeInFooter !== false) && (
+                <>
+                  <span>{settings?.supportOfficeTitle || 'Customer Support Desk (UK)'}</span>
+                  <span>•</span>
+                </>
+              )}
               <span>100% Escrow Protected</span>
             </div>
           </div>

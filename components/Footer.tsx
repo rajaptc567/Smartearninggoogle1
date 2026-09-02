@@ -40,7 +40,7 @@ export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = t
         </div>
 
         {/* Official UK Customer Support Office */}
-        {settings?.showUkSupportOfficeInFooter !== false && (
+        {settings?.showUkSupportOfficeInFooter !== false && settings?.homepageContent?.showUkSupportOfficeInFooter !== false && (
           <SupportOfficeCard variant="compact" />
         )}
 
