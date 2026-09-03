@@ -1,6 +1,6 @@
 {
-  "name": "SmartEarning Admin Panel",
-  "description": "A comprehensive platform and admin dashboard to manage users, deposits, withdrawals, investment plans, payment partners, and the SmartExn Global Tasks & Earn (New Version) module.",
+  "name": "SmartExn | Online Micro-Tasks, Surveys & Global Gigs",
+  "description": "Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

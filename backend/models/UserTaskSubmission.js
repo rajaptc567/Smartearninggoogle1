@@ -80,7 +80,57 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
     paid: { type: Boolean, default: false },
     rewardClaimed: { type: Boolean, default: false },
     rewardTransactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' },
-    rewardPaidAt: { type: Date }
+    rewardPaidAt: { type: Date },
+    surveyResponses: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: []
+    },
+    surveyCompletionTimeSeconds: {
+        type: Number,
+        default: 0
+    },
+    surveyQualificationStatus: {
+        type: String,
+        enum: ['Qualified', 'Disqualified', 'Screenout', 'Completed'],
+        default: 'Completed'
+    },
+    attentionCheckPassed: {
+        type: Boolean,
+        default: true
+    },
+    consentAgreed: {
+        type: Boolean,
+        default: true
+    },
+    surveyVersion: {
+        type: Number,
+        default: 1
+    },
+    checkQuestionResults: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: []
+    },
+    qualityFlags: {
+        type: [String],
+        default: []
+    },
+    qualityScore: {
+        type: Number,
+        default: 100
+    },
+    answeredPath: {
+        type: [String],
+        default: []
+    },
+    skippedQuestions: {
+        type: [String],
+        default: []
+    },
+    approvalMode: {
+        type: String,
+        enum: ['auto', 'creator', 'admin'],
+        default: 'auto'
+    }
 }, { timestamps: true });
 
 UserTaskSubmissionSchema.index({ taskId: 1, workerId: 1 });

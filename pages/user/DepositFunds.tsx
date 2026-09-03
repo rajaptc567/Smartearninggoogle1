@@ -6,8 +6,9 @@ import { useData } from '../../hooks/useData';
 import { createDeposit } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import Modal from '../../components/ui/Modal';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 
 const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
@@ -239,9 +240,13 @@ const DepositFunds: React.FC = () => {
     // Wizard State
     const [step, setStep] = useState(1);
     
+    const outletCtx = useOutletContext<{ dashboardMode?: 'work_and_earn' | 'investment' }>() || {};
+    const canAccessInvestment = canAccessInvestmentModule(currentUser, state.settings);
     const isHub = useMemo(() => {
-        return localStorage.getItem('dashboard_mode') === 'work_and_earn';
-    }, []);
+        if (!canAccessInvestment) return true;
+        const currentMode = outletCtx.dashboardMode || (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null);
+        return currentMode === 'work_and_earn';
+    }, [canAccessInvestment, outletCtx.dashboardMode]);
     const [selectedMethodId, setSelectedMethodId] = useState<string>('');
     const [amount, setAmount] = useState('');
     const [transactionId, setTransactionId] = useState('');

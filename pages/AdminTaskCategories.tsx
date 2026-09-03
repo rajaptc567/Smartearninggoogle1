@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { updateSettings } from '../services/api';
+import { AdminSurveyWorkspace } from '../components/AdminSurveyWorkspace';
 
 const ToggleSwitch: React.FC<{ enabled: boolean; onChange: () => void; label?: string }> = ({ enabled, onChange, label }) => {
     return (
@@ -70,6 +71,21 @@ const DEFAULT_PRESETS = {
         displayName: "Paid Sign-Ups",
         simpleSignUp: { minPayout: 0.10, minSlots: 10, enabled: true, displayName: "Simple Sign-up" },
         activePlanPurchase: { minPayout: 0.50, minSlots: 5, enabled: true, displayName: "Plan Purchase Sign-up" }
+    },
+    survey: {
+        enabled: true,
+        displayName: "Surveys & Feedback",
+        generalSurvey: { minPayout: 0.08, minSlots: 10, enabled: true, displayName: "General Opinion Poll" },
+        marketResearch: { minPayout: 0.15, minSlots: 10, enabled: true, displayName: "Market Research Survey" },
+        productFeedback: { minPayout: 0.20, minSlots: 5, enabled: true, displayName: "Product & UX Feedback" },
+        brandPerception: { minPayout: 0.12, minSlots: 10, enabled: true, displayName: "Brand & Ad Awareness" },
+        academicSurvey: { minPayout: 0.25, minSlots: 5, enabled: true, displayName: "Academic & Demographic Research" },
+        watchTimeTiers: [
+            { duration: '1-3 Minutes', minPayout: 0.05, minSlots: 10, enabled: true },
+            { duration: '4-7 Minutes', minPayout: 0.10, minSlots: 10, enabled: true },
+            { duration: '8-15 Minutes', minPayout: 0.25, minSlots: 5, enabled: true },
+            { duration: '16-30 Minutes', minPayout: 0.50, minSlots: 5, enabled: true }
+        ]
     }
 };
 
@@ -85,7 +101,11 @@ const AdminTaskCategories: React.FC = () => {
     useEffect(() => {
         if (settings && settings.taskCategoryPresets) {
             // Deep copy to prevent mutating state directly
-            setPresets(JSON.parse(JSON.stringify(settings.taskCategoryPresets)));
+            const deep = JSON.parse(JSON.stringify(settings.taskCategoryPresets));
+            if (!deep.survey) {
+                deep.survey = JSON.parse(JSON.stringify(DEFAULT_PRESETS.survey));
+            }
+            setPresets(deep);
         } else {
             setPresets(JSON.parse(JSON.stringify(DEFAULT_PRESETS)));
         }
@@ -301,7 +321,7 @@ const AdminTaskCategories: React.FC = () => {
                             );
 
                             // Icons
-                            const icon = key === 'youtube' ? '📺' : key === 'facebook' ? '👥' : key === 'instagram' ? '📸' : key === 'google' ? '🗺️' : key === 'paidSignUp' ? '🔗' : '⚙️';
+                            const icon = key === 'youtube' ? '📺' : key === 'facebook' ? '👥' : key === 'instagram' ? '📸' : key === 'google' ? '🗺️' : key === 'paidSignUp' ? '🔗' : key === 'survey' ? '📋' : '⚙️';
 
                             return (
                                 <button
@@ -597,7 +617,7 @@ const AdminTaskCategories: React.FC = () => {
                             )}
 
                             {/* Delete Category action for Custom Categories */}
-                            {!['youtube', 'facebook', 'instagram', 'google', 'paidSignUp'].includes(activeTab) && (
+                            {!['youtube', 'facebook', 'instagram', 'google', 'paidSignUp', 'survey'].includes(activeTab) && (
                                 <div className="bg-red-500/5 rounded-3xl p-6 border border-red-500/20 flex flex-col sm:flex-row justify-between items-center gap-4">
                                     <div>
                                         <h4 className="text-sm font-black text-red-500 uppercase tracking-wider">⚠️ Delete Custom Category</h4>
@@ -619,6 +639,13 @@ const AdminTaskCategories: React.FC = () => {
                                     >
                                         Delete Platform
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Full Admin Survey Workspace for Surveys & Feedback */}
+                            {activeTab === 'survey' && (
+                                <div className="mt-8">
+                                    <AdminSurveyWorkspace onConfigChange={handleSave} />
                                 </div>
                             )}
                         </div>

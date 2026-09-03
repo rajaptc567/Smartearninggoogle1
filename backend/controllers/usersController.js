@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js'; 
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendAutomatedMessage, sendTemplateNotification } from '../utils/automation.js';
 import createLog from '../utils/logger.js';
 import { randomBytes, createHash } from 'crypto';
@@ -585,6 +586,14 @@ export const purchasePlan = async (req, res) => {
         const user = await User.findById(req.params.id);
         const plan = await InvestmentPlan.findById(req.body.planId);
         if (!user || !plan) return res.status(404).json({ success: false, error: 'Not found'});
+
+        const settings = await Setting.getSettings();
+        if (!isAdmin && !canUserAccessInvestmentModule(user, settings)) {
+            return res.status(403).json({
+                success: false,
+                error: 'The Investment Module is currently disabled. Investment plan purchases are unavailable.'
+            });
+        }
         if (user.restrictions?.purchaseBlocked) return res.status(403).json({ success: false, error: 'Purchases disabled.' });
 
         const useHeldBalance = req.body.useHeldBalance !== false;
@@ -619,7 +628,6 @@ export const purchasePlan = async (req, res) => {
         sendTemplateNotification({ userId: updatedUser._id, templateKey: 'plan_activated_whatsapp', variables: planVars });
 
         await Transaction.create({ userId: user._id, userName: user.username, currency: user.currency, type: 'Plan Purchase', amount: -plan.price, description: `Purchased ${plan.name} plan`, status: 'Approved' });
-        const settings = await Setting.getSettings();
         const allPlans = await InvestmentPlan.find();
         await distributeCommissions(updatedUser, plan, settings, settings.exchangeRates || {}, { USD: 1, EUR: 0.92, PKR: 278.50 }, allPlans);
         const pendingCommissions = await Transaction.find({ userId: updatedUser._id, type: 'Commission', status: 'Pending' });

@@ -3,6 +3,7 @@ import UserTaskSubmission from '../models/UserTaskSubmission.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Setting from '../models/Setting.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import Dispute from '../models/Dispute.js';
 import Notification from '../models/Notification.js';
 import Withdrawal from '../models/Withdrawal.js';
@@ -38,8 +39,11 @@ export const createUserTask = async (req, res) => {
             return res.status(400).json({ success: false, error: 'User ID is required.' });
         }
 
-        if (link) {
-            const urlString = String(link).trim();
+        const isSurveyTask = String(category || '').trim().toLowerCase() === 'survey';
+        const effectiveLink = isSurveyTask ? (link || 'https://internal.survey') : link;
+
+        if (effectiveLink) {
+            const urlString = String(effectiveLink).trim();
             if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
                 return res.status(400).json({ success: false, error: 'Task URL must start with http:// or https://' });
             }
@@ -54,6 +58,61 @@ export const createUserTask = async (req, res) => {
         const settings = await Setting.getSettings();
         if (settings.isUserTaskEnabled === false) {
             return res.status(400).json({ success: false, error: 'User task submissions are currently disabled by administrator.' });
+        }
+
+        if (isSurveyTask && settings.surveyCampaignsEnabled === false) {
+            return res.status(400).json({ success: false, error: 'Survey campaigns are currently disabled by administrator.' });
+        }
+
+        const surveyConfig = req.body.surveyConfig || null;
+        let minSurveyRewardRequired = 0;
+        if (isSurveyTask) {
+            if (!surveyConfig || !Array.isArray(surveyConfig.questions) || surveyConfig.questions.length === 0) {
+                return res.status(400).json({ success: false, error: 'Survey campaigns require at least one question in surveyConfig.' });
+            }
+
+            // Backend cycle detection and check question integrity validation
+            const questionIds = new Set(surveyConfig.questions.map(q => q.id));
+            for (let i = 0; i < surveyConfig.questions.length; i++) {
+                const q = surveyConfig.questions[i];
+                if (!q.id || !q.title) {
+                    return res.status(400).json({ success: false, error: `Survey question at position ${i + 1} must have an id and title.` });
+                }
+
+                // Validate check questions
+                if (q.isCheckQuestion) {
+                    if (!q.sourceQuestionId || !questionIds.has(q.sourceQuestionId)) {
+                        return res.status(400).json({ success: false, error: `Check question "${q.title}" references a non-existent source question.` });
+                    }
+                    const sourceIdx = surveyConfig.questions.findIndex(sq => sq.id === q.sourceQuestionId);
+                    if (sourceIdx >= i) {
+                        return res.status(400).json({ success: false, error: `Check question "${q.title}" must appear after its source question.` });
+                    }
+                }
+
+                // Validate branching logic
+                if (Array.isArray(q.logicRules)) {
+                    for (const rule of q.logicRules) {
+                        if (rule.action === 'goto_question' && rule.targetQuestionId) {
+                            if (!questionIds.has(rule.targetQuestionId)) {
+                                return res.status(400).json({ success: false, error: `Logic rule in "${q.title}" points to invalid target question ID.` });
+                            }
+                            const targetIdx = surveyConfig.questions.findIndex(tq => tq.id === rule.targetQuestionId);
+                            if (targetIdx <= i) {
+                                return res.status(400).json({ success: false, error: `Logic rule in "${q.title}" creates an invalid loop or backward jump.` });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Backend Pricing Calculation: Never trust frontend reward amounts
+            const pricingRules = settings.surveyConfig?.pricingRules || {};
+            const baseRate = Number(pricingRules.baseReward || 0.15);
+            const perQuestionRate = Number(pricingRules.perQuestionRate || 0.02);
+            const estMinutes = Number(surveyConfig.estimatedTimeMinutes) || 5;
+            const timeSurcharge = estMinutes > 5 ? (estMinutes - 5) * 0.03 : 0;
+            minSurveyRewardRequired = Number((baseRate + (surveyConfig.questions.length * perQuestionRate) + timeSurcharge).toFixed(2));
         }
 
         const presets = settings.taskCategoryPresets;
@@ -104,6 +163,9 @@ export const createUserTask = async (req, res) => {
         }
         if (rewardPerTask < config.minRewardAmount) {
             return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
+        }
+        if (isSurveyTask && rewardPerTask < minSurveyRewardRequired) {
+            return res.status(400).json({ success: false, error: `Minimum reward amount for this survey based on question complexity and duration is ${minSurveyRewardRequired} USD.` });
         }
 
         const user = await User.findById(effectiveUserId);
@@ -183,7 +245,7 @@ export const createUserTask = async (req, res) => {
             subType: subType || 'Like',
             title,
             description,
-            link,
+            link: effectiveLink,
             targetQuantity,
             rewardPerTask,
             totalBudget,
@@ -203,9 +265,14 @@ export const createUserTask = async (req, res) => {
             userIdInstruction: userIdInstruction || '',
             requireEmail: Boolean(requireEmail),
             emailInstruction: emailInstruction || '',
-            requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : true,
-            screenshotInstruction: screenshotInstruction || 'Please upload screenshot proof of completion.',
+            requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : !isSurveyTask,
+            screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
             requiredProofs: requiredProofs || [],
+            isSurvey: isSurveyTask,
+            surveyEstimatedMinutes: isSurveyTask ? (Number(surveyConfig?.estimatedTimeMinutes) || 5) : 5,
+            surveyQuestionsCount: isSurveyTask && Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : 0,
+            surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
+            surveyConfig: isSurveyTask ? surveyConfig : null,
             status: 'Pending'
         });
 
@@ -1010,11 +1077,109 @@ export const submitUserTaskProof = async (req, res) => {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
         }
 
+        const isSurveyTask = task.isSurvey || String(task.category || '').toLowerCase() === 'survey';
+        const surveyResponses = req.body.surveyResponses || [];
+        const surveyCompletionTimeSeconds = Number(req.body.surveyCompletionTimeSeconds) || 0;
+        let surveyQualificationStatus = req.body.surveyQualificationStatus || 'Completed';
+        const consentAgreed = req.body.consentAgreed !== false;
+        const answeredPath = req.body.answeredPath || [];
+        const skippedQuestions = req.body.skippedQuestions || [];
+        let attentionCheckPassed = true;
+        const checkQuestionResults = [];
+        const qualityFlags = [];
+        let qualityScore = 100;
+
+        if (isSurveyTask && task.surveyConfig && Array.isArray(task.surveyConfig.questions)) {
+            // 1. Attention Checks Validation
+            for (const q of task.surveyConfig.questions) {
+                if (q.isAttentionCheck && q.expectedAnswer) {
+                    const ans = surveyResponses.find(r => r.questionId === q.id);
+                    if (!ans || String(ans.value || '').trim().toLowerCase() !== String(q.expectedAnswer).trim().toLowerCase()) {
+                        attentionCheckPassed = false;
+                        qualityFlags.push(`Failed Attention Check on Question: "${q.title}"`);
+                        qualityScore = Math.max(0, qualityScore - 40);
+                    }
+                }
+            }
+
+            // 2. Answer Consistency / Check Questions Verification
+            for (const q of task.surveyConfig.questions) {
+                if (q.isCheckQuestion && q.sourceQuestionId) {
+                    const sourceAnsObj = surveyResponses.find(r => r.questionId === q.sourceQuestionId);
+                    const checkAnsObj = surveyResponses.find(r => r.questionId === q.id);
+                    const sourceVal = sourceAnsObj ? sourceAnsObj.value : undefined;
+                    const checkVal = checkAnsObj ? checkAnsObj.value : undefined;
+
+                    let passed = false;
+                    const compMethod = q.checkComparisonMethod || 'case_insensitive';
+
+                    if (sourceVal !== undefined && checkVal !== undefined) {
+                        if (compMethod === 'exact') {
+                            passed = String(sourceVal) === String(checkVal);
+                        } else if (compMethod === 'trim_spaces') {
+                            passed = String(sourceVal).replace(/\s+/g, '') === String(checkVal).replace(/\s+/g, '');
+                        } else if (compMethod === 'numeric') {
+                            passed = !isNaN(Number(sourceVal)) && !isNaN(Number(checkVal)) && Number(sourceVal) === Number(checkVal);
+                        } else if (compMethod === 'date') {
+                            const d1 = new Date(sourceVal).getTime();
+                            const d2 = new Date(checkVal).getTime();
+                            passed = !isNaN(d1) && !isNaN(d2) && d1 === d2;
+                        } else if (compMethod === 'normalized') {
+                            const norm1 = String(sourceVal).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                            const norm2 = String(checkVal).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                            passed = norm1 === norm2;
+                        } else {
+                            // case_insensitive default
+                            passed = String(sourceVal).trim().toLowerCase() === String(checkVal).trim().toLowerCase();
+                        }
+                    }
+
+                    const failureAction = q.checkFailureAction || 'flag';
+                    checkQuestionResults.push({
+                        checkQuestionId: q.id,
+                        checkQuestionTitle: q.title,
+                        sourceQuestionId: q.sourceQuestionId,
+                        originalAnswer: sourceVal,
+                        verificationAnswer: checkVal,
+                        comparisonMethod: compMethod,
+                        result: passed ? 'PASS' : 'FAIL',
+                        failureAction,
+                        timestamp: new Date()
+                    });
+
+                    if (!passed) {
+                        qualityFlags.push(`Inconsistent Answer between "${q.title}" and source question`);
+                        qualityScore = Math.max(0, qualityScore - 30);
+                        if (failureAction === 'disqualify') {
+                            surveyQualificationStatus = 'Disqualified';
+                        }
+                    }
+                }
+            }
+
+            // 3. Anti-Speeding Verification
+            const minTimeRatio = (settings.surveyConfig?.securityRules?.minCompletionTimeRatio) || 0.25;
+            const estimatedSec = (task.surveyEstimatedMinutes || 5) * 60;
+            const minAllowedSec = Math.floor(estimatedSec * minTimeRatio);
+            if (settings.surveyConfig?.securityRules?.enforceAntiSpeeding && surveyCompletionTimeSeconds < minAllowedSec && surveyQualificationStatus !== 'Disqualified') {
+                return res.status(400).json({
+                    success: false,
+                    error: `Survey completion was too fast (${surveyCompletionTimeSeconds}s). Please take time to carefully read and answer each question thoughtfully.`
+                });
+            }
+        }
+
+        const finalProofText = isSurveyTask 
+            ? `Survey responses recorded (${surveyResponses.length} answered in ${surveyCompletionTimeSeconds}s, qualification: ${surveyQualificationStatus}, quality score: ${qualityScore}).` 
+            : (proofText || '');
+
+        const surveyApprovalMode = (task.surveyApprovalMode || settings.surveyConfig?.approvalSettings?.mode || 'auto').toLowerCase();
+
         const submission = await UserTaskSubmission.create({
             taskId: task._id,
             workerId: worker._id,
             workerName: worker.username,
-            proofText: proofText || '',
+            proofText: finalProofText,
             proofUsername: proofUsername || '',
             proofUserIdVal: proofUserIdVal || '',
             proofEmail: proofEmail || '',
@@ -1024,49 +1189,202 @@ export const submitUserTaskProof = async (req, res) => {
             currency: task.currency || 'USD',
             taskTitle: task.title,
             taskCategory: task.category,
+            surveyResponses: isSurveyTask ? surveyResponses : [],
+            surveyCompletionTimeSeconds: isSurveyTask ? surveyCompletionTimeSeconds : 0,
+            surveyQualificationStatus: isSurveyTask ? surveyQualificationStatus : 'Completed',
+            attentionCheckPassed: isSurveyTask ? attentionCheckPassed : true,
+            consentAgreed: isSurveyTask ? consentAgreed : true,
+            checkQuestionResults: isSurveyTask ? checkQuestionResults : [],
+            qualityFlags: isSurveyTask ? qualityFlags : [],
+            qualityScore: isSurveyTask ? qualityScore : 100,
+            answeredPath: isSurveyTask ? answeredPath : [],
+            skippedQuestions: isSurveyTask ? skippedQuestions : [],
+            approvalMode: isSurveyTask ? surveyApprovalMode : 'auto',
             status: 'Pending'
         });
 
-        // Notify Campaign Creator
-        await Notification.create({
-            userId: task.userId,
-            subject: 'New Task Submission 📥',
-            message: `Worker @${worker.username} has submitted a proof of completion for your campaign "${task.title}". Please review it.`,
-            senderType: 'System'
-        });
+        const checkQuestionsPassed = checkQuestionResults.every(r => r.result === 'PASS');
+        const canAutoApprove = isSurveyTask && 
+            surveyApprovalMode === 'auto' && 
+            settings.campaignLiveRules?.autoApproval !== false && 
+            attentionCheckPassed && 
+            checkQuestionsPassed &&
+            surveyQualificationStatus !== 'Disqualified';
 
-        // Send Email & WhatsApp automated templates to Employer
-        sendTemplateNotification({
-            userId: task.userId,
-            templateKey: 'task_submission_received_email',
-            variables: {
-                taskTitle: task.title,
-                amount: task.rewardPerTask,
-                currency: 'USD',
-                workerName: worker.username,
-                txId: submission._id.toString()
-            }
-        }).catch(err => console.error('Failed to send task submission email:', err));
+        const isScreenout = isSurveyTask && (surveyQualificationStatus === 'Disqualified' || surveyQualificationStatus === 'Screenout');
+        const allowScreeningReward = Boolean(settings.surveyConfig?.rateRules?.allowScreeningReward);
 
-        sendTemplateNotification({
-            userId: task.userId,
-            templateKey: 'task_submission_received_whatsapp',
-            variables: {
-                taskTitle: task.title,
-                amount: task.rewardPerTask,
-                currency: 'USD',
-                workerName: worker.username,
-                txId: submission._id.toString()
+        // If survey task and autoApproval conditions met, auto-approve and credit worker immediately
+        if (canAutoApprove) {
+            submission.status = 'Approved';
+            submission.paid = true;
+            submission.rewardClaimed = true;
+            submission.rewardPaidAt = new Date();
+            submission.isAutoApproved = true;
+            submission.autoApproved = true;
+            submission.approvalType = 'auto';
+            submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
+            await submission.save();
+
+            if (task.currentCompletions < task.targetQuantity) {
+                task.currentCompletions += 1;
+                if (task.currentCompletions >= task.targetQuantity) {
+                    task.status = 'Completed';
+                }
+                await task.save();
             }
-        }).catch(err => console.error('Failed to send task submission whatsapp:', err));
+
+            worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
+            await worker.save();
+
+            const tx = await Transaction.create({
+                userId: worker._id,
+                userName: worker.username,
+                currency: 'USD',
+                type: 'Survey Reward',
+                amount: task.rewardPerTask,
+                amountUSD: task.rewardPerTask,
+                campaignId: task._id,
+                submissionId: submission._id,
+                sourceWallet: 'CampaignEscrow',
+                destinationWallet: 'TaskEarnings',
+                description: `Earned reward for completing survey: "${task.title}"`,
+                status: 'Approved'
+            });
+            submission.rewardTransactionId = tx._id;
+            await submission.save();
+        } else if (isScreenout && allowScreeningReward && attentionCheckPassed && checkQuestionsPassed) {
+            // Screenout Micro-Reward Automation
+            const rawConfiguredReward = settings.surveyConfig?.rateRules?.screeningRewardAmount ?? 
+                                        settings.surveyConfig?.rateRules?.qualificationReward ?? 
+                                        0.01;
+            let screeningRewardAmount = Number(parseFloat(rawConfiguredReward).toFixed(2));
+            if (isNaN(screeningRewardAmount) || screeningRewardAmount <= 0) {
+                screeningRewardAmount = 0.01;
+            }
+            // Strict server-side bounds: capped at task.rewardPerTask
+            screeningRewardAmount = Math.min(screeningRewardAmount, Number((task.rewardPerTask || 0).toFixed(2)));
+            screeningRewardAmount = Number(screeningRewardAmount.toFixed(2));
+
+            // Duplicate Payout & Idempotency Safeguard
+            const existingScreenoutTx = await Transaction.findOne({
+                userId: worker._id,
+                campaignId: task._id,
+                type: { $in: ['Survey Screenout Reward', 'Survey Reward', 'Task Reward'] }
+            });
+
+            if (!existingScreenoutTx && screeningRewardAmount > 0) {
+                const claimSub = await UserTaskSubmission.findOneAndUpdate(
+                    { _id: submission._id, rewardClaimed: { $ne: true } },
+                    {
+                        $set: {
+                            status: 'Approved',
+                            paid: true,
+                            rewardClaimed: true,
+                            rewardPaidAt: new Date(),
+                            rewardAmount: screeningRewardAmount,
+                            isAutoApproved: true,
+                            autoApproved: true,
+                            approvalType: 'auto',
+                            adminNotes: `Screenout micro-reward ($${screeningRewardAmount.toFixed(2)}) automatically credited on survey disqualification.`
+                        }
+                    },
+                    { new: true }
+                );
+
+                if (claimSub) {
+                    submission.status = 'Approved';
+                    submission.paid = true;
+                    submission.rewardClaimed = true;
+                    submission.rewardPaidAt = claimSub.rewardPaidAt;
+                    submission.rewardAmount = screeningRewardAmount;
+                    submission.adminNotes = claimSub.adminNotes;
+
+                    // Strictly credit Task Earnings balance (Preserve wallet separation)
+                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + screeningRewardAmount).toFixed(2));
+                    await worker.save();
+
+                    // Create ledger entry using existing financial mechanism
+                    const tx = await Transaction.create({
+                        userId: worker._id,
+                        userName: worker.username,
+                        currency: 'USD',
+                        type: 'Survey Screenout Reward',
+                        amount: screeningRewardAmount,
+                        amountUSD: screeningRewardAmount,
+                        campaignId: task._id,
+                        submissionId: claimSub._id,
+                        sourceWallet: 'CampaignEscrow',
+                        destinationWallet: 'TaskEarnings',
+                        description: `Screenout micro-reward for survey: "${task.title}"`,
+                        status: 'Approved'
+                    });
+
+                    claimSub.rewardTransactionId = tx._id;
+                    await claimSub.save();
+                    submission.rewardTransactionId = tx._id;
+                }
+            }
+        }
+
+        // Notify Campaign Creator (only for non-screenout submissions)
+        if (!isScreenout) {
+            await Notification.create({
+                userId: task.userId,
+                subject: 'New Task Submission 📥',
+                message: `Worker @${worker.username} has submitted a proof of completion for your campaign "${task.title}". Please review it.`,
+                senderType: 'System'
+            });
+
+            // Send Email & WhatsApp automated templates to Employer
+            sendTemplateNotification({
+                userId: task.userId,
+                templateKey: 'task_submission_received_email',
+                variables: {
+                    taskTitle: task.title,
+                    amount: task.rewardPerTask,
+                    currency: 'USD',
+                    workerName: worker.username,
+                    txId: submission._id.toString()
+                }
+            }).catch(err => console.error('Failed to send task submission email:', err));
+
+            sendTemplateNotification({
+                userId: task.userId,
+                templateKey: 'task_submission_received_whatsapp',
+                variables: {
+                    taskTitle: task.title,
+                    amount: task.rewardPerTask,
+                    currency: 'USD',
+                    workerName: worker.username,
+                    txId: submission._id.toString()
+                }
+            }).catch(err => console.error('Failed to send task submission whatsapp:', err));
+        }
 
         // Notify Worker
-        await Notification.create({
-            userId: worker._id,
-            subject: 'Proof Submitted Successfully! 📤',
-            message: `Your completion proof for campaign "${task.title}" has been successfully submitted and is pending the creator's review.`,
-            senderType: 'System'
-        });
+        if (submission.paid && isScreenout) {
+            await Notification.create({
+                userId: worker._id,
+                subject: 'Survey Screenout Reward Credited 💵',
+                message: `You received a screening compensation of $${submission.rewardAmount.toFixed(2)} USD for participating in survey "${task.title}". Credited to your Task Earnings balance.`,
+                senderType: 'System'
+            });
+        } else if (submission.paid) {
+            await Notification.create({
+                userId: worker._id,
+                subject: 'Survey Reward Credited! 🎉',
+                message: `Your survey submission for "${task.title}" was approved. $${submission.rewardAmount.toFixed(2)} USD has been credited to your Task Earnings balance.`,
+                senderType: 'System'
+            });
+        } else {
+            await Notification.create({
+                userId: worker._id,
+                subject: 'Proof Submitted Successfully! 📤',
+                message: `Your completion proof for campaign "${task.title}" has been successfully submitted and is pending review.`,
+                senderType: 'System'
+            });
+        }
 
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: submission });
@@ -1094,6 +1412,9 @@ export const updateSubmissionStatus = async (req, res) => {
             }
             if (!isAdmin && !isCreator) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to review this submission.' });
+            }
+            if (task && task.isSurvey && task.surveyApprovalMode === 'admin' && !isAdmin) {
+                return res.status(403).json({ success: false, error: 'This survey campaign is configured for Admin-only review and approval.' });
             }
         }
 
@@ -1702,6 +2023,13 @@ export const transferInvestmentToTaskWallet = async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const settings = await Setting.getSettings();
+        if (!isAdmin && !canUserAccessInvestmentModule(user, settings)) {
+            return res.status(403).json({
+                success: false,
+                error: 'The Investment Module is currently disabled. Transfers from the Investment Wallet are unavailable.'
+            });
+        }
+
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
         const rate = rates[userCurr] || 1;
@@ -2151,5 +2479,127 @@ export const resetWorkAndEarnData = async (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message || 'Server error resetting Work & Earn data.' });
+    }
+};
+
+/**
+ * Aggregated analytics and responses for a Survey Campaign
+ */
+export const getSurveyCampaignAnalytics = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const task = await UserTask.findById(id);
+        if (!task) return res.status(404).json({ success: false, error: 'Survey campaign not found' });
+
+        const isOwner = req.user && String(task.userId) === String(req.user.id);
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'Unauthorized to view survey analytics' });
+        }
+
+        const submissions = await UserTaskSubmission.find({ taskId: task._id }).sort({ createdAt: -1 });
+        const totalSubmissions = submissions.length;
+        const completed = submissions.filter(s => s.surveyQualificationStatus === 'Completed' || s.status === 'Approved');
+        const disqualified = submissions.filter(s => s.surveyQualificationStatus === 'Disqualified');
+        const attentionPassed = submissions.filter(s => s.attentionCheckPassed !== false).length;
+        
+        let totalTime = 0;
+        let countWithTime = 0;
+        submissions.forEach(s => {
+            if (s.surveyCompletionTimeSeconds > 0) {
+                totalTime += s.surveyCompletionTimeSeconds;
+                countWithTime++;
+            }
+        });
+        const averageTimeSeconds = countWithTime > 0 ? Math.round(totalTime / countWithTime) : 0;
+
+        const questions = (task.surveyConfig && task.surveyConfig.questions) || [];
+        const questionAnalytics = questions.map((q, idx) => {
+            const answers = [];
+            const counts = {};
+            let numericSum = 0;
+            let numericCount = 0;
+
+            submissions.forEach(s => {
+                const response = (s.surveyResponses || []).find(r => r.questionId === q.id);
+                if (response && response.value !== undefined && response.value !== null && response.value !== '') {
+                    answers.push({
+                        workerName: isAdmin || isOwner ? s.workerName : 'Participant',
+                        value: response.value,
+                        submittedAt: s.createdAt
+                    });
+
+                    if (Array.isArray(response.value)) {
+                        response.value.forEach(val => {
+                            counts[val] = (counts[val] || 0) + 1;
+                        });
+                    } else {
+                        counts[response.value] = (counts[response.value] || 0) + 1;
+                    }
+
+                    const numVal = Number(response.value);
+                    if (!isNaN(numVal) && isFinite(numVal)) {
+                        numericSum += numVal;
+                        numericCount++;
+                    }
+                }
+            });
+
+            return {
+                id: q.id,
+                order: idx + 1,
+                title: q.title,
+                type: q.type,
+                options: q.options || [],
+                totalAnswers: answers.length,
+                counts,
+                average: numericCount > 0 ? Number((numericSum / numericCount).toFixed(2)) : null,
+                recentAnswers: answers.slice(-25)
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                task: {
+                    id: task._id,
+                    title: task.title,
+                    category: task.category,
+                    subType: task.subType,
+                    status: task.status,
+                    targetQuantity: task.targetQuantity,
+                    currentCompletions: task.currentCompletions,
+                    rewardPerTask: task.rewardPerTask,
+                    totalBudget: task.totalBudget,
+                    surveyEstimatedMinutes: task.surveyEstimatedMinutes,
+                    createdAt: task.createdAt
+                },
+                metrics: {
+                    totalSubmissions,
+                    approvedSubmissions: submissions.filter(s => s.status === 'Approved').length,
+                    pendingSubmissions: submissions.filter(s => s.status === 'Pending').length,
+                    rejectedSubmissions: submissions.filter(s => s.status === 'Rejected').length,
+                    completedSubmissions: completed.length,
+                    disqualifiedSubmissions: disqualified.length,
+                    attentionPassedCount: attentionPassed,
+                    averageCompletionTimeSeconds: averageTimeSeconds,
+                    completionRate: task.targetQuantity > 0 ? Math.min(100, Math.round((task.currentCompletions / task.targetQuantity) * 100)) : 0
+                },
+                questions: questionAnalytics,
+                rawSubmissions: submissions.map(s => ({
+                    id: s._id,
+                    workerName: s.workerName,
+                    status: s.status,
+                    rewardAmount: s.rewardAmount,
+                    completionTimeSeconds: s.surveyCompletionTimeSeconds,
+                    qualificationStatus: s.surveyQualificationStatus,
+                    attentionCheckPassed: s.attentionCheckPassed,
+                    responses: s.surveyResponses,
+                    createdAt: s.createdAt
+                }))
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 };

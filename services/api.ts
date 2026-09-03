@@ -690,11 +690,34 @@ export const getUserTaskSubmissions = async (): Promise<any[]> => {
     return result.data;
 };
 
-export const submitUserTaskProof = async (taskId: string, proofData: { userId: string; proofText?: string; proofUsername?: string; proofUserIdVal?: string; proofEmail?: string; proofImage?: string; submittedProofs?: any[] }): Promise<any> => {
+export const submitUserTaskProof = async (taskId: string, proofData: { 
+    userId: string; 
+    proofText?: string; 
+    proofUsername?: string; 
+    proofUserIdVal?: string; 
+    proofEmail?: string; 
+    proofImage?: string; 
+    submittedProofs?: any[];
+    surveyResponses?: any[];
+    surveyCompletionTimeSeconds?: number;
+    surveyQualificationStatus?: string;
+    consentAgreed?: boolean;
+    checkQuestionResults?: any[];
+    answeredPath?: string[];
+    skippedQuestions?: string[];
+}): Promise<any> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/submit-proof`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(proofData)
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const getSurveyCampaignAnalytics = async (taskId: string): Promise<any> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${taskId}/survey-analytics`, {
+        headers: getHeaders()
     });
     const result = await handleResponse(response);
     return result.data;

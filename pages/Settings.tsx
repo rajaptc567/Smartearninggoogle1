@@ -5,6 +5,7 @@ import { useData } from '../hooks/useData';
 import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
 import { updateSettings } from '../services/api';
 import { AdminModulePagesManager } from '../components/AdminModulePagesManager';
+import { AdminInvestmentWhitelistManager } from '../components/AdminInvestmentWhitelistManager';
 import { compressImageFile } from '../utils/imageCompressor';
 import { 
     defaultPrivacyPolicyTitle, 
@@ -133,6 +134,11 @@ const Settings: React.FC = () => {
             ...settings.homepageContent // Overwrite with actual DB values
         },
         homepagePaymentLogos: settings.homepagePaymentLogos || [],
+        investmentModuleEnabled: (settings.investmentModuleEnabled !== undefined ? settings.investmentModuleEnabled !== false : (settings.isInvestmentModuleEnabled !== false)),
+        isInvestmentModuleEnabled: (settings.investmentModuleEnabled !== undefined ? settings.investmentModuleEnabled !== false : (settings.isInvestmentModuleEnabled !== false)),
+        investmentActivePlanBypassEnabled: settings.investmentActivePlanBypassEnabled || false,
+        investmentManualWhitelistEnabled: settings.investmentManualWhitelistEnabled || false,
+        investmentManualWhitelistUserIds: settings.investmentManualWhitelistUserIds || [],
         featuredPlanIds: settings.featuredPlanIds || [],
         faqs: settings.faqs || [],
         whatsappNumber: settings.whatsappNumber || '',
@@ -913,6 +919,199 @@ const Settings: React.FC = () => {
                     <h4 className="text-md font-bold text-gray-800 dark:text-white mb-4">Feature Toggles</h4>
                     
                     <div className="space-y-4">
+                        {/* INVESTMENT MODULE MASTER TOGGLE */}
+                        <div className={`p-5 rounded-2xl border transition-all ${
+                            (localSettings.investmentModuleEnabled ?? true)
+                                ? 'bg-gradient-to-r from-blue-900/20 via-indigo-900/10 to-transparent border-blue-500/40 dark:border-blue-500/30'
+                                : 'bg-gradient-to-r from-rose-950/30 via-gray-900/40 to-transparent border-rose-500/40 dark:border-rose-500/30'
+                        }`}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="space-y-1.5 max-w-2xl">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-xl">📈</span>
+                                        <span className="font-extrabold text-base text-gray-900 dark:text-white tracking-tight">
+                                            Investment Module (Master Control)
+                                        </span>
+                                        <span className={`px-2.5 py-0.5 text-[11px] font-black rounded-full uppercase tracking-wider ${
+                                            (localSettings.investmentModuleEnabled ?? true)
+                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                        }`}>
+                                            {(localSettings.investmentModuleEnabled ?? true) ? '● Status: ON (Active)' : '○ Status: OFF (Disabled)'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                                        {(localSettings.investmentModuleEnabled ?? true)
+                                            ? 'The Investment Module is fully visible and operational for platform users. Members can view investment plans, transfer funds, manage portfolios, and switch dashboards.'
+                                            : 'The Investment Module is completely hidden and locked for normal users. Work & Earn remains 100% active and operational. All existing investment balances, plans, and historical records remain safely preserved in the database.'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                        {(localSettings.investmentModuleEnabled ?? true) ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                    <div className="relative inline-block w-14 h-7 transition duration-200 ease-in-out">
+                                        <input
+                                            id="investmentModuleEnabled"
+                                            name="investmentModuleEnabled"
+                                            type="checkbox"
+                                            className="toggle-checkbox absolute block w-7 h-7 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500 shadow-md"
+                                            checked={localSettings.investmentModuleEnabled ?? true}
+                                            onChange={() => {
+                                                const newVal = !(localSettings.investmentModuleEnabled ?? true);
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    investmentModuleEnabled: newVal,
+                                                    isInvestmentModuleEnabled: newVal
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                        />
+                                        <label
+                                            htmlFor="investmentModuleEnabled"
+                                            className={`toggle-label block overflow-hidden h-7 rounded-full cursor-pointer transition-colors ${(localSettings.investmentModuleEnabled ?? true) ? 'bg-blue-600' : 'bg-gray-600'}`}
+                                        ></label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ACCESS CONTROL BYPASSES & TRANSITION MODES */}
+                            <div className="mt-5 pt-4 border-t border-gray-200/40 dark:border-gray-700/60 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                                            Access Control Bypasses & Rules
+                                        </span>
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                            Hierarchy Level 2 & 3
+                                        </span>
+                                    </div>
+                                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                                        Active when Master Toggle is OFF
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* 1. Active Plan Bypass */}
+                                    <div className={`p-4 rounded-xl border transition-all ${
+                                        localSettings.investmentActivePlanBypassEnabled
+                                            ? 'bg-blue-500/10 border-blue-500/30'
+                                            : 'bg-gray-50/50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
+                                    }`}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Active Plan Bypass</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                                        localSettings.investmentActivePlanBypassEnabled
+                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            : 'bg-gray-500/20 text-gray-400'
+                                                    }`}>
+                                                        {localSettings.investmentActivePlanBypassEnabled ? 'Enabled' : 'Disabled'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                                                    Allow members who have active investment plans to access the Investment Module even when the Master Toggle is OFF. Protects running investments and allows users to manage or withdraw their earnings.
+                                                </p>
+                                            </div>
+                                            <div className="relative inline-block w-11 h-6 shrink-0 transition duration-200 ease-in-out">
+                                                <input
+                                                    id="investmentActivePlanBypassEnabled"
+                                                    type="checkbox"
+                                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-2 appearance-none cursor-pointer checked:right-0 checked:border-blue-500 shadow"
+                                                    checked={localSettings.investmentActivePlanBypassEnabled || false}
+                                                    onChange={(e) => {
+                                                        setLocalSettings(prev => ({
+                                                            ...prev,
+                                                            investmentActivePlanBypassEnabled: e.target.checked
+                                                        }));
+                                                        setIsDirty(true);
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor="investmentActivePlanBypassEnabled"
+                                                    className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${localSettings.investmentActivePlanBypassEnabled ? 'bg-blue-600' : 'bg-gray-400 dark:bg-gray-600'}`}
+                                                ></label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Manual Whitelist Bypass */}
+                                    <div className={`p-4 rounded-xl border transition-all ${
+                                        localSettings.investmentManualWhitelistEnabled
+                                            ? 'bg-indigo-500/10 border-indigo-500/30'
+                                            : 'bg-gray-50/50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
+                                    }`}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Manual Whitelist Bypass</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                                        localSettings.investmentManualWhitelistEnabled
+                                                            ? 'bg-emerald-500/20 text-emerald-400'
+                                                            : 'bg-gray-500/20 text-gray-400'
+                                                    }`}>
+                                                        {localSettings.investmentManualWhitelistEnabled ? 'Enabled' : 'Disabled'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                                                    Allow specific whitelisted accounts to access the Investment Module even when the Master Toggle is OFF. Essential for auditing, VIP testing, or selective access rollout.
+                                                </p>
+                                            </div>
+                                            <div className="relative inline-block w-11 h-6 shrink-0 transition duration-200 ease-in-out">
+                                                <input
+                                                    id="investmentManualWhitelistEnabled"
+                                                    type="checkbox"
+                                                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-2 appearance-none cursor-pointer checked:right-0 checked:border-blue-500 shadow"
+                                                    checked={localSettings.investmentManualWhitelistEnabled || false}
+                                                    onChange={(e) => {
+                                                        setLocalSettings(prev => ({
+                                                            ...prev,
+                                                            investmentManualWhitelistEnabled: e.target.checked
+                                                        }));
+                                                        setIsDirty(true);
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor="investmentManualWhitelistEnabled"
+                                                    className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${localSettings.investmentManualWhitelistEnabled ? 'bg-indigo-600' : 'bg-gray-400 dark:bg-gray-600'}`}
+                                                ></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Whitelisted Users Management Panel */}
+                                {localSettings.investmentManualWhitelistEnabled && (
+                                    <div className="pt-2">
+                                        <AdminInvestmentWhitelistManager
+                                            whitelistedUserIds={localSettings.investmentManualWhitelistUserIds || []}
+                                            onUpdateWhitelist={(newIds) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    investmentManualWhitelistUserIds: newIds
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            users={users}
+                                            investmentPlans={investmentPlans}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Informational Hierarchy Notice */}
+                                <div className="p-3 rounded-xl bg-gray-50/50 dark:bg-gray-800/40 border border-gray-200/60 dark:border-gray-700/60 text-[11px] text-gray-500 dark:text-gray-400 space-y-1">
+                                    <div className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <span>🛡️ Access Hierarchy:</span>
+                                    </div>
+                                    <p>1. <strong>Admins & Super Admins</strong>: Always have access with an Admin Preview banner.</p>
+                                    <p>2. <strong>Master Toggle ON</strong>: All members access the module normally.</p>
+                                    <p>3. <strong>Master Toggle OFF</strong>: Access granted only if <em>Active Plan Bypass</em> is ON and user has an active plan, or if <em>Whitelist Bypass</em> is ON and user ID is listed.</p>
+                                    <p>4. <strong>Blocked Users</strong>: Nav is hidden, direct URL routes redirect to Work & Earn dashboard, and financial APIs return 403 Forbidden.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border dark:border-gray-600">
                             <div>
                                 <label htmlFor="transferConfig.enabled" className="block text-sm font-medium text-gray-900 dark:text-gray-200">User-to-User Transfers</label>

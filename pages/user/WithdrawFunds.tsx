@@ -7,8 +7,9 @@ import { useData } from '../../hooks/useData';
 import { createWithdrawal, purchasePlan as apiPurchasePlan } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { evaluateWithdrawalRules, getPayoutOptionsForUser } from '../../utils/withdrawalRuleEngine';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 
 const formatFriendlyError = (err: any): string => {
     if (!err) return 'An unexpected error occurred. Please try again.';
@@ -86,9 +87,13 @@ const WithdrawFunds: React.FC = () => {
     // Wizard State
     const [step, setStep] = useState(1);
 
+    const outletCtx = useOutletContext<{ dashboardMode?: 'work_and_earn' | 'investment' }>() || {};
+    const canAccessInvestment = canAccessInvestmentModule(currentUser, state.settings);
     const isHub = useMemo(() => {
-        return localStorage.getItem('dashboard_mode') === 'work_and_earn';
-    }, []);
+        if (!canAccessInvestment) return true;
+        const currentMode = outletCtx.dashboardMode || (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null);
+        return currentMode === 'work_and_earn';
+    }, [canAccessInvestment, outletCtx.dashboardMode]);
 
     const exchangeRate = state.settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
 

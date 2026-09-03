@@ -346,6 +346,74 @@ export const AdminModulePagesManager: React.FC = () => {
                 </div>
             )}
 
+            {/* MASTER INVESTMENT MODULE CONTROL BANNER */}
+            <div className={`p-5 rounded-3xl border transition-all ${
+                (settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false)
+                    ? 'bg-gradient-to-r from-blue-950/50 via-slate-900 to-slate-900/90 border-blue-500/40 shadow-xl'
+                    : 'bg-gradient-to-r from-rose-950/50 via-slate-900 to-slate-900/90 border-rose-500/40 shadow-xl'
+            }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2.5">
+                            <span className="text-2xl">📈</span>
+                            <div>
+                                <h3 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
+                                    Investment Module Master Switch
+                                    <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-full uppercase tracking-wider ${
+                                        (settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false)
+                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    }`}>
+                                        {(settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false) ? '● Status: ON (Active)' : '○ Status: OFF (Disabled)'}
+                                    </span>
+                                </h3>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+                            {(settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false)
+                                ? 'The Investment & MLM Module is currently visible and active for users. Work & Earn operates simultaneously.'
+                                : 'The Investment & MLM Module is currently completely disabled and hidden from users. Work & Earn continues operating independently. No balances or user data are lost.'}
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                        <button
+                            type="button"
+                            disabled={isSaving}
+                            onClick={async () => {
+                                const currentStatus = settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false;
+                                const nextStatus = !currentStatus;
+                                setIsSaving(true);
+                                try {
+                                    const updated = await updateSettings({
+                                        ...settings,
+                                        investmentModuleEnabled: nextStatus,
+                                        isInvestmentModuleEnabled: nextStatus
+                                    });
+                                    dispatch({ type: 'SET_SETTINGS', payload: updated });
+                                    setFeedbackMsg({
+                                        type: 'success',
+                                        text: `Investment Module is now ${nextStatus ? 'ENABLED (Visible & Active)' : 'DISABLED (Hidden from Users)'}!`
+                                    });
+                                    setTimeout(() => setFeedbackMsg(null), 4000);
+                                } catch (e: any) {
+                                    setFeedbackMsg({ type: 'error', text: e.message || 'Failed to update Investment Module status.' });
+                                } finally {
+                                    setIsSaving(false);
+                                }
+                            }}
+                            className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all transform active:scale-95 shadow-lg ${
+                                (settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false)
+                                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
+                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                            }`}
+                        >
+                            {(settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false) ? 'Turn OFF Module' : 'Turn ON Module'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             {/* Category Tabs & Quick Stats */}
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
                 {/* Module Selector Pill Tabs */}

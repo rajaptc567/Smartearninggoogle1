@@ -1,5 +1,7 @@
 
 import Setting from '../models/Setting.js';
+import User from '../models/User.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 // Clean standard fallback logos map for popular gateways
 const STANDARD_FALLBACK_LOGOS = {
@@ -120,6 +122,10 @@ export const getPublicSettings = async (req, res) => {
             exchangeRates: settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278.00 },
             whatsappNumber: settings.whatsappNumber || '',
             whatsappFloatingEnabled: settings.whatsappFloatingEnabled !== false,
+            investmentModuleEnabled: settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false,
+            isInvestmentModuleEnabled: settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false,
+            investmentActivePlanBypassEnabled: Boolean(settings.investmentActivePlanBypassEnabled),
+            investmentManualWhitelistEnabled: Boolean(settings.investmentManualWhitelistEnabled),
             isUserTaskEnabled: settings.isUserTaskEnabled !== false,
             isUserTransferEnabled: settings.isUserTransferEnabled !== false,
             isTasksEnabled: settings.isTasksEnabled !== false,
@@ -184,6 +190,14 @@ export const getSettings = async (req, res) => {
         if (!isAuthorizedAdmin) {
             delete settingsObj.emailSenderPassword;
             delete settingsObj.whatsappToken;
+            delete settingsObj.investmentManualWhitelistUserIds;
+        }
+
+        if (req.user) {
+            const user = await User.findById(req.user.id);
+            settingsObj.canAccessInvestment = canUserAccessInvestmentModule(user, settings);
+        } else {
+            settingsObj.canAccessInvestment = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
         }
 
         res.status(200).json({ success: true, data: settingsObj });
@@ -197,6 +211,13 @@ export const updateSettings = async (req, res) => {
         const prevSettings = await Setting.findOne();
         const emailBecameRequired = req.body.emailVerificationRequired && (!prevSettings || !prevSettings.emailVerificationRequired);
         const whatsappBecameRequired = req.body.whatsappVerificationRequired && (!prevSettings || !prevSettings.whatsappVerificationRequired);
+
+        // Synchronize master investment module toggle flags
+        if (req.body.investmentModuleEnabled !== undefined) {
+            req.body.isInvestmentModuleEnabled = req.body.investmentModuleEnabled;
+        } else if (req.body.isInvestmentModuleEnabled !== undefined) {
+            req.body.investmentModuleEnabled = req.body.isInvestmentModuleEnabled;
+        }
 
         // Sanitize homepage payment logos to remove empty/invalid items
         if (Array.isArray(req.body.homepagePaymentLogos)) {

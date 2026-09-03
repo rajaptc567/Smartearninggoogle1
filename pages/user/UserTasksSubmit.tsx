@@ -5,11 +5,14 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { createUserTask, submitUserTaskProof, convertUserCurrency, createDispute, convertTaskWalletBalance, updateSubmissionStatus, openTaskDispute, updateUserTaskStatus, deleteUserTask, transferInvestmentToTaskWallet, transferTaskEarningsToCampaignWallet, transferWalletToCampaign } from '../../services/api';
 import { canUserAccessTasks } from '../../utils/taskAccess';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
 import { seoAnalytics } from '../../services/seoAnalytics';
 import OtherTasksCard from '../../components/OtherTasksCard';
-import { Layers as TaskIcon, Globe as GlobeIcon } from 'lucide-react';
+import { Layers as TaskIcon, Globe as GlobeIcon, FileQuestion, HelpCircle, CheckSquare } from 'lucide-react';
+import { SurveyBuilder, SurveyConfigData } from '../../components/SurveyBuilder';
+import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 
 export interface UserTasksSubmitProps {
     initialTab?: 'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs';
@@ -197,6 +200,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     const userIdStr = currentUser?._id?.toString() || '';
     const exchangeRate = rates[currentUser?.currency || 'USD'] || 1;
+
+    const allowInvestmentFunding = canAccessInvestmentModule(currentUser, settings);
 
     // Calculate Task Earnings Balance dynamically to match Dashboard
     const netAvailableTaskEarningsUSD = useMemo(() => {
@@ -511,6 +516,37 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const [requiredProofsList, setRequiredProofsList] = useState<Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; instruction: string }>>([
         { id: 'screenshot_1', type: 'screenshot', label: 'Screenshot / Image', instruction: 'Please upload screenshot proof of completion.' }
     ]);
+
+    // Survey Campaign Builder State
+    const [surveyConfigData, setSurveyConfigData] = useState<SurveyConfigData>({
+        category: 'General Opinion Poll',
+        estimatedTimeMinutes: 3,
+        description: 'Please answer all questions thoughtfully and accurately.',
+        questions: [
+            {
+                id: 'q_1',
+                type: 'single_choice',
+                title: 'How satisfied are you with this product or service?',
+                required: true,
+                options: ['Extremely Satisfied', 'Satisfied', 'Neutral', 'Dissatisfied'],
+                isAttentionCheck: false
+            },
+            {
+                id: 'q_2',
+                type: 'opinion_scale',
+                title: 'How likely are you to recommend us to a friend or colleague? (0 to 10)',
+                required: true,
+                isAttentionCheck: false
+            },
+            {
+                id: 'q_3',
+                type: 'short_text',
+                title: 'What features or improvements would you like to see next?',
+                required: false,
+                isAttentionCheck: false
+            }
+        ]
+    });
 
     // Form Validation & Popup Notice State
     const [fieldErrors, setFieldErrors] = useState<{
@@ -1192,6 +1228,21 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         paidSignUp: {
             simpleSignUp: { minPayout: 0.10, minSlots: 10 },
             activePlanPurchase: { minPayout: 0.50, minSlots: 5 }
+        },
+        survey: {
+            enabled: true,
+            displayName: "Surveys & Feedback",
+            generalSurvey: { minPayout: 0.08, minSlots: 10, displayName: "General Opinion Poll" },
+            marketResearch: { minPayout: 0.15, minSlots: 10, displayName: "Market Research Survey" },
+            productFeedback: { minPayout: 0.20, minSlots: 5, displayName: "Product & UX Feedback" },
+            brandPerception: { minPayout: 0.12, minSlots: 10, displayName: "Brand & Ad Awareness" },
+            academicSurvey: { minPayout: 0.25, minSlots: 5, displayName: "Academic & Demographic Research" },
+            watchTimeTiers: [
+                { duration: '1-3 Minutes', minPayout: 0.05, minSlots: 10, enabled: true },
+                { duration: '4-7 Minutes', minPayout: 0.10, minSlots: 10, enabled: true },
+                { duration: '8-15 Minutes', minPayout: 0.25, minSlots: 5, enabled: true },
+                { duration: '16-30 Minutes', minPayout: 0.50, minSlots: 5, enabled: true }
+            ]
         }
     };
 
@@ -1206,6 +1257,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             key === 'instagram' ? 'Instagram' :
             key === 'google' ? 'Google' :
             key === 'paidSignUp' ? 'Website' :
+            key === 'survey' ? 'Surveys & Feedback' :
             key.charAt(0).toUpperCase() + key.slice(1)
         );
         return { key, displayName };
@@ -1221,6 +1273,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         k.toLowerCase() === category.toLowerCase() || 
         (presets[k]?.displayName && presets[k].displayName.toLowerCase() === category.toLowerCase())
     ) || 'youtube';
+
+    const isSurveyCampaign = activePresetKey === 'survey' || category.toLowerCase().includes('survey');
     
     const activeCategoryConfig = presets[activePresetKey];
     const activeWatchTimeTiers = (activeCategoryConfig?.watchTimeTiers || []).filter((tier: any) => tier.enabled !== false);
@@ -1347,16 +1401,23 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         }
 
         // Validate Target Link
-        if (!link || !link.trim()) {
+        if (!isSurveyCampaign && (!link || !link.trim())) {
             errors.link = 'Target Link / URL is required.';
             errorMessages.push('• Target Link / URL is missing.');
             if (!firstErrorFieldId) firstErrorFieldId = 'campaign-link-field';
-        } else {
+        } else if (link && link.trim()) {
             const urlPattern = /^(https?:\/\/)?([\w.-]+)+[\w\-_~:/?#[\]@!$&'()*+,;=.]+$/i;
             if (!urlPattern.test(link.trim())) {
                 errors.link = 'Target Link / URL must be a valid web address (e.g. https://example.com).';
                 errorMessages.push('• Target Link / URL format is invalid.');
                 if (!firstErrorFieldId) firstErrorFieldId = 'campaign-link-field';
+            }
+        }
+
+        // Validate Survey Questionnaire if isSurveyCampaign
+        if (isSurveyCampaign) {
+            if (!surveyConfigData.questions || surveyConfigData.questions.length === 0) {
+                errorMessages.push('• Survey Campaign must have at least one configured question in the Questionnaire Builder.');
             }
         }
 
@@ -1379,11 +1440,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         }
 
         // Validate Required Proofs (Module A)
-        if (requiredProofsList.length === 0) {
+        if (!isSurveyCampaign && requiredProofsList.length === 0) {
             errors.proofs = 'Please configure at least one required proof requirement (Module A).';
             errorMessages.push('• No required proof criteria configured (Module A). Please add at least one proof requirement.');
             if (!firstErrorFieldId) firstErrorFieldId = 'campaign-proofs-container';
-        } else {
+        } else if (!isSurveyCampaign) {
             const proofInstErrors: Record<string, string> = {};
             requiredProofsList.forEach((item) => {
                 if (!item.instruction || !item.instruction.trim()) {
@@ -1528,7 +1589,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 emailInstruction: pEmailInst,
                 requireScreenshot: pReqShot,
                 screenshotInstruction: pShotInst,
-                requiredProofs: requiredProofsList
+                requiredProofs: requiredProofsList,
+                isSurvey: isSurveyCampaign,
+                surveyCategory: isSurveyCampaign ? (subType || surveyConfigData.category) : undefined,
+                surveyEstimatedMinutes: isSurveyCampaign ? (surveyConfigData.estimatedTimeMinutes || 3) : undefined,
+                surveyConfig: isSurveyCampaign ? surveyConfigData : undefined
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
@@ -2477,28 +2542,53 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 )}
                             </div>
 
-                            <div id="campaign-link-field">
-                                <label className="block text-xs font-black uppercase text-gray-500 mb-2">Target Link / URL</label>
-                                <input 
-                                    type="url" 
-                                    value={link} 
-                                    onChange={(e) => {
-                                        setLink(e.target.value);
-                                        if (fieldErrors.link) setFieldErrors(prev => ({ ...prev, link: undefined }));
-                                    }}
-                                    placeholder="https://example.com/signup"
-                                    className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
-                                        fieldErrors.link 
-                                            ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20' 
-                                            : 'dark:border-gray-700'
-                                    }`}
-                                />
-                                {fieldErrors.link && (
-                                    <p className="text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
-                                        <span>⚠️</span> {fieldErrors.link}
-                                    </p>
-                                )}
-                            </div>
+                            {!isSurveyCampaign && (
+                                <div id="campaign-link-field">
+                                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                                        Target Link / URL
+                                    </label>
+                                    <input 
+                                        type="url" 
+                                        value={link} 
+                                        onChange={(e) => {
+                                            setLink(e.target.value);
+                                            if (fieldErrors.link) setFieldErrors(prev => ({ ...prev, link: undefined }));
+                                        }}
+                                        placeholder="https://example.com/signup"
+                                        className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
+                                            fieldErrors.link 
+                                                ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20' 
+                                                : 'dark:border-gray-700'
+                                        }`}
+                                    />
+                                    {fieldErrors.link && (
+                                        <p className="text-xs font-bold text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1">
+                                            <span>⚠️</span> {fieldErrors.link}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Interactive Survey Questionnaire Builder */}
+                            {isSurveyCampaign && (
+                                <div className="space-y-4">
+                                    <SurveyBuilder
+                                        value={surveyConfigData}
+                                        onChange={(updated) => {
+                                            setSurveyConfigData(updated);
+                                            if (updated.estimatedTimeMinutes >= 15) {
+                                                setRewardPerTask(prev => Math.max(Number(prev) || 0, 0.50));
+                                            } else if (updated.estimatedTimeMinutes >= 8) {
+                                                setRewardPerTask(prev => Math.max(Number(prev) || 0, 0.25));
+                                            } else if (updated.estimatedTimeMinutes >= 4) {
+                                                setRewardPerTask(prev => Math.max(Number(prev) || 0, 0.10));
+                                            }
+                                        }}
+                                        systemTemplates={settings?.surveyConfig?.templates || []}
+                                        systemQuestionBank={settings?.surveyConfig?.questionBank || []}
+                                    />
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-xs font-black uppercase text-gray-500 mb-2">Description & Proof Instructions</label>
@@ -2589,173 +2679,187 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 );
                             })()}
 
-                            {/* Module A: Dynamic Proof Requirements Form Builder */}
-                            <div id="campaign-proofs-container" className={`space-y-4 pt-6 border-t rounded-2xl p-3 transition-all ${
-                                fieldErrors.proofs ? 'border-2 border-red-500 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-100 dark:border-gray-700'
-                            }`}>
-                                <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">Configure Required Proofs (Module A)</h4>
-                                {fieldErrors.proofs && (
-                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
-                                        <span>⚠️</span> {fieldErrors.proofs}
-                                    </div>
-                                )}
-                                
-                                <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
-                                    <div className="flex flex-col gap-2">
-                                        <span className="text-xs font-black uppercase text-gray-400">Add Required Proof Type:</span>
-                                        <div className="flex flex-wrap gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    addProofType('screenshot', 'Screenshot / Image');
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                }}
-                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
-                                            >
-                                                <span className="text-sm font-black text-blue-600 dark:text-blue-400">+</span> 📸 Screenshot / Image
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    addProofType('text', 'Text Proof');
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                }}
-                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
-                                            >
-                                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">+</span> 📝 Text Proof
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    addProofType('username', 'Username');
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                }}
-                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
-                                            >
-                                                <span className="text-sm font-black text-purple-600 dark:text-purple-400">+</span> 👤 Username
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    addProofType('userId', 'User ID');
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                }}
-                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
-                                            >
-                                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">+</span> 🆔 User ID
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    addProofType('email', 'Email');
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                }}
-                                                className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
-                                            >
-                                                <span className="text-sm font-black text-rose-600 dark:text-rose-400">+</span> 📧 Email
-                                            </button>
+                            {/* Module A: Dynamic Proof Requirements Form Builder (Standard Campaigns Only) */}
+                            {!isSurveyCampaign ? (
+                                <div id="campaign-proofs-container" className={`space-y-4 pt-6 border-t rounded-2xl p-3 transition-all ${
+                                    fieldErrors.proofs ? 'border-2 border-red-500 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-100 dark:border-gray-700'
+                                }`}>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">Configure Required Proofs (Module A)</h4>
+                                    {fieldErrors.proofs && (
+                                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
+                                            <span>⚠️</span> {fieldErrors.proofs}
                                         </div>
-                                    </div>
+                                    )}
+                                    
+                                    <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
+                                        <div className="flex flex-col gap-2">
+                                            <span className="text-xs font-black uppercase text-gray-400">Add Required Proof Type:</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        addProofType('screenshot', 'Screenshot / Image');
+                                                        if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    }}
+                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="text-sm font-black text-blue-600 dark:text-blue-400">+</span> 📸 Screenshot / Image
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        addProofType('text', 'Text Proof');
+                                                        if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    }}
+                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">+</span> 📝 Text Proof
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        addProofType('username', 'Username');
+                                                        if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    }}
+                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="text-sm font-black text-purple-600 dark:text-purple-400">+</span> 👤 Username
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        addProofType('userId', 'User ID');
+                                                        if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    }}
+                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="text-sm font-black text-amber-600 dark:text-amber-400">+</span> 🆔 User ID
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        addProofType('email', 'Email');
+                                                        if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    }}
+                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="text-sm font-black text-rose-600 dark:text-rose-400">+</span> 📧 Email
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                    <div className="flex gap-2 bg-white dark:bg-gray-800 p-2.5 rounded-2xl border dark:border-gray-700 shadow-inner">
-                                        <input
-                                            type="text"
-                                            id="custom-proof-manual-input"
-                                            placeholder="Or enter manual entry name (e.g. Profile URL)..."
-                                            className="flex-1 bg-transparent border-none text-xs font-medium focus:ring-0 px-2 text-gray-900 dark:text-white"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    const val = (e.currentTarget as HTMLInputElement).value.trim();
+                                        <div className="flex gap-2 bg-white dark:bg-gray-800 p-2.5 rounded-2xl border dark:border-gray-700 shadow-inner">
+                                            <input
+                                                type="text"
+                                                id="custom-proof-manual-input"
+                                                placeholder="Or enter manual entry name (e.g. Profile URL)..."
+                                                className="flex-1 bg-transparent border-none text-xs font-medium focus:ring-0 px-2 text-gray-900 dark:text-white"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const val = (e.currentTarget as HTMLInputElement).value.trim();
+                                                        if (val) {
+                                                            addProofType('manual', val);
+                                                            (e.currentTarget as HTMLInputElement).value = '';
+                                                            if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const el = document.getElementById('custom-proof-manual-input') as HTMLInputElement;
+                                                    const val = el?.value.trim();
                                                     if (val) {
                                                         addProofType('manual', val);
-                                                        (e.currentTarget as HTMLInputElement).value = '';
+                                                        el.value = '';
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
+                                                    } else {
+                                                        alert("Please enter a label for manual entry proof.");
                                                     }
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const el = document.getElementById('custom-proof-manual-input') as HTMLInputElement;
-                                                const val = el?.value.trim();
-                                                if (val) {
-                                                    addProofType('manual', val);
-                                                    el.value = '';
-                                                    if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
-                                                } else {
-                                                    alert("Please enter a label for manual entry proof.");
-                                                }
-                                            }}
-                                            className="px-4 py-2 text-xs font-black rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 hover:scale-105 transition-all flex items-center gap-1 shrink-0"
-                                        >
-                                            <span className="font-bold">+</span> Add Manual Entry
-                                        </button>
-                                    </div>
+                                                }}
+                                                className="px-4 py-2 text-xs font-black rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 hover:scale-105 transition-all flex items-center gap-1 shrink-0"
+                                            >
+                                                <span className="font-bold">+</span> Add Manual Entry
+                                            </button>
+                                        </div>
 
-                                    {/* Configured Proofs List */}
-                                    <div className="space-y-3 pt-2">
-                                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Proof Requirements list:</span>
-                                        {requiredProofsList.length === 0 ? (
-                                            <p className="text-xs text-gray-400 italic text-center py-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed dark:border-gray-700">
-                                                No proofs configured yet. Please add at least one required proof above.
-                                            </p>
-                                        ) : (
-                                            requiredProofsList.map((proof, index) => (
-                                                <div key={proof.id} id={`proof-instruction-${proof.id}`} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm space-y-2.5 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                                                #{index + 1}
-                                                            </span>
-                                                            <span className="text-xs font-black text-gray-900 dark:text-white">
-                                                                {proof.type === 'screenshot' ? '📸' : 
-                                                                 proof.type === 'text' ? '📝' : 
-                                                                 proof.type === 'username' ? '👤' : 
-                                                                 proof.type === 'userId' ? '🆔' : 
-                                                                 proof.type === 'email' ? '📧' : '✍️'} {proof.label}
-                                                            </span>
+                                        {/* Configured Proofs List */}
+                                        <div className="space-y-3 pt-2">
+                                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Proof Requirements list:</span>
+                                            {requiredProofsList.length === 0 ? (
+                                                <p className="text-xs text-gray-400 italic text-center py-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed dark:border-gray-700">
+                                                    No proofs configured yet. Please add at least one required proof above.
+                                                </p>
+                                            ) : (
+                                                requiredProofsList.map((proof, index) => (
+                                                    <div key={proof.id} id={`proof-instruction-${proof.id}`} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm space-y-2.5 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs font-black px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                                    #{index + 1}
+                                                                </span>
+                                                                <span className="text-xs font-black text-gray-900 dark:text-white">
+                                                                    {proof.type === 'screenshot' ? '📸' : 
+                                                                     proof.type === 'text' ? '📝' : 
+                                                                     proof.type === 'username' ? '👤' : 
+                                                                     proof.type === 'userId' ? '🆔' : 
+                                                                     proof.type === 'email' ? '📧' : '✍️'} {proof.label}
+                                                                </span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeProofItem(proof.id)}
+                                                                className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <span>🗑️</span> Remove
+                                                            </button>
                                                         </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeProofItem(proof.id)}
-                                                            className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
-                                                        >
-                                                            <span>🗑️</span> Remove
-                                                        </button>
+                                                        <input
+                                                            type="text"
+                                                            value={proof.instruction}
+                                                            onChange={(e) => {
+                                                                updateProofInstruction(proof.id, e.target.value);
+                                                                if (fieldErrors.proofInstructions?.[proof.id]) {
+                                                                    setFieldErrors(prev => {
+                                                                        const copy = { ...prev.proofInstructions };
+                                                                        delete copy[proof.id];
+                                                                        return { ...prev, proofInstructions: copy };
+                                                                    });
+                                                                }
+                                                            }}
+                                                            placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()})`}
+                                                            className={`w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                                                                fieldErrors.proofInstructions?.[proof.id]
+                                                                    ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20'
+                                                                    : 'dark:border-gray-700'
+                                                            }`}
+                                                        />
+                                                        {fieldErrors.proofInstructions?.[proof.id] && (
+                                                            <p className="text-[11px] font-bold text-red-600 dark:text-red-400 mt-1 flex items-center gap-1 animate-in fade-in">
+                                                                <span>⚠️</span> {fieldErrors.proofInstructions[proof.id]}
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    <input
-                                                        type="text"
-                                                        value={proof.instruction}
-                                                        onChange={(e) => {
-                                                            updateProofInstruction(proof.id, e.target.value);
-                                                            if (fieldErrors.proofInstructions?.[proof.id]) {
-                                                                setFieldErrors(prev => {
-                                                                    const copy = { ...prev.proofInstructions };
-                                                                    delete copy[proof.id];
-                                                                    return { ...prev, proofInstructions: copy };
-                                                                });
-                                                            }
-                                                        }}
-                                                        placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()})`}
-                                                        className={`w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
-                                                            fieldErrors.proofInstructions?.[proof.id]
-                                                                ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20'
-                                                                : 'dark:border-gray-700'
-                                                        }`}
-                                                    />
-                                                    {fieldErrors.proofInstructions?.[proof.id] && (
-                                                        <p className="text-[11px] font-bold text-red-600 dark:text-red-400 mt-1 flex items-center gap-1 animate-in fade-in">
-                                                            <span>⚠️</span> {fieldErrors.proofInstructions[proof.id]}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            ))
-                                        )}
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-3">
+                                    <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 shrink-0 text-lg">
+                                        📋
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <div className="font-bold text-blue-900 dark:text-blue-200 text-xs">Self-Contained Survey Questionnaire</div>
+                                        <div className="text-[11px] text-blue-700 dark:text-blue-300/90 leading-relaxed font-medium">
+                                            The respondent's survey answers serve as the verified submission proof. No external links, manual screenshots, or file uploads are required.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Base Creation Fee Notice Banner above launch campaign button */}
                             <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs space-y-1.5">
@@ -4902,8 +5006,18 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 </div>
             )}
 
-            {/* PROOF SUBMISSION MODAL */}
-            {selectedTaskForProof && (
+            {/* INTERACTIVE SURVEY RUNNER MODAL */}
+            {selectedTaskForProof && (selectedTaskForProof.isSurvey || selectedTaskForProof.category?.toLowerCase() === 'survey' || selectedTaskForProof.category?.toLowerCase() === 'surveys & feedback' || selectedTaskForProof.surveyConfig) ? (
+                <SurveyRunnerModal
+                    task={selectedTaskForProof}
+                    currentUserId={currentUser?._id || ''}
+                    onClose={() => setSelectedTaskForProof(null)}
+                    onCompleted={() => {
+                        setSelectedTaskForProof(null);
+                        setActiveTab('browse');
+                    }}
+                />
+            ) : selectedTaskForProof ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6 my-8">
                         <div className="flex justify-between items-center">
@@ -5284,7 +5398,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         )}
                     </div>
                 </div>
-            )}
+            ) : null}
 
             {/* DISPUTE MODAL */}
             {selectedSubmissionForDispute && (
@@ -6288,12 +6402,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         ${(insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0).toFixed(2)} USD
                                     </span>
                                 </div>
-                                <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
-                                    <span className="text-gray-500 uppercase font-bold">Available Investment Balance:</span>
-                                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                        {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.availableInvestmentUSD.toFixed(2)} USD)
-                                    </span>
-                                </div>
+                                {allowInvestmentFunding && (
+                                    <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
+                                        <span className="text-gray-500 uppercase font-bold">Available Investment Balance:</span>
+                                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                            {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${insufficientFundsModal.availableInvestmentUSD.toFixed(2)} USD)
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800 bg-amber-500/10 p-3 rounded-xl font-bold">
                                     <span className="text-amber-700 dark:text-amber-400 uppercase">Shortfall Required to Transfer:</span>
                                     <span className="font-mono text-amber-700 dark:text-amber-400 text-sm">
@@ -6307,7 +6423,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 <label className="text-[10px] font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-wider block">
                                     Select Funding Source Option:
                                 </label>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className={`grid ${allowInvestmentFunding ? 'grid-cols-3' : 'grid-cols-1'} gap-2`}>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -6327,43 +6443,47 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </span>
                                     </button>
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFundingSource('investment');
-                                        }}
-                                        className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
-                                            fundingSource === 'investment'
-                                                ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                                                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
-                                            🏦 Investment
-                                        </span>
-                                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                            {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}
-                                        </span>
-                                    </button>
+                                    {allowInvestmentFunding && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFundingSource('investment');
+                                            }}
+                                            className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
+                                                fundingSource === 'investment'
+                                                    ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
+                                                🏦 Investment
+                                            </span>
+                                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                                {insufficientFundsModal.availableInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency}
+                                            </span>
+                                        </button>
+                                    )}
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setFundingSource('combined');
-                                        }}
-                                        className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
-                                            fundingSource === 'combined'
-                                                ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                                                : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
-                                            🔀 Combined
-                                        </span>
-                                        <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold mt-0.5">
-                                            ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)} USD
-                                        </span>
-                                    </button>
+                                    {allowInvestmentFunding && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFundingSource('combined');
+                                            }}
+                                            className={`p-3 rounded-xl border text-left flex flex-col transition-all ${
+                                                fundingSource === 'combined'
+                                                    ? 'bg-blue-50/90 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
+                                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            <span className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">
+                                                🔀 Combined
+                                            </span>
+                                            <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold mt-0.5">
+                                                ${((insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0) + insufficientFundsModal.availableInvestmentUSD).toFixed(2)} USD
+                                            </span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -6371,14 +6491,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             {(() => {
                                 const rate = rates[insufficientFundsModal.userCurrency] || 1;
                                 const availTaskEarningsUSD = insufficientFundsModal.availableTaskEarningsUSD ?? currentUser.taskEarningsBalance ?? 0;
-                                const availInvestmentUSD = insufficientFundsModal.availableInvestmentUSD ?? 0;
-                                const availInvestmentUserCurr = insufficientFundsModal.availableInvestmentUserCurr ?? 0;
+                                const availInvestmentUSD = allowInvestmentFunding ? (insufficientFundsModal.availableInvestmentUSD ?? 0) : 0;
+                                const availInvestmentUserCurr = allowInvestmentFunding ? (insufficientFundsModal.availableInvestmentUserCurr ?? 0) : 0;
                                 const shortfallUSD = insufficientFundsModal.shortfallUSD;
                                 const shortfallUserCurr = insufficientFundsModal.shortfallUserCurr;
 
                                 const isTaskEarningsDeficit = fundingSource === 'task_earnings' && availTaskEarningsUSD < shortfallUSD;
-                                const remainingFromInvestmentUSD = isTaskEarningsDeficit ? Number((shortfallUSD - availTaskEarningsUSD).toFixed(2)) : 0;
-                                const remainingFromInvestmentUserCurr = isTaskEarningsDeficit ? Number((remainingFromInvestmentUSD * rate).toFixed(2)) : 0;
+                                const remainingFromInvestmentUSD = isTaskEarningsDeficit && allowInvestmentFunding ? Number((shortfallUSD - availTaskEarningsUSD).toFixed(2)) : 0;
+                                const remainingFromInvestmentUserCurr = isTaskEarningsDeficit && allowInvestmentFunding ? Number((remainingFromInvestmentUSD * rate).toFixed(2)) : 0;
 
                                 const isInvestmentDeficit = fundingSource === 'investment' && availInvestmentUSD < shortfallUSD;
                                 const remainingFromTaskEarningsUSD = isInvestmentDeficit ? Number((shortfallUSD - availInvestmentUSD).toFixed(2)) : 0;
@@ -6396,25 +6516,30 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     <span>Task Earnings Balance Insufficient</span>
                                                 </div>
                                                 <p className="text-xs text-amber-900 dark:text-amber-200 font-semibold leading-relaxed">
-                                                    "Your transfer balance is insufficient, so what remaining amount do you want to transfer from the investment module?"
+                                                    {allowInvestmentFunding 
+                                                        ? '"Your transfer balance is insufficient, so what remaining amount do you want to transfer from the investment module?"'
+                                                        : 'Your available Task Earnings are insufficient to cover the required campaign cost. Please complete more tasks or deposit funds to your Work & Earn hub.'
+                                                    }
                                                 </p>
-                                                <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
-                                                    <div className="flex justify-between">
-                                                        <span>Task Earnings Contribution:</span>
-                                                        <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)} USD</strong>
+                                                {allowInvestmentFunding && (
+                                                    <div className="bg-amber-100/70 dark:bg-amber-900/40 p-3 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1 text-[11px] font-mono">
+                                                        <div className="flex justify-between">
+                                                            <span>Task Earnings Contribution:</span>
+                                                            <strong className="text-blue-600 dark:text-blue-400">${availTaskEarningsUSD.toFixed(2)} USD</strong>
+                                                        </div>
+                                                        <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
+                                                            <span>Auto Pre-filled from Investment:</span>
+                                                            <strong className="text-emerald-700 dark:text-emerald-400 font-black">
+                                                                {remainingFromInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)} USD)
+                                                            </strong>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex justify-between pt-1 border-t border-amber-200/60 dark:border-amber-800/50">
-                                                        <span>Auto Pre-filled from Investment:</span>
-                                                        <strong className="text-emerald-700 dark:text-emerald-400 font-black">
-                                                            {remainingFromInvestmentUserCurr.toFixed(2)} {insufficientFundsModal.userCurrency} (${remainingFromInvestmentUSD.toFixed(2)} USD)
-                                                        </strong>
-                                                    </div>
-                                                </div>
+                                                )}
                                             </div>
                                         )}
 
                                         {/* Notice Message when Investment is Insufficient */}
-                                        {fundingSource === 'investment' && isInvestmentDeficit && (
+                                        {allowInvestmentFunding && fundingSource === 'investment' && isInvestmentDeficit && (
                                             <div className="bg-amber-50 dark:bg-amber-950/50 p-4 rounded-2xl border border-amber-300 dark:border-amber-800 space-y-2">
                                                 <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
                                                     <span className="text-base">⚠️</span>
@@ -6437,7 +6562,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         )}
 
                                         {/* Combined Split Mode Summary */}
-                                        {fundingSource === 'combined' && (
+                                        {allowInvestmentFunding && fundingSource === 'combined' && (
                                             <div className="bg-purple-50 dark:bg-purple-950/40 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/50 space-y-2 text-xs">
                                                 <h4 className="font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
                                                     🔀 Automatic Multi-Wallet Split Funding
@@ -6461,12 +6586,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         {isCombinedSufficient ? (
                                             <div className="bg-emerald-50 dark:bg-emerald-950/50 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-200 font-medium flex items-center gap-2">
                                                 <span className="text-emerald-600 dark:text-emerald-400 text-sm">✅</span>
-                                                <span>Combined available balance (${totalAvailableUSD.toFixed(2)} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)} USD.</span>
+                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is sufficient to fund the required shortfall of ${shortfallUSD.toFixed(2)} USD.</span>
                                             </div>
                                         ) : (
                                             <div className="bg-red-50 dark:bg-red-950/50 p-3 rounded-xl border border-red-200 dark:border-red-800/60 text-xs text-red-700 dark:text-red-300 font-medium flex items-center gap-2">
                                                 <span className="text-red-500 text-sm">❌</span>
-                                                <span>Combined available balance (${totalAvailableUSD.toFixed(2)} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)} USD). Please deposit funds into your Investment Wallet.</span>
+                                                <span>Available balance (${totalAvailableUSD.toFixed(2)} USD) is less than the required shortfall (${shortfallUSD.toFixed(2)} USD). {allowInvestmentFunding ? 'Please deposit funds into your Investment Wallet.' : 'Please deposit funds to Work & Earn.'}</span>
                                             </div>
                                         )}
 
@@ -6486,8 +6611,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             })()}
 
                             <div className="flex justify-between items-center pt-2 border-t dark:border-gray-800">
-                                <Link to="/member/deposit" className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
-                                    💳 Deposit to Investment Balance &rarr;
+                                <Link to={allowInvestmentFunding ? "/member/deposit" : "/member/deposit"} className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
+                                    💳 {allowInvestmentFunding ? 'Deposit to Investment Balance →' : 'Deposit Hub Funds →'}
                                 </Link>
                                 <Button
                                     variant="secondary"

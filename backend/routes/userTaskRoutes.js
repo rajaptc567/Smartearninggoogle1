@@ -19,7 +19,8 @@ import {
     transferInvestmentToTaskWallet,
     transferTaskEarningsToCampaignWallet,
     transferWalletToCampaign,
-    resetWorkAndEarnData
+    resetWorkAndEarnData,
+    getSurveyCampaignAnalytics
 } from '../controllers/userTasksController.js';
 
 // Multer for memory storage (Base64)
@@ -68,6 +69,9 @@ router.route('/admin-reset-data')
 
 router.route('/simulate-reward')
     .post(authorize(['admin', 'super_admin']), simulateTaskReward);
+
+router.route('/:id/survey-analytics')
+    .get(authorize(['user', 'admin']), getSurveyCampaignAnalytics);
 
 router.route('/:id')
     .put(authorize(['user', 'admin']), updateUserTaskStatus)

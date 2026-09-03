@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
+import { canAccessInvestmentModule } from '../utils/investmentAccess';
 
 interface ModulePageGuardProps {
     pageId: string;
@@ -16,10 +17,23 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
 
     const currentMode = (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null) as 'work_and_earn' | 'investment' | null || 'work_and_earn';
 
+    const canAccessInvestment = canAccessInvestmentModule(currentUser, settings);
+
     // Determine effective category based on user's current module context
-    const effectiveCategory = (category === 'workAndEarn' && currentMode === 'investment' && pageId === 'userTasks')
-        ? 'investment'
-        : category;
+    // When investment module is disabled or user is in work_and_earn mode,
+    // deposit and withdraw operate strictly within the Work & Earn module.
+    const effectiveCategory = (() => {
+        if (pageId === 'deposit' || pageId === 'withdraw') {
+            if (!canAccessInvestment || currentMode === 'work_and_earn') {
+                return 'workAndEarn';
+            }
+            return 'investment';
+        }
+        if (category === 'workAndEarn' && currentMode === 'investment' && pageId === 'userTasks') {
+            return 'investment';
+        }
+        return category;
+    })();
 
     const pageControl = getEffectiveModulePageControl(settings?.modulePagesConfig, effectiveCategory, pageId);
     const workAndEarnControl = getEffectiveModulePageControl(settings?.modulePagesConfig, 'workAndEarn', pageId);
@@ -27,14 +41,16 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
 
     const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'manager' || currentUser?.role === 'accountant';
 
-    // Legacy sync checks
+    // Access checks
     let isLegacyEnabled = true;
-    if (category === 'investment' || effectiveCategory === 'investment') {
+
+    if (effectiveCategory === 'investment') {
+        if (!canAccessInvestment) isLegacyEnabled = false;
         if (pageId === 'transfer' && (settings?.isUserTransferEnabled === false || settings?.transferConfig?.enabled === false)) isLegacyEnabled = false;
         if (pageId === 'tasks' && settings?.isTasksEnabled === false) isLegacyEnabled = false;
         if (pageId === 'userTasks' && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
     } 
-    if (category === 'workAndEarn' || effectiveCategory === 'workAndEarn') {
+    if (effectiveCategory === 'workAndEarn') {
         if (settings?.hubEnabled === false) isLegacyEnabled = false;
         if ((pageId === 'availableTasks' || pageId === 'createCampaign' || pageId === 'userTasks') && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
     }

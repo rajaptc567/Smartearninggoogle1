@@ -29,7 +29,10 @@ const UserTaskSchema = new mongoose.Schema({
     },
     link: {
         type: String,
-        required: [true, 'Please add a target URL or link']
+        required: function() {
+            return !this.isSurvey;
+        },
+        default: ''
     },
     targetQuantity: {
         type: Number,
@@ -119,6 +122,22 @@ const UserTaskSchema = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'User'
     }],
+    isSurvey: {
+        type: Boolean,
+        default: false
+    },
+    surveyEstimatedMinutes: {
+        type: Number,
+        default: 5
+    },
+    surveyQuestionsCount: {
+        type: Number,
+        default: 0
+    },
+    surveyConfig: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
     date: {
         type: Date,
         default: Date.now

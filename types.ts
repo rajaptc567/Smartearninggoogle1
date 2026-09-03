@@ -173,6 +173,12 @@ export interface Settings {
     };
     isUserTransferEnabled: boolean;
     isTasksEnabled: boolean; 
+    investmentModuleEnabled?: boolean;
+    isInvestmentModuleEnabled?: boolean;
+    investmentActivePlanBypassEnabled?: boolean;
+    investmentManualWhitelistEnabled?: boolean;
+    investmentManualWhitelistUserIds?: string[];
+    canAccessInvestment?: boolean;
     transferConfig: {
         enabled: boolean;
         tiers: TransferFeeTier[];
@@ -337,6 +343,8 @@ export interface Settings {
         campaignFeeAmount?: number;
     };
     taskCategoryPresets?: any;
+    surveyCampaignsEnabled?: boolean;
+    surveyConfig?: any;
     userTaskProofLimits?: any;
     signUpConfig?: {
         customTitle?: string;
@@ -629,6 +637,11 @@ export interface UserTask {
     requireScreenshot?: boolean;
     screenshotInstruction?: string;
     requiredProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; instruction: string }>;
+    isSurvey?: boolean;
+    surveyEstimatedMinutes?: number;
+    surveyQuestionsCount?: number;
+    surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
+    surveyConfig?: any;
 }
 
 export interface UserTaskSubmission {
@@ -644,6 +657,28 @@ export interface UserTaskSubmission {
     proofEmail?: string;
     proofImage?: string;
     submittedProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; value: string }>;
+    surveyResponses?: any[];
+    surveyCompletionTimeSeconds?: number;
+    surveyQualificationStatus?: 'Qualified' | 'Disqualified' | 'Screenout' | 'Completed' | string;
+    attentionCheckPassed?: boolean;
+    consentAgreed?: boolean;
+    surveyVersion?: number;
+    checkQuestionResults?: Array<{
+        checkQuestionId: string;
+        checkQuestionTitle?: string;
+        sourceQuestionId: string;
+        originalAnswer?: any;
+        verificationAnswer?: any;
+        comparisonMethod?: string;
+        result: 'PASS' | 'FAIL';
+        failureAction?: string;
+        timestamp?: string | Date;
+    }>;
+    qualityFlags?: string[];
+    qualityScore?: number;
+    answeredPath?: string[];
+    skippedQuestions?: string[];
+    approvalMode?: string;
     status: 'Pending' | 'Approved' | 'Rejected' | 'Disputed' | 'Paid' | 'In Review' | 'Submitted' | 'Completed' | string;
     adminNotes?: string;
     rewardAmount: number;

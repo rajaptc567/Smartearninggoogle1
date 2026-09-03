@@ -17,7 +17,7 @@ const TransactionSchema = new mongoose.Schema({
             'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
             'Withdrawal Request', 'Withdrawal Refund', 'Plan Purchase', 'Transfer Sent', 
             'Transfer Received', 'Transfer Request', 'Transfer Refund', 'Task Budget Deduction', 
-            'Task Refund', 'Task Reward', 'Currency Conversion', 'Investment To Task Wallet Transfer',
+            'Task Refund', 'Task Reward', 'Survey Reward', 'Survey Screenout Reward', 'Currency Conversion', 'Investment To Task Wallet Transfer',
             'Task Wallet Transfer', 'Campaign Creation', 'Task Reward Transfer', 
             'Main To Campaign Wallet Transfer', 'Campaign Wallet To Main Transfer',
             'Task Wallet Conversion', 'Task Earnings Conversion', 'Task Earnings Transfer',
