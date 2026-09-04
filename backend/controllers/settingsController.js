@@ -129,6 +129,9 @@ export const getPublicSettings = async (req, res) => {
             isUserTaskEnabled: settings.isUserTaskEnabled !== false,
             isUserTransferEnabled: settings.isUserTransferEnabled !== false,
             isTasksEnabled: settings.isTasksEnabled !== false,
+            surveyCampaignsEnabled: settings.surveyCampaignsEnabled !== false && settings.taskCategoryPresets?.survey?.enabled !== false,
+            taskCategoryPresets: settings.taskCategoryPresets || null,
+            surveyConfig: settings.surveyConfig || null,
             transferConfig: settings.transferConfig || { enabled: true, tiers: [], allowCrossCurrency: false, allowManualRecipientEntry: true },
             hubEnabled: settings.hubEnabled !== false,
             hubAccessMode: settings.hubAccessMode || 'all',
@@ -182,9 +185,7 @@ export const getSettings = async (req, res) => {
         // Strip sensitive credentials from non-admin requests
         const isAuthorizedAdmin = req.user && (
             req.user.role === 'admin' || 
-            req.user.role === 'super_admin' || 
-            req.user.email === 'studio56.pk@gmail.com' ||
-            req.user.email === 'smartexn.com@gmail.com'
+            req.user.role === 'super_admin'
         );
 
         if (!isAuthorizedAdmin) {
@@ -217,6 +218,20 @@ export const updateSettings = async (req, res) => {
             req.body.isInvestmentModuleEnabled = req.body.investmentModuleEnabled;
         } else if (req.body.isInvestmentModuleEnabled !== undefined) {
             req.body.investmentModuleEnabled = req.body.isInvestmentModuleEnabled;
+        }
+
+        // Synchronize surveyCampaignsEnabled with taskCategoryPresets.survey.enabled
+        if (req.body.surveyCampaignsEnabled !== undefined) {
+            const currentPresets = req.body.taskCategoryPresets || prevSettings?.taskCategoryPresets || {};
+            req.body.taskCategoryPresets = {
+                ...currentPresets,
+                survey: {
+                    ...(currentPresets.survey || {}),
+                    enabled: req.body.surveyCampaignsEnabled
+                }
+            };
+        } else if (req.body.taskCategoryPresets?.survey?.enabled !== undefined) {
+            req.body.surveyCampaignsEnabled = req.body.taskCategoryPresets.survey.enabled;
         }
 
         // Sanitize homepage payment logos to remove empty/invalid items

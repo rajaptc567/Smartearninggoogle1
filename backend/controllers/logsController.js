@@ -3,7 +3,7 @@ import Log from '../models/Log.js';
 
 export const getLogs = async (req, res) => {
     try {
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
         
         if (!isAdmin) {
             // Return empty data instead of 403 to prevent frontend boot failure
@@ -19,7 +19,7 @@ export const getLogs = async (req, res) => {
 
 export const clearLogs = async (req, res) => {
     try {
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
 
         await Log.deleteMany({});

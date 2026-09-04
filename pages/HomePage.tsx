@@ -517,9 +517,10 @@ const HomePage: React.FC = () => {
     // Using loose equality check !== false to default to true if undefined
     const showHero = settings.homepageContent?.showHero !== false;
     const showFeatures = settings.homepageContent?.showFeatures !== false;
+    const isInvestmentGloballyEnabled = settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false;
     const showMultiCurrency = settings.homepageContent?.showMultiCurrency !== false;
-    const showInvestmentPlans = settings.homepageContent?.showInvestmentPlans !== false;
-    const showMLM = settings.homepageContent?.showMLM !== false;
+    const showInvestmentPlans = isInvestmentGloballyEnabled && settings.homepageContent?.showInvestmentPlans !== false;
+    const showMLM = isInvestmentGloballyEnabled && settings.homepageContent?.showMLM !== false;
     const showPaymentMethods = settings.homepageContent?.showPaymentMethods !== false;
     const showVideoSection = settings.homepageContent?.showVideoSection !== false;
     const showFAQ = settings.homepageContent?.showFAQ !== false;
@@ -683,13 +684,15 @@ const HomePage: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-900"></div>
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                             <div className="text-[10px] sm:text-xs font-black tracking-[0.2em] text-blue-600 dark:text-blue-400 uppercase mb-3">
-                                Secure Network Marketing Platform • Multi-Currency Wallet Investment System
+                                Global Work & Earn Micro-Tasks Platform • Instant Multi-Currency Payouts
                             </div>
                             <EditableText editMode={editMode} value={pageContent.heroTitle || ''} onChange={handleContentChange('heroTitle')} tag="h1" className="text-3xl md:text-6xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4 leading-tight" />
                             <EditableText editMode={editMode} value={pageContent.heroSubtitle || ''} onChange={handleContentChange('heroSubtitle')} tag="p" multiline className="text-base md:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed" />
                             <div className="mt-6 flex justify-center gap-3">
                                 <Button size="lg" onClick={() => navigate('/register')} className="shadow-lg shadow-blue-500/20 px-6 py-3 text-base bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0">Start Earning</Button>
-                                <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-6 py-3 text-base">View Plans</Button>
+                                {isInvestmentGloballyEnabled && (
+                                    <Button size="lg" variant="secondary" onClick={() => {document.getElementById('plans')?.scrollIntoView({behavior: 'smooth'})}} className="px-6 py-3 text-base">View Plans</Button>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -703,13 +706,13 @@ const HomePage: React.FC = () => {
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                         <div className="text-center max-w-3xl mx-auto mb-8 md:mb-10">
                             <span className="text-[10px] sm:text-xs font-black tracking-[0.25em] text-emerald-600 dark:text-emerald-400 uppercase mb-2 block">
-                                NO INVESTMENT REQUIRED • EARN DAILY
+                                VERIFIED MICRO-TASKS • EARN DAILY
                             </span>
                             <h2 className="text-2xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight mb-3 uppercase">
-                                Zero-Investment Daily Gigs & Social Tasks
+                                Daily Online Micro-Tasks, Surveys & Gigs
                             </h2>
                             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
-                                Don't want to purchase an investment plan? No problem! Complete simple daily social media tasks, watch promotional videos, follow premium channels, and get paid instantly in <strong>USD, EUR, or PKR</strong> with local withdrawals.
+                                Complete simple daily micro-tasks, interactive surveys, and digital gigs, watch promotional videos, follow verified channels, and get paid directly in <strong>USD, EUR, or PKR</strong> with fast withdrawals.
                             </p>
                         </div>
 
@@ -851,19 +854,19 @@ const HomePage: React.FC = () => {
                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 text-center">
                                  <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-blue-600 dark:text-blue-400"><SecureIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-blue-500 mb-1.5 block">Secure Network Marketing Platform</span>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-blue-500 mb-1.5 block">Verified Task Execution Platform</span>
                                     <EditableText editMode={editMode} value={pageContent.feature1Title || ''} onChange={handleContentChange('feature1Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
                                     <EditableText editMode={editMode} value={pageContent.feature1Desc || ''} onChange={handleContentChange('feature1Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
                                 <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-purple-600 dark:text-purple-400"><NetworkIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-purple-500 mb-1.5 block">Peer-to-Peer Ledger Investment Portal</span>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-purple-500 mb-1.5 block">Transparent Direct Payouts & Escrow</span>
                                     <EditableText editMode={editMode} value={pageContent.feature2Title || ''} onChange={handleContentChange('feature2Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
                                     <EditableText editMode={editMode} value={pageContent.feature2Desc || ''} onChange={handleContentChange('feature2Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
                                 <div className="bg-white dark:bg-gray-800 p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:-translate-y-1 transition-transform duration-300">
                                     <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mb-4 mx-auto text-green-600 dark:text-green-400"><GrowthIcon/></div>
-                                    <span className="text-[10px] font-black tracking-widest uppercase text-green-500 mb-1.5 block">Real-Time MLM Earning Dashboard</span>
+                                    <span className="text-[10px] font-black tracking-widest uppercase text-green-500 mb-1.5 block">Real-Time Task & Rewards Analytics</span>
                                     <EditableText editMode={editMode} value={pageContent.feature3Title || ''} onChange={handleContentChange('feature3Title')} tag="h4" className="text-lg md:text-xl font-bold mb-1.5" />
                                     <EditableText editMode={editMode} value={pageContent.feature3Desc || ''} onChange={handleContentChange('feature3Desc')} multiline className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" />
                                 </div>
@@ -919,7 +922,7 @@ const HomePage: React.FC = () => {
                 )}
 
                 {/* Investment Plans Section */}
-                {(showInvestmentPlans || editMode) && featuredPlans.length > 0 && (
+                {(showInvestmentPlans || (editMode && isInvestmentGloballyEnabled)) && featuredPlans.length > 0 && (
                     <section id="plans" className={`py-10 md:py-16 bg-white dark:bg-gray-900 ${!showInvestmentPlans && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showInvestmentPlans && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -956,7 +959,7 @@ const HomePage: React.FC = () => {
 
 
                 {/* MLM System Section */}
-                {(showMLM || editMode) && (
+                {(showMLM || (editMode && isInvestmentGloballyEnabled)) && (
                     <section className={`py-10 md:py-16 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${!showMLM && editMode ? 'opacity-50 border-2 border-red-500' : ''}`}>
                         {editMode && !showMLM && <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded z-50">HIDDEN SECTION</div>}
                         <div className="container mx-auto px-4 sm:px-6 lg:px-8">

@@ -290,7 +290,7 @@ const distributeCommissions = async (user, plan, settings, exchangeRates, defaul
 export const getUsers = async (req, res) => {
     try {
         let users;
-        const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isMasterAdmin = req.user?.role === 'super_admin';
         const isAdmin = isMasterAdmin || req.user?.role === 'admin';
 
         if (isAdmin) {
@@ -329,7 +329,7 @@ export const getUser = async (req, res) => {
         if (!user) return res.status(200).json({ success: false, data: {} });
 
         const loggedInUserId = req.user?.id;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(user._id)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot access other users profiles.' });
@@ -464,7 +464,7 @@ export const updateUser = async (req, res) => {
         // SECURITY: Verify that logged-in user matches target user, or is an admin
         const loggedInUserId = req.user?.id;
         const targetUserId = req.params.id;
-        const isMasterAdmin = req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isMasterAdmin = req.user?.role === 'super_admin';
         const isAdmin = isMasterAdmin || req.user?.role === 'admin' || req.user?.role === 'finance' || req.user?.role === 'support';
 
         if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
@@ -577,7 +577,7 @@ export const purchasePlan = async (req, res) => {
     try {
         const loggedInUserId = req.user?.id;
         const targetUserId = req.params.id;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(targetUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot purchase plan on behalf of other users.' });

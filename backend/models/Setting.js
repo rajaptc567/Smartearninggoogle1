@@ -664,100 +664,133 @@ SettingSchema.statics.getSettings = async function() {
         };
         needsSave = true;
     }
-    if (!settings.surveyConfig || !settings.surveyConfig.categories || settings.surveyConfig.categories.length === 0) {
-        settings.surveyConfig = {
-            categories: [
-                { id: 'cat_general', name: 'General Survey', slug: 'general-survey', description: 'Broad multi-topic opinion and feedback surveys', icon: '📋', status: 'active', sortOrder: 1, minReward: 0.10, defaultReward: 0.15, maxReward: 2.00, estimatedTimeMinutes: 3, minQuestions: 1, maxQuestions: 20, requireApproval: false },
-                { id: 'cat_market', name: 'Market Research', slug: 'market-research', description: 'In-depth market trends, habits and consumer preferences', icon: '📊', status: 'active', sortOrder: 2, minReward: 0.25, defaultReward: 0.35, maxReward: 5.00, estimatedTimeMinutes: 7, minQuestions: 3, maxQuestions: 30, requireApproval: false },
-                { id: 'cat_product', name: 'Product Feedback', slug: 'product-feedback', description: 'Product testing, feature suggestions and usability feedback', icon: '💡', status: 'active', sortOrder: 3, minReward: 0.20, defaultReward: 0.30, maxReward: 4.00, estimatedTimeMinutes: 5, minQuestions: 2, maxQuestions: 25, requireApproval: false },
-                { id: 'cat_customer', name: 'Customer Feedback', slug: 'customer-feedback', description: 'Customer service, loyalty and brand experience reviews', icon: '⭐', status: 'active', sortOrder: 4, minReward: 0.15, defaultReward: 0.20, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false },
-                { id: 'cat_brand', name: 'Brand Awareness', slug: 'brand-awareness', description: 'Evaluate brand recognition, perception and messaging', icon: '🏷️', status: 'active', sortOrder: 5, minReward: 0.20, defaultReward: 0.25, maxReward: 3.50, estimatedTimeMinutes: 5, minQuestions: 2, maxQuestions: 20, requireApproval: false },
-                { id: 'cat_website', name: 'Website Feedback', slug: 'website-feedback', description: 'Website navigation, UI/UX, responsiveness and checkout audits', icon: '🌐', status: 'active', sortOrder: 6, minReward: 0.15, defaultReward: 0.20, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false },
-                { id: 'cat_app', name: 'App Feedback', slug: 'app-feedback', description: 'Mobile application onboarding, usability and feature reviews', icon: '📱', status: 'active', sortOrder: 7, minReward: 0.20, defaultReward: 0.30, maxReward: 4.00, estimatedTimeMinutes: 6, minQuestions: 3, maxQuestions: 25, requireApproval: false },
-                { id: 'cat_service', name: 'Service Review', slug: 'service-review', description: 'Evaluate services, delivery, support and satisfaction', icon: '🛎️', status: 'active', sortOrder: 8, minReward: 0.25, defaultReward: 0.35, maxReward: 4.00, estimatedTimeMinutes: 6, minQuestions: 2, maxQuestions: 25, requireApproval: false },
-                { id: 'cat_poll', name: 'Opinion Poll', slug: 'opinion-poll', description: 'Fast single or double question community polls', icon: '🗳️', status: 'active', sortOrder: 9, minReward: 0.08, defaultReward: 0.10, maxReward: 1.50, estimatedTimeMinutes: 2, minQuestions: 1, maxQuestions: 10, requireApproval: false },
-                { id: 'cat_consumer', name: 'Consumer Research', slug: 'consumer-research', description: 'Detailed shopping behavior, brand choices and lifestyle analysis', icon: '🛒', status: 'active', sortOrder: 10, minReward: 0.30, defaultReward: 0.45, maxReward: 6.00, estimatedTimeMinutes: 10, minQuestions: 5, maxQuestions: 35, requireApproval: false },
-                { id: 'cat_demographic', name: 'Demographic Survey', slug: 'demographic-survey', description: 'Targeted demographic audience mapping and qualification', icon: '👥', status: 'active', sortOrder: 11, minReward: 0.15, defaultReward: 0.25, maxReward: 3.00, estimatedTimeMinutes: 5, minQuestions: 3, maxQuestions: 20, requireApproval: false },
-                { id: 'cat_academic', name: 'Academic Research', slug: 'academic-research', description: 'University and scientific studies with structured response forms', icon: '🎓', status: 'active', sortOrder: 12, minReward: 0.35, defaultReward: 0.50, maxReward: 8.00, estimatedTimeMinutes: 12, minQuestions: 5, maxQuestions: 40, requireApproval: false },
-                { id: 'cat_lead', name: 'Lead Qualification', slug: 'lead-qualification', description: 'Prospective client discovery and requirement screening', icon: '🎯', status: 'active', sortOrder: 13, minReward: 0.40, defaultReward: 0.60, maxReward: 10.00, estimatedTimeMinutes: 8, minQuestions: 3, maxQuestions: 25, requireApproval: false },
-                { id: 'cat_satisfaction', name: 'Satisfaction Survey', slug: 'satisfaction-survey', description: 'CSAT, Net Promoter Score (NPS) and post-purchase surveys', icon: '😊', status: 'active', sortOrder: 14, minReward: 0.15, defaultReward: 0.22, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false }
+    if (!settings.surveyConfig) {
+        settings.surveyConfig = {};
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.categories || settings.surveyConfig.categories.length === 0) {
+        settings.surveyConfig.categories = [
+            { id: 'cat_general', name: 'General Survey', slug: 'general-survey', description: 'Broad multi-topic opinion and feedback surveys', icon: '📋', status: 'active', sortOrder: 1, minReward: 0.10, defaultReward: 0.15, maxReward: 2.00, estimatedTimeMinutes: 3, minQuestions: 1, maxQuestions: 20, requireApproval: false },
+            { id: 'cat_market', name: 'Market Research', slug: 'market-research', description: 'In-depth market trends, habits and consumer preferences', icon: '📊', status: 'active', sortOrder: 2, minReward: 0.25, defaultReward: 0.35, maxReward: 5.00, estimatedTimeMinutes: 7, minQuestions: 3, maxQuestions: 30, requireApproval: false },
+            { id: 'cat_product', name: 'Product Feedback', slug: 'product-feedback', description: 'Product testing, feature suggestions and usability feedback', icon: '💡', status: 'active', sortOrder: 3, minReward: 0.20, defaultReward: 0.30, maxReward: 4.00, estimatedTimeMinutes: 5, minQuestions: 2, maxQuestions: 25, requireApproval: false },
+            { id: 'cat_customer', name: 'Customer Feedback', slug: 'customer-feedback', description: 'Customer service, loyalty and brand experience reviews', icon: '⭐', status: 'active', sortOrder: 4, minReward: 0.15, defaultReward: 0.20, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false },
+            { id: 'cat_brand', name: 'Brand Awareness', slug: 'brand-awareness', description: 'Evaluate brand recognition, perception and messaging', icon: '🏷️', status: 'active', sortOrder: 5, minReward: 0.20, defaultReward: 0.25, maxReward: 3.50, estimatedTimeMinutes: 5, minQuestions: 2, maxQuestions: 20, requireApproval: false },
+            { id: 'cat_website', name: 'Website Feedback', slug: 'website-feedback', description: 'Website navigation, UI/UX, responsiveness and checkout audits', icon: '🌐', status: 'active', sortOrder: 6, minReward: 0.15, defaultReward: 0.20, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false },
+            { id: 'cat_app', name: 'App Feedback', slug: 'app-feedback', description: 'Mobile application onboarding, usability and feature reviews', icon: '📱', status: 'active', sortOrder: 7, minReward: 0.20, defaultReward: 0.30, maxReward: 4.00, estimatedTimeMinutes: 6, minQuestions: 3, maxQuestions: 25, requireApproval: false },
+            { id: 'cat_service', name: 'Service Review', slug: 'service-review', description: 'Evaluate services, delivery, support and satisfaction', icon: '🛎️', status: 'active', sortOrder: 8, minReward: 0.25, defaultReward: 0.35, maxReward: 4.00, estimatedTimeMinutes: 6, minQuestions: 2, maxQuestions: 25, requireApproval: false },
+            { id: 'cat_poll', name: 'Opinion Poll', slug: 'opinion-poll', description: 'Fast single or double question community polls', icon: '🗳️', status: 'active', sortOrder: 9, minReward: 0.08, defaultReward: 0.10, maxReward: 1.50, estimatedTimeMinutes: 2, minQuestions: 1, maxQuestions: 10, requireApproval: false },
+            { id: 'cat_consumer', name: 'Consumer Research', slug: 'consumer-research', description: 'Detailed shopping behavior, brand choices and lifestyle analysis', icon: '🛒', status: 'active', sortOrder: 10, minReward: 0.30, defaultReward: 0.45, maxReward: 6.00, estimatedTimeMinutes: 10, minQuestions: 5, maxQuestions: 35, requireApproval: false },
+            { id: 'cat_demographic', name: 'Demographic Survey', slug: 'demographic-survey', description: 'Targeted demographic audience mapping and qualification', icon: '👥', status: 'active', sortOrder: 11, minReward: 0.15, defaultReward: 0.25, maxReward: 3.00, estimatedTimeMinutes: 5, minQuestions: 3, maxQuestions: 20, requireApproval: false },
+            { id: 'cat_academic', name: 'Academic Research', slug: 'academic-research', description: 'University and scientific studies with structured response forms', icon: '🎓', status: 'active', sortOrder: 12, minReward: 0.35, defaultReward: 0.50, maxReward: 8.00, estimatedTimeMinutes: 12, minQuestions: 5, maxQuestions: 40, requireApproval: false },
+            { id: 'cat_lead', name: 'Lead Qualification', slug: 'lead-qualification', description: 'Prospective client discovery and requirement screening', icon: '🎯', status: 'active', sortOrder: 13, minReward: 0.40, defaultReward: 0.60, maxReward: 10.00, estimatedTimeMinutes: 8, minQuestions: 3, maxQuestions: 25, requireApproval: false },
+            { id: 'cat_satisfaction', name: 'Satisfaction Survey', slug: 'satisfaction-survey', description: 'CSAT, Net Promoter Score (NPS) and post-purchase surveys', icon: '😊', status: 'active', sortOrder: 14, minReward: 0.15, defaultReward: 0.22, maxReward: 3.00, estimatedTimeMinutes: 4, minQuestions: 2, maxQuestions: 20, requireApproval: false }
+        ];
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.rateRules) {
+        settings.surveyConfig.rateRules = {
+            baseReward: 0.10,
+            workerReward: 0.08,
+            platformFee: 0.02,
+            minCampaignBudget: 1.00,
+            maxCampaignBudget: 10000,
+            timeTiers: [
+                { id: 'tt_1', duration: '1-3 Minutes', minutes: 3, advertiserRate: 0.15, workerReward: 0.10, platformFee: 0.05, minSlots: 10, enabled: true },
+                { id: 'tt_2', duration: '4-7 Minutes', minutes: 7, advertiserRate: 0.30, workerReward: 0.22, platformFee: 0.08, minSlots: 10, enabled: true },
+                { id: 'tt_3', duration: '8-15 Minutes', minutes: 15, advertiserRate: 0.60, workerReward: 0.45, platformFee: 0.15, minSlots: 5, enabled: true },
+                { id: 'tt_4', duration: '16-30 Minutes', minutes: 30, advertiserRate: 1.20, workerReward: 0.90, platformFee: 0.30, minSlots: 5, enabled: true },
+                { id: 'tt_5', duration: '31+ Minutes', minutes: 45, advertiserRate: 2.00, workerReward: 1.50, platformFee: 0.50, minSlots: 5, enabled: true }
             ],
-            rateRules: {
-                baseReward: 0.10,
-                workerReward: 0.08,
-                platformFee: 0.02,
-                minCampaignBudget: 1.00,
-                maxCampaignBudget: 10000,
-                timeTiers: [
-                    { id: 'tt_1', duration: '1-3 Minutes', minutes: 3, advertiserRate: 0.15, workerReward: 0.10, platformFee: 0.05, minSlots: 10, enabled: true },
-                    { id: 'tt_2', duration: '4-7 Minutes', minutes: 7, advertiserRate: 0.30, workerReward: 0.22, platformFee: 0.08, minSlots: 10, enabled: true },
-                    { id: 'tt_3', duration: '8-15 Minutes', minutes: 15, advertiserRate: 0.60, workerReward: 0.45, platformFee: 0.15, minSlots: 5, enabled: true },
-                    { id: 'tt_4', duration: '16-30 Minutes', minutes: 30, advertiserRate: 1.20, workerReward: 0.90, platformFee: 0.30, minSlots: 5, enabled: true },
-                    { id: 'tt_5', duration: '31+ Minutes', minutes: 45, advertiserRate: 2.00, workerReward: 1.50, platformFee: 0.50, minSlots: 5, enabled: true }
-                ],
-                questionTiers: [
-                    { id: 'qt_1', range: '1-5 Questions', maxQuestions: 5, priceAdjustment: 0.00, enabled: true },
-                    { id: 'qt_2', range: '6-10 Questions', maxQuestions: 10, priceAdjustment: 0.05, enabled: true },
-                    { id: 'qt_3', range: '11-20 Questions', maxQuestions: 20, priceAdjustment: 0.15, enabled: true },
-                    { id: 'qt_4', range: '21-30 Questions', maxQuestions: 30, priceAdjustment: 0.30, enabled: true },
-                    { id: 'qt_5', range: '31+ Questions', maxQuestions: 100, priceAdjustment: 0.50, enabled: true }
-                ],
-                targetingPremium: 0.05,
-                qualificationReward: 0.01,
-                screeningRewardAmount: 0.01,
-                allowScreeningReward: false
-            },
-            templates: [
-                {
-                    id: 'tmpl_csat',
-                    name: 'Customer Satisfaction (CSAT) Standard',
-                    category: 'Satisfaction Survey',
-                    description: 'Measure customer happiness, rating, and feedback recommendations',
-                    estimatedTimeMinutes: 4,
-                    questions: [
-                        { id: 'q1', type: 'rating', title: 'Overall, how satisfied are you with our service?', required: true, minRating: 1, maxRating: 5, ratingScaleType: 'stars' },
-                        { id: 'q2', type: 'opinion_scale', title: 'How likely are you to recommend us to a friend or colleague?', required: true, minRating: 1, maxRating: 10 },
-                        { id: 'q3', type: 'single_choice', title: 'What is your primary use case for our platform?', required: true, options: ['Personal Use', 'Freelancing / Earning', 'Business / Advertising', 'Other'] },
-                        { id: 'q4', type: 'long_text', title: 'What is one thing we could do better?', required: false }
-                    ]
-                },
-                {
-                    id: 'tmpl_market',
-                    name: 'Consumer Habits & Device Preferences',
-                    category: 'Market Research',
-                    description: 'Audience hardware, operating system, and digital routine survey',
-                    estimatedTimeMinutes: 5,
-                    questions: [
-                        { id: 'q1', type: 'single_choice', title: 'Which operating system do you use most often?', required: true, options: ['Android', 'iOS / Apple', 'Windows', 'MacOS', 'Other'] },
-                        { id: 'q2', type: 'multiple_choice', title: 'Which social media platforms do you check daily?', required: true, options: ['YouTube', 'Facebook', 'Instagram', 'TikTok', 'WhatsApp', 'X (Twitter)'] },
-                        { id: 'q3', type: 'yes_no', title: 'Have you made an online purchase in the last 30 days?', required: true },
-                        { id: 'q4', type: 'rating', title: 'Rate your confidence in digital shopping security', required: true, minRating: 1, maxRating: 5 }
-                    ]
-                }
+            questionTiers: [
+                { id: 'qt_1', range: '1-5 Questions', maxQuestions: 5, priceAdjustment: 0.00, enabled: true },
+                { id: 'qt_2', range: '6-10 Questions', maxQuestions: 10, priceAdjustment: 0.05, enabled: true },
+                { id: 'qt_3', range: '11-20 Questions', maxQuestions: 20, priceAdjustment: 0.15, enabled: true },
+                { id: 'qt_4', range: '21-30 Questions', maxQuestions: 30, priceAdjustment: 0.30, enabled: true },
+                { id: 'qt_5', range: '31+ Questions', maxQuestions: 100, priceAdjustment: 0.50, enabled: true }
             ],
-            questionBank: [
-                { id: 'qb_1', category: 'General', type: 'single_choice', title: 'Which device do you use predominantly for online work?', options: ['Smartphone', 'Laptop / PC', 'Tablet', 'Other'], tags: ['device', 'demographic'] },
-                { id: 'qb_2', category: 'Attention Check', type: 'single_choice', title: 'Attention verification: Please select "Strongly Agree" to continue.', options: ['Strongly Disagree', 'Neutral', 'Strongly Agree', 'Disagree'], isAttentionCheck: true, expectedAnswer: 'Strongly Agree', tags: ['anti-fraud', 'attention'] },
-                { id: 'qb_3', category: 'Demographics', type: 'single_choice', title: 'What is your current employment status?', options: ['Employed Full-Time', 'Part-Time', 'Freelancer / Gig Worker', 'Student', 'Unemployed'], tags: ['employment', 'demographics'] },
-                { id: 'qb_4', category: 'Satisfaction', type: 'rating', title: 'How would you rate the responsiveness and speed of our website?', minRating: 1, maxRating: 5, tags: ['speed', 'ux'] },
-                { id: 'qb_5', category: 'Feedback', type: 'long_text', title: 'Please share any specific suggestions or improvements you would like to see.', tags: ['text', 'feedback'] }
-            ],
-            allowedCustomizations: {
-                allowUserChangeReward: true,
-                allowUserChangeCompletionTime: true,
-                allowUserChangeTargeting: true,
-                allowUserChangeQuestions: true,
-                allowUserChangeResponsesCount: true
-            },
-            securityRules: {
-                minCompletionTimeRatio: 0.3,
-                enforceAntiSpeeding: true,
-                enforceOneResponsePerUser: true,
-                allowAttentionChecks: true
-            },
-            defaultConsentText: 'I agree to participate in this survey and confirm that my answers will be accurate, honest, and complete.'
+            targetingPremium: 0.05,
+            qualificationReward: 0.01,
+            screeningRewardAmount: 0.01,
+            allowScreeningReward: false
         };
         needsSave = true;
+    }
+    if (!settings.surveyConfig.templates) {
+        settings.surveyConfig.templates = [
+            {
+                id: 'tmpl_csat',
+                name: 'Customer Satisfaction (CSAT) Standard',
+                category: 'Satisfaction Survey',
+                description: 'Measure customer happiness, rating, and feedback recommendations',
+                estimatedTimeMinutes: 4,
+                questions: [
+                    { id: 'q1', type: 'rating', title: 'Overall, how satisfied are you with our service?', required: true, minRating: 1, maxRating: 5, ratingScaleType: 'stars' },
+                    { id: 'q2', type: 'opinion_scale', title: 'How likely are you to recommend us to a friend or colleague?', required: true, minRating: 1, maxRating: 10 },
+                    { id: 'q3', type: 'single_choice', title: 'What is your primary use case for our platform?', required: true, options: ['Personal Use', 'Freelancing / Earning', 'Business / Advertising', 'Other'] },
+                    { id: 'q4', type: 'long_text', title: 'What is one thing we could do better?', required: false }
+                ]
+            },
+            {
+                id: 'tmpl_market',
+                name: 'Consumer Habits & Device Preferences',
+                category: 'Market Research',
+                description: 'Audience hardware, operating system, and digital routine survey',
+                estimatedTimeMinutes: 5,
+                questions: [
+                    { id: 'q1', type: 'single_choice', title: 'Which operating system do you use most often?', required: true, options: ['Android', 'iOS / Apple', 'Windows', 'MacOS', 'Other'] },
+                    { id: 'q2', type: 'multiple_choice', title: 'Which social media platforms do you check daily?', required: true, options: ['YouTube', 'Facebook', 'Instagram', 'TikTok', 'WhatsApp', 'X (Twitter)'] },
+                    { id: 'q3', type: 'yes_no', title: 'Have you made an online purchase in the last 30 days?', required: true },
+                    { id: 'q4', type: 'rating', title: 'Rate your confidence in digital shopping security', required: true, minRating: 1, maxRating: 5 }
+                ]
+            }
+        ];
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.questionBank) {
+        settings.surveyConfig.questionBank = [
+            { id: 'qb_1', category: 'General', type: 'single_choice', title: 'Which device do you use predominantly for online work?', options: ['Smartphone', 'Laptop / PC', 'Tablet', 'Other'], tags: ['device', 'demographic'] },
+            { id: 'qb_2', category: 'Attention Check', type: 'single_choice', title: 'Attention verification: Please select "Strongly Agree" to continue.', options: ['Strongly Disagree', 'Neutral', 'Strongly Agree', 'Disagree'], isAttentionCheck: true, expectedAnswer: 'Strongly Agree', tags: ['anti-fraud', 'attention'] },
+            { id: 'qb_3', category: 'Demographics', type: 'single_choice', title: 'What is your current employment status?', options: ['Employed Full-Time', 'Part-Time', 'Freelancer / Gig Worker', 'Student', 'Unemployed'], tags: ['employment', 'demographics'] },
+            { id: 'qb_4', category: 'Satisfaction', type: 'rating', title: 'How would you rate the responsiveness and speed of our website?', minRating: 1, maxRating: 5, tags: ['speed', 'ux'] },
+            { id: 'qb_5', category: 'Feedback', type: 'long_text', title: 'Please share any specific suggestions or improvements you would like to see.', tags: ['text', 'feedback'] }
+        ];
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.allowedCustomizations) {
+        settings.surveyConfig.allowedCustomizations = {
+            allowUserChangeReward: true,
+            allowUserChangeCompletionTime: true,
+            allowUserChangeTargeting: true,
+            allowUserChangeQuestions: true,
+            allowUserChangeResponsesCount: true
+        };
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.securityRules) {
+        settings.surveyConfig.securityRules = {
+            minCompletionTimeRatio: 0.3,
+            enforceAntiSpeeding: true,
+            enforceOneResponsePerUser: true,
+            allowAttentionChecks: true
+        };
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.rotationRules) {
+        settings.surveyConfig.rotationRules = {
+            allowQuestionRotation: true,
+            allowOptionRotation: true,
+            globalRotationEnabled: false,
+            globalOptionRotationEnabled: false
+        };
+        needsSave = true;
+    }
+    if (!settings.surveyConfig.defaultConsentText) {
+        settings.surveyConfig.defaultConsentText = 'I agree to participate in this survey and confirm that my answers will be accurate, honest, and complete.';
+        needsSave = true;
+    }
+    if (needsSave) {
+        settings.markModified('surveyConfig');
+        await settings.save();
     }
     if (needsSave) { await settings.save(); }
     return settings;

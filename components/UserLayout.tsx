@@ -166,12 +166,12 @@ const UserLayout: React.FC = () => {
       const adminDefault = settings?.defaultUserDashboardModule || 'work_and_earn';
       const saved = localStorage.getItem('dashboard_mode');
       const mode = (saved as 'work_and_earn' | 'investment') || adminDefault;
-      // Fallback only if explicitly disabled
-      if (mode === 'work_and_earn' && settings && settings.hubEnabled === false) {
-          return 'investment';
-      }
-      if (mode === 'work_and_earn' && settings && !hasHubAccess) {
-          return 'investment';
+      // Fallback only if explicitly disabled AND user has investment access
+      if (mode === 'work_and_earn' && settings && (settings.hubEnabled === false || !hasHubAccess)) {
+          if (isInvestmentEnabled || isAdmin) {
+              return 'investment';
+          }
+          return 'work_and_earn';
       }
       return mode;
   });
@@ -188,7 +188,11 @@ const UserLayout: React.FC = () => {
     if (settings?.defaultUserDashboardModule && !localStorage.getItem('dashboard_mode')) {
       const targetMode = settings.defaultUserDashboardModule;
       if (targetMode === 'work_and_earn' && (settings.hubEnabled === false || !hasHubAccess)) {
-        setDashboardMode('investment');
+        if (isInvestmentEnabled || isAdmin) {
+          setDashboardMode('investment');
+        } else {
+          setDashboardMode('work_and_earn');
+        }
       } else {
         setDashboardMode(targetMode);
       }
@@ -197,17 +201,21 @@ const UserLayout: React.FC = () => {
 
   // Enforce access changes in real-time safely
   useEffect(() => {
-    if (!isInvestmentEnabled && !isAdmin && dashboardMode === 'investment') {
-      setDashboardMode('work_and_earn');
-      localStorage.setItem('dashboard_mode', 'work_and_earn');
+    if (!isInvestmentEnabled && !isAdmin) {
+      if (dashboardMode !== 'work_and_earn') {
+        setDashboardMode('work_and_earn');
+        localStorage.setItem('dashboard_mode', 'work_and_earn');
+      }
       return;
     }
-    if (settings && settings.hubEnabled === false && dashboardMode === 'work_and_earn') {
-      setDashboardMode('investment');
-      localStorage.setItem('dashboard_mode', 'investment');
-    } else if (settings && settings.hubEnabled !== false && !hasHubAccess && dashboardMode === 'work_and_earn') {
-      setDashboardMode('investment');
-      localStorage.setItem('dashboard_mode', 'investment');
+    if (isInvestmentEnabled || isAdmin) {
+      if (settings && settings.hubEnabled === false && dashboardMode === 'work_and_earn') {
+        setDashboardMode('investment');
+        localStorage.setItem('dashboard_mode', 'investment');
+      } else if (settings && settings.hubEnabled !== false && !hasHubAccess && dashboardMode === 'work_and_earn') {
+        setDashboardMode('investment');
+        localStorage.setItem('dashboard_mode', 'investment');
+      }
     }
   }, [hasHubAccess, dashboardMode, settings, isInvestmentEnabled, isAdmin]);
 

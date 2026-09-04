@@ -7,7 +7,7 @@ import { sendAutomatedMessage } from '../utils/automation.js';
 // @route   GET /api/v1/notifications
 export const getNotifications = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { userId: req.user?.id };
 
         if (!isAdmin && !req.user?.id) {
@@ -195,7 +195,7 @@ export const markAsRead = async (req, res) => {
             { userId: req.params.userId, read: false },
             { $set: { read: true } }
         );
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { userId: req.user?.id };
         const updatedNotifications = await Notification.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, data: updatedNotifications });
@@ -259,7 +259,7 @@ export const markPopupShown = async (req, res) => {
         if(!notification) return res.status(404).json({ success: false, error: "Notification not found" });
         
         // Return updated list for frontend sync
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { userId: req.user?.id };
         const notifications = await Notification.find(query).sort({ date: -1 });
         res.status(200).json({ success: true, data: notifications });

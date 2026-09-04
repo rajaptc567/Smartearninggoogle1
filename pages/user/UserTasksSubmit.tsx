@@ -1248,25 +1248,43 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     const presets = settings?.taskCategoryPresets || DEFAULT_PRESETS;
 
+    const isSurveyGloballyEnabled = settings?.surveyCampaignsEnabled !== false && 
+                                    presets?.survey?.enabled !== false;
+
     // Get list of all categories from database presets
-    const availableCategories = Object.keys(presets).map(key => {
-        const cat = presets[key];
-        const displayName = cat.displayName || (
-            key === 'youtube' ? 'YouTube' :
-            key === 'facebook' ? 'Facebook' :
-            key === 'instagram' ? 'Instagram' :
-            key === 'google' ? 'Google' :
-            key === 'paidSignUp' ? 'Website' :
-            key === 'survey' ? 'Surveys & Feedback' :
-            key.charAt(0).toUpperCase() + key.slice(1)
-        );
-        return { key, displayName };
-    });
+    const availableCategories = Object.keys(presets)
+        .filter(key => {
+            if (key === 'survey') {
+                return isSurveyGloballyEnabled;
+            }
+            return presets[key]?.enabled !== false;
+        })
+        .map(key => {
+            const cat = presets[key];
+            const displayName = cat.displayName || (
+                key === 'youtube' ? 'YouTube' :
+                key === 'facebook' ? 'Facebook' :
+                key === 'instagram' ? 'Instagram' :
+                key === 'google' ? 'Google' :
+                key === 'paidSignUp' ? 'Website' :
+                key === 'survey' ? 'Surveys & Feedback' :
+                key.charAt(0).toUpperCase() + key.slice(1)
+            );
+            return { key, displayName };
+        });
 
     // Append "Other" catch-all if not present
     if (!availableCategories.some(c => c.key === 'other')) {
         availableCategories.push({ key: 'other', displayName: 'Other' });
     }
+
+    // Auto-fallback if currently selected category was disabled
+    useEffect(() => {
+        if (!isSurveyGloballyEnabled && (category.toLowerCase().includes('survey') || category === 'Surveys & Feedback')) {
+            const fallback = availableCategories.find(c => c.key !== 'survey')?.displayName || 'YouTube';
+            setCategory(fallback);
+        }
+    }, [isSurveyGloballyEnabled, category, availableCategories]);
 
     // Find the preset key matching the selected category
     const activePresetKey = Object.keys(presets).find(k => 
@@ -1274,7 +1292,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         (presets[k]?.displayName && presets[k].displayName.toLowerCase() === category.toLowerCase())
     ) || 'youtube';
 
-    const isSurveyCampaign = activePresetKey === 'survey' || category.toLowerCase().includes('survey');
+    const isSurveyCampaign = isSurveyGloballyEnabled && (activePresetKey === 'survey' || category.toLowerCase().includes('survey'));
     
     const activeCategoryConfig = presets[activePresetKey];
     const activeWatchTimeTiers = (activeCategoryConfig?.watchTimeTiers || []).filter((tier: any) => tier.enabled !== false);
@@ -1416,8 +1434,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
         // Validate Survey Questionnaire if isSurveyCampaign
         if (isSurveyCampaign) {
+            if (!isSurveyGloballyEnabled) {
+                errorMessages.push('• Survey campaigns are currently disabled by the administrator.');
+            }
             if (!surveyConfigData.questions || surveyConfigData.questions.length === 0) {
                 errorMessages.push('• Survey Campaign must have at least one configured question in the Questionnaire Builder.');
+            }
+            for (let qi = 0; qi < (surveyConfigData.questions || []).length; qi++) {
+                const q = surveyConfigData.questions[qi];
+                if (['single_choice', 'multiple_choice', 'dropdown'].includes(q.type)) {
+                    if (Array.isArray(q.options) && q.options.length > 4) {
+                        errorMessages.push(`• Question "${q.title || `Q${qi + 1}`}" exceeds the maximum allowed 4 answer options (currently has ${q.options.length}).`);
+                    }
+                }
             }
         }
 

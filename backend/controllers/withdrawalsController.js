@@ -10,7 +10,7 @@ import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getWithdrawals = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { userId: req.user?.id };
 
         if (!isAdmin && !req.user?.id) {
@@ -37,7 +37,7 @@ export const getWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
 
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         if (!isAdmin && withdrawal.userId.toString() !== req.user.id) {
             return res.status(403).json({ success: false, error: 'Unauthorized access to this record' });
         }
@@ -52,7 +52,7 @@ export const createWithdrawal = async (req, res) => {
     try {
         const loggedInUserId = req.user?.id;
         const requestedUserId = req.body.userId;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot withdraw on behalf of other users.' });

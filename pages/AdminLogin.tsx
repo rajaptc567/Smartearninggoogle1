@@ -32,9 +32,11 @@ const AdminLogin: React.FC = () => {
             // FIX: apiLogin returns { token, data: User }. Access username and email through result.data.
             const loginResult = await apiLogin(email, password);
             
-            // SECURITY CHECK: Ensure the user is actually the admin account.
-            // FIX: Property 'username' and 'email' exist on loginResult.data, not on loginResult itself.
-            if (loginResult.data.username !== 'admin' && loginResult.data.email !== 'studio56.pk@gmail.com') {
+            // SECURITY CHECK: Ensure the user is actually an administrator account.
+            const isAuthorized = loginResult.data.role === 'admin' || 
+                                 loginResult.data.role === 'super_admin' || 
+                                 loginResult.data.username === 'admin';
+            if (!isAuthorized) {
                 setError('Unauthorized access. This area is restricted to administrators.');
                 // Log them out immediately if they aren't admin
                 // FIX: Ensure payload matches { user: User | null; token?: string }.

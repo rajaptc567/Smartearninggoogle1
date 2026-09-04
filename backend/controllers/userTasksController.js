@@ -60,7 +60,9 @@ export const createUserTask = async (req, res) => {
             return res.status(400).json({ success: false, error: 'User task submissions are currently disabled by administrator.' });
         }
 
-        if (isSurveyTask && settings.surveyCampaignsEnabled === false) {
+        const isSurveyGloballyEnabled = settings.surveyCampaignsEnabled !== false && 
+                                        settings.taskCategoryPresets?.survey?.enabled !== false;
+        if (isSurveyTask && !isSurveyGloballyEnabled) {
             return res.status(400).json({ success: false, error: 'Survey campaigns are currently disabled by administrator.' });
         }
 
@@ -71,12 +73,22 @@ export const createUserTask = async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Survey campaigns require at least one question in surveyConfig.' });
             }
 
-            // Backend cycle detection and check question integrity validation
+            // Backend cycle detection, max 4 options enforcement, and check question integrity validation
             const questionIds = new Set(surveyConfig.questions.map(q => q.id));
             for (let i = 0; i < surveyConfig.questions.length; i++) {
                 const q = surveyConfig.questions[i];
                 if (!q.id || !q.title) {
                     return res.status(400).json({ success: false, error: `Survey question at position ${i + 1} must have an id and title.` });
+                }
+
+                // Enforce maximum 4 answer options
+                if (['single_choice', 'multiple_choice', 'dropdown'].includes(q.type)) {
+                    if (Array.isArray(q.options) && q.options.length > 4) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: `Question "${q.title}" exceeds the maximum limit of 4 answer options (maximum 4 allowed).` 
+                        });
+                    }
                 }
 
                 // Validate check questions
@@ -104,6 +116,14 @@ export const createUserTask = async (req, res) => {
                         }
                     }
                 }
+            }
+
+            // Honor admin rotation policies
+            if (surveyConfig.enableQuestionRotation && settings.surveyConfig?.rotationRules?.allowQuestionRotation === false) {
+                surveyConfig.enableQuestionRotation = false;
+            }
+            if (surveyConfig.enableOptionRotation && settings.surveyConfig?.rotationRules?.allowOptionRotation === false) {
+                surveyConfig.enableOptionRotation = false;
             }
 
             // Backend Pricing Calculation: Never trust frontend reward amounts
@@ -358,7 +378,7 @@ export const updateUserTaskStatus = async (req, res) => {
         // Check ownership & authorization
         if (req.user) {
             const isOwner = task.userId?.toString() === req.user.id?.toString();
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to modify this campaign.' });
             }
@@ -697,7 +717,7 @@ export const deleteUserTask = async (req, res) => {
 
         if (req.user) {
             const isOwner = String(task.userId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to delete this campaign.' });
             }
@@ -810,7 +830,7 @@ export const renewUserTask = async (req, res) => {
 
         if (req.user) {
             const isOwner = String(task.userId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to renew this campaign.' });
             }
@@ -1077,17 +1097,22 @@ export const submitUserTaskProof = async (req, res) => {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
         }
 
-        const isSurveyTask = task.isSurvey || String(task.category || '').toLowerCase() === 'survey';
+        const settings = await Setting.getSettings();
+        const isSurveyTask = Boolean(task.isSurvey) || String(task.category || '').toLowerCase().includes('survey');
         const surveyResponses = req.body.surveyResponses || [];
         const surveyCompletionTimeSeconds = Number(req.body.surveyCompletionTimeSeconds) || 0;
         let surveyQualificationStatus = req.body.surveyQualificationStatus || 'Completed';
         const consentAgreed = req.body.consentAgreed !== false;
         const answeredPath = req.body.answeredPath || [];
         const skippedQuestions = req.body.skippedQuestions || [];
-        let attentionCheckPassed = true;
+        let attentionCheckPassed = req.body.attentionCheckPassed !== false && req.body.attentionCheckPassed !== 'false';
         const checkQuestionResults = [];
         const qualityFlags = [];
         let qualityScore = 100;
+        if (!attentionCheckPassed) {
+            qualityFlags.push('Failed attention verification trap');
+            qualityScore = Math.max(0, qualityScore - 40);
+        }
 
         if (isSurveyTask && task.surveyConfig && Array.isArray(task.surveyConfig.questions)) {
             // 1. Attention Checks Validation
@@ -1403,7 +1428,7 @@ export const updateSubmissionStatus = async (req, res) => {
 
         // Ownership and Role Verification
         if (req.user) {
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
             const isCreator = task && String(task.userId) === String(req.user.id);
             const isWorker = String(submission.workerId) === String(req.user.id);
 
@@ -1619,7 +1644,7 @@ export const deleteSubmission = async (req, res) => {
 
         if (req.user) {
             const isWorker = String(submission.workerId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
             if (!isWorker && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to delete this submission.' });
             }
@@ -2492,7 +2517,7 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
         if (!task) return res.status(404).json({ success: false, error: 'Survey campaign not found' });
 
         const isOwner = req.user && String(task.userId) === String(req.user.id);
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         if (!isOwner && !isAdmin) {
             return res.status(403).json({ success: false, error: 'Unauthorized to view survey analytics' });
         }

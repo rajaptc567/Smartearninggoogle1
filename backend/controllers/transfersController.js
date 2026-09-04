@@ -9,7 +9,7 @@ import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getTransfers = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { 
             $or: [
                 { senderId: req.user?.id }, 
@@ -33,7 +33,7 @@ export const createTransfer = async (req, res) => {
     try {
         const loggedInUserId = req.user?.id;
         const requestedSenderId = senderId;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(requestedSenderId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot initiate transfer on behalf of other users.' });

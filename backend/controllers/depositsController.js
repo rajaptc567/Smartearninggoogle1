@@ -12,7 +12,7 @@ import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getDeposits = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin ? {} : { userId: req.user?.id };
         
         // If not admin and no user ID found in token, return empty
@@ -32,7 +32,7 @@ export const getDeposit = async (req, res) => {
         const deposit = await Deposit.findById(req.params.id);
         if (!deposit) return res.status(404).json({ success: false, error: 'Deposit not found' });
         
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         if (!isAdmin && deposit.userId.toString() !== req.user.id) {
             return res.status(403).json({ success: false, error: 'Unauthorized access to this record' });
         }
@@ -62,7 +62,7 @@ export const createDeposit = async (req, res) => {
 
         const loggedInUserId = req.user?.id;
         const requestedUserId = depositData.userId;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot submit deposit on behalf of other users.' });

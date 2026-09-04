@@ -48,7 +48,7 @@ export const completeTask = async (req, res) => {
         if (!task || !user) return res.status(404).json({ success: false, error: 'Not found' });
 
         const settings = await Setting.getSettings();
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
         if (!isAdmin && !canUserAccessInvestmentModule(user, settings)) {
             return res.status(403).json({
                 success: false,

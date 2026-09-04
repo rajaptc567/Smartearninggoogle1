@@ -22,9 +22,7 @@ export const canUserAccessInvestmentModule = (user, settings) => {
     // 1. Administrators and Super Admins always have access
     if (
         user.role === 'admin' || 
-        user.role === 'super_admin' || 
-        user.email === 'studio56.pk@gmail.com' || 
-        user.email === 'smartexn.com@gmail.com'
+        user.role === 'super_admin'
     ) {
         return true;
     }
@@ -73,9 +71,7 @@ export const requireInvestmentAccess = async (req, res, next) => {
         // Administrators bypass
         if (
             req.user.role === 'admin' || 
-            req.user.role === 'super_admin' || 
-            req.user.email === 'studio56.pk@gmail.com' || 
-            req.user.email === 'smartexn.com@gmail.com'
+            req.user.role === 'super_admin'
         ) {
             return next();
         }

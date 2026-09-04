@@ -9,7 +9,7 @@ import Transfer from '../models/Transfer.js';
 export const getTransactions = async (req, res) => {
     try {
         let query = {};
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         if (!isAdmin && req.user) {
             query = { userId: req.user.id };
@@ -31,7 +31,7 @@ export const getTransactions = async (req, res) => {
  */
 export const getReconciliationReport = async (req, res) => {
     try {
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
         if (!isAdmin) {
             return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required for financial reconciliation audit.' });
         }

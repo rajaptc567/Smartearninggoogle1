@@ -11,7 +11,7 @@ import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getDisputes = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
         const query = isAdmin 
             ? {} 
             : { $or: [{ userId: req.user?.id }, { creatorId: req.user?.id }] };
@@ -33,7 +33,7 @@ export const createDispute = async (req, res) => {
 
         const loggedInUserId = req.user.id;
         const requestedUserId = disputeData.userId;
-        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot submit dispute on behalf of other users.' });
@@ -77,7 +77,7 @@ export const updateDispute = async (req, res) => {
         if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
 
         const loggedInUserId = req.user.id;
-        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(dispute.userId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users disputes.' });
@@ -121,7 +121,7 @@ export const markAsRead = async (req, res) => {
         if (!dispute) return res.status(404).json({ success: false, error: 'Not found' });
 
         const loggedInUserId = req.user.id;
-        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
 
         if (!isAdmin && String(loggedInUserId) !== String(dispute.userId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot update other users disputes.' });

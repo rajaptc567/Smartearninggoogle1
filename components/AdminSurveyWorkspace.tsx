@@ -173,9 +173,17 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
         setIsSaving(true);
         setToastMessage(null);
         try {
+            const currentPresets = settings?.taskCategoryPresets || {};
             const updatedSettings = {
                 ...settings,
                 surveyCampaignsEnabled: masterEnabled,
+                taskCategoryPresets: {
+                    ...currentPresets,
+                    survey: {
+                        ...(currentPresets.survey || {}),
+                        enabled: masterEnabled
+                    }
+                },
                 surveyConfig: surveyConfig
             };
 
@@ -189,6 +197,43 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
             }
         } catch (err: any) {
             setToastMessage({ type: 'error', text: err.message || 'Error saving settings.' });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleMasterToggle = async (newVal: boolean) => {
+        setMasterEnabled(newVal);
+        setIsSaving(true);
+        try {
+            const currentPresets = settings?.taskCategoryPresets || {};
+            const updatedSettings = {
+                ...settings,
+                surveyCampaignsEnabled: newVal,
+                taskCategoryPresets: {
+                    ...currentPresets,
+                    survey: {
+                        ...(currentPresets.survey || {}),
+                        enabled: newVal
+                    }
+                },
+                surveyConfig: surveyConfig
+            };
+            const response = await updateSettings(updatedSettings);
+            if (response) {
+                dispatch({ type: 'UPDATE_SETTINGS', payload: response });
+                setToastMessage({
+                    type: 'success',
+                    text: newVal 
+                        ? 'Survey campaigns successfully enabled across the platform.' 
+                        : 'Survey campaigns disabled. New survey creation is now hidden and blocked for users.'
+                });
+                if (onConfigChange) onConfigChange();
+            }
+        } catch (err: any) {
+            console.error('Failed toggling survey master state', err);
+            setToastMessage({ type: 'error', text: err.message || 'Failed updating survey state' });
+            setMasterEnabled(!newVal);
         } finally {
             setIsSaving(false);
         }
@@ -296,7 +341,7 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                         <input
                             type="checkbox"
                             checked={masterEnabled}
-                            onChange={(e) => setMasterEnabled(e.target.checked)}
+                            onChange={(e) => handleMasterToggle(e.target.checked)}
                             className="sr-only peer"
                         />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
@@ -1337,6 +1382,62 @@ export const AdminSurveyWorkspace: React.FC<AdminSurveyWorkspaceProps> = ({ onCo
                                     }))}
                                     className="w-4 h-4 text-blue-600 rounded"
                                 />
+                            </div>
+
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Allow Creators to Enable Question Rotation</h4>
+                                    <p className="text-xs text-gray-500">Permits creators to randomize or shuffle the display order of questions for respondents.</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={surveyConfig.rotationRules?.allowQuestionRotation !== false}
+                                    onChange={e => setSurveyConfig((prev: any) => ({
+                                        ...prev,
+                                        rotationRules: { ...(prev.rotationRules || {}), allowQuestionRotation: e.target.checked }
+                                    }))}
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                />
+                            </div>
+
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Allow Option Shuffling</h4>
+                                    <p className="text-xs text-gray-500">Permits creators to randomize the order of answer choices on multiple/single choice questions.</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={surveyConfig.rotationRules?.allowOptionShuffling !== false}
+                                    onChange={e => setSurveyConfig((prev: any) => ({
+                                        ...prev,
+                                        rotationRules: { ...(prev.rotationRules || {}), allowOptionShuffling: e.target.checked }
+                                    }))}
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                />
+                            </div>
+
+                            <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-semibold text-xs text-gray-900 dark:text-white">Force Global Question Rotation</h4>
+                                    <p className="text-xs text-gray-500">Automatically shuffles question order across all survey campaigns regardless of creator settings.</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={surveyConfig.rotationRules?.forceGlobalQuestionRotation === true}
+                                    onChange={e => setSurveyConfig((prev: any) => ({
+                                        ...prev,
+                                        rotationRules: { ...(prev.rotationRules || {}), forceGlobalQuestionRotation: e.target.checked }
+                                    }))}
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                />
+                            </div>
+
+                            <div className="p-4 border rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/40 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-semibold text-xs text-blue-900 dark:text-blue-300">Answer Option Limit (Strict Rule)</h4>
+                                    <p className="text-xs text-blue-700/80 dark:text-blue-400">Enforced platform-wide: maximum 4 answer choices allowed per question to guarantee optimal UX and mobile responsiveness.</p>
+                                </div>
+                                <span className="px-2.5 py-1 text-xs font-black bg-blue-600 text-white rounded-lg">Max 4</span>
                             </div>
 
                             <div className="p-4 border rounded-xl bg-gray-50 dark:bg-gray-750 space-y-1.5">

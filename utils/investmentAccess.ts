@@ -20,9 +20,7 @@ export const canAccessInvestmentModule = (
     // 1. Administrators and Super Admins always have access
     if (
         user.role === 'admin' || 
-        user.role === 'super_admin' || 
-        user.email === 'studio56.pk@gmail.com' || 
-        user.email === 'smartexn.com@gmail.com'
+        user.role === 'super_admin'
     ) {
         return true;
     }
