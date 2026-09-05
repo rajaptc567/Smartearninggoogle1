@@ -7,6 +7,7 @@ import {
     getInvestmentPlans, getRules, getSettings, getPublicSettings, getTransfers, getLogs, getPasswordResetRequests, getDisputes, getTasks, getUserTasks, getUserTaskSubmissions,
     getDataVersion
 } from '../services/api';
+import { canAccessInvestmentModule } from '../utils/investmentAccess';
 
 interface AppState {
     users: User[];
@@ -499,9 +500,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 if (!isMounted) return;
 
                 try {
+                    const canFetchPlans = canAccessInvestmentModule(state.currentUser, state.settings);
                     const backgroundPrivate = [
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                        canFetchPlans ? getInvestmentPlans() : Promise.resolve([]), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ];
 
                     const privateResults = await Promise.allSettled(backgroundPrivate);
@@ -520,7 +522,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             transactions: getValue(privateResults, 3, state.transactions),
                             notifications: getValue(privateResults, 4, state.notifications),
                             paymentMethods: getValue(privateResults, 5, state.paymentMethods),
-                            investmentPlans: getValue(privateResults, 6, state.investmentPlans),
+                            investmentPlans: canFetchPlans ? getValue(privateResults, 6, state.investmentPlans) : [],
                             rules: getValue(privateResults, 7, state.rules),
                             settings: getValue(privateResults, 8, state.settings),
                             transfers: getValue(privateResults, 9, state.transfers),
@@ -598,9 +600,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                     lastVersionRef.current = serverVersion;
                     
                     // Silent background fetch using Promise.allSettled to eliminate UI flicker
+                    const canFetchPlans = canAccessInvestmentModule(state.currentUser, state.settings);
                     const results = await Promise.allSettled([
                         getUsers(), getDeposits(), getWithdrawals(), getTransactions(), getNotifications(), getPaymentMethods(),
-                        getInvestmentPlans(), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
+                        canFetchPlans ? getInvestmentPlans() : Promise.resolve([]), getRules(), getSettings(), getTransfers(), getLogs(), getPasswordResetRequests(), getDisputes(), getTasks(), getUserTasks(), getUserTaskSubmissions()
                     ]);
                     
                     const getValue = (idx: number, fallback: any) => 
@@ -615,7 +618,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                             transactions: getValue(3, state.transactions), 
                             notifications: getValue(4, state.notifications), 
                             paymentMethods: getValue(5, state.paymentMethods),
-                            investmentPlans: getValue(6, state.investmentPlans), 
+                            investmentPlans: canFetchPlans ? getValue(6, state.investmentPlans) : [], 
                             rules: getValue(7, state.rules), 
                             settings: getValue(8, state.settings),
                             transfers: getValue(9, state.transfers), 

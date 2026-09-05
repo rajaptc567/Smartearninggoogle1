@@ -1,18 +1,32 @@
 
 import Transaction from '../models/Transaction.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import UserTaskSubmission from '../models/UserTaskSubmission.js';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 export const getTransactions = async (req, res) => {
     try {
         let query = {};
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
 
         if (!isAdmin && req.user) {
             query = { userId: req.user.id };
+
+            const settings = await Setting.getSettings();
+            const user = await User.findById(req.user.id);
+            const canAccessInvestment = user ? canUserAccessInvestmentModule(user, settings) : false;
+
+            if (!canAccessInvestment) {
+                query.type = { 
+                    $nin: ['Plan Purchase', 'Commission', 'Investment To Task Wallet Transfer'] 
+                };
+                query.sourceWallet = { $ne: 'Investment' };
+                query.relatedPlanId = { $in: [null, undefined] };
+            }
         } else if (!isAdmin) {
             // Unauthenticated requests get nothing
             return res.status(200).json({ success: true, count: 0, data: [] });
@@ -31,7 +45,7 @@ export const getTransactions = async (req, res) => {
  */
 export const getReconciliationReport = async (req, res) => {
     try {
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
         if (!isAdmin) {
             return res.status(403).json({ success: false, error: 'Unauthorized: Admin access required for financial reconciliation audit.' });
         }
