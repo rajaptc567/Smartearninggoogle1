@@ -10,6 +10,9 @@ import Withdrawal from '../models/Withdrawal.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
+// Centralized admin & P0-2 email bypass check
+const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com'));
+
 export const getUserTasks = async (req, res) => {
     try {
         const tasks = await UserTask.find().sort({ createdAt: -1 });
@@ -31,7 +34,7 @@ export const createUserTask = async (req, res) => {
             requiredProofs
         } = req.body;
 
-        const effectiveUserId = (req.user && req.user.role !== 'admin' && req.user.role !== 'super_admin') 
+        const effectiveUserId = (req.user && !isUserAdmin(req.user)) 
             ? req.user.id 
             : (userId || req.user?.id);
 
@@ -378,7 +381,7 @@ export const updateUserTaskStatus = async (req, res) => {
         // Check ownership & authorization
         if (req.user) {
             const isOwner = task.userId?.toString() === req.user.id?.toString();
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+            const isAdmin = isUserAdmin(req.user);
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to modify this campaign.' });
             }
@@ -717,7 +720,7 @@ export const deleteUserTask = async (req, res) => {
 
         if (req.user) {
             const isOwner = String(task.userId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+            const isAdmin = isUserAdmin(req.user);
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to delete this campaign.' });
             }
@@ -830,7 +833,7 @@ export const renewUserTask = async (req, res) => {
 
         if (req.user) {
             const isOwner = String(task.userId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+            const isAdmin = isUserAdmin(req.user);
             if (!isOwner && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to renew this campaign.' });
             }
@@ -1428,7 +1431,7 @@ export const updateSubmissionStatus = async (req, res) => {
 
         // Ownership and Role Verification
         if (req.user) {
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+            const isAdmin = isUserAdmin(req.user);
             const isCreator = task && String(task.userId) === String(req.user.id);
             const isWorker = String(submission.workerId) === String(req.user.id);
 
@@ -1644,7 +1647,7 @@ export const deleteSubmission = async (req, res) => {
 
         if (req.user) {
             const isWorker = String(submission.workerId) === String(req.user.id);
-            const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+            const isAdmin = isUserAdmin(req.user);
             if (!isWorker && !isAdmin) {
                 return res.status(403).json({ success: false, error: 'You are not authorized to delete this submission.' });
             }
@@ -1663,7 +1666,7 @@ export const convertUserCurrency = async (req, res) => {
         const { userId, amount, fromCurrency, toCurrency } = req.body;
 
         const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You can only convert currency for your own account.' });
         }
@@ -1919,7 +1922,7 @@ export const convertTaskWalletBalance = async (req, res) => {
         const { userId } = req.body;
 
         const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
         }
@@ -2039,7 +2042,7 @@ export const transferInvestmentToTaskWallet = async (req, res) => {
         const { userId, amountUserCurr, amountUSD } = req.body;
 
         const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
         }
@@ -2142,7 +2145,7 @@ export const transferTaskEarningsToCampaignWallet = async (req, res) => {
         const { userId, amountUSD } = req.body;
 
         const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
         }
@@ -2226,7 +2229,7 @@ export const transferWalletToCampaign = async (req, res) => {
         const { userId, amountUserCurr, amountUSD, sourceWallet } = req.body;
 
         const loggedInUserId = req.user ? (req.user.id || req.user._id) : null;
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && loggedInUserId && String(loggedInUserId) !== String(userId)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You can only transfer funds for your own account.' });
         }
@@ -2517,7 +2520,7 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
         if (!task) return res.status(404).json({ success: false, error: 'Survey campaign not found' });
 
         const isOwner = req.user && String(task.userId) === String(req.user.id);
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isOwner && !isAdmin) {
             return res.status(403).json({ success: false, error: 'Unauthorized to view survey analytics' });
         }

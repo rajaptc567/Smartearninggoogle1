@@ -8,9 +8,14 @@ import PaymentMethod from '../models/PaymentMethod.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 
+const isUserAdmin = (user) => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com';
+};
+
 export const getWithdrawals = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         const query = isAdmin ? {} : { userId: req.user?.id };
 
         if (!isAdmin && !req.user?.id) {
@@ -37,7 +42,7 @@ export const getWithdrawal = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Withdrawal not found' });
         }
 
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        const isAdmin = isUserAdmin(req.user);
         if (!isAdmin && withdrawal.userId.toString() !== req.user.id) {
             return res.status(403).json({ success: false, error: 'Unauthorized access to this record' });
         }
@@ -52,7 +57,7 @@ export const createWithdrawal = async (req, res) => {
     try {
         const loggedInUserId = req.user?.id;
         const requestedUserId = req.body.userId;
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+        const isAdmin = isUserAdmin(req.user);
 
         if (!isAdmin && String(loggedInUserId) !== String(requestedUserId)) {
             return res.status(403).json({ success: false, error: 'Access denied: Cannot withdraw on behalf of other users.' });
@@ -123,29 +128,77 @@ export const createWithdrawal = async (req, res) => {
             }
         }
 
+        let sourceWallet = 'Investment';
+        let sourceAmount = req.body.amount;
+        let balanceBefore = user.walletBalance || 0;
+        let balanceAfter = 0;
+
         if (isHub) {
-            const settings = await Setting.findOne();
+            sourceWallet = 'TaskEarnings';
             const rate = settings?.exchangeRates?.[user.currency] || 1;
-            const reqAmountUSD = user.currency === 'USD' ? req.body.amount : (req.body.amount / (rate || 1));
+            const reqAmountUSD = Number((user.currency === 'USD' ? req.body.amount : (req.body.amount / (rate || 1))).toFixed(4));
+            sourceAmount = reqAmountUSD;
+            balanceBefore = user.taskEarningsBalance || 0;
 
-            const availTaskUSD = Math.max(user.taskWalletBalance || 0, user.taskEarningsBalance || 0);
+            // Atomic balance check and debit to prevent double spending
+            const updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    status: { $ne: 'Blocked' },
+                    'restrictions.withdrawal': { $ne: true },
+                    $or: [
+                        { taskEarningsBalance: { $gte: reqAmountUSD - 0.001 } },
+                        { taskWalletBalance: { $gte: reqAmountUSD - 0.001 } }
+                    ]
+                },
+                {
+                    $inc: {
+                        taskEarningsBalance: -reqAmountUSD,
+                        taskWalletBalance: -reqAmountUSD
+                    }
+                },
+                { new: true }
+            );
 
-            if (availTaskUSD * rate < req.body.amount - 0.1 && (user.taskWalletBalance || 0) < req.body.amount) {
+            if (!updatedUser) {
                 return res.status(400).json({ success: false, error: 'Insufficient Task Earnings / Task Wallet balance' });
             }
 
-            user.taskWalletBalance = Number((Math.max(0, (user.taskWalletBalance || 0) - reqAmountUSD)).toFixed(2));
-            if (user.taskEarningsBalance !== undefined) {
-                user.taskEarningsBalance = Number((Math.max(0, (user.taskEarningsBalance || 0) - reqAmountUSD)).toFixed(2));
-            }
+            balanceAfter = updatedUser.taskEarningsBalance;
         } else {
-            if (user.walletBalance < req.body.amount) {
+            sourceWallet = 'Investment';
+            balanceBefore = user.walletBalance || 0;
+
+            // Atomic balance check and debit from Investment main wallet
+            const updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    status: { $ne: 'Blocked' },
+                    'restrictions.withdrawal': { $ne: true },
+                    walletBalance: { $gte: req.body.amount }
+                },
+                {
+                    $inc: { walletBalance: -req.body.amount }
+                },
+                { new: true }
+            );
+
+            if (!updatedUser) {
                 return res.status(400).json({ success: false, error: 'Insufficient balance' });
             }
-            user.walletBalance = Number((user.walletBalance - req.body.amount).toFixed(2));
+
+            balanceAfter = updatedUser.walletBalance;
         }
         
-        const withdrawalData = { ...req.body, isHub, currency: user.currency };
+        const withdrawalData = {
+            ...req.body,
+            isHub,
+            currency: user.currency,
+            sourceWallet,
+            sourceAmount,
+            balanceBefore,
+            balanceAfter
+        };
         const withdrawal = await Withdrawal.create(withdrawalData);
         
         const transaction = await Transaction.create({
@@ -156,8 +209,15 @@ export const createWithdrawal = async (req, res) => {
             amount: -withdrawal.amount,
             status: 'Pending',
             withdrawalId: withdrawal._id,
-            description: `Pending Withdrawal #${withdrawal._id}`
+            sourceWallet,
+            destinationWallet: 'External',
+            balanceBefore,
+            balanceAfter,
+            description: `Pending Withdrawal #${withdrawal._id} (${sourceWallet})`
         });
+
+        withdrawal.relatedTransactionId = transaction._id;
+        await withdrawal.save();
 
         await Notification.create({
             userId: user._id,
@@ -177,7 +237,6 @@ export const createWithdrawal = async (req, res) => {
             console.error('Failed to send withdrawal pending notifications:', wNotifErr);
         }
         
-        await user.save();
         await Setting.bumpVersion();
         req.app.get('io')?.emit('DATA_CHANGED');
         res.status(201).json({ success: true, data: { withdrawal, user, transaction } });
@@ -188,6 +247,10 @@ export const createWithdrawal = async (req, res) => {
 
 export const updateWithdrawal = async (req, res) => {
     try {
+        if (!isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin privileges required.' });
+        }
+
         const { status, adminNotes, p2pName, p2pAccountTitle, p2pAccountNumber, p2pInstructions, p2pLogoUrl, p2pCustomFields } = req.body;
         
         let withdrawal = await Withdrawal.findById(req.params.id).populate('matchedDepositIds');
@@ -259,10 +322,33 @@ export const updateWithdrawal = async (req, res) => {
                 return res.status(200).json({ success: true, data: { withdrawal: currentW, user, message: 'Withdrawal already processed.' } });
             }
 
-            if (withdrawal.isHub) {
-                user.taskWalletBalance = Number((user.taskWalletBalance + withdrawal.amount).toFixed(2));
+            let refundedWallet = 'Investment';
+            let refundedAmount = withdrawal.amount;
+            let currentBalance = 0;
+
+            if (withdrawal.isHub || withdrawal.sourceWallet === 'TaskEarnings') {
+                refundedWallet = 'TaskEarnings';
+                const settings = await Setting.findOne();
+                const rate = settings?.exchangeRates?.[withdrawal.currency] || 1;
+                const refundUSD = withdrawal.sourceAmount || (withdrawal.currency === 'USD' ? withdrawal.amount : Number((withdrawal.amount / rate).toFixed(4)));
+                refundedAmount = refundUSD;
+
+                const u = await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: refundUSD,
+                        taskWalletBalance: refundUSD
+                    }
+                }, { new: true });
+                currentBalance = u?.taskEarningsBalance || 0;
             } else {
-                user.walletBalance = Number((user.walletBalance + withdrawal.amount).toFixed(2));
+                refundedWallet = 'Investment';
+                const refundAmount = withdrawal.sourceAmount || withdrawal.amount;
+                refundedAmount = refundAmount;
+
+                const u = await User.findByIdAndUpdate(user._id, {
+                    $inc: { walletBalance: refundAmount }
+                }, { new: true });
+                currentBalance = u?.walletBalance || 0;
             }
             
             await Transaction.create({
@@ -273,7 +359,10 @@ export const updateWithdrawal = async (req, res) => {
                 amount: withdrawal.amount,
                 status: 'Approved',
                 withdrawalId: withdrawal._id,
-                description: `Refund for rejected withdrawal #${withdrawal._id}`
+                sourceWallet: 'External',
+                destinationWallet: refundedWallet,
+                balanceAfter: currentBalance,
+                description: `Refund for rejected withdrawal #${withdrawal._id} to ${refundedWallet}`
             });
 
             if (originalTransaction) {
@@ -284,7 +373,7 @@ export const updateWithdrawal = async (req, res) => {
 
             await Notification.create({
                 userId: user._id,
-                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your ${withdrawal.isHub ? 'task wallet' : 'wallet'}.`
+                message: `Your withdrawal for ${user.currency}${withdrawal.amount.toFixed(2)} was rejected. The amount has been refunded to your ${refundedWallet === 'TaskEarnings' ? 'task wallet' : 'wallet'}.`
             });
 
             // Send dynamic templated notification in the background
@@ -297,7 +386,6 @@ export const updateWithdrawal = async (req, res) => {
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_email', variables }).catch(err => console.error(err));
             sendTemplateNotification({ userId: user._id, templateKey: 'withdrawal_rejected_whatsapp', variables }).catch(err => console.error(err));
 
-            await user.save();
             await Setting.bumpVersion();
             req.app.get('io')?.emit('DATA_CHANGED');
             return res.status(200).json({ success: true, data: { withdrawal: updatedWithdrawal, user } });

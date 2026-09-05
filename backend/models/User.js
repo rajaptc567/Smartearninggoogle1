@@ -78,6 +78,10 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 0,
     },
+    chargebackLiabilityUSD: {
+        type: Number,
+        default: 0,
+    },
     campaignWalletSources: {
         fromInvestmentUSD: { type: Number, default: 0 },
         fromTaskEarningsUSD: { type: Number, default: 0 },

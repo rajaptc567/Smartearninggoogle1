@@ -62,6 +62,23 @@ const WithdrawalSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    sourceWallet: {
+        type: String,
+        default: 'Wallet'
+    },
+    sourceAmount: {
+        type: Number
+    },
+    balanceBefore: {
+        type: Number
+    },
+    balanceAfter: {
+        type: Number
+    },
+    relatedTransactionId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Transaction'
+    }
 }, {
     timestamps: { createdAt: 'date', updatedAt: true }
 });

@@ -67,6 +67,65 @@ const OfferwallProviderSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {}
     },
+    status: {
+        type: String,
+        enum: ['NOT_STARTED', 'CREDENTIALS_PENDING', 'SANDBOX', 'TESTING', 'PRODUCTION_READY', 'ACTIVE', 'DISABLED', 'SUSPENDED'],
+        default: 'NOT_STARTED'
+    },
+    approvalStatus: {
+        type: String,
+        enum: ['Pending', 'Submitted', 'Under Review', 'Approved', 'Rejected'],
+        default: 'Pending'
+    },
+    integrationStatus: {
+        type: String,
+        enum: ['Not Started', 'In Progress', 'Configured', 'Tested', 'Verified'],
+        default: 'Not Started'
+    },
+    userRevenueSharePercent: {
+        type: Number,
+        default: 70, // User gets 70% of gross revenue by default
+        min: 0,
+        max: 100
+    },
+    platformRevenueSharePercent: {
+        type: Number,
+        default: 30, // Platform retains 30% of gross revenue
+        min: 0,
+        max: 100
+    },
+    riskThresholdUSD: {
+        type: Number,
+        default: 50.0 // Single transactions above this trigger risk review
+    },
+    holdRewards: {
+        type: Boolean,
+        default: false
+    },
+    holdThresholdUSD: {
+        type: Number,
+        default: 25.0
+    },
+    totalGrossPayoutUSD: {
+        type: Number,
+        default: 0
+    },
+    totalUserPayoutUSD: {
+        type: Number,
+        default: 0
+    },
+    totalPlatformRevenueUSD: {
+        type: Number,
+        default: 0
+    },
+    totalPostbackCount: {
+        type: Number,
+        default: 0
+    },
+    totalReversalCount: {
+        type: Number,
+        default: 0
+    },
     description: {
         type: String,
         default: ''

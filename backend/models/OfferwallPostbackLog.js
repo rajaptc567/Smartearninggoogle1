@@ -65,6 +65,50 @@ const OfferwallPostbackLogSchema = new mongoose.Schema({
     calculatedSignature: {
         type: String
     },
+    signatureStatus: {
+        type: String,
+        enum: ['Verified', 'Invalid', 'Missing', 'Bypassed_TestMode', 'NotRequired'],
+        default: 'Verified'
+    },
+    grossAmountUSD: {
+        type: Number,
+        default: 0
+    },
+    userRewardUSD: {
+        type: Number,
+        default: 0
+    },
+    platformRevenueUSD: {
+        type: Number,
+        default: 0
+    },
+    reversalReferenceTxId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Transaction'
+    },
+    reversedAmountUSD: {
+        type: Number,
+        default: 0
+    },
+    chargebackStatus: {
+        type: String,
+        enum: ['None', 'Settled', 'Liability_Owed'],
+        default: 'None'
+    },
+    userBalanceBefore: {
+        type: Number
+    },
+    userBalanceAfter: {
+        type: Number
+    },
+    riskStatus: {
+        type: String,
+        enum: ['NORMAL', 'REVIEW', 'HELD', 'BLOCKED'],
+        default: 'NORMAL'
+    },
+    riskReason: {
+        type: String
+    },
     errorMessage: {
         type: String
     },
@@ -76,7 +120,7 @@ const OfferwallPostbackLogSchema = new mongoose.Schema({
     timestamps: { createdAt: 'receivedAt', updatedAt: true }
 });
 
-OfferwallPostbackLogSchema.index({ provider: 1, externalTxId: 1, isReversal: 1 });
+OfferwallPostbackLogSchema.index({ provider: 1, externalTxId: 1, isReversal: 1 }, { unique: true });
 OfferwallPostbackLogSchema.index({ receivedAt: -1 });
 
 export default mongoose.model('OfferwallPostbackLog', OfferwallPostbackLogSchema);

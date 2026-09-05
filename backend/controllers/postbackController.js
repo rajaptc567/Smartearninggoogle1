@@ -39,6 +39,15 @@ const verifySignature = (provider, params, clientIp) => {
         }
     }
 
+    // P4: If signature is required, secret must be configured; fail closed if missing
+    if (!secret && !provider.testMode) {
+        return { valid: false, error: 'Provider secret key is not configured; failing closed' };
+    }
+
+    if (provider.testMode && !secret) {
+        return { valid: true };
+    }
+
     // Provider-specific verification algorithms
     const key = provider.providerKey.toLowerCase();
 
@@ -48,131 +57,126 @@ const verifySignature = (provider, params, clientIp) => {
             const sig = params.sig || params.signature || '';
             const userId = params.user_id || params.uid || '';
             const txId = params.id || params.trans_id || '';
-            if (secret && sig) {
-                const expected = crypto.createHash('md5').update(`${userId}-${txId}-${secret}`).digest('hex');
-                if (sig.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received: sig, error: 'Torox signature mismatch' };
-                }
+            if (!sig) return { valid: false, error: 'Torox signature missing' };
+            const expected = crypto.createHash('md5').update(`${userId}-${txId}-${secret}`).digest('hex');
+            if (sig.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received: sig, error: 'Torox signature mismatch' };
             }
             return { valid: true };
         }
 
         if (key === 'cpx_research') {
-            // CPX Research md5: md5(trans_id + '-' + app_secure_hash) or md5(ext_user_id + '-' + app_secure_hash)
             const hash = params.hash || params.signature || '';
             const transId = params.trans_id || params.transaction_id || '';
-            if (secret && hash) {
-                const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
-                if (hash.toLowerCase() !== expected.toLowerCase()) {
-                    // Try alternative CPX hash variant
-                    const altExpected = crypto.createHash('md5').update(`${params.ext_user_id || ''}-${secret}`).digest('hex');
-                    if (hash.toLowerCase() !== altExpected.toLowerCase()) {
-                        return { valid: false, expected, received: hash, error: 'CPX signature mismatch' };
-                    }
+            if (!hash) return { valid: false, error: 'CPX signature missing' };
+            const expected = crypto.createHash('md5').update(`${transId}-${secret}`).digest('hex');
+            if (hash.toLowerCase() !== expected.toLowerCase()) {
+                const altExpected = crypto.createHash('md5').update(`${params.ext_user_id || ''}-${secret}`).digest('hex');
+                if (hash.toLowerCase() !== altExpected.toLowerCase()) {
+                    return { valid: false, expected, received: hash, error: 'CPX signature mismatch' };
                 }
             }
             return { valid: true };
         }
 
         if (key === 'wannads') {
-            // Wannads md5: md5(subId + transId + reward + secretKey)
             const signature = params.signature || '';
             const subId = params.subId || params.user_id || '';
             const transId = params.transId || params.trans_id || '';
             const reward = params.reward || '';
-            if (secret && signature) {
-                const expected = crypto.createHash('md5').update(`${subId}${transId}${reward}${secret}`).digest('hex');
-                if (signature.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received: signature, error: 'Wannads signature mismatch' };
-                }
+            if (!signature) return { valid: false, error: 'Wannads signature missing' };
+            const expected = crypto.createHash('md5').update(`${subId}${transId}${reward}${secret}`).digest('hex');
+            if (signature.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received: signature, error: 'Wannads signature mismatch' };
             }
             return { valid: true };
         }
 
         if (key === 'revlum') {
-            // Revlum HMAC-SHA256 or SHA256 of transId + subId + reward with secret
             const signature = params.signature || params.sig || '';
             const transId = params.transId || params.transaction_id || '';
             const subId = params.subId || params.user_id || '';
             const reward = params.reward || params.payout || '';
-            if (secret && signature) {
-                const hmacExpected = crypto.createHmac('sha256', secret).update(`${transId}${subId}${reward}`).digest('hex');
-                const sha256Expected = crypto.createHash('sha256').update(`${transId}${subId}${reward}${secret}`).digest('hex');
-                if (signature.toLowerCase() !== hmacExpected.toLowerCase() && signature.toLowerCase() !== sha256Expected.toLowerCase()) {
-                    return { valid: false, expected: hmacExpected, received: signature, error: 'Revlum signature mismatch' };
-                }
+            if (!signature) return { valid: false, error: 'Revlum signature missing' };
+            const hmacExpected = crypto.createHmac('sha256', secret).update(`${transId}${subId}${reward}`).digest('hex');
+            const sha256Expected = crypto.createHash('sha256').update(`${transId}${subId}${reward}${secret}`).digest('hex');
+            if (signature.toLowerCase() !== hmacExpected.toLowerCase() && signature.toLowerCase() !== sha256Expected.toLowerCase()) {
+                return { valid: false, expected: hmacExpected, received: signature, error: 'Revlum signature mismatch' };
             }
             return { valid: true };
         }
 
         if (key === 'monlix') {
-            // Monlix secretKey match or SHA256 signature
             const secretKeyReceived = params.secretKey || params.secret || '';
             const signature = params.signature || '';
-            if (secret) {
-                if (secretKeyReceived && secretKeyReceived === secret) {
-                    return { valid: true };
-                }
-                if (signature) {
-                    const expected = crypto.createHash('sha256').update(`${params.userId || ''}${params.transactionId || ''}${secret}`).digest('hex');
-                    if (signature.toLowerCase() !== expected.toLowerCase()) {
-                        return { valid: false, expected, received: signature, error: 'Monlix signature mismatch' };
-                    }
-                }
+            if (secretKeyReceived && secretKeyReceived === secret) {
+                return { valid: true };
             }
-            return { valid: true };
+            if (signature) {
+                const expected = crypto.createHash('sha256').update(`${params.userId || ''}${params.transactionId || ''}${secret}`).digest('hex');
+                if (signature.toLowerCase() !== expected.toLowerCase()) {
+                    return { valid: false, expected, received: signature, error: 'Monlix signature mismatch' };
+                }
+                return { valid: true };
+            }
+            return { valid: false, error: 'Monlix signature or secret key missing/invalid' };
         }
 
         if (key === 'lootably') {
-            // Lootably SHA256: sha256(userID + ip + revenue + secret_key)
             const signature = params.signature || '';
             const userID = params.userID || params.user_id || '';
             const ip = params.ip || clientIp || '';
             const revenue = params.revenue || params.pointValue || '';
-            if (secret && signature) {
-                const expected = crypto.createHash('sha256').update(`${userID}${ip}${revenue}${secret}`).digest('hex');
-                if (signature.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received: signature, error: 'Lootably signature mismatch' };
-                }
+            if (!signature) return { valid: false, error: 'Lootably signature missing' };
+            const expected = crypto.createHash('sha256').update(`${userID}${ip}${revenue}${secret}`).digest('hex');
+            if (signature.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received: signature, error: 'Lootably signature mismatch' };
             }
             return { valid: true };
         }
 
         if (key === 'bitlabs') {
-            // BitLabs HMAC-SHA1 or HMAC-SHA256
             const hash = params.hash || params.signature || '';
             const val = params.val || params.reward || '';
             const uid = params.uid || params.user_id || '';
             const tx = params.tx || params.tx_id || '';
-            if (secret && hash) {
-                const sha1Expected = crypto.createHmac('sha1', secret).update(`${val}${uid}${tx}`).digest('hex');
-                const sha256Expected = crypto.createHmac('sha256', secret).update(`${val}${uid}${tx}`).digest('hex');
-                if (hash.toLowerCase() !== sha1Expected.toLowerCase() && hash.toLowerCase() !== sha256Expected.toLowerCase()) {
-                    return { valid: false, expected: sha256Expected, received: hash, error: 'BitLabs signature mismatch' };
-                }
+            if (!hash) return { valid: false, error: 'BitLabs signature missing' };
+            const sha1Expected = crypto.createHmac('sha1', secret).update(`${val}${uid}${tx}`).digest('hex');
+            const sha256Expected = crypto.createHmac('sha256', secret).update(`${val}${uid}${tx}`).digest('hex');
+            if (hash.toLowerCase() !== sha1Expected.toLowerCase() && hash.toLowerCase() !== sha256Expected.toLowerCase()) {
+                return { valid: false, expected: sha256Expected, received: hash, error: 'BitLabs signature mismatch' };
             }
             return { valid: true };
         }
 
-        // Generic HMAC-SHA256 or MD5 verification if configured
-        if (provider.signatureType === 'hmac_sha256' && secret) {
+        // Generic HMAC-SHA256, MD5, or SHA256 verification
+        if (provider.signatureType === 'hmac_sha256') {
             const received = params.signature || params.sig || params.hash || '';
-            if (received) {
-                const payload = params.trans_id || params.txid || params.id || params.transaction_id || '';
-                const expected = crypto.createHmac('sha256', secret).update(String(payload)).digest('hex');
-                if (received.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received, error: 'HMAC-SHA256 signature mismatch' };
-                }
+            if (!received) return { valid: false, error: 'HMAC-SHA256 signature missing' };
+            const payload = params.trans_id || params.txid || params.id || params.transaction_id || '';
+            const expected = crypto.createHmac('sha256', secret).update(String(payload)).digest('hex');
+            if (received.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received, error: 'HMAC-SHA256 signature mismatch' };
             }
-        } else if (provider.signatureType === 'md5' && secret) {
+            return { valid: true };
+        } else if (provider.signatureType === 'md5') {
             const received = params.signature || params.sig || params.hash || '';
-            if (received) {
-                const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
-                const expected = crypto.createHash('md5').update(payload).digest('hex');
-                if (received.toLowerCase() !== expected.toLowerCase()) {
-                    return { valid: false, expected, received, error: 'MD5 signature mismatch' };
-                }
+            if (!received) return { valid: false, error: 'MD5 signature missing' };
+            const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
+            const expected = crypto.createHash('md5').update(payload).digest('hex');
+            if (received.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received, error: 'MD5 signature mismatch' };
             }
+            return { valid: true };
+        } else if (provider.signatureType === 'sha256') {
+            const received = params.signature || params.sig || params.hash || '';
+            if (!received) return { valid: false, error: 'SHA256 signature missing' };
+            const payload = `${params.user_id || params.uid || params.subId || ''}-${params.id || params.txid || params.trans_id || ''}-${secret}`;
+            const expected = crypto.createHash('sha256').update(payload).digest('hex');
+            if (received.toLowerCase() !== expected.toLowerCase()) {
+                return { valid: false, expected, received, error: 'SHA256 signature mismatch' };
+            }
+            return { valid: true };
         }
     } catch (err) {
         return { valid: false, error: err.message };
@@ -225,6 +229,11 @@ const normalizePostbackParams = (providerKey, rawParams) => {
     };
 };
 
+const isAuthorizedAdmin = (user) => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com';
+};
+
 /**
  * Handle incoming S2S Postback
  */
@@ -233,23 +242,28 @@ export const handlePostback = async (req, res) => {
     const rawParams = { ...req.query, ...req.body };
     const clientIp = getClientIp(req);
 
-    let provider = await OfferwallProvider.findOne({ providerKey });
-    
-    // Auto-create generic or missing provider if not present yet
+    // P3: Unknown Provider Safety - DO NOT auto-create unknown providers!
+    const provider = await OfferwallProvider.findOne({ providerKey });
     if (!provider) {
-        provider = await OfferwallProvider.create({
-            providerKey,
-            name: providerKey.toUpperCase(),
-            category: 'offerwall',
-            enabled: true,
-            requireSignature: false,
-            exchangeRateMultiplier: 1.0
+        console.warn(`[SECURITY ALERT] Unknown provider postback attempt: '${providerKey}' from IP ${clientIp}`);
+        return res.status(404).json({
+            success: false,
+            error: `UNKNOWN_PROVIDER: Provider '${providerKey}' is not registered or supported.`,
+            alert: 'SECURITY_ALERT_LOGGED'
+        });
+    }
+
+    // P14: Provider State Check
+    if (!provider.enabled || provider.status === 'DISABLED' || provider.status === 'SUSPENDED') {
+        return res.status(403).json({
+            success: false,
+            error: `PROVIDER_INACTIVE: Provider '${providerKey}' is currently disabled or suspended.`
         });
     }
 
     const normalized = normalizePostbackParams(providerKey, rawParams);
 
-    // Create initial postback log
+    // Create initial postback log record
     const log = new OfferwallPostbackLog({
         provider: providerKey,
         externalTxId: normalized.externalTxId,
@@ -272,16 +286,18 @@ export const handlePostback = async (req, res) => {
     });
 
     try {
-        // 1. Signature & IP Validation
+        // P4: Strict Signature & IP Validation (Fail-closed)
         const sigCheck = verifySignature(provider, rawParams, clientIp);
         if (!sigCheck.valid) {
             log.status = 'InvalidSignature';
+            log.signatureStatus = 'Invalid';
             log.errorMessage = sigCheck.error || 'Signature check failed';
-            await log.save();
+            try { await log.save(); } catch (_) {}
             return res.status(400).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '0' : 'INVALID_SIGNATURE');
         }
+        log.signatureStatus = provider.requireSignature ? 'Verified' : 'NotRequired';
 
-        // 2. Find target User (by MongoDB _id, username, or email)
+        // Find target User (by MongoDB _id, username, or email)
         let user = null;
         if (normalized.userId) {
             if (normalized.userId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -298,41 +314,91 @@ export const handlePostback = async (req, res) => {
         if (!user) {
             log.status = 'UserNotFound';
             log.errorMessage = `User not found for subId: ${normalized.userId}`;
-            await log.save();
-            // Return OK so provider doesn't indefinitely retry an orphaned subId, but keep log
+            try { await log.save(); } catch (_) {}
+            // Acknowledge so provider doesn't indefinitely retry an orphaned subId, but do NOT credit
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'USER_NOT_FOUND_LOGGED');
         }
 
         log.userId = user._id;
         log.username = user.username;
 
-        // 3. Idempotency Check: prevent duplicate crediting of the same (provider, externalTxId, isReversal)
-        const existingLog = await OfferwallPostbackLog.findOne({
-            provider: providerKey,
-            externalTxId: normalized.externalTxId,
-            isReversal: normalized.isReversal,
-            status: { $in: ['Processed', 'Reversed'] }
-        });
-
-        if (existingLog) {
+        // P5: Database-Level Idempotency Key
+        const idempotencyKey = `${providerKey}_${normalized.externalTxId}_${normalized.isReversal ? 'reversal' : 'credit'}`;
+        const existingTx = await Transaction.findOne({ idempotencyKey });
+        if (existingTx) {
             log.status = 'Duplicate';
-            log.errorMessage = 'Transaction already processed previously';
-            await log.save();
-            // Most networks require HTTP 200 / "1" / "OK" to acknowledge duplicate without error
+            log.errorMessage = 'Transaction already credited with this idempotencyKey';
+            try { await log.save(); } catch (_) {}
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
         }
 
-        // 4. Calculate Final Reward in USD with provider multiplier
-        const finalRewardUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+        // P8: Gross / User / Platform Split Calculation
+        const grossUSD = Number((normalized.rewardUSD * (provider.exchangeRateMultiplier || 1.0)).toFixed(4));
+        const userSharePct = (typeof provider.userRevenueSharePercent === 'number' && provider.userRevenueSharePercent >= 0 && provider.userRevenueSharePercent <= 100)
+            ? provider.userRevenueSharePercent
+            : 100;
+        const userRewardUSD = Number((grossUSD * (userSharePct / 100)).toFixed(4));
+        const platformRevenueUSD = Number((grossUSD - userRewardUSD).toFixed(4));
+
+        log.grossAmountUSD = grossUSD;
+        log.userRewardUSD = userRewardUSD;
+        log.platformRevenueUSD = platformRevenueUSD;
+
+        // P16: Fraud & Risk Controls
+        let riskStatus = 'NORMAL';
+        let riskReason = '';
+        if (grossUSD >= (provider.riskThresholdUSD || 50.0)) {
+            riskStatus = 'REVIEW';
+            riskReason = `High reward amount ($${grossUSD} >= threshold $${provider.riskThresholdUSD || 50})`;
+        }
+
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const recentCount = await OfferwallPostbackLog.countDocuments({
+            userId: user._id,
+            receivedAt: { $gte: fiveMinutesAgo }
+        });
+        if (recentCount >= 15) {
+            riskStatus = 'REVIEW';
+            riskReason = riskReason ? `${riskReason}; High conversion velocity (${recentCount} in 5m)` : `High conversion velocity (${recentCount} in 5m)`;
+        }
+
+        log.riskStatus = riskStatus;
+        log.riskReason = riskReason;
 
         if (normalized.isReversal) {
             // ==========================================
-            // REVERSAL / CHARGEBACK LOGIC
+            // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
             // ==========================================
-            const deductionAmount = finalRewardUSD;
+            const origTx = await Transaction.findOne({
+                offerwallProvider: providerKey,
+                externalTransactionId: normalized.externalTxId,
+                type: 'Offerwall Reward'
+            });
+
+            const deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
             const currentEarnings = user.taskEarningsBalance || 0;
-            user.taskEarningsBalance = Number((currentEarnings - deductionAmount).toFixed(2));
-            await user.save();
+            const newEarnings = currentEarnings - deductionAmount;
+            let chargebackStatus = 'Settled';
+            let liabilityToAdd = 0;
+            let deductionToApply = deductionAmount;
+
+            if (newEarnings < 0) {
+                chargebackStatus = 'Liability_Owed';
+                liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
+                deductionToApply = currentEarnings;
+            }
+
+            // Atomic balance deduction and liability tracking
+            const updatedUser = await User.findByIdAndUpdate(user._id, {
+                $inc: {
+                    taskEarningsBalance: -deductionToApply,
+                    taskWalletBalance: -deductionToApply,
+                    chargebackLiabilityUSD: liabilityToAdd
+                }
+            }, { new: true });
+
+            const balanceBefore = currentEarnings;
+            const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
 
             const tx = await Transaction.create({
                 userId: user._id,
@@ -341,6 +407,14 @@ export const handlePostback = async (req, res) => {
                 type: 'Offerwall Reversal',
                 amount: deductionAmount,
                 amountUSD: deductionAmount,
+                grossAmount: origTx?.grossAmount || grossUSD,
+                userRewardAmount: deductionAmount,
+                platformRevenueAmount: origTx?.platformRevenueAmount || 0,
+                balanceBefore,
+                balanceAfter,
+                idempotencyKey,
+                chargebackStatus,
+                reversalReferenceId: origTx?._id,
                 description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
                 status: 'Approved',
                 sourceWallet: 'TaskEarnings',
@@ -349,9 +423,19 @@ export const handlePostback = async (req, res) => {
                 externalTransactionId: normalized.externalTxId
             });
 
+            // Update Provider metrics atomically
+            await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                $inc: { totalReversalCount: 1 }
+            });
+
             log.status = 'Reversed';
             log.transactionId = tx._id;
-            await log.save();
+            log.reversalReferenceTxId = origTx?._id;
+            log.reversedAmountUSD = deductionAmount;
+            log.chargebackStatus = chargebackStatus;
+            log.userBalanceBefore = balanceBefore;
+            log.userBalanceAfter = balanceAfter;
+            try { await log.save(); } catch (_) {}
 
             await Notification.create({
                 userId: user._id,
@@ -363,35 +447,94 @@ export const handlePostback = async (req, res) => {
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         } else {
             // ==========================================
-            // CREDIT WORKER REWARD (taskEarningsBalance)
+            // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
             // ==========================================
-            user.taskEarningsBalance = Number(((user.taskEarningsBalance || 0) + finalRewardUSD).toFixed(2));
-            await user.save();
+            const updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    status: { $ne: 'Blocked' },
+                    'restrictions.earning': { $ne: true }
+                },
+                {
+                    $inc: {
+                        taskEarningsBalance: userRewardUSD,
+                        taskWalletBalance: userRewardUSD
+                    }
+                },
+                { new: true }
+            );
 
-            const tx = await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                currency: 'USD',
-                type: 'Offerwall Reward',
-                amount: finalRewardUSD,
-                amountUSD: finalRewardUSD,
-                description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
-                status: 'Approved',
-                sourceWallet: 'External',
-                destinationWallet: 'TaskEarnings',
-                offerwallProvider: providerKey,
-                externalTransactionId: normalized.externalTxId
+            if (!updatedUser) {
+                log.status = 'Rejected';
+                log.errorMessage = 'User account is blocked or earning restricted';
+                try { await log.save(); } catch (_) {}
+                return res.status(403).send('USER_RESTRICTED');
+            }
+
+            const balanceBefore = Number((updatedUser.taskEarningsBalance - userRewardUSD).toFixed(2));
+            const balanceAfter = updatedUser.taskEarningsBalance;
+
+            let tx;
+            try {
+                tx = await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Offerwall Reward',
+                    amount: userRewardUSD,
+                    amountUSD: userRewardUSD,
+                    grossAmount: grossUSD,
+                    userRewardAmount: userRewardUSD,
+                    platformRevenueAmount: platformRevenueUSD,
+                    balanceBefore,
+                    balanceAfter,
+                    idempotencyKey,
+                    riskStatus,
+                    description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
+                    status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
+                    sourceWallet: 'External',
+                    destinationWallet: 'TaskEarnings',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
+                });
+            } catch (txErr) {
+                // Handle duplicate key error 11000 gracefully (P5)
+                if (txErr.code === 11000) {
+                    await User.findByIdAndUpdate(user._id, {
+                        $inc: {
+                            taskEarningsBalance: -userRewardUSD,
+                            taskWalletBalance: -userRewardUSD
+                        }
+                    });
+                    log.status = 'Duplicate';
+                    log.errorMessage = 'Duplicate transaction key caught by database constraint';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                }
+                throw txErr;
+            }
+
+            // Update Provider metrics atomically
+            await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                $inc: {
+                    totalGrossPayoutUSD: grossUSD,
+                    totalUserPayoutUSD: userRewardUSD,
+                    totalPlatformRevenueUSD: platformRevenueUSD,
+                    totalPostbackCount: 1
+                }
             });
 
             log.status = 'Processed';
             log.transactionId = tx._id;
-            await log.save();
+            log.userBalanceBefore = balanceBefore;
+            log.userBalanceAfter = balanceAfter;
+            try { await log.save(); } catch (_) {}
 
             // Notify Worker in Inbox
             await Notification.create({
                 userId: user._id,
-                subject: `Offerwall Reward Credited! 🎁 (+$${finalRewardUSD})`,
-                message: `You earned $${finalRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
+                subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
+                message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
                 senderType: 'System'
             });
 
@@ -411,38 +554,91 @@ export const handlePostback = async (req, res) => {
     } catch (err) {
         log.status = 'Error';
         log.errorMessage = err.message;
-        await log.save();
+        try { await log.save(); } catch (_) {}
         return res.status(500).send(`POSTBACK_ERROR: ${err.message}`);
     }
 };
 
 /**
- * Get all configured offerwall providers (Admin or Public authenticated)
+ * P9: Get all configured offerwall providers (Admin or Public sanitized)
+ * Prevents exposure of provider secrets, postback keys, or IP whitelists to workers or public.
  */
 export const getOfferwallProviders = async (req, res) => {
     try {
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
-        const query = isAdmin ? {} : { enabled: true };
-        const providers = await OfferwallProvider.find(query).sort({ category: 1, name: 1 });
-        res.status(200).json({ success: true, count: providers.length, data: providers });
+        const isAdmin = isAuthorizedAdmin(req.user);
+
+        if (isAdmin) {
+            const providers = await OfferwallProvider.find().sort({ category: 1, name: 1 });
+            return res.status(200).json({ success: true, count: providers.length, data: providers });
+        }
+
+        // Public / Worker View: Only enabled, non-disabled, non-suspended providers with SAFE projection
+        const providers = await OfferwallProvider.find(
+            { enabled: true, status: { $nin: ['DISABLED', 'SUSPENDED', 'NOT_STARTED'] } },
+            'providerKey name category group description icon badge technicalReadinessScore approvalLikelihoodScore iframeUrlTemplate status enabled userRevenueSharePercent'
+        ).sort({ category: 1, name: 1 });
+
+        const sanitized = providers.map(p => {
+            const obj = p.toObject();
+            if (req.user?.id && obj.iframeUrlTemplate) {
+                obj.iframeUrl = obj.iframeUrlTemplate
+                    .replace(/\{userId\}/g, String(req.user.id))
+                    .replace(/\{appId\}/g, p.appId || '');
+            }
+            return obj;
+        });
+
+        res.status(200).json({ success: true, count: sanitized.length, data: sanitized });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
 };
 
 /**
- * Update Offerwall Provider Settings (Admin only)
+ * P10: Update Offerwall Provider Settings (Admin only with strict allowlist)
  */
 export const updateOfferwallProvider = async (req, res) => {
     try {
+        if (!isAuthorizedAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin privileges required.' });
+        }
+
         const { providerKey } = req.params;
-        const updates = req.body;
+        const body = req.body || {};
+
+        const ALLOWED_FIELDS = [
+            'name', 'category', 'group', 'enabled', 'appId', 'secretKey', 'postbackKey',
+            'iframeUrlTemplate', 'exchangeRateMultiplier', 'userRevenueSharePercent',
+            'platformRevenueSharePercent', 'ipWhitelist', 'requireSignature', 'signatureType',
+            'testMode', 'description', 'badge', 'icon', 'status', 'approvalStatus',
+            'integrationStatus', 'riskThresholdUSD', 'holdRewards', 'holdThresholdUSD',
+            'complianceNotes', 'customConfig'
+        ];
+
+        const sanitizedUpdates = {};
+        for (const field of ALLOWED_FIELDS) {
+            if (body[field] !== undefined) {
+                sanitizedUpdates[field] = body[field];
+            }
+        }
+
+        if (sanitizedUpdates.exchangeRateMultiplier !== undefined) {
+            sanitizedUpdates.exchangeRateMultiplier = Math.max(0, Number(sanitizedUpdates.exchangeRateMultiplier) || 1.0);
+        }
+        if (sanitizedUpdates.userRevenueSharePercent !== undefined) {
+            sanitizedUpdates.userRevenueSharePercent = Math.min(100, Math.max(0, Number(sanitizedUpdates.userRevenueSharePercent) || 0));
+            sanitizedUpdates.platformRevenueSharePercent = 100 - sanitizedUpdates.userRevenueSharePercent;
+        }
 
         const provider = await OfferwallProvider.findOneAndUpdate(
             { providerKey: providerKey.toLowerCase() },
-            { $set: updates },
-            { new: true, upsert: true }
+            { $set: sanitizedUpdates },
+            { new: true, runValidators: true }
         );
+
+        if (!provider) {
+            return res.status(404).json({ success: false, error: `Provider '${providerKey}' not found` });
+        }
 
         res.status(200).json({ success: true, data: provider });
     } catch (err) {
@@ -455,6 +651,10 @@ export const updateOfferwallProvider = async (req, res) => {
  */
 export const getOfferwallLogs = async (req, res) => {
     try {
+        if (!isAuthorizedAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin privileges required.' });
+        }
+
         const { provider, status, userId, page = 1, limit = 50 } = req.query;
         const query = {};
         if (provider) query.provider = provider.toLowerCase();
@@ -490,6 +690,10 @@ export const getOfferwallLogs = async (req, res) => {
  */
 export const simulatePostback = async (req, res) => {
     try {
+        if (!isAuthorizedAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Admin privileges required.' });
+        }
+
         const { providerKey, userId, amount = 1.0, isReversal = false, offerName = 'Test Survey / Offer' } = req.body;
         
         const testReq = {

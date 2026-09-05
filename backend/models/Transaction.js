@@ -110,6 +110,45 @@ const TransactionSchema = new mongoose.Schema({
     externalTransactionId: {
         type: String
     },
+    grossAmount: {
+        type: Number,
+        default: 0
+    },
+    userRewardAmount: {
+        type: Number,
+        default: 0
+    },
+    platformRevenueAmount: {
+        type: Number,
+        default: 0
+    },
+    providerFeeAmount: {
+        type: Number,
+        default: 0
+    },
+    balanceBefore: {
+        type: Number
+    },
+    balanceAfter: {
+        type: Number
+    },
+    idempotencyKey: {
+        type: String
+    },
+    riskStatus: {
+        type: String,
+        enum: ['NORMAL', 'REVIEW', 'HELD', 'BLOCKED'],
+        default: 'NORMAL'
+    },
+    chargebackStatus: {
+        type: String,
+        enum: ['None', 'Settled', 'Liability_Owed'],
+        default: 'None'
+    },
+    reversalReferenceId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Transaction'
+    },
     relatedTransactionId: {
         type: mongoose.Schema.ObjectId,
         ref: 'Transaction'
@@ -125,5 +164,6 @@ TransactionSchema.index({ withdrawalId: 1 }, { sparse: true });
 TransactionSchema.index({ transferId: 1 }, { sparse: true });
 TransactionSchema.index({ type: 1, status: 1 });
 TransactionSchema.index({ offerwallProvider: 1, externalTransactionId: 1 }, { sparse: true });
+TransactionSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('Transaction', TransactionSchema);
