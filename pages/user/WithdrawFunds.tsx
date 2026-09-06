@@ -4,7 +4,7 @@ import { PaymentMethod, Status, Withdrawal, formatCurrency, currencySymbols, Tas
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { useData } from '../../hooks/useData';
-import { createWithdrawal, purchasePlan as apiPurchasePlan, getPaymentMethods, getPublicPaymentMethods } from '../../services/api';
+import { createWithdrawal, purchasePlan as apiPurchasePlan } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate, useOutletContext } from 'react-router-dom';
@@ -89,6 +89,12 @@ const WithdrawFunds: React.FC = () => {
 
     const outletCtx = useOutletContext<{ dashboardMode?: 'work_and_earn' | 'investment' }>() || {};
     const canAccessInvestment = canAccessInvestmentModule(currentUser, state.settings);
+    const isHub = useMemo(() => {
+        if (!canAccessInvestment) return true;
+        const currentMode = outletCtx.dashboardMode || (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null);
+        return currentMode === 'work_and_earn';
+    }, [canAccessInvestment, outletCtx.dashboardMode]);
+
     const exchangeRate = state.settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
 
     const userIdStr = currentUser?._id?.toString() || '';
@@ -259,18 +265,6 @@ const WithdrawFunds: React.FC = () => {
         return Number(dynamicNet.toFixed(2));
     }, [currentUser?.taskEarningsBalance, totalLifetimeTaskEarningsUSD, totalDeductedHubWithdrawalsUSD, totalConvertedTaskEarningsUSD, fundsUsedForCampaignUSD]);
 
-    const isHub = useMemo(() => {
-        if (!canAccessInvestment) {
-            // When investment is disabled, allow withdrawal from whichever balance has funds
-            if (netAvailableTaskEarningsUSD <= 0 && (currentUser?.walletBalance ?? 0) > 0) {
-                return false;
-            }
-            return true;
-        }
-        const currentMode = outletCtx.dashboardMode || (typeof window !== 'undefined' ? localStorage.getItem('dashboard_mode') : null);
-        return currentMode === 'work_and_earn';
-    }, [canAccessInvestment, outletCtx.dashboardMode, netAvailableTaskEarningsUSD, currentUser?.walletBalance]);
-
     const currentBalance = useMemo(() => {
         if (!currentUser) return 0;
         if (isHub) {
@@ -291,7 +285,6 @@ const WithdrawFunds: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [cooldownMessage, setCooldownMessage] = useState<string | null>(null);
-    const [step2LimitError, setStep2LimitError] = useState<string | null>(null);
 
     // History Filter State
     const [historyStatus, setHistoryStatus] = useState<string>('');
@@ -333,28 +326,14 @@ const WithdrawFunds: React.FC = () => {
         );
     }, [currentUser, settings.workAndEarnWithdrawalRules, withdrawals, state.userTasks, state.userTaskSubmissions, state.users, state.investmentPlans, settings.workAndEarnPayoutTierConfig]);
 
-    // Self-healing check to ensure payment methods are loaded from API
-    useEffect(() => {
-        if (!paymentMethods || paymentMethods.length === 0) {
-            getPaymentMethods().then(methods => {
-                if (methods && methods.length > 0) {
-                    dispatch({ type: 'SET_PAYMENT_METHODS', payload: methods });
-                }
-            }).catch(console.warn);
-        }
-    }, [paymentMethods?.length]);
-
     // Derived Data
     const withdrawalMethods = useMemo(() => {
         if (!currentUser) return [];
-        const userCurr = String(currentUser.currency || 'USD').trim().toUpperCase();
-        return (paymentMethods || []).filter(method => {
-            if (!method) return false;
-            const mType = String(method.type || '').trim().toLowerCase();
-            const mStatus = String(method.status || '').trim().toLowerCase();
-            const mCurr = String(method.currency || 'USD').trim().toUpperCase();
-            return mType === 'withdrawal' && mStatus === 'enabled' && mCurr === userCurr;
-        });
+        return paymentMethods.filter(method => 
+            method.type === 'Withdrawal' && 
+            method.status === 'Enabled' &&
+            method.currency === currentUser.currency
+        );
     }, [paymentMethods, currentUser]);
     
     const userActivePlanPrices = useMemo(() => {
@@ -449,12 +428,12 @@ const WithdrawFunds: React.FC = () => {
     useEffect(() => {
         if (step === 4) {
             const isPopupEnabled = settings.workAndEarnPayoutTierConfig?.enableInvestmentPlanPopupOnWithdrawal !== false;
-            if (isPopupEnabled && canAccessInvestment) {
+            if (isPopupEnabled) {
                 setPlanModalTab('view_plan');
                 setIsPlanOpportunityModalOpen(true);
             }
         }
-    }, [step, settings.workAndEarnPayoutTierConfig?.enableInvestmentPlanPopupOnWithdrawal, canAccessInvestment]);
+    }, [step, settings.workAndEarnPayoutTierConfig?.enableInvestmentPlanPopupOnWithdrawal]);
 
     const handleConfirmPurchasePlan = async (targetPlan?: InvestmentPlan) => {
         const planToBuy = targetPlan || selectedPlanForPurchase;
@@ -779,10 +758,10 @@ const WithdrawFunds: React.FC = () => {
 
                     <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
                         <Button 
-                            onClick={() => navigate(canAccessInvestment ? (nc.primaryActionUrl || '/member/plans') : '/member')} 
+                            onClick={() => navigate(nc.primaryActionUrl || '/member/plans')} 
                             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl py-4 px-8 font-black uppercase tracking-widest text-xs shadow-xl shadow-indigo-500/20"
                         >
-                            {canAccessInvestment ? (nc.primaryActionButtonText || 'View Investment Plans') : 'Return to Dashboard'}
+                            {nc.primaryActionButtonText || 'View Investment Plans'}
                         </Button>
 
                         {nc.secondaryActionButtonText && (
@@ -889,7 +868,7 @@ const WithdrawFunds: React.FC = () => {
                             <p className="text-slate-500 dark:text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">Step 1: Payout allocation</p>
                         </div>
 
-                        {restrictWithdrawalAmount && !isHub && canAccessInvestment ? (
+                        {restrictWithdrawalAmount && !isHub ? (
                             <div className="space-y-6">
                                 {userActivePlanPrices.length > 0 ? (
                                     <div className="grid grid-cols-2 gap-4">
@@ -913,9 +892,7 @@ const WithdrawFunds: React.FC = () => {
                                         <p className="text-sm text-yellow-800 dark:text-yellow-200 font-bold mb-6">
                                             Active Plan Requirement: You must own a valid investment tier to unlock plan-matching payouts.
                                         </p>
-                                        <Button onClick={() => navigate(canAccessInvestment ? '/member/plans' : '/member')} className="rounded-xl px-10 py-4 font-black uppercase text-[10px] tracking-widest">
-                                            {canAccessInvestment ? 'Buy Plan Now' : 'Back to Dashboard'}
-                                        </Button>
+                                        <Button onClick={() => navigate('/member/plans')} className="rounded-xl px-10 py-4 font-black uppercase text-[10px] tracking-widest">Buy Plan Now</Button>
                                     </div>
                                 )}
                             </div>
@@ -1022,26 +999,8 @@ const WithdrawFunds: React.FC = () => {
                                                 )}
                                             </>
                                         ) : (
-                                            <div className="space-y-4">
-                                                <div className="relative">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-2">
-                                                        Withdrawal Amount ({currentUser?.currency || 'USD'})
-                                                    </label>
-                                                    <div className="relative">
-                                                        <span className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-slate-400 font-bold">
-                                                            {currencySymbols[currentUser?.currency || 'USD'] || '$'}
-                                                        </span>
-                                                        <input
-                                                            type="number"
-                                                            value={amount}
-                                                            onChange={(e) => setAmount(e.target.value)}
-                                                            className="w-full pl-8 p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500/10 focus:border-teal-600 outline-none transition-all dark:text-white text-2xl font-black tracking-tighter"
-                                                            placeholder="0.00"
-                                                            min="1"
-                                                            step="any"
-                                                        />
-                                                    </div>
-                                                </div>
+                                            <div className="text-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border dark:border-slate-700">
+                                                <p className="text-xs text-slate-500 font-bold">No payout tier options available at this time.</p>
                                             </div>
                                         )}
                                     </div>
@@ -1497,30 +1456,22 @@ const WithdrawFunds: React.FC = () => {
                             <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest opacity-60">Step 2: Choose Payout Provider</p>
                         </div>
 
-                        {step2LimitError && (
-                            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200 text-xs font-bold animate-fade-in">
-                                <span>⚠️ {step2LimitError}</span>
-                                <button onClick={() => setStep2LimitError(null)} className="text-amber-700 dark:text-amber-400 hover:opacity-75 font-black uppercase text-[10px] ml-2">Dismiss</button>
-                            </div>
-                        )}
-
                         {withdrawalMethods.length > 0 ? (
                             <div className="grid grid-cols-2 gap-2 sm:gap-4 animate-fade-in">
                                 {withdrawalMethods.map(method => {
                                     const numAmount = parseFloat(amount);
                                     const minWith = method.minAmount;
                                     const maxWith = method.maxAmount;
-                                    const isInvalid = (typeof minWith === 'number' && numAmount < minWith) || (typeof maxWith === 'number' && numAmount > maxWith);
+                                    const isInvalid = numAmount < minWith || numAmount > maxWith;
                                     
                                     return (
                                         <div 
                                             key={method._id}
                                             onClick={() => {
                                                 if (isInvalid) {
-                                                    setStep2LimitError(`Limit Violation: ${method.name} only processes requests between ${formatCurrency(minWith, method.currency)} and ${formatCurrency(maxWith, method.currency)}.`);
+                                                    alert(`Limit Violation: This provider only processes requests between ${formatCurrency(minWith, method.currency)} and ${formatCurrency(maxWith, method.currency)}`);
                                                     return;
                                                 }
-                                                setStep2LimitError(null);
                                                 setSelectedMethodId(method._id);
                                                 setStep(3);
                                             }}
@@ -1540,9 +1491,6 @@ const WithdrawFunds: React.FC = () => {
                                             
                                             <div className="flex-grow min-w-0 w-full">
                                                 <h4 className="font-black uppercase text-xs sm:text-base tracking-tight text-gray-950 dark:text-white truncate leading-tight">{method.name}</h4>
-                                                <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase mt-0.5">
-                                                    Limit: {formatCurrency(method.minAmount, method.currency)} - {formatCurrency(method.maxAmount, method.currency)}
-                                                </p>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 mt-0.5 sm:mt-1">
                                                     {method.feePercent > 0 && (
                                                         <span className="text-[8px] sm:text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mx-auto sm:mx-0">Fee: {method.feePercent}%</span>

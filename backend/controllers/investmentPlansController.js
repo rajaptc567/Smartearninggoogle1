@@ -1,32 +1,9 @@
 
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Setting from '../models/Setting.js';
-import User from '../models/User.js';
-import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 export const getInvestmentPlans = async (req, res) => {
     try {
-        const settings = await Setting.getSettings();
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
-
-        if (!isAdmin) {
-            let canAccess = false;
-            if (req.user?.id) {
-                const user = await User.findById(req.user.id);
-                if (user) {
-                    canAccess = canUserAccessInvestmentModule(user, settings);
-                }
-            } else {
-                // Unauthenticated visitor: check global master toggle
-                const isGloballyEnabled = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
-                canAccess = isGloballyEnabled;
-            }
-
-            if (!canAccess) {
-                return res.status(200).json({ success: true, count: 0, data: [] });
-            }
-        }
-
         const plans = await InvestmentPlan.find();
         res.status(200).json({ success: true, count: plans.length, data: plans });
     } catch (err) {
@@ -36,26 +13,6 @@ export const getInvestmentPlans = async (req, res) => {
 
 export const getInvestmentPlan = async (req, res) => {
     try {
-        const settings = await Setting.getSettings();
-        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.email === 'studio56.pk@gmail.com');
-
-        if (!isAdmin) {
-            let canAccess = false;
-            if (req.user?.id) {
-                const user = await User.findById(req.user.id);
-                if (user) {
-                    canAccess = canUserAccessInvestmentModule(user, settings);
-                }
-            } else {
-                const isGloballyEnabled = settings.investmentModuleEnabled !== false && settings.isInvestmentModuleEnabled !== false;
-                canAccess = isGloballyEnabled;
-            }
-
-            if (!canAccess) {
-                return res.status(404).json({ success: false, error: 'Investment plan not found' });
-            }
-        }
-
         const plan = await InvestmentPlan.findById(req.params.id);
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });

@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PaymentMethod, Status, formatCurrency, currencySymbols, Deposit } from '../../types';
 import Button from '../../components/ui/Button';
 import { useData } from '../../hooks/useData';
-import { createDeposit, getPaymentMethods, getPublicPaymentMethods } from '../../services/api';
+import { createDeposit } from '../../services/api';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import { useNavigate, useOutletContext } from 'react-router-dom';
@@ -276,59 +276,35 @@ const DepositFunds: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Self-healing check to ensure payment methods are loaded from API
-    useEffect(() => {
-        if (!paymentMethods || paymentMethods.length === 0) {
-            getPaymentMethods().then(methods => {
-                if (methods && methods.length > 0) {
-                    dispatch({ type: 'SET_PAYMENT_METHODS', payload: methods });
-                }
-            }).catch(console.warn);
-        }
-    }, [paymentMethods?.length]);
-
-    const activeDepositMethods = useMemo(() => {
-        if (!currentUser) return [];
-        const userCurr = String(currentUser.currency || 'USD').trim().toUpperCase();
-        return (paymentMethods || []).filter(method => {
-            if (!method) return false;
-            const mType = String(method.type || '').trim().toLowerCase();
-            const mStatus = String(method.status || '').trim().toLowerCase();
-            const mCurr = String(method.currency || 'USD').trim().toUpperCase();
-            return mType === 'deposit' && mStatus === 'enabled' && mCurr === userCurr;
-        });
-    }, [paymentMethods, currentUser]);
-
     const planPrices = useMemo(() => {
         if (!currentUser) return [];
-        const userCurr = String(currentUser.currency || 'USD').trim().toUpperCase();
-        const pricesFromPlans = (investmentPlans || [])
-            .filter(p => (p.status === Status.Active || (p.status as any) === 'Active') && String(p.currency || 'USD').trim().toUpperCase() === userCurr)
+        return investmentPlans
+            .filter(p => p.status === Status.Active && p.currency === currentUser.currency)
             .map(p => p.price)
             .sort((a, b) => a - b)
             .filter((value, index, self) => self.indexOf(value) === index);
-
-        if (pricesFromPlans.length > 0) return pricesFromPlans;
-
-        // Fallback quick presets based on user currency
-        return userCurr === 'PKR' 
-            ? [500, 1000, 2500, 5000, 10000] 
-            : [10, 25, 50, 100, 250];
     }, [investmentPlans, currentUser]);
 
     const availableMethods = useMemo(() => {
+        if (!currentUser) return [];
         const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount) || numericAmount <= 0) return activeDepositMethods;
+        if (isNaN(numericAmount) || numericAmount <= 0) return [];
         
-        return activeDepositMethods.filter(method => 
-            (typeof method.minAmount !== 'number' || method.minAmount <= numericAmount) && 
-            (typeof method.maxAmount !== 'number' || method.maxAmount >= numericAmount)
+        const activeDepositMethods = paymentMethods.filter(method => 
+            method.type === 'Deposit' && 
+            method.status === 'Enabled' &&
+            method.currency === currentUser.currency
         );
-    }, [activeDepositMethods, amount]);
+
+        return activeDepositMethods.filter(method => 
+            method.minAmount <= numericAmount && 
+            method.maxAmount >= numericAmount
+        );
+    }, [paymentMethods, amount, currentUser]);
 
     const selectedMethod = useMemo(() =>
-        (activeDepositMethods || []).find(method => method._id.toString() === selectedMethodId),
-        [selectedMethodId, activeDepositMethods]
+        availableMethods.find(method => method._id.toString() === selectedMethodId),
+        [selectedMethodId, availableMethods]
     );
 
     useEffect(() => {
@@ -567,64 +543,40 @@ const DepositFunds: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-950 p-4 sm:p-8 md:p-12 shadow-xl border border-gray-100 dark:border-gray-800" style={{ borderRadius: pageConfig.cardRounding }}>
                 {step === 1 && (
-                    <div className="animate-fade-in space-y-4 sm:space-y-6 max-w-2xl mx-auto">
-                        <div className="text-center space-y-1 mb-2 sm:mb-4">
+                    <div className="animate-fade-in space-y-4 sm:space-y-8 max-w-2xl mx-auto">
+                        <div className="text-center space-y-1 mb-2 sm:mb-6">
                             <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Amount Selection</h3>
                             <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest font-mono">
-                                Enter custom amount or choose a quick preset below
+                                Enter custom amount or select from quick amounts below
                             </p>
                         </div>
-
-                        {/* Custom Amount Input Field */}
-                        <div className="relative">
-                            <label className="text-[10px] sm:text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block mb-2">
-                                Deposit Amount ({currentUser?.currency || 'USD'})
-                            </label>
-                            <div className="relative">
-                                <span className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 font-bold text-lg">
-                                    {currencySymbols[currentUser?.currency || 'USD'] || '$'}
-                                </span>
-                                <input
-                                    type="number"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3.5 sm:py-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl sm:rounded-2xl text-xl sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    placeholder="0.00"
-                                    min="1"
-                                    step="any"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Quick Presets */}
                         {planPrices.length > 0 && (
-                            <div>
-                                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 block mb-2">Quick Amounts</span>
-                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2">
-                                    {planPrices.map(price => (
-                                        <button
-                                            key={price}
-                                            type="button"
-                                            onClick={() => setAmount(price.toString())}
-                                            className={`py-2 px-1.5 sm:py-2.5 sm:px-3 rounded-lg sm:rounded-xl font-black uppercase text-[10px] sm:text-xs tracking-wider transition-all border-2`}
-                                            style={{ 
-                                                backgroundColor: amount === price.toString() ? pageConfig.primaryColor : 'transparent',
-                                                color: amount === price.toString() ? '#fff' : '#6b7280',
-                                                borderColor: amount === price.toString() ? pageConfig.primaryColor : 'rgba(0,0,0,0.08)',
-                                                boxShadow: amount === price.toString() ? `0 10px 15px -3px ${pageConfig.primaryColor}33` : 'none'
-                                            }}
-                                        >
-                                            {formatCurrency(price, currentUser.currency)}
-                                        </button>
-                                    ))}
-                                </div>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-3">
+                                {planPrices.map(price => (
+                                    <button
+                                        key={price}
+                                        type="button"
+                                        onClick={() => setAmount(price.toString())}
+                                        className={`py-2.5 px-2 sm:py-4 sm:px-4 rounded-lg sm:rounded-xl font-black uppercase text-[10px] sm:text-xs tracking-wider sm:tracking-widest transition-all border-2`}
+                                        style={{ 
+                                            backgroundColor: amount === price.toString() ? pageConfig.primaryColor : 'transparent',
+                                            color: amount === price.toString() ? '#fff' : '#6b7280',
+                                            borderColor: amount === price.toString() ? pageConfig.primaryColor : 'rgba(0,0,0,0.05)',
+                                            boxShadow: amount === price.toString() ? `0 10px 15px -3px ${pageConfig.primaryColor}33` : 'none'
+                                        }}
+                                    >
+                                        {formatCurrency(price, currentUser.currency)}
+                                    </button>
+                                ))}
                             </div>
                         )}
+
+
 
                         <Button 
                             onClick={() => setStep(2)} 
                             disabled={!amount || parseFloat(amount) <= 0}
-                            className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs sm:text-sm shadow-xl"
+                            className="w-full py-3.5 sm:py-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-xs sm:text-sm shadow-xl"
                             style={{ backgroundColor: pageConfig.primaryColor }}
                         >
                             Next Step &rarr;
@@ -636,27 +588,11 @@ const DepositFunds: React.FC = () => {
                     <div className="space-y-4 max-w-2xl mx-auto">
                         <div className="text-center space-y-1 mb-2 sm:mb-4 animate-fade-in">
                             <h3 className="text-base sm:text-xl font-black uppercase tracking-tight text-gray-800 dark:text-white">Choose payment provider</h3>
-                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest">
-                                Step 2: Select a payment method for {formatCurrency(parseFloat(amount) || 0, currentUser?.currency)}
-                            </p>
+                            <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest">Step 2: Select a payment method matching {formatCurrency(parseFloat(amount), currentUser.currency)}</p>
                         </div>
-                        {activeDepositMethods.length === 0 ? (
-                            <div className="text-center py-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl animate-fade-in p-6">
-                                <p className="text-xs font-bold text-gray-400 uppercase">No active deposit methods are currently enabled by Admin for {currentUser?.currency || 'USD'}.</p>
-                                <button onClick={() => setStep(1)} className="mt-3 px-4 py-2 bg-blue-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:bg-blue-700 transition-colors">&larr; Return to Step 1</button>
-                            </div>
-                        ) : availableMethods.length === 0 ? (
-                            <div className="text-center py-8 border-2 border-dashed border-amber-200 dark:border-amber-800/60 rounded-2xl animate-fade-in p-6 bg-amber-50/50 dark:bg-amber-950/20">
-                                <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
-                                    Entered amount ({formatCurrency(parseFloat(amount) || 0, currentUser?.currency)}) is outside the limits of available payment methods.
-                                </p>
-                                <div className="my-3 space-y-1 text-[11px] text-gray-600 dark:text-gray-300">
-                                    {activeDepositMethods.map(m => (
-                                        <p key={m._id} className="font-semibold">
-                                            {m.name}: Min {formatCurrency(m.minAmount, m.currency)} — Max {formatCurrency(m.maxAmount, m.currency)}
-                                        </p>
-                                    ))}
-                                </div>
+                        {availableMethods.length === 0 ? (
+                            <div className="text-center py-8 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl animate-fade-in">
+                                <p className="text-xs font-bold text-gray-400 uppercase">No active methods for this amount</p>
                                 <button onClick={() => setStep(1)} className="mt-3 px-4 py-2 bg-blue-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:bg-blue-700 transition-colors">Adjust Amount</button>
                             </div>
                         ) : (
@@ -672,9 +608,6 @@ const DepositFunds: React.FC = () => {
                                         </div>
                                         <div className="flex-grow min-w-0 w-full">
                                             <h4 className="font-black uppercase text-[10px] sm:text-sm tracking-tight text-gray-950 dark:text-white truncate">{m.name}</h4>
-                                            <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase mt-0.5">
-                                                Limit: {formatCurrency(m.minAmount, m.currency)} - {formatCurrency(m.maxAmount, m.currency)}
-                                            </p>
                                             {m.feePercent > 0 && (
                                                 <p className="text-[8px] sm:text-[9px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mt-0.5">
                                                     Fee: {m.feePercent}%

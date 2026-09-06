@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import OfferwallProvider from '../models/OfferwallProvider.js';
@@ -368,217 +367,176 @@ export const handlePostback = async (req, res) => {
 
         if (normalized.isReversal) {
             // ==========================================
-            // P7: REVERSAL / CHARGEBACK SAFETY LOGIC WITH ATOMIC SESSION
+            // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
             // ==========================================
-            const session = await mongoose.startSession();
-            let deductionAmount = 0;
-            let origTx = null;
+            const origTx = await Transaction.findOne({
+                offerwallProvider: providerKey,
+                externalTransactionId: normalized.externalTxId,
+                type: 'Offerwall Reward'
+            });
 
-            try {
-                await session.withTransaction(async () => {
-                    // Check duplicate inside transaction
-                    const duplicateTx = await Transaction.findOne({ idempotencyKey }).session(session);
-                    if (duplicateTx) {
-                        const err = new Error('DUPLICATE_TX');
-                        err.code = 'DUPLICATE_TX';
-                        throw err;
-                    }
+            const deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
+            const currentEarnings = user.taskEarningsBalance || 0;
+            const newEarnings = currentEarnings - deductionAmount;
+            let chargebackStatus = 'Settled';
+            let liabilityToAdd = 0;
+            let deductionToApply = deductionAmount;
 
-                    origTx = await Transaction.findOne({
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId,
-                        type: 'Offerwall Reward'
-                    }).session(session);
-
-                    deductionAmount = origTx ? (origTx.userRewardAmount || origTx.amountUSD) : userRewardUSD;
-                    const currentEarnings = user.taskEarningsBalance || 0;
-                    const newEarnings = currentEarnings - deductionAmount;
-                    let chargebackStatus = 'Settled';
-                    let liabilityToAdd = 0;
-                    let deductionToApply = deductionAmount;
-
-                    if (newEarnings < 0) {
-                        chargebackStatus = 'Liability_Owed';
-                        liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
-                        deductionToApply = currentEarnings;
-                    }
-
-                    // Atomic balance deduction and liability tracking inside session
-                    const updatedUser = await User.findByIdAndUpdate(user._id, {
-                        $inc: {
-                            taskEarningsBalance: -deductionToApply,
-                            taskWalletBalance: -deductionToApply,
-                            chargebackLiabilityUSD: liabilityToAdd
-                        }
-                    }, { session, new: true });
-
-                    const balanceBefore = currentEarnings;
-                    const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
-
-                    const [tx] = await Transaction.create([{
-                        userId: user._id,
-                        userName: user.username,
-                        currency: 'USD',
-                        type: 'Offerwall Reversal',
-                        amount: deductionAmount,
-                        amountUSD: deductionAmount,
-                        grossAmount: origTx?.grossAmount || grossUSD,
-                        userRewardAmount: deductionAmount,
-                        platformRevenueAmount: origTx?.platformRevenueAmount || 0,
-                        balanceBefore,
-                        balanceAfter,
-                        idempotencyKey,
-                        chargebackStatus,
-                        reversalReferenceId: origTx?._id,
-                        description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
-                        status: 'Approved',
-                        sourceWallet: 'TaskEarnings',
-                        destinationWallet: 'External',
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId
-                    }], { session });
-
-                    // Update Provider metrics atomically inside session
-                    await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                        $inc: { totalReversalCount: 1 }
-                    }, { session });
-
-                    log.status = 'Reversed';
-                    log.transactionId = tx._id;
-                    log.reversalReferenceTxId = origTx?._id;
-                    log.reversedAmountUSD = deductionAmount;
-                    log.chargebackStatus = chargebackStatus;
-                    log.userBalanceBefore = balanceBefore;
-                    log.userBalanceAfter = balanceAfter;
-                    await log.save({ session });
-                });
-            } catch (txErr) {
-                if (txErr.code === 'DUPLICATE_TX' || txErr.code === 11000) {
-                    log.status = 'Duplicate';
-                    log.errorMessage = 'Duplicate transaction key caught by transaction / database constraint';
-                    try { await log.save(); } catch (_) {}
-                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
-                }
-                throw txErr;
-            } finally {
-                await session.endSession();
+            if (newEarnings < 0) {
+                chargebackStatus = 'Liability_Owed';
+                liabilityToAdd = Number(Math.abs(newEarnings).toFixed(2));
+                deductionToApply = currentEarnings;
             }
 
-            try {
-                await Notification.create({
-                    userId: user._id,
-                    subject: `Offerwall Reversal: ${provider.name} ⚠️`,
-                    message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
-                    senderType: 'System'
-                });
-            } catch (_) {}
+            // Atomic balance deduction and liability tracking
+            const updatedUser = await User.findByIdAndUpdate(user._id, {
+                $inc: {
+                    taskEarningsBalance: -deductionToApply,
+                    taskWalletBalance: -deductionToApply,
+                    chargebackLiabilityUSD: liabilityToAdd
+                }
+            }, { new: true });
+
+            const balanceBefore = currentEarnings;
+            const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
+
+            const tx = await Transaction.create({
+                userId: user._id,
+                userName: user.username,
+                currency: 'USD',
+                type: 'Offerwall Reversal',
+                amount: deductionAmount,
+                amountUSD: deductionAmount,
+                grossAmount: origTx?.grossAmount || grossUSD,
+                userRewardAmount: deductionAmount,
+                platformRevenueAmount: origTx?.platformRevenueAmount || 0,
+                balanceBefore,
+                balanceAfter,
+                idempotencyKey,
+                chargebackStatus,
+                reversalReferenceId: origTx?._id,
+                description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
+                status: 'Approved',
+                sourceWallet: 'TaskEarnings',
+                destinationWallet: 'External',
+                offerwallProvider: providerKey,
+                externalTransactionId: normalized.externalTxId
+            });
+
+            // Update Provider metrics atomically
+            await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                $inc: { totalReversalCount: 1 }
+            });
+
+            log.status = 'Reversed';
+            log.transactionId = tx._id;
+            log.reversalReferenceTxId = origTx?._id;
+            log.reversedAmountUSD = deductionAmount;
+            log.chargebackStatus = chargebackStatus;
+            log.userBalanceBefore = balanceBefore;
+            log.userBalanceAfter = balanceAfter;
+            try { await log.save(); } catch (_) {}
+
+            await Notification.create({
+                userId: user._id,
+                subject: `Offerwall Reversal: ${provider.name} ⚠️`,
+                message: `An offerwall reward of $${deductionAmount} was revoked by the advertiser/provider (${provider.name} - ${normalized.offerName}). Your task earnings balance has been adjusted.`,
+                senderType: 'System'
+            });
 
             return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'OK');
         } else {
             // ==========================================
-            // P6: ATOMIC REWARD CREDITING WITH SESSION TRANSACTION
+            // P6: ATOMIC REWARD CREDITING (taskEarningsBalance)
             // ==========================================
-            const session = await mongoose.startSession();
+            const updatedUser = await User.findOneAndUpdate(
+                {
+                    _id: user._id,
+                    status: { $ne: 'Blocked' },
+                    'restrictions.earning': { $ne: true }
+                },
+                {
+                    $inc: {
+                        taskEarningsBalance: userRewardUSD,
+                        taskWalletBalance: userRewardUSD
+                    }
+                },
+                { new: true }
+            );
 
+            if (!updatedUser) {
+                log.status = 'Rejected';
+                log.errorMessage = 'User account is blocked or earning restricted';
+                try { await log.save(); } catch (_) {}
+                return res.status(403).send('USER_RESTRICTED');
+            }
+
+            const balanceBefore = Number((updatedUser.taskEarningsBalance - userRewardUSD).toFixed(2));
+            const balanceAfter = updatedUser.taskEarningsBalance;
+
+            let tx;
             try {
-                await session.withTransaction(async () => {
-                    // Check duplicate inside transaction
-                    const duplicateTx = await Transaction.findOne({ idempotencyKey }).session(session);
-                    if (duplicateTx) {
-                        const err = new Error('DUPLICATE_TX');
-                        err.code = 'DUPLICATE_TX';
-                        throw err;
-                    }
-
-                    const updatedUser = await User.findOneAndUpdate(
-                        {
-                            _id: user._id,
-                            status: { $ne: 'Blocked' },
-                            'restrictions.earning': { $ne: true }
-                        },
-                        {
-                            $inc: {
-                                taskEarningsBalance: userRewardUSD,
-                                taskWalletBalance: userRewardUSD
-                            }
-                        },
-                        { session, new: true }
-                    );
-
-                    if (!updatedUser) {
-                        const err = new Error('USER_RESTRICTED');
-                        err.code = 'USER_RESTRICTED';
-                        throw err;
-                    }
-
-                    const balanceBefore = Number((updatedUser.taskEarningsBalance - userRewardUSD).toFixed(2));
-                    const balanceAfter = updatedUser.taskEarningsBalance;
-
-                    const [tx] = await Transaction.create([{
-                        userId: user._id,
-                        userName: user.username,
-                        currency: 'USD',
-                        type: 'Offerwall Reward',
-                        amount: userRewardUSD,
-                        amountUSD: userRewardUSD,
-                        grossAmount: grossUSD,
-                        userRewardAmount: userRewardUSD,
-                        platformRevenueAmount: platformRevenueUSD,
-                        balanceBefore,
-                        balanceAfter,
-                        idempotencyKey,
-                        riskStatus,
-                        description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
-                        status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
-                        sourceWallet: 'External',
-                        destinationWallet: 'TaskEarnings',
-                        offerwallProvider: providerKey,
-                        externalTransactionId: normalized.externalTxId
-                    }], { session });
-
-                    // Update Provider metrics atomically inside session
-                    await OfferwallProvider.findByIdAndUpdate(provider._id, {
-                        $inc: {
-                            totalGrossPayoutUSD: grossUSD,
-                            totalUserPayoutUSD: userRewardUSD,
-                            totalPlatformRevenueUSD: platformRevenueUSD,
-                            totalPostbackCount: 1
-                        }
-                    }, { session });
-
-                    log.status = 'Processed';
-                    log.transactionId = tx._id;
-                    log.userBalanceBefore = balanceBefore;
-                    log.userBalanceAfter = balanceAfter;
-                    await log.save({ session });
+                tx = await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Offerwall Reward',
+                    amount: userRewardUSD,
+                    amountUSD: userRewardUSD,
+                    grossAmount: grossUSD,
+                    userRewardAmount: userRewardUSD,
+                    platformRevenueAmount: platformRevenueUSD,
+                    balanceBefore,
+                    balanceAfter,
+                    idempotencyKey,
+                    riskStatus,
+                    description: `Completed ${provider.name} Offer/Survey: ${normalized.offerName}`,
+                    status: riskStatus === 'REVIEW' ? 'Pending' : 'Approved',
+                    sourceWallet: 'External',
+                    destinationWallet: 'TaskEarnings',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
                 });
             } catch (txErr) {
-                if (txErr.code === 'DUPLICATE_TX' || txErr.code === 11000) {
+                // Handle duplicate key error 11000 gracefully (P5)
+                if (txErr.code === 11000) {
+                    await User.findByIdAndUpdate(user._id, {
+                        $inc: {
+                            taskEarningsBalance: -userRewardUSD,
+                            taskWalletBalance: -userRewardUSD
+                        }
+                    });
                     log.status = 'Duplicate';
-                    log.errorMessage = 'Duplicate transaction key caught by transaction / database constraint';
+                    log.errorMessage = 'Duplicate transaction key caught by database constraint';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
-                if (txErr.code === 'USER_RESTRICTED') {
-                    log.status = 'Rejected';
-                    log.errorMessage = 'User account is blocked or earning restricted';
-                    try { await log.save(); } catch (_) {}
-                    return res.status(403).send('USER_RESTRICTED');
-                }
                 throw txErr;
-            } finally {
-                await session.endSession();
             }
 
+            // Update Provider metrics atomically
+            await OfferwallProvider.findByIdAndUpdate(provider._id, {
+                $inc: {
+                    totalGrossPayoutUSD: grossUSD,
+                    totalUserPayoutUSD: userRewardUSD,
+                    totalPlatformRevenueUSD: platformRevenueUSD,
+                    totalPostbackCount: 1
+                }
+            });
+
+            log.status = 'Processed';
+            log.transactionId = tx._id;
+            log.userBalanceBefore = balanceBefore;
+            log.userBalanceAfter = balanceAfter;
+            try { await log.save(); } catch (_) {}
+
             // Notify Worker in Inbox
-            try {
-                await Notification.create({
-                    userId: user._id,
-                    subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
-                    message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
-                    senderType: 'System'
-                });
-            } catch (_) {}
+            await Notification.create({
+                userId: user._id,
+                subject: `Offerwall Reward Credited! 🎁 (+$${userRewardUSD})`,
+                message: `You earned $${userRewardUSD} from ${provider.name} (${normalized.offerName}). The reward has been credited directly to your Work & Earn Task Balance!`,
+                senderType: 'System'
+            });
 
             // Return provider-expected success body
             if (providerKey === 'torox' || providerKey === 'cpx_research') {
