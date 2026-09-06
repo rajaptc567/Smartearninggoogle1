@@ -453,13 +453,17 @@ export const getPayoutOptionsForUser = (
     }
 
     if (options.length === 0) {
-        [5, 10, 15, 25].forEach(amtUSD => {
+        const fallbackAmounts = (config.manualPayoutAmountsUSD && config.manualPayoutAmountsUSD.length > 0)
+            ? config.manualPayoutAmountsUSD
+            : (DEFAULT_PAYOUT_TIER_CONFIG.manualPayoutAmountsUSD || [5, 10, 15, 25]);
+            
+        fallbackAmounts.forEach(amtUSD => {
             const localAmt = userCurr !== 'USD' ? Math.round(amtUSD * rate) : amtUSD;
             options.push({
                 amount: localAmt,
                 amountUSD: amtUSD,
                 label: userCurr !== 'USD' ? `${localAmt.toLocaleString()} ${userCurr}` : `$${amtUSD} USD`,
-                source: 'manual'
+                source: 'milestone'
             });
         });
     }

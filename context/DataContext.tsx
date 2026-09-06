@@ -465,16 +465,20 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             const token = localStorage.getItem('authToken');
             const isLoggedIn = !!token;
 
-            // Phase 1: Ultra-fast critical public handshake (< 3 KB) - never blocks render
+            // Phase 1: Fast public handshake with settings and payment methods
             try {
-                const publicSettings = await getPublicSettings();
+                const [publicSettings, initialMethods] = await Promise.all([
+                    getPublicSettings(),
+                    getPaymentMethods().catch(() => [])
+                ]);
 
                 if (isMounted && publicSettings) {
                     lastVersionRef.current = publicSettings.dataVersion || 1;
                     dispatch({
                         type: 'SET_ALL_DATA',
                         payload: {
-                            settings: publicSettings as any
+                            settings: publicSettings as any,
+                            paymentMethods: (initialMethods && initialMethods.length > 0) ? initialMethods : state.paymentMethods
                         }
                     });
                 }
@@ -486,15 +490,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
                 }
             }
 
-            // Phase 2: Deferred non-critical background loading ONLY for authenticated users
-            // Public homepage visitors never fetch payment methods, investment plans, or private data on startup!
+            // Phase 2: Immediate background loading for authenticated users
             if (!isLoggedIn) {
                 return;
             }
 
-            const scheduleBackgroundFetch = typeof window !== 'undefined' && 'requestIdleCallback' in window
-                ? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
-                : (cb: () => void) => setTimeout(cb, 1000);
+            const scheduleBackgroundFetch = (cb: () => void) => setTimeout(cb, 0);
 
             scheduleBackgroundFetch(async () => {
                 if (!isMounted) return;
