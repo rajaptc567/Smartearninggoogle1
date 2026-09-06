@@ -4,7 +4,6 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
-import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 
 export const getTransfers = async (req, res) => {
@@ -60,16 +59,7 @@ export const createTransfer = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Recipient account is not eligible to receive transfers.' });
         }
 
-        // 1. Check Investment Module Access
-        if (!isAdmin && !canUserAccessInvestmentModule(sender, settings)) {
-            return res.status(403).json({
-                success: false,
-                error: 'The Investment Module is currently disabled. Wallet transfers are unavailable.',
-                code: 'INVESTMENT_MODULE_DISABLED'
-            });
-        }
-
-        // 2. Check User Restrictions
+        // 1. Check User Restrictions
         if (sender.status === 'Blocked' || (sender.restrictions && sender.restrictions.transfer)) {
             return res.status(403).json({ success: false, error: `Transfers are currently disabled for your account.` });
         }

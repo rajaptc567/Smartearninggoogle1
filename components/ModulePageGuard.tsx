@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { getEffectiveModulePageControl } from '../data/modulePagesDefaults';
 import { canAccessInvestmentModule } from '../utils/investmentAccess';
@@ -65,6 +65,10 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
     }
 
     if (!isEffectivelyEnabled) {
+        if (!isAdmin && effectiveCategory === 'investment' && !canAccessInvestment) {
+            return <Navigate to="/member" replace />;
+        }
+
         if (isAdmin) {
             return (
                 <div>

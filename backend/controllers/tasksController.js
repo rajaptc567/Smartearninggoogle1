@@ -4,7 +4,6 @@ import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
-import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 
 // ... getTasks, createTask, updateTask, deleteTask same ...
@@ -46,16 +45,6 @@ export const completeTask = async (req, res) => {
         const user = await User.findById(userId);
 
         if (!task || !user) return res.status(404).json({ success: false, error: 'Not found' });
-
-        const settings = await Setting.getSettings();
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
-        if (!isAdmin && !canUserAccessInvestmentModule(user, settings)) {
-            return res.status(403).json({
-                success: false,
-                error: 'The Investment Module is currently disabled. Investment tasks are unavailable.',
-                code: 'INVESTMENT_MODULE_DISABLED'
-            });
-        }
 
         const completionData = {
             taskId: task._id,

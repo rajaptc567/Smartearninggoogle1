@@ -6,7 +6,6 @@ import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
-import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 
 const isUserAdmin = (user) => {
@@ -118,16 +117,6 @@ export const createWithdrawal = async (req, res) => {
         }
 
         const isHub = req.body.isHub === 'true' || req.body.isHub === true;
-
-        if (!isHub && !isAdmin) {
-            if (!canUserAccessInvestmentModule(user, settings)) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'The Investment Module is currently disabled. Investment withdrawals are unavailable.',
-                    code: 'INVESTMENT_MODULE_DISABLED'
-                });
-            }
-        }
 
         let sourceWallet = 'Investment';
         let sourceAmount = req.body.amount;

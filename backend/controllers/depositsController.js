@@ -6,7 +6,6 @@ import Notification from '../models/Notification.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Setting from '../models/Setting.js';
 import PaymentMethod from '../models/PaymentMethod.js';
-import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 
@@ -70,18 +69,6 @@ export const createDeposit = async (req, res) => {
 
         const user = await User.findById(depositData.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-        // Guard Investment Module Deposits when disabled
-        if (!depositData.isHub && !isAdmin) {
-            const settings = await Setting.getSettings();
-            if (!canUserAccessInvestmentModule(user, settings)) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'The Investment Module is currently disabled. Investment deposits are unavailable.',
-                    code: 'INVESTMENT_MODULE_DISABLED'
-                });
-            }
-        }
         
         const amountNum = Number(depositData.amount);
         if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {

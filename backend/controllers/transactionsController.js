@@ -24,7 +24,6 @@ export const getTransactions = async (req, res) => {
                 query.type = { 
                     $nin: ['Plan Purchase', 'Commission', 'Investment To Task Wallet Transfer'] 
                 };
-                query.sourceWallet = { $ne: 'Investment' };
                 query.relatedPlanId = { $in: [null, undefined] };
             }
         } else if (!isAdmin) {
