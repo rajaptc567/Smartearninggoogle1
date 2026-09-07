@@ -893,9 +893,7 @@ const HomePage: React.FC = () => {
                                     </div>
                                     <h3 className="text-lg font-bold mb-1.5">US Dollar (USD)</h3>
                                     <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                                        {isInvestmentGloballyEnabled 
-                                            ? "Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods."
-                                            : "Access a wide range of earning tasks and campaigns priced in USD. All your earnings from our global network can be withdrawn directly to your preferred US Dollar payment methods."}
+                                        Access a wide range of investment plans priced in USD. All your earnings from our global network are automatically converted and can be withdrawn directly to your preferred US Dollar payment methods.
                                     </p>
                                 </div>
                                 
@@ -905,9 +903,7 @@ const HomePage: React.FC = () => {
                                     </div>
                                     <h3 className="text-lg font-bold mb-1.5">Euro (EUR)</h3>
                                     <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                                        {isInvestmentGloballyEnabled 
-                                            ? "For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal."
-                                            : "For our European members, all tasks and transactions are available in Euros. Complete tasks, earn rewards, and receive your earnings seamlessly in EUR, ready for withdrawal."}
+                                        For our European members, all plans and transactions are available in Euros. Refer members from any country and receive your commissions seamlessly in EUR, ready for withdrawal.
                                     </p>
                                 </div>
                                 
@@ -917,9 +913,7 @@ const HomePage: React.FC = () => {
                                     </div>
                                     <h3 className="text-lg font-bold mb-1.5">Pakistani Rupee (PKR) - Local Channels</h3>
                                     <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                                        {isInvestmentGloballyEnabled 
-                                            ? <>We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>our secure local channels</strong>, you can instantly subscribe to high-performing options like our <strong>premium plans</strong> and withdraw your earnings directly to your mobile wallet.</>
-                                            : <>We operate as a premier <strong>earning and advertising platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>our secure local channels</strong>, you can fund campaigns, complete verified tasks, and withdraw your earnings directly to your mobile wallet.</>}
+                                        We operate as a premier <strong>local payment investment platform</strong> in Pakistan. With seamless deposits and withdrawals through <strong>our secure local channels</strong>, you can instantly subscribe to high-performing options like our <strong>premium plans</strong> and withdraw your earnings directly to your mobile wallet.
                                     </p>
                                 </div>
                             </div>

@@ -246,7 +246,7 @@ const UserLayout: React.FC = () => {
           }
       }
   }, [currentUser, notifications]);
-
+  
   const generatedActivities = useMemo((): Activity[] => {
     if (!users.length) return [];
   
@@ -326,7 +326,7 @@ const UserLayout: React.FC = () => {
         if (realActivitySettings.registrations) {
             realSources.push(...users.filter(u => !excludedUserIds.has(u._id) && !hiddenEventIds.has(u._id)).slice(0, 3).map(u => ({ type: 'joined', data: u, date: new Date(u.registrationDate) })));
         }
-        if (realActivitySettings.commissions && isInvestmentEnabled) {
+        if (realActivitySettings.commissions) {
             realSources.push(...transactions
                 .filter(t => t.type === 'Commission' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && !hiddenEventIds.has(t._id) && isValidAmount(t.amount, t.currency))
                 .slice(0, 3).map(t => ({ type: 'commission', data: t, date: new Date(t.date) })));
@@ -336,7 +336,7 @@ const UserLayout: React.FC = () => {
                 .filter(t => t.status === 'Approved' && !excludedUserIds.has(t.senderId) && !hiddenEventIds.has(t._id) && isValidAmount(t.amount, t.currency))
                 .slice(0, 3).map(t => ({ type: 'transfer', data: t, date: new Date(t.date) })));
         }
-        if (realActivitySettings.planPurchases && isInvestmentEnabled) {
+        if (realActivitySettings.planPurchases) {
             realSources.push(...transactions
                 .filter(t => t.type === 'Plan Purchase' && t.status === 'Approved' && !excludedUserIds.has(t.userId) && !hiddenEventIds.has(t._id) && isValidAmount(Math.abs(t.amount), t.currency))
                 .slice(0, 3).map(t => ({ type: 'plan', data: t, date: new Date(t.date) })));
@@ -386,13 +386,7 @@ const UserLayout: React.FC = () => {
     
     if (contentSource === 'hybrid' || contentSource === 'demo_only') {
         const demoProfiles = settings.demoProfiles || [];
-        const demoTemplates = (settings.demoActivityTemplates || []).filter(t => {
-            if (!t.enabled) return false;
-            if (!isInvestmentEnabled && (t.type === 'plan' || t.type === 'commission' || (t.template && t.template.toLowerCase().includes('plan')))) {
-                return false;
-            }
-            return true;
-        });
+        const demoTemplates = (settings.demoActivityTemplates || []).filter(t => t.enabled);
 
         if (demoProfiles.length > 0 && demoTemplates.length > 0) {
             demoTemplates.forEach(template => {
@@ -455,16 +449,9 @@ const UserLayout: React.FC = () => {
         }
     }
     
-    const finalActivities = isInvestmentEnabled
-        ? activities
-        : activities.filter(a => {
-            const lower = (a.text || '').toLowerCase();
-            return !lower.includes('plan') && !lower.includes('commission') && !lower.includes('investment');
-        });
+    return activities.sort(() => Math.random() - 0.5);
 
-    return finalActivities.sort(() => Math.random() - 0.5);
-
-  }, [users, transactions, deposits, withdrawals, transfers, investmentPlans, settings, isInvestmentEnabled]);
+  }, [users, transactions, deposits, withdrawals, transfers, investmentPlans, settings]);
 
 
   const handleClosePopup = async () => {
@@ -635,7 +622,7 @@ const UserLayout: React.FC = () => {
         <UserHeader setSidebarOpen={setSidebarOpen} dashboardMode={dashboardMode} setDashboardMode={setDashboardMode} />
         
         {/* PERSISTENT NO-PLAN WARNING BANNER (Only in Investment Mode) */}
-        {isInvestmentEnabled && hasNoPlan && dashboardMode !== 'work_and_earn' && !location.pathname.includes('/work-and-earn') && !location.pathname.includes('/tasks') && (
+        {hasNoPlan && dashboardMode !== 'work_and_earn' && !location.pathname.includes('/work-and-earn') && !location.pathname.includes('/tasks') && (
           <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 px-4 shadow-lg flex flex-col sm:flex-row items-center justify-center gap-3 animate-fade-in relative z-40">
             <span className="flex items-center gap-2 font-bold text-sm">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>

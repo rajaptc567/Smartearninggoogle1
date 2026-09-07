@@ -322,10 +322,9 @@ const WithdrawFunds: React.FC = () => {
             state.userTaskSubmissions || [],
             state.users || [],
             state.investmentPlans || [],
-            settings.workAndEarnPayoutTierConfig,
-            canAccessInvestment
+            settings.workAndEarnPayoutTierConfig
         );
-    }, [currentUser, settings.workAndEarnWithdrawalRules, withdrawals, state.userTasks, state.userTaskSubmissions, state.users, state.investmentPlans, settings.workAndEarnPayoutTierConfig, canAccessInvestment]);
+    }, [currentUser, settings.workAndEarnWithdrawalRules, withdrawals, state.userTasks, state.userTaskSubmissions, state.users, state.investmentPlans, settings.workAndEarnPayoutTierConfig]);
 
     // Derived Data
     const withdrawalMethods = useMemo(() => {
@@ -355,10 +354,9 @@ const WithdrawFunds: React.FC = () => {
             settings.workAndEarnWithdrawalRules || [],
             state.investmentPlans || [],
             userWithdrawalCount,
-            exchangeRate,
-            canAccessInvestment
+            exchangeRate
         );
-    }, [currentUser, settings.workAndEarnPayoutTierConfig, settings.workAndEarnWithdrawalRules, state.investmentPlans, userWithdrawalCount, exchangeRate, canAccessInvestment]);
+    }, [currentUser, settings.workAndEarnPayoutTierConfig, settings.workAndEarnWithdrawalRules, state.investmentPlans, userWithdrawalCount, exchangeRate]);
 
     const activePlansInUserCurrency = useMemo(() => {
         if (!currentUser) return [];
