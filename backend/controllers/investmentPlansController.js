@@ -1,9 +1,19 @@
 
 import InvestmentPlan from '../models/InvestmentPlan.js';
 import Setting from '../models/Setting.js';
+import User from '../models/User.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 export const getInvestmentPlans = async (req, res) => {
     try {
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin) {
+            const settings = await Setting.getSettings();
+            const user = req.user ? await User.findById(req.user.id) : null;
+            if (!canUserAccessInvestmentModule(user, settings)) {
+                return res.status(200).json({ success: true, count: 0, data: [] });
+            }
+        }
         const plans = await InvestmentPlan.find();
         res.status(200).json({ success: true, count: plans.length, data: plans });
     } catch (err) {
@@ -13,6 +23,18 @@ export const getInvestmentPlans = async (req, res) => {
 
 export const getInvestmentPlan = async (req, res) => {
     try {
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.role === 'super_admin');
+        if (!isAdmin) {
+            const settings = await Setting.getSettings();
+            const user = req.user ? await User.findById(req.user.id) : null;
+            if (!canUserAccessInvestmentModule(user, settings)) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'The Investment Module is currently disabled.',
+                    code: 'INVESTMENT_MODULE_DISABLED'
+                });
+            }
+        }
         const plan = await InvestmentPlan.findById(req.params.id);
         if (!plan) {
             return res.status(404).json({ success: false, error: 'Investment plan not found' });

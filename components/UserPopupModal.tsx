@@ -3,10 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../hooks/useData';
 import { markNotificationPopupAsShown } from '../services/api';
 import { Notification } from '../types';
+import { canAccessInvestmentModule } from '../utils/investmentAccess';
 
 export const UserPopupModal: React.FC = () => {
     const { state, dispatch } = useData();
-    const { notifications, currentUser } = state;
+    const { notifications, currentUser, settings } = state;
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -28,10 +29,24 @@ export const UserPopupModal: React.FC = () => {
     useEffect(() => {
         // If on homepage or user is logged in
         const isHomepage = location.pathname === '/';
+        const isInvestmentEnabled = canAccessInvestmentModule(currentUser, settings);
         
         const eligiblePopups = notifications.filter(n => {
             if (!n.isPopup) return false;
             
+            // If investment is disabled for this user, completely suppress any investment popup
+            if (!isInvestmentEnabled) {
+                const combined = `${n.subject || ''} ${n.message || ''} ${n.actionButtonLink || ''} ${n.actionButtonText || ''}`.toLowerCase();
+                if (
+                    combined.includes('investment') ||
+                    combined.includes('plan') ||
+                    combined.includes('commission') ||
+                    combined.includes('/member/plans')
+                ) {
+                    return false;
+                }
+            }
+
             // Check target user or broadcast
             const isForUser = currentUser && String(n.userId) === String(currentUser._id);
             const isForGuestOrHomepage = isHomepage; // Broadcast or homepage popups

@@ -369,6 +369,19 @@ export const handlePostback = async (req, res) => {
             // ==========================================
             // P7: REVERSAL / CHARGEBACK SAFETY LOGIC
             // ==========================================
+            const existingReversal = await Transaction.findOne({
+                offerwallProvider: providerKey,
+                externalTransactionId: normalized.externalTxId,
+                type: 'Offerwall Reversal'
+            });
+
+            if (existingReversal) {
+                log.status = 'Duplicate';
+                log.errorMessage = 'Reversal already processed for this transaction';
+                try { await log.save(); } catch (_) {}
+                return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'ALREADY_REVERSED');
+            }
+
             const origTx = await Transaction.findOne({
                 offerwallProvider: providerKey,
                 externalTransactionId: normalized.externalTxId,
@@ -400,28 +413,49 @@ export const handlePostback = async (req, res) => {
             const balanceBefore = currentEarnings;
             const balanceAfter = updatedUser ? updatedUser.taskEarningsBalance : 0;
 
-            const tx = await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                currency: 'USD',
-                type: 'Offerwall Reversal',
-                amount: deductionAmount,
-                amountUSD: deductionAmount,
-                grossAmount: origTx?.grossAmount || grossUSD,
-                userRewardAmount: deductionAmount,
-                platformRevenueAmount: origTx?.platformRevenueAmount || 0,
-                balanceBefore,
-                balanceAfter,
-                idempotencyKey,
-                chargebackStatus,
-                reversalReferenceId: origTx?._id,
-                description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
-                status: 'Approved',
-                sourceWallet: 'TaskEarnings',
-                destinationWallet: 'External',
-                offerwallProvider: providerKey,
-                externalTransactionId: normalized.externalTxId
-            });
+            let tx;
+            try {
+                tx = await Transaction.create({
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Offerwall Reversal',
+                    amount: deductionAmount,
+                    amountUSD: deductionAmount,
+                    grossAmount: origTx?.grossAmount || grossUSD,
+                    userRewardAmount: deductionAmount,
+                    platformRevenueAmount: origTx?.platformRevenueAmount || 0,
+                    balanceBefore,
+                    balanceAfter,
+                    idempotencyKey,
+                    chargebackStatus,
+                    reversalReferenceId: origTx?._id,
+                    description: `Offerwall Chargeback/Reversal: ${provider.name} (${normalized.offerName})`,
+                    status: 'Approved',
+                    sourceWallet: 'TaskEarnings',
+                    destinationWallet: 'External',
+                    offerwallProvider: providerKey,
+                    externalTransactionId: normalized.externalTxId
+                });
+            } catch (txErr) {
+                await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: deductionToApply,
+                        taskWalletBalance: deductionToApply,
+                        chargebackLiabilityUSD: -liabilityToAdd
+                    }
+                });
+                if (txErr.code === 11000) {
+                    log.status = 'Duplicate';
+                    log.errorMessage = 'Duplicate reversal key caught by database constraint';
+                    try { await log.save(); } catch (_) {}
+                    return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
+                }
+                log.status = 'Failed';
+                log.errorMessage = txErr.message || 'Reversal transaction creation failed';
+                try { await log.save(); } catch (_) {}
+                return res.status(500).send('REVERSAL_CREATION_FAILED');
+            }
 
             // Update Provider metrics atomically
             await OfferwallProvider.findByIdAndUpdate(provider._id, {
@@ -498,20 +532,24 @@ export const handlePostback = async (req, res) => {
                     externalTransactionId: normalized.externalTxId
                 });
             } catch (txErr) {
-                // Handle duplicate key error 11000 gracefully (P5)
+                // Roll back user balance increment on any error
+                await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: -userRewardUSD,
+                        taskWalletBalance: -userRewardUSD
+                    }
+                });
+
                 if (txErr.code === 11000) {
-                    await User.findByIdAndUpdate(user._id, {
-                        $inc: {
-                            taskEarningsBalance: -userRewardUSD,
-                            taskWalletBalance: -userRewardUSD
-                        }
-                    });
                     log.status = 'Duplicate';
                     log.errorMessage = 'Duplicate transaction key caught by database constraint';
                     try { await log.save(); } catch (_) {}
                     return res.status(200).send(providerKey === 'cpx_research' || providerKey === 'torox' ? '1' : 'DUP_ALREADY_PROCESSED');
                 }
-                throw txErr;
+                log.status = 'Failed';
+                log.errorMessage = txErr.message || 'Transaction creation failed';
+                try { await log.save(); } catch (_) {}
+                return res.status(500).send('TRANSACTION_CREATION_FAILED');
             }
 
             // Update Provider metrics atomically

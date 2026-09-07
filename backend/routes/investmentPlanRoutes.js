@@ -1,6 +1,7 @@
 
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
+import { requireInvestmentAccess } from '../utils/investmentAccess.js';
 import {
     getInvestmentPlans,
     getInvestmentPlan,
@@ -13,12 +14,12 @@ const router = express.Router();
 
 router
     .route('/')
-    .get(getInvestmentPlans) // Public view for homepage
+    .get(getInvestmentPlans) // Handled inside controller to gracefully return empty array when disabled
     .post(authorize(['admin']), createInvestmentPlan);
 
 router
     .route('/:id')
-    .get(getInvestmentPlan)
+    .get(requireInvestmentAccess, getInvestmentPlan)
     .put(authorize(['admin']), updateInvestmentPlan)
     .delete(authorize(['admin']), deleteInvestmentPlan);
 

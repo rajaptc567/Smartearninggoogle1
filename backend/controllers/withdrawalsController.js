@@ -199,25 +199,47 @@ export const createWithdrawal = async (req, res) => {
             balanceBefore,
             balanceAfter
         };
-        const withdrawal = await Withdrawal.create(withdrawalData);
-        
-        const transaction = await Transaction.create({
-            userId: user._id,
-            userName: user.username,
-            currency: user.currency,
-            type: 'Withdrawal Request',
-            amount: -withdrawal.amount,
-            status: 'Pending',
-            withdrawalId: withdrawal._id,
-            sourceWallet,
-            destinationWallet: 'External',
-            balanceBefore,
-            balanceAfter,
-            description: `Pending Withdrawal #${withdrawal._id} (${sourceWallet})`
-        });
+        let withdrawal;
+        let transaction;
+        try {
+            withdrawal = await Withdrawal.create(withdrawalData);
+            
+            transaction = await Transaction.create({
+                userId: user._id,
+                userName: user.username,
+                currency: user.currency,
+                type: 'Withdrawal Request',
+                amount: -withdrawal.amount,
+                status: 'Pending',
+                withdrawalId: withdrawal._id,
+                sourceWallet,
+                destinationWallet: 'External',
+                balanceBefore,
+                balanceAfter,
+                description: `Pending Withdrawal #${withdrawal._id} (${sourceWallet})`
+            });
 
-        withdrawal.relatedTransactionId = transaction._id;
-        await withdrawal.save();
+            withdrawal.relatedTransactionId = transaction._id;
+            await withdrawal.save();
+        } catch (dbErr) {
+            // Atomic rollback of debited balance
+            if (isHub) {
+                await User.findByIdAndUpdate(user._id, {
+                    $inc: {
+                        taskEarningsBalance: sourceAmount,
+                        taskWalletBalance: sourceAmount
+                    }
+                });
+            } else {
+                await User.findByIdAndUpdate(user._id, {
+                    $inc: { walletBalance: req.body.amount }
+                });
+            }
+            if (withdrawal?._id) {
+                try { await Withdrawal.findByIdAndDelete(withdrawal._id); } catch (_) {}
+            }
+            throw dbErr;
+        }
 
         await Notification.create({
             userId: user._id,
@@ -320,6 +342,16 @@ export const updateWithdrawal = async (req, res) => {
             if (!updatedWithdrawal) {
                 const currentW = await Withdrawal.findById(req.params.id);
                 return res.status(200).json({ success: true, data: { withdrawal: currentW, user, message: 'Withdrawal already processed.' } });
+            }
+
+            const existingRefund = await Transaction.findOne({
+                userId: user._id,
+                type: 'Withdrawal Refund',
+                withdrawalId: withdrawal._id
+            });
+
+            if (existingRefund) {
+                return res.status(200).json({ success: true, data: { withdrawal: updatedWithdrawal, user, message: 'Refund already processed.' } });
             }
 
             let refundedWallet = 'Investment';

@@ -2,6 +2,7 @@
 import express from 'express';
 import { authorize } from '../middleware/authMiddleware.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
+import { requireInvestmentAccess } from '../utils/investmentAccess.js';
 import {
     getUsers,
     getUser,
@@ -46,7 +47,7 @@ router.route('/')
     .post(authLimiter, createUser); // Registration protection
 
 // User-Specific actions
-router.post('/:id/purchase-plan', authorize(['user', 'admin']), purchasePlan);
+router.post('/:id/purchase-plan', authorize(['user', 'admin']), requireInvestmentAccess, purchasePlan);
 
 // Admin-Only actions
 router.post('/send-custom-message', authorize(['admin']), sendCustomAdminMessage);

@@ -2,6 +2,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
+import { requireInvestmentAccess } from '../utils/investmentAccess.js';
 import {
     getTasks,
     createTask,
@@ -21,7 +22,7 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(authorize(['user', 'admin']), getTasks)
+    .get(authorize(['user', 'admin']), requireInvestmentAccess, getTasks)
     .post(authorize(['admin']), createTask);
 
 router.get('/pending-verifications', authorize(['admin']), getPendingVerifications);
@@ -31,6 +32,6 @@ router.route('/:id')
     .put(authorize(['admin']), updateTask)
     .delete(authorize(['admin']), deleteTask);
 
-router.post('/:id/complete', upload.single('proof'), authorize(['user', 'admin']), completeTask);
+router.post('/:id/complete', upload.single('proof'), authorize(['user', 'admin']), requireInvestmentAccess, completeTask);
 
 export default router;

@@ -65,6 +65,7 @@ import {
     deleteUserTask, 
     openTaskDispute 
 } from '../../services/api';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 
 interface JobGig {
     id: string;
@@ -267,6 +268,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     const { state, dispatch } = useData();
     const { currentUser, userTasks = [], userTaskSubmissions = [], tasks = [], transactions = [], deposits = [], withdrawals = [] } = state;
     const navigate = useNavigate();
+    const isInvestmentEnabled = canAccessInvestmentModule(currentUser, state.settings);
 
     // Primary Tabs
     const [dashboardTab, setDashboardTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
@@ -885,17 +887,19 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             }
 
             if (isInvestmentTransfer) {
-                items.push({
-                    id: 'trx_inv_' + t._id,
-                    date: t.date || new Date().toISOString(),
-                    purpose: 'campaign_transfers',
-                    purposeLabel: 'Campaign Fund Transfer (Investment)',
-                    title: 'Investment Wallet → Campaign Fund',
-                    description: t.description || 'Investment Module funds transferred to Campaign Wallet',
-                    amountUSD: amtUSD,
-                    type: 'debit',
-                    status: t.status || 'Approved'
-                });
+                if (isInvestmentEnabled) {
+                    items.push({
+                        id: 'trx_inv_' + t._id,
+                        date: t.date || new Date().toISOString(),
+                        purpose: 'campaign_transfers',
+                        purposeLabel: 'Campaign Fund Transfer (Investment)',
+                        title: 'Investment Wallet → Campaign Fund',
+                        description: t.description || 'Investment Module funds transferred to Campaign Wallet',
+                        amountUSD: amtUSD,
+                        type: 'debit',
+                        status: t.status || 'Approved'
+                    });
+                }
             } else if (isCampaignTransfer) {
                 items.push({
                     id: 'trx_cmp_' + t._id,
@@ -1559,7 +1563,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                                     <span className="text-slate-400">Advertiser Wallet</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-slate-400">Deposits / Investments In:</span>
+                                    <span className="text-slate-400">{isInvestmentEnabled ? 'Deposits / Investments In:' : 'Deposits In:'}</span>
                                     <span className="font-bold text-blue-300 font-mono">${(investmentTransferSumUSD + totalHubDepositsUSD).toFixed(2)} USD</span>
                                 </div>
                                 <div className="flex justify-between items-center">

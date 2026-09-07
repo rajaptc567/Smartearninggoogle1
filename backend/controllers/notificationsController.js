@@ -1,7 +1,9 @@
 
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import { sendAutomatedMessage } from '../utils/automation.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 // @desc    Get notifications scoped by user role
 // @route   GET /api/v1/notifications
@@ -14,7 +16,31 @@ export const getNotifications = async (req, res) => {
             return res.status(200).json({ success: true, count: 0, data: [] });
         }
 
-        const notifications = await Notification.find(query).sort({ date: -1 });
+        let notifications = await Notification.find(query).sort({ date: -1 });
+
+        if (!isAdmin && req.user?.id) {
+            const settings = await Setting.getSettings();
+            const user = await User.findById(req.user.id);
+            if (!canUserAccessInvestmentModule(user, settings)) {
+                notifications = notifications.filter(n => {
+                    const text = `${n.title || ''} ${n.message || ''} ${n.subject || ''} ${n.type || ''}`.toLowerCase();
+                    const link = (n.actionButtonLink || '').toLowerCase();
+                    if (link.includes('/member/plans') || link.includes('/member/active-plans') || link.includes('/member/tasks')) {
+                        return false;
+                    }
+                    return !(
+                        text.includes('investment plan') ||
+                        text.includes('buy a plan') ||
+                        text.includes('active plan') ||
+                        text.includes('plan purchase') ||
+                        text.includes('plan expired') ||
+                        text.includes('commission earned') ||
+                        text.includes('sponsor commission')
+                    );
+                });
+            }
+        }
+
         res.status(200).json({ success: true, count: notifications.length, data: notifications });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });

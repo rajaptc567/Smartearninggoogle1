@@ -47,7 +47,8 @@ export const evaluateWithdrawalRules = (
     userTaskSubmissions: UserTaskSubmission[] = [],
     allUsers: User[] = [],
     investmentPlans: InvestmentPlan[] = [],
-    payoutConfig?: WorkAndEarnPayoutTierConfig
+    payoutConfig?: WorkAndEarnPayoutTierConfig,
+    isInvestmentEnabled: boolean = true
 ): RuleEvaluationResult => {
     const logs: RuleEvaluationLog[] = [];
     const activeRules = (rules && rules.length > 0 ? rules : DEFAULT_WITHDRAWAL_RULES)
@@ -98,7 +99,7 @@ export const evaluateWithdrawalRules = (
         return true;
     });
 
-    if (payoutConfig && payoutConfig.enabled && payoutConfig.planBasedAmountLimitsEnabled && payoutConfig.requireActivePlanToWithdraw) {
+    if (isInvestmentEnabled && payoutConfig && payoutConfig.enabled && payoutConfig.planBasedAmountLimitsEnabled && payoutConfig.requireActivePlanToWithdraw) {
         const userHasAnyActivePlan = userActivePlans.length > 0 || ((user as any).activeInvestmentPlans && (user as any).activeInvestmentPlans.length > 0) || Boolean(user.activePlan);
         if (!userHasAnyActivePlan) {
             return {
@@ -194,7 +195,7 @@ export const evaluateWithdrawalRules = (
         let failReason = '';
         const rc = rule.requirementConfig || {};
 
-        if (rule.ruleType === 'investment_plan_requirement' || rc.requireActiveInvestmentPlan) {
+        if (isInvestmentEnabled && (rule.ruleType === 'investment_plan_requirement' || rc.requireActiveInvestmentPlan)) {
             if (userActivePlans.length === 0) {
                 requirementMet = false;
                 failReason = 'No active Investment Plan found on account.';
@@ -330,7 +331,8 @@ export const getPayoutOptionsForUser = (
     rules: WorkAndEarnWithdrawalRule[] = [],
     investmentPlans: InvestmentPlan[] = [],
     userWithdrawalCount: number = 0,
-    exchangeRate: number = 1
+    exchangeRate: number = 1,
+    isInvestmentEnabled: boolean = true
 ): PayoutOptionItem[] => {
     const config = payoutConfig && payoutConfig.enabled ? payoutConfig : DEFAULT_PAYOUT_TIER_CONFIG;
     if (!config.enabled) return [];
@@ -395,12 +397,12 @@ export const getPayoutOptionsForUser = (
     );
 
     const userHasActivePlan = runningActivePlansInUserCurrency.length > 0 || userRunningPlanIds.size > 0 || userRunningPlanNames.size > 0;
-    const requiresActivePlan = config.requireActivePlanToWithdraw === true && !userHasActivePlan;
+    const requiresActivePlan = isInvestmentEnabled && config.requireActivePlanToWithdraw === true && !userHasActivePlan;
 
     const isRunningPlanOnlyMode = config.mode === 'running_plan_only' || config.onlyShowRunningPlanAmount === true;
 
     // 1. MODE: Running Investment Plan Amount Only OR Plan-Based Amount Limits
-    if (isRunningPlanOnlyMode || config.planBasedAmountLimitsEnabled) {
+    if (isInvestmentEnabled && (isRunningPlanOnlyMode || config.planBasedAmountLimitsEnabled)) {
         const targetPlans = activePlansInUserCurrency.length > 0 
             ? activePlansInUserCurrency 
             : investmentPlans.filter(p => p.status === 'Active' || (p.status as any) === 'Active' || (p as any).enabled !== false);
@@ -433,7 +435,7 @@ export const getPayoutOptionsForUser = (
     } 
     // 4. MODE: Milestones Choice / Hybrid
     else {
-        if (config.mountInvestmentPlans) {
+        if (isInvestmentEnabled && config.mountInvestmentPlans) {
             activePlansInUserCurrency.forEach(plan => {
                 const isRunning = runningActivePlansInUserCurrency.some(rp => rp._id === plan._id);
                 options.push(buildPlanOption(plan, isRunning, false));

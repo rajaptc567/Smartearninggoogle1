@@ -277,13 +277,13 @@ const DepositFunds: React.FC = () => {
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const planPrices = useMemo(() => {
-        if (!currentUser) return [];
+        if (!currentUser || !canAccessInvestment) return [];
         return investmentPlans
             .filter(p => p.status === Status.Active && p.currency === currentUser.currency)
             .map(p => p.price)
             .sort((a, b) => a - b)
             .filter((value, index, self) => self.indexOf(value) === index);
-    }, [investmentPlans, currentUser]);
+    }, [investmentPlans, currentUser, canAccessInvestment]);
 
     const availableMethods = useMemo(() => {
         if (!currentUser) return [];

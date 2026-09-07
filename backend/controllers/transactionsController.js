@@ -1,10 +1,12 @@
 
 import Transaction from '../models/Transaction.js';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import UserTaskSubmission from '../models/UserTaskSubmission.js';
 import Deposit from '../models/Deposit.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Transfer from '../models/Transfer.js';
+import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 
 export const getTransactions = async (req, res) => {
     try {
@@ -13,6 +15,15 @@ export const getTransactions = async (req, res) => {
 
         if (!isAdmin && req.user) {
             query = { userId: req.user.id };
+            const settings = await Setting.getSettings();
+            const user = await User.findById(req.user.id);
+            if (!canUserAccessInvestmentModule(user, settings)) {
+                query.$and = [
+                    { type: { $nin: ['Plan Purchase', 'Commission', 'Investment To Task Wallet Transfer', 'Task Earnings to Main Transfer', 'Daily Return', 'Investment Return', 'Plan Return'] } },
+                    { relatedPlanId: { $exists: false } },
+                    { description: { $not: { $regex: /investment|plan purchase|subscribed to/i } } }
+                ];
+            }
         } else if (!isAdmin) {
             // Unauthenticated requests get nothing
             return res.status(200).json({ success: true, count: 0, data: [] });

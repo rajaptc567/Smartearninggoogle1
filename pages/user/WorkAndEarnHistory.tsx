@@ -28,6 +28,7 @@ import { formatCurrency } from '../../types';
 import { openTaskDispute } from '../../services/api';
 import { getRemainingTimeString, renderDisputeStageBadge, renderDisputeTimerBox } from './UserTasksSubmit';
 import { DisputeTimeline } from '../../components/DisputeTimeline';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 
 export type FilterTab = 'all' | 'campaign_purchases' | 'wallet_transfers' | 'task_rewards' | 'conversions' | 'deposits_withdrawals' | 'refunds';
 
@@ -151,6 +152,7 @@ const WorkAndEarnHistory: React.FC = () => {
         const list: HistoryUnifiedItem[] = [];
         const userIdStr = currentUser._id?.toString();
         const addedTrxIds = new Set<string>();
+        const isInvestmentEnabled = canAccessInvestmentModule(currentUser, settings);
 
         // 1. Campaign Creations / Purchases (from userTasks created by user)
         (userTasks || [])
@@ -256,6 +258,10 @@ const WorkAndEarnHistory: React.FC = () => {
                     title = 'Returned Campaign Funds to Main Balance';
                     subTitle = t.description || `Transferred $${transferUSD.toFixed(2)} USD from Campaign Wallet to Main Account`;
                     transferSource = 'campaign_to_main';
+                }
+
+                if (!isInvestmentEnabled && transferSource === 'investment') {
+                    return;
                 }
 
                 list.push({

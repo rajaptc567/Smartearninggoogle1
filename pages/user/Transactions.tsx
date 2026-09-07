@@ -6,8 +6,9 @@ import { Status, Transaction, formatCurrency } from '../../types';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { LoadingCircle } from '../../components/ui/LoadingCircle';
+import { canAccessInvestmentModule } from '../../utils/investmentAccess';
 
-const transactionTypes = [
+const allTransactionTypes = [
     'Deposit', 'Withdrawal', 'Commission', 'Manual Credit', 'Manual Debit', 
     'Withdrawal Request', 'Withdrawal Refund', 'Plan Purchase', 'Transfer Sent', 
     'Transfer Received', 'Transfer Request', 'Transfer Refund'
@@ -15,7 +16,7 @@ const transactionTypes = [
 
 const Transactions: React.FC = () => {
     const { state } = useData();
-    const { currentUser, transactions } = state;
+    const { currentUser, transactions, settings } = state;
 
     // Filter State
     const [typeFilter, setTypeFilter] = useState('');
@@ -27,6 +28,14 @@ const Transactions: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
     const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
+
+    const isInvestmentEnabled = useMemo(() => {
+        return canAccessInvestmentModule(currentUser, settings);
+    }, [currentUser, settings]);
+
+    const transactionTypes = useMemo(() => {
+        return allTransactionTypes.filter(t => isInvestmentEnabled || (t !== 'Commission' && t !== 'Plan Purchase'));
+    }, [isInvestmentEnabled]);
     
     if (!currentUser) {
         return (
@@ -40,6 +49,11 @@ const Transactions: React.FC = () => {
         return transactions
             .filter(t => t.userId === currentUser._id)
             .filter(t => {
+                if (!isInvestmentEnabled) {
+                    if (t.type === 'Plan Purchase' || t.type === 'Commission' || t.type === 'Investment To Task Wallet Transfer') {
+                        return false;
+                    }
+                }
                 if (typeFilter && t.type !== typeFilter) return false;
                 
                 // MASKING: Logic for filtering by status needs to handle 'Matching' being hidden
@@ -58,7 +72,7 @@ const Transactions: React.FC = () => {
                 return true;
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [transactions, currentUser._id, typeFilter, statusFilter, dateFrom, dateTo]);
+    }, [transactions, currentUser._id, typeFilter, statusFilter, dateFrom, dateTo, isInvestmentEnabled]);
 
     // Reset to first page when filters change
     useEffect(() => {
