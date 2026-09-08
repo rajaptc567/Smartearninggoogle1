@@ -13,12 +13,12 @@ export const SocialMediaTasks: React.FC = () => {
       a: 'Social and content engagement micro-tasks involve interacting with digital content created by independent advertisers. Typical tasks include discovering creator content, participating in community discussions, exploring channels, or sharing feedback to help businesses increase reach, subject to applicable platform terms and campaign rules.'
     },
     {
-      q: 'What proof is required for social media tasks?',
-      a: 'Proof usually consists of your exact social media username/handle used during the task and an uncropped screenshot showing the completed action (such as the "Following", "Subscribed", or "Liked" button active).'
+      q: 'What proof is required for social and content engagement tasks?',
+      a: 'Proof usually consists of your exact platform username/handle used during the task and an uncropped screenshot showing the completed engagement action (such as active participation, discussion contribution, or confirmation screen).'
     },
     {
-      q: 'Why do social media task submissions get rejected?',
-      a: 'The most common reasons are unfollowing/unsubscribing immediately after submission, submitting private or unidentifiable handles, uploading blurry or outdated screenshots, or failing to meet account maturity requirements specified by the advertiser.'
+      q: 'Why do social and content engagement submissions get rejected?',
+      a: 'The most common reasons are retracting interactions immediately after submission, submitting private or unidentifiable handles, uploading blurry or outdated screenshots, or failing to meet account maturity requirements specified by the advertiser.'
     },
     {
       q: 'Are social media tasks available at all times?',
@@ -33,8 +33,8 @@ export const SocialMediaTasks: React.FC = () => {
         "@type": "WebPage",
         "@id": "https://smartexn.com/micro-tasks/social-media-tasks#webpage",
         "url": "https://smartexn.com/micro-tasks/social-media-tasks",
-        "name": "Social Media Micro-Tasks: Engagement, Subscriptions & Proof Guidelines | SmartExn",
-        "description": "Learn how social media micro-tasks work on SmartExn. Understand requirements for channel follows, video views, likes, valid proof submission, and avoiding rejection.",
+        "name": "Social & Content Engagement Micro-Tasks: Discovery, Community & Proof Guidelines | SmartExn",
+        "description": "Learn how social and content engagement micro-tasks work on SmartExn. Understand requirements for content discovery, community discussions, valid proof submission, and avoiding rejection.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -61,7 +61,7 @@ export const SocialMediaTasks: React.FC = () => {
           {
             "@type": "ListItem",
             "position": 3,
-            "name": "Social Media Tasks",
+            "name": "Social & Content Engagement Tasks",
             "item": "https://smartexn.com/micro-tasks/social-media-tasks"
           }
         ]
@@ -84,8 +84,8 @@ export const SocialMediaTasks: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
       <SEOHead
-        title="Social Media Micro-Tasks: Engagement, Subscriptions & Proof Guidelines | SmartExn"
-        description="Learn how social media micro-tasks work on SmartExn. Understand requirements for channel follows, video views, likes, valid proof submission, and avoiding rejection."
+        title="Social & Content Engagement Micro-Tasks: Discovery, Community & Proof Guidelines | SmartExn"
+        description="Learn how social and content engagement micro-tasks work on SmartExn. Understand requirements for content discovery, community discussions, valid proof submission, and avoiding rejection."
         canonicalUrl="https://smartexn.com/micro-tasks/social-media-tasks"
         schema={schemaData}
       />
@@ -98,7 +98,7 @@ export const SocialMediaTasks: React.FC = () => {
           <span>/</span>
           <Link to="/micro-tasks" className="hover:text-sky-400 transition-colors">Micro-Tasks</Link>
           <span>/</span>
-          <span className="text-sky-400 font-medium">Social Media Tasks</span>
+          <span className="text-sky-400 font-medium">Social & Content Engagement Tasks</span>
         </div>
       </div>
 
@@ -163,7 +163,7 @@ export const SocialMediaTasks: React.FC = () => {
               </div>
               <h3 className="text-base font-semibold text-white">Capture Clean Proof</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Take an unedited screenshot clearly showing your active follow state, timestamp, and account handle.
+                Take an unedited screenshot clearly showing your active participation, timestamp, and account handle.
               </p>
             </div>
 
@@ -191,7 +191,7 @@ export const SocialMediaTasks: React.FC = () => {
             </li>
             <li className="flex items-start gap-3">
               <span className="text-emerald-400 font-bold">✓</span>
-              <span><strong>Maintain active status:</strong> Do not unfollow or delete interactions post-submission. Advertisers conduct routine audits and may flag accounts that immediately retract actions.</span>
+              <span><strong>Maintain active status:</strong> Do not retract interactions or delete contributions post-submission. Advertisers conduct routine audits and may flag accounts that immediately retract actions.</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="text-rose-400 font-bold">✗</span>

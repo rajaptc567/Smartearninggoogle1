@@ -13,8 +13,8 @@ export const SocialMediaCampaigns: React.FC = () => {
       a: 'Advertisers can launch campaigns for authentic content discovery and community engagement across YouTube, X (Twitter), Instagram, TikTok, Facebook, LinkedIn, Discord, and Telegram—including content discovery, discussion participation, channel exploration, and community feedback, subject to applicable platform terms and campaign rules.'
     },
     {
-      q: 'How does SmartExn prevent bot or fake engagement?',
-      a: 'SmartExn employs multi-layer verification: workers must submit uncropped visual proof and registered handles, and all submissions are subject to advertiser review before escrow release. Suspicious activity triggers automated bot-filter flags.'
+      q: 'How does SmartExn ensure authentic human participation and prevent automated bots?',
+      a: 'SmartExn employs multi-layer verification: workers must submit uncropped visual proof and registered handles, and all submissions are subject to advertiser review before escrow release. Automated bot tools and synthetic scripts are strictly filtered.'
     },
     {
       q: 'How does campaign budget and escrow work for advertisers?',
@@ -33,8 +33,8 @@ export const SocialMediaCampaigns: React.FC = () => {
         "@type": "WebPage",
         "@id": "https://smartexn.com/advertise/social-media-campaigns#webpage",
         "url": "https://smartexn.com/advertise/social-media-campaigns",
-        "name": "Social Media Marketing Campaigns: Crowdsourced Engagement | SmartExn",
-        "description": "Deploy targeted crowdsourced social media engagement campaigns on SmartExn. Drive authentic community growth, brand reach, and verified social interactions.",
+        "name": "Social & Content Engagement Campaigns: Discovery & Audience Feedback | SmartExn",
+        "description": "Deploy targeted crowdsourced social and content engagement campaigns on SmartExn. Drive authentic content discovery, community participation, and verified feedback subject to platform terms.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -61,7 +61,7 @@ export const SocialMediaCampaigns: React.FC = () => {
           {
             "@type": "ListItem",
             "position": 3,
-            "name": "Social Media Campaigns",
+            "name": "Social & Content Engagement Campaigns",
             "item": "https://smartexn.com/advertise/social-media-campaigns"
           }
         ]
@@ -84,8 +84,8 @@ export const SocialMediaCampaigns: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
       <SEOHead
-        title="Social Media Marketing Campaigns: Crowdsourced Engagement | SmartExn"
-        description="Deploy targeted crowdsourced social media engagement campaigns on SmartExn. Drive authentic community growth, brand reach, and verified social interactions."
+        title="Social & Content Engagement Campaigns: Discovery & Audience Feedback | SmartExn"
+        description="Deploy targeted crowdsourced social and content engagement campaigns on SmartExn. Drive authentic content discovery, community participation, and verified feedback subject to platform terms."
         canonicalUrl="https://smartexn.com/advertise/social-media-campaigns"
         schema={schemaData}
       />
@@ -98,7 +98,7 @@ export const SocialMediaCampaigns: React.FC = () => {
           <span>/</span>
           <Link to="/advertise" className="hover:text-sky-400 transition-colors">For Advertisers</Link>
           <span>/</span>
-          <span className="text-sky-400 font-medium">Social Media Campaigns</span>
+          <span className="text-sky-400 font-medium">Social & Content Engagement Campaigns</span>
         </div>
       </div>
 

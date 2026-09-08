@@ -55,7 +55,7 @@ export const HowToCreateCampaign: React.FC = () => {
             "@type": "HowToStep",
             "position": 2,
             "name": "Select Task Category",
-            "text": "Choose from Social Engagement, Mobile App Feedback, Website Usability, or Custom Tasks."
+            "text": "Choose from Social & Content Engagement, App Testing & Feedback, Website Usability, or Custom Tasks."
           },
           {
             "@type": "HowToStep",
@@ -143,12 +143,12 @@ export const HowToCreateCampaign: React.FC = () => {
     {
       step: '03',
       title: 'Select Task Category & Type',
-      desc: 'Choose from Social Engagement, Mobile App Feedback, Website Usability, Survey Research, or Custom Digital Tasks.'
+      desc: 'Choose from Social & Content Engagement, App Testing & Feedback, Website Usability, Survey Research, or Custom Digital Tasks.'
     },
     {
       step: '04',
       title: 'Define Step-by-Step Requirements',
-      desc: 'Write clear, numbered instructions outlining exactly what actions workers must perform (e.g. download app, reach specific screen, copy link).'
+      desc: 'Write clear, numbered instructions outlining exactly what actions workers must perform (e.g. test usability features, evaluate onboarding flows, or explore content subject to platform terms).'
     },
     {
       step: '05',

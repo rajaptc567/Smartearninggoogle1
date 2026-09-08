@@ -22,15 +22,15 @@ const relatedCampaignGuides: GuideItem[] = [
     tag: 'Overview'
   },
   {
-    title: 'Mobile App Testing & QA Campaigns',
-    description: 'Collect real-device feedback, bug reports, and UX reviews across global device ecosystems.',
+    title: 'App Testing & Feedback Campaigns',
+    description: 'Collect real-device usability testing, bug reporting, and UX feedback across global device ecosystems.',
     to: '/advertise/app-testing-campaigns',
     category: 'Advertisers',
     tag: 'App Testing'
   },
   {
-    title: 'Social Media Engagement Campaigns',
-    description: 'Scale authentic channel subscriptions, community growth, and verified post engagement.',
+    title: 'Social & Content Engagement Campaigns',
+    description: 'Support authentic content discovery, community participation, and verified campaign feedback.',
     to: '/advertise/social-media-campaigns',
     category: 'Advertisers',
     tag: 'Social'
@@ -60,7 +60,7 @@ export const Campaigns: React.FC = () => {
         "@id": "https://smartexn.com/campaigns#webpage",
         "url": "https://smartexn.com/campaigns",
         "name": "Crowdsourced Micro-Task Campaigns | SmartExn",
-        "description": "Launch crowdsourced micro-task campaigns on SmartExn. Connect with a global workforce for social engagement, app testing, website testing, and digital tasks.",
+        "description": "Launch crowdsourced micro-task campaigns on SmartExn. Connect with a global workforce for social & content engagement, app testing & feedback, website testing, and digital tasks.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -114,12 +114,12 @@ export const Campaigns: React.FC = () => {
 
   const categories = [
     {
-      title: "Social Media Tasks",
-      desc: "Channel subscriptions, page follows, post likes, genuine comments, and community group joins on major networks."
+      title: "Social & Content Engagement",
+      desc: "Content discovery, community discussions, channel exploration, and audience feedback subject to applicable platform terms."
     },
     {
       title: "App Testing & Feedback",
-      desc: "Mobile app installations, usability testing across diverse smartphone models, onboarding evaluations, and store feedback."
+      desc: "Mobile app installations, usability testing across diverse devices, bug reporting, UX feedback, feature testing, and gameplay testing."
     },
     {
       title: "Website Testing & Navigation",
@@ -147,7 +147,7 @@ export const Campaigns: React.FC = () => {
     <div className="min-h-screen bg-[#061325] text-slate-100 flex flex-col font-sans selection:bg-sky-500 selection:text-white">
       <SEOHead
         title="Crowdsourced Micro-Task Campaigns | SmartExn"
-        description="Launch crowdsourced micro-task campaigns on SmartExn. Connect with a global workforce for social engagement, app testing, website testing, and digital tasks."
+        description="Launch crowdsourced micro-task campaigns on SmartExn. Connect with a global workforce for social & content engagement, app testing & feedback, website testing, and digital tasks."
         canonical="https://smartexn.com/campaigns"
         robots="index, follow"
         schemaJson={schemaData}
@@ -173,7 +173,7 @@ export const Campaigns: React.FC = () => {
             </h1>
 
             <p className="text-slate-300 text-base sm:text-xl max-w-3xl mx-auto leading-relaxed">
-              Scale your online presence, test applications across real devices, and gather authentic digital engagement with thousands of verified independent task workers.
+              Scale your online presence, test applications across real devices, and gather authentic digital engagement with verified independent task workers from our growing community.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
