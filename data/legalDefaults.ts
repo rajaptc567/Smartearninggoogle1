@@ -25,7 +25,7 @@ SmartExn utilizes essential cookies and session tokens to preserve authenticatio
 
 6. Support Contacts
 For questions regarding this Privacy Policy or your personal data rights:
-- Support Email: support@smartexn.com
+- Support Email: smartexn.com@gmail.com
 - Knowledge Base: https://smartexn.com/faqs`;
 
 export const defaultRefundPolicyTitle = "Refund & Escrow Policy";
@@ -46,7 +46,7 @@ SmartExn provides guaranteed escrow protection for advertisers and campaign crea
 
 4. Contact & Dispute Desk
 If you have any questions regarding campaign escrow, refunds, or payment processing:
-- Support Email: support@smartexn.com
+- Support Email: smartexn.com@gmail.com
 - Helpdesk: https://smartexn.com/faqs`;
 
 export const defaultTermsOfUseTitle = "Terms of Use";
@@ -76,7 +76,7 @@ SmartExn and its operators shall not be liable for any indirect, incidental, or 
 
 7. Inquiries & Support
 For clarification regarding these Terms of Use:
-- Support Email: support@smartexn.com
+- Support Email: smartexn.com@gmail.com
 - Knowledge Base: https://smartexn.com/faqs`;
 
 export const defaultCookiePolicyTitle = "Cookie Policy";
@@ -98,8 +98,8 @@ export const defaultContactUsContent = `1. SmartExn Support Desk
 We are committed to providing reliable assistance to our global community of task workers and campaign creators.
 
 2. Official Channels
-- General & Worker Support: support@smartexn.com
-- Campaign & Business Inquiries: support@smartexn.com
+- General & Worker Support: smartexn.com@gmail.com
+- Campaign & Business Inquiries: smartexn.com@gmail.com
 - FAQ & Knowledge Base: https://smartexn.com/faqs
 - WhatsApp Support Widget: Available on the main website pages.
 
@@ -169,4 +169,4 @@ Please include:
 - A statement of good faith belief that the disputed use is unauthorized.
 
 3. Contact
-Submit all intellectual property inquiries to: support@smartexn.com.`;
+Submit all intellectual property inquiries to: smartexn.com@gmail.com.`;

@@ -9,8 +9,8 @@ export const SocialMediaTasks: React.FC = () => {
 
   const faqs = [
     {
-      q: 'What are social media micro-tasks on SmartExn?',
-      a: 'Social media micro-tasks involve engaging with digital content created by independent advertisers. Typical tasks include following official social profiles, subscribing to channels, liking publications, watching videos, or sharing content to help businesses increase reach.'
+      q: 'What are social and content engagement micro-tasks on SmartExn?',
+      a: 'Social and content engagement micro-tasks involve interacting with digital content created by independent advertisers. Typical tasks include discovering creator content, participating in community discussions, exploring channels, or sharing feedback to help businesses increase reach, subject to applicable platform terms and campaign rules.'
     },
     {
       q: 'What proof is required for social media tasks?',
@@ -111,23 +111,23 @@ export const SocialMediaTasks: React.FC = () => {
             <span>4 Min Read</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-            Social Media Micro-Tasks: Engagement, Follows & Proof Guidelines
+            Social & Content Engagement Micro-Tasks: Discovery, Community & Proof Guidelines
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            A comprehensive guide to understanding social engagement campaigns on SmartExn, including channel follows, content sharing, verification standards, and best practices to prevent task rejection.
+            A comprehensive guide to understanding social and content engagement campaigns on SmartExn, including content discovery, community participation, verification standards, and best practices to prevent task rejection.
           </p>
         </header>
 
         {/* Section 1: Overview */}
         <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-4">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            1. What Are Social Media Micro-Tasks?
+            1. What Are Social & Content Engagement Micro-Tasks?
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Content creators, digital publishers, and small businesses frequently launch crowdsourced promotional campaigns on SmartExn to amplify their organic reach. These advertisers specify clear actions—such as following an Instagram account, subscribing to a YouTube channel, liking a Facebook post, or joining a Telegram group.
+            Content creators, digital publishers, and small businesses frequently launch crowdsourced campaigns on SmartExn to amplify genuine reach and collect community feedback. Advertisers specify clear actions—such as exploring content, participating in discussion groups, or providing constructive feedback, subject to platform terms and campaign instructions.
           </p>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Every social media task is backed by upfront funds locked in SmartExn escrow. When you perform the requested interaction, submit verifiable proof, and obtain advertiser or automated approval, your task earnings are credited directly to your balance.
+            Every task is backed by upfront funds locked in SmartExn escrow. When you perform the requested interaction, submit verifiable proof, and obtain advertiser or automated approval, your task earnings are credited directly to your balance.
           </p>
         </section>
 
@@ -151,9 +151,9 @@ export const SocialMediaTasks: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 font-bold flex items-center justify-center text-sm">
                 2
               </div>
-              <h3 className="text-base font-semibold text-white">Execute the Social Action</h3>
+              <h3 className="text-base font-semibold text-white">Execute the Engagement Action</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Open the advertiser's official destination link and perform the requested interaction (e.g., Click Follow or Subscribe).
+                Open the advertiser's official destination link and perform the requested engagement or discovery action according to campaign rules.
               </p>
             </div>
 
@@ -196,6 +196,10 @@ export const SocialMediaTasks: React.FC = () => {
             <li className="flex items-start gap-3">
               <span className="text-rose-400 font-bold">✗</span>
               <span><strong>Avoid cropped or generic screenshots:</strong> Full-screen captures showing platform context and device status bar are significantly more likely to be approved.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-emerald-400 font-bold">✓</span>
+              <span><strong>Platform Terms Compliance:</strong> All actions must comply with applicable third-party platform rules and SmartExn community standards. Automated bot tools, synthetic click generators, and spamming violate platform policy.</span>
             </li>
           </ul>
         </section>

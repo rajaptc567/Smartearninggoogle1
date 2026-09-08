@@ -169,6 +169,10 @@ export const AppTestingTasks: React.FC = () => {
               <span className="text-rose-400 font-bold">✗</span>
               <span><strong>Do not use recycled images:</strong> Each submission is verified for uniqueness. Reusing images from previous campaigns will result in immediate rejection and account penalties.</span>
             </li>
+            <li className="flex items-start gap-3">
+              <span className="text-emerald-400 font-bold">✓</span>
+              <span><strong>Genuine Feedback Only:</strong> App testing tasks require authentic user experience feedback and bug reporting. Writing fraudulent, paid 5-star reviews or manipulating app store rating systems is strictly prohibited on SmartExn.</span>
+            </li>
           </ul>
         </section>
 

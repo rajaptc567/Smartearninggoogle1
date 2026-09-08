@@ -33,8 +33,8 @@ export const DataVerificationCampaigns: React.FC = () => {
         "@type": "WebPage",
         "@id": "https://smartexn.com/advertise/data-verification-campaigns#webpage",
         "url": "https://smartexn.com/advertise/data-verification-campaigns",
-        "name": "Crowdsourced Data Verification & Labeling Campaigns | SmartExn",
-        "description": "Outsource data cleansing, classification, image labeling, and directory validation to a distributed human workforce with escrow protection on SmartExn.",
+        "name": "Data & AI Tasks: Crowdsourced Verification & Annotation | SmartExn",
+        "description": "Outsource data cleansing, classification, AI response evaluation, image labeling, and directory validation to a distributed human workforce with escrow protection on SmartExn.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -110,10 +110,10 @@ export const DataVerificationCampaigns: React.FC = () => {
             <span>4 Min Read</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-            Crowdsourced Data Verification & Annotation: Scalable Human-in-the-Loop Operations
+            Data & AI Tasks: Verification, Annotation & Human-in-the-Loop Operations
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            Cleanse databases, categorize e-commerce catalogs, and annotate machine learning datasets with an on-demand, verified human workforce.
+            Cleanse databases, categorize e-commerce catalogs, evaluate AI model outputs, and annotate machine learning datasets with an on-demand, verified human workforce.
           </p>
         </header>
 

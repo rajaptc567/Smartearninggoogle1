@@ -217,7 +217,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
     },
     {
       q: "How do online micro-tasks and gigs work?",
-      a: "Workers browse available tasks, review clear step-by-step instructions, execute the required actions (such as social engagement, app feedback, or surveys), and submit verifiable proof. Once the campaign creator verifies the submission, rewards are credited."
+      a: "Workers browse available tasks, review clear step-by-step instructions, execute the required actions (such as social & content engagement, app feedback, or surveys), and submit verifiable proof. Once the campaign creator verifies the submission, rewards are credited."
     },
     {
       q: "How does Campaign Escrow protect workers and advertisers?",
@@ -781,10 +781,10 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                 👍
               </div>
               <h3 className="font-bold text-white text-lg mb-2">
-                {sc.opp2Title || "Social Media Engagement"}
+                {sc.opp2Title || "Social & Content Engagement"}
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {sc.opp2Desc || "Follow YouTube channels, like posts, engage with TikTok videos, and promote verified creator campaigns."}
+                {sc.opp2Desc || "Discover creator content, participate in community discussions, explore channels, and submit feedback subject to platform terms."}
               </p>
             </div>
 
@@ -794,10 +794,10 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                 📱
               </div>
               <h3 className="font-bold text-white text-lg mb-2">
-                {sc.opp3Title || "App Testing & Reviews"}
+                {sc.opp3Title || "App Testing & Feedback"}
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {sc.opp3Desc || "Install mobile applications, explore gameplay features, report usability feedback, and claim rewards."}
+                {sc.opp3Desc || "Install mobile applications, explore gameplay features, report usability and UX feedback, and claim rewards."}
               </p>
             </div>
 
@@ -807,10 +807,10 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                 💻
               </div>
               <h3 className="font-bold text-white text-lg mb-2">
-                {sc.opp4Title || "Data Entry & Micro-Jobs"}
+                {sc.opp4Title || "Data & AI Tasks"}
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {sc.opp4Desc || "Perform website visits, image categorization, transcription snippet tasks, and small digital gigs."}
+                {sc.opp4Desc || "Image classification, data labeling, search relevance evaluation, AI response feedback, and structured micro-jobs."}
               </p>
             </div>
 
@@ -865,7 +865,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                     {sc.bizPoint1Title || "Access a Vast Global Workforce"}
                   </h3>
                   <p className="text-sm text-slate-600 leading-relaxed">
-                    {sc.bizPoint1Desc || "Reach thousands of real, authenticated workers ready to complete your custom social, mobile, or website tasks."}
+                    {sc.bizPoint1Desc || "Reach verified workers from our growing global task community ready to complete your custom tasks, feedback, or testing campaigns."}
                   </p>
                 </div>
               </div>

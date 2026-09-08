@@ -33,8 +33,8 @@ export const AppTestingCampaigns: React.FC = () => {
         "@type": "WebPage",
         "@id": "https://smartexn.com/advertise/app-testing-campaigns#webpage",
         "url": "https://smartexn.com/advertise/app-testing-campaigns",
-        "name": "Mobile App Testing Campaigns: QA & UX Feedback at Scale | SmartExn",
-        "description": "Launch crowdsourced mobile application testing campaigns on SmartExn. Collect real-device QA feedback, bug reports, and UX reviews with escrow-backed safety.",
+        "name": "Mobile App Testing & Feedback Campaigns: QA & UX Feedback at Scale | SmartExn",
+        "description": "Launch crowdsourced mobile application testing campaigns on SmartExn. Collect real-device QA feedback, bug reports, and UX evaluations with escrow-backed safety.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -110,7 +110,7 @@ export const AppTestingCampaigns: React.FC = () => {
             <span>4 Min Read</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-            Mobile App Testing Campaigns: Real-Device Quality Assurance & User Feedback
+            Mobile App Testing & Feedback Campaigns: Real-Device Quality Assurance & User Feedback
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
             Deploy your iOS and Android apps to a global testing community. Uncover device-specific crashes, validate user flows, and optimize onboarding retention before public launch.
@@ -169,6 +169,10 @@ export const AppTestingCampaigns: React.FC = () => {
             <li className="flex items-start gap-3">
               <span className="text-emerald-400 font-bold">✓</span>
               <span><strong>Official Stores Only:</strong> SmartExn requires links to official Play Store, App Store, or verified TestFlight distributions.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-emerald-400 font-bold">✓</span>
+              <span><strong>Genuine Testing & Feedback Policy:</strong> SmartExn app testing campaigns are designed for authentic bug reporting, onboarding evaluation, and usability feedback. Coerced, incentivized 5-star ratings or deceptive app store reviews are strictly prohibited.</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="text-emerald-400 font-bold">✓</span>

@@ -33,8 +33,8 @@ export const DataVerificationTasks: React.FC = () => {
         "@type": "WebPage",
         "@id": "https://smartexn.com/micro-tasks/data-verification#webpage",
         "url": "https://smartexn.com/micro-tasks/data-verification",
-        "name": "Data Verification & Categorization Micro-Tasks: Accuracy & Guidelines | SmartExn",
-        "description": "Learn how data verification and classification micro-tasks work on SmartExn. Understand accuracy benchmarks, workflow steps, and reward validation.",
+        "name": "Data & AI Tasks: Verification, Labeling & Accuracy Guidelines | SmartExn",
+        "description": "Learn how data verification, AI model feedback, and classification micro-tasks work on SmartExn. Understand accuracy benchmarks, workflow steps, and reward validation.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -110,54 +110,54 @@ export const DataVerificationTasks: React.FC = () => {
             <span>4 Min Read</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-            Data Verification & Categorization Micro-Tasks: Quality & Accuracy Standards
+            Data & AI Tasks: Verification, Annotation & Accuracy Standards
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            Understand how online data cleansing, categorization, and verification tasks function on SmartExn, and discover best practices for maintaining high accuracy ratings.
+            Understand how online data cleansing, AI response evaluation, and categorization tasks function on SmartExn, and discover best practices for maintaining high accuracy ratings.
           </p>
         </header>
 
         {/* Overview */}
         <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-4">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            1. What Are Data Verification Tasks?
+            1. What Are Data & AI Tasks?
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Businesses and data science teams manage enormous amounts of digital information that require human judgment to ensure accuracy. Common tasks include checking whether a company directory listing is active, categorizing e-commerce merchandise into structured taxonomies, and reviewing image tags for visual clarity.
+            Businesses and data science teams manage enormous amounts of digital information that require human judgment to ensure accuracy. Common tasks include evaluating AI-generated responses, checking whether a company directory listing is active, categorizing e-commerce merchandise into structured taxonomies, and reviewing image tags for visual clarity.
           </p>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Because data tasks are modular and clearly defined, they allow workers to complete short, discrete verification checks efficiently from any computer or mobile device.
+            Because data and AI evaluation tasks are modular and clearly defined, they allow workers to complete short, discrete verification checks efficiently from any computer or mobile device.
           </p>
         </section>
 
         {/* Workflow */}
         <section className="space-y-6">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            2. Common Types of Data Tasks
+            2. Common Types of Data & AI Tasks
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Directory & Contact Checks</h3>
+              <h3 className="text-base font-semibold text-white">AI Model & Search Relevance Evaluation</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Verifying that public company websites, business hours, and contact details match official search listings.
+                Reviewing search engine results, evaluating AI prompt responses, and rating text relevance and factual helpfulness.
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Product Categorization</h3>
+              <h3 className="text-base font-semibold text-white">Product Taxonomy & Categorization</h3>
               <p className="text-xs sm:text-sm text-slate-400">
                 Matching product titles to relevant department categories (e.g. classifying "Wireless Headphones" under Electronics &gt; Audio).
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Content Tagging & Moderation</h3>
+              <h3 className="text-base font-semibold text-white">Image Labeling & Visual Attributes</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Tagging visual assets or filtering user submissions based on safety and relevance guidelines provided by the advertiser.
+                Tagging visual attributes, drawing bounding boxes, or classifying image objects for machine learning training datasets.
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Text Matching & OCR Audit</h3>
+              <h3 className="text-base font-semibold text-white">Directory & Contact Checks</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Comparing scanned text or invoice numbers against database entries to correct minor typographical discrepancies.
+                Verifying that public company websites, business hours, and contact details match official listings.
               </p>
             </div>
           </div>

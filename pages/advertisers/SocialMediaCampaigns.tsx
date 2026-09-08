@@ -9,8 +9,8 @@ export const SocialMediaCampaigns: React.FC = () => {
 
   const faqs = [
     {
-      q: 'What types of social media campaigns can I run on SmartExn?',
-      a: 'Advertisers can launch campaigns for authentic social engagement across YouTube, X (Twitter), Instagram, TikTok, Facebook, LinkedIn, Discord, and Telegram—including channel subscriptions, post shares, meaningful comments, and group joins.'
+      q: 'What types of social and content engagement campaigns can I run on SmartExn?',
+      a: 'Advertisers can launch campaigns for authentic content discovery and community engagement across YouTube, X (Twitter), Instagram, TikTok, Facebook, LinkedIn, Discord, and Telegram—including content discovery, discussion participation, channel exploration, and community feedback, subject to applicable platform terms and campaign rules.'
     },
     {
       q: 'How does SmartExn prevent bot or fake engagement?',
@@ -110,54 +110,54 @@ export const SocialMediaCampaigns: React.FC = () => {
             <span>4 Min Read</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
-            Crowdsourced Social Media Campaigns: Authentic Reach & Verified Interactions
+            Crowdsourced Social & Content Engagement: Authentic Reach & Audience Feedback
           </h1>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            Scale your brand's digital presence with verified, human-driven social interactions across major platforms with 100% escrow protection and manual proof review.
+            Scale your brand's digital presence with verified, human-driven social and content engagement across major platforms with 100% escrow protection and manual proof review, subject to applicable platform terms and campaign rules.
           </p>
         </header>
 
         {/* Overview */}
         <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-4">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            1. Why Brands Choose SmartExn for Social Reach
+            1. Why Brands Choose SmartExn for Content & Social Reach
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Automated bot farms and synthetic click networks risk account suspensions and algorithmic penalties. SmartExn connects brands directly with thousands of real, authenticated human users who interact naturally with your content.
+            Automated bot farms and synthetic click networks risk account suspensions and algorithmic penalties. SmartExn connects brands directly with verified workers from our growing global task community who interact naturally with your content.
           </p>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Whether you are launching a new YouTube channel, building an active Discord community, or announcing a product release on X (Twitter), crowdsourced micro-tasks deliver measurable engagement.
+            Whether you are launching a new educational channel, conducting audience research, building an active community, or announcing a product release, structured crowdsourced engagement campaigns deliver authentic feedback and measurable reach.
           </p>
         </section>
 
         {/* Campaign Types */}
         <section className="space-y-6">
           <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            2. Supported Social Media Actions
+            2. Supported Social & Content Engagement Actions
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Followers & Subscriptions</h3>
+              <h3 className="text-base font-semibold text-white">Content Discovery & Channel Exploration</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Grow verified subscriber bases across YouTube, TikTok, Instagram, Twitter, and Twitch.
+                Facilitate authentic content discovery and channel awareness across YouTube, TikTok, Instagram, Twitter, and Twitch, subject to platform terms.
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Community & Server Growth</h3>
+              <h3 className="text-base font-semibold text-white">Community & Server Participation</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Attract genuine members to Telegram announcement channels, Discord servers, and Reddit communities.
+                Attract genuine participants to Telegram announcement channels, Discord servers, and community discussion groups.
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Post Engagement & Retweets</h3>
+              <h3 className="text-base font-semibold text-white">Campaign Awareness & Discussion Feedback</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Amplify product announcements with verified shares, retweets, likes, and thoughtful comments.
+                Amplify product announcements with verified feedback, discussion participation, and thoughtful comments.
               </p>
             </div>
             <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 space-y-2">
-              <h3 className="text-base font-semibold text-white">Video Watch Time & Feedback</h3>
+              <h3 className="text-base font-semibold text-white">Audience Retention & Video Feedback</h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                Encourage full-length video viewings and constructive comments to signal strong algorithmic retention.
+                Encourage full-length video viewings and constructive feedback to evaluate viewer response and audience retention.
               </p>
             </div>
           </div>
@@ -180,6 +180,10 @@ export const SocialMediaCampaigns: React.FC = () => {
             <li className="flex items-start gap-3">
               <span className="text-emerald-400 font-bold">✓</span>
               <span><strong>100% Escrow Protection:</strong> You only pay for verified completions that meet your exact campaign criteria.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-emerald-400 font-bold">✓</span>
+              <span><strong>Platform Terms Compliance:</strong> All social and content engagement campaigns must adhere to target third-party platform terms of service and SmartExn community guidelines. Artificial metric inflation and spam generation are prohibited.</span>
             </li>
           </ul>
         </section>
@@ -231,9 +235,9 @@ export const SocialMediaCampaigns: React.FC = () => {
 
         {/* CTA */}
         <section className="bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-800/40 rounded-2xl p-6 sm:p-8 text-center space-y-4">
-          <h2 className="text-xl sm:text-2xl font-black text-white">Launch Your Social Campaign Today</h2>
+          <h2 className="text-xl sm:text-2xl font-black text-white">Launch Your Social & Content Engagement Campaign Today</h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto">
-            Reach thousands of authenticated human contributors and grow your community with verified proof.
+            Reach verified workers from our growing global task community and grow your audience with verified proof.
           </p>
           <div className="flex flex-wrap justify-center gap-4 pt-2">
             <Link

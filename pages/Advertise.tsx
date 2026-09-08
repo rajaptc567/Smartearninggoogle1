@@ -23,17 +23,17 @@ const relatedAdvertiserGuides: GuideItem[] = [
   },
   {
     title: 'Mobile App Testing & QA Campaigns',
-    description: 'Collect real-device feedback, bug reports, and UX reviews across global device ecosystems.',
+    description: 'Collect real-device feedback, bug reports, and UX evaluations across global device ecosystems.',
     to: '/advertise/app-testing-campaigns',
     category: 'Advertisers',
     tag: 'App Testing'
   },
   {
-    title: 'Social Media Engagement Campaigns',
-    description: 'Scale authentic channel subscriptions, community growth, and verified post engagement.',
+    title: 'Social & Content Engagement Campaigns',
+    description: 'Support authentic content discovery, community participation, and verified campaign awareness.',
     to: '/advertise/social-media-campaigns',
     category: 'Advertisers',
-    tag: 'Social Growth'
+    tag: 'Social & Content'
   },
   {
     title: '100% Upfront Escrow Protection Architecture',
@@ -54,7 +54,7 @@ const relatedAdvertiserGuides: GuideItem[] = [
 const advertiserFaqs = [
   {
     question: "What types of campaigns can businesses run on SmartExn?",
-    answer: "Businesses and creators can launch campaigns for social media engagement (follows, likes, shares, comments), mobile application testing and reviews, website feedback, user survey responses, content interaction, and custom digital tasks requiring verified proof."
+    answer: "Businesses and creators can launch campaigns for social & content engagement (content discovery, community participation, discussion feedback), mobile application testing and feedback, website testing, user survey responses, and data & AI tasks requiring verified proof."
   },
   {
     question: "How does Campaign Escrow protect my advertising budget?",
@@ -85,7 +85,7 @@ export const Advertise: React.FC = () => {
         "@id": "https://smartexn.com/advertise#webpage",
         "url": "https://smartexn.com/advertise",
         "name": "Hire a Crowdsourced Workforce & Launch Micro-Task Campaigns | SmartExn",
-        "description": "Reach an active global task-based workforce with SmartExn. Launch crowdsourced campaigns for social media engagement, app feedback, website testing, and verified digital tasks with 100% escrow protection.",
+        "description": "Reach verified workers from our growing global task community with SmartExn. Launch crowdsourced campaigns for social & content engagement, app feedback, website testing, and verified digital tasks with 100% escrow protection.",
         "isPartOf": {
           "@type": "WebSite",
           "@id": "https://smartexn.com/#website",
@@ -129,13 +129,13 @@ export const Advertise: React.FC = () => {
   const campaignCategories = [
     {
       icon: "📱",
-      title: "Mobile App Testing & Reviews",
-      desc: "Distribute your iOS or Android app to real users to test onboarding, report bugs, and gather valuable early feedback."
+      title: "Mobile App Testing & Feedback",
+      desc: "Distribute your iOS or Android app to real users to test onboarding, report bugs, and gather valuable UX and usability feedback."
     },
     {
       icon: "📣",
-      title: "Social Media Engagement",
-      desc: "Promote YouTube videos, Twitter/X posts, Telegram groups, and Instagram content through real human interactions."
+      title: "Social & Content Engagement",
+      desc: "Promote content discovery, community participation, and discussion engagement through real human interactions, subject to platform rules."
     },
     {
       icon: "🌐",
@@ -154,8 +154,8 @@ export const Advertise: React.FC = () => {
     },
     {
       icon: "🔍",
-      title: "Data Collection & Verification",
-      desc: "Crowdsource search evaluation, business listing checks, image tagging, and light data categorization tasks at scale."
+      title: "Data & AI Tasks",
+      desc: "Crowdsource image classification, data labeling, text classification, search relevance evaluation, and data verification at scale."
     }
   ];
 
@@ -163,7 +163,7 @@ export const Advertise: React.FC = () => {
     <div className="min-h-screen bg-[#061325] text-slate-100 flex flex-col font-sans selection:bg-sky-500 selection:text-white">
       <SEOHead
         title="Hire a Crowdsourced Workforce & Launch Micro-Task Campaigns | SmartExn"
-        description="Reach an active global task-based workforce with SmartExn. Launch crowdsourced campaigns for social media engagement, app feedback, website testing, and verified digital tasks with 100% escrow protection."
+        description="Reach verified workers from our growing global task community with SmartExn. Launch crowdsourced campaigns for social & content engagement, app feedback, website testing, and verified digital tasks with 100% escrow protection."
         canonical="https://smartexn.com/advertise"
         robots="index, follow"
         schemaJson={schemaData}
@@ -430,7 +430,7 @@ export const Advertise: React.FC = () => {
                 Launch Your First Campaign with SmartExn
               </h2>
               <p className="text-sky-200 text-sm sm:text-base max-w-xl mx-auto">
-                Reach thousands of active workers ready to execute your digital tasks with guaranteed escrow security.
+                Reach verified workers from our growing global task community ready to execute your digital tasks with guaranteed escrow security.
               </p>
               <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
                 <Link
