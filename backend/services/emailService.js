@@ -162,6 +162,15 @@ const recentSends = new Map();
  */
 const createTransporterForProvider = (provider, settings) => {
     if (provider === 'resend') {
+        console.log('[EmailService] RESEND_RUNTIME_CONFIG', {
+            RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
+            SMTP_PASSWORD: Boolean(process.env.SMTP_PASSWORD),
+            SMTP_HOST: Boolean(process.env.SMTP_HOST),
+            SMTP_PORT: Boolean(process.env.SMTP_PORT),
+            SMTP_USER: Boolean(process.env.SMTP_USER),
+            SMTP_SECURE: Boolean(process.env.SMTP_SECURE)
+        });
+
         const password = process.env.SMTP_PASSWORD || process.env.RESEND_API_KEY;
         if (!password) {
             const err = new Error('Resend SMTP credentials missing: please define RESEND_API_KEY or SMTP_PASSWORD in environment variables');
