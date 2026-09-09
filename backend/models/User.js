@@ -156,6 +156,7 @@ const UserSchema = new mongoose.Schema({
         type: String,
     },
     passwordResetToken: String,
+    passwordResetOtp: String,
     passwordResetExpires: Date,
 }, {
     timestamps: { createdAt: 'registrationDate', updatedAt: true }

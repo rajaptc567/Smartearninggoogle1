@@ -559,6 +559,23 @@ export const updateSettings = async (settingsData: Partial<Settings>): Promise<S
     return result.data;
 };
 
+export const sendAdminTestEmail = async (payload: { toEmail: string; sender?: string; provider?: string }): Promise<{ success: boolean; message: string; data?: any }> => {
+    const response = await fetch(`${API_BASE_URL}/settings/send-test-email`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload)
+    });
+    return handleResponse(response);
+};
+
+export const getEmailLogs = async (): Promise<any[]> => {
+    const response = await fetch(`${API_BASE_URL}/settings/email-logs`, {
+        headers: getHeaders()
+    });
+    const result = await handleResponse(response);
+    return result.data || [];
+};
+
 // --- [Transfer API Functions] ---
 export const getTransfers = async (): Promise<Transfer[]> => {
     const response = await fetch(`${API_BASE_URL}/transfers`, {

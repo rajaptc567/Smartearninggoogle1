@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
 import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
-import { updateSettings } from '../services/api';
+import { updateSettings, sendAdminTestEmail } from '../services/api';
 import { AdminModulePagesManager } from '../components/AdminModulePagesManager';
 import { AdminInvestmentWhitelistManager } from '../components/AdminInvestmentWhitelistManager';
 import { compressImageFile } from '../utils/imageCompressor';
@@ -92,6 +92,12 @@ const Settings: React.FC = () => {
   // Legal Policies admin state
   const [adminLegalTarget, setAdminLegalTarget] = useState<'global' | 'hub'>('global');
   const [adminLegalSubTab, setAdminLegalSubTab] = useState<string>('privacy');
+
+  // Transactional Email Testing States
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [testEmailSender, setTestEmailSender] = useState('');
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [testEmailFeedback, setTestEmailFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     // Merge provided settings with defaults, ensuring nested objects like exchangeRates are fully populated.
@@ -195,6 +201,32 @@ const Settings: React.FC = () => {
         dmcaPolicyUpdated: settings.dmcaPolicyUpdated || defaultDmcaPolicyUpdated,
         dmcaPolicyContent: settings.dmcaPolicyContent || defaultDmcaPolicyContent,
         emailAutomationEnabled: settings.emailAutomationEnabled || false,
+        emailProvider: settings.emailProvider || 'existing',
+        emailSenders: settings.emailSenders && settings.emailSenders.length > 0 ? settings.emailSenders : [
+            { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information', enabled: true },
+            { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support', enabled: true },
+            { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications', enabled: true },
+            { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance', enabled: true },
+            { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team', enabled: true },
+            { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
+        ],
+        defaultSenderEmail: settings.defaultSenderEmail || 'notifications@smartexn.com',
+        eventSenders: settings.eventSenders || {
+            password_reset: 'security@smartexn.com',
+            security: 'security@smartexn.com',
+            disputes: 'support@smartexn.com',
+            support: 'support@smartexn.com',
+            finance: 'finance@smartexn.com',
+            deposit: 'finance@smartexn.com',
+            withdrawal: 'finance@smartexn.com',
+            transfer: 'finance@smartexn.com',
+            investment: 'finance@smartexn.com',
+            tasks: 'notifications@smartexn.com',
+            campaigns: 'notifications@smartexn.com',
+            legal: 'legal@smartexn.com',
+            info: 'info@smartexn.com',
+            welcome: 'info@smartexn.com'
+        },
         emailSenderAddress: settings.emailSenderAddress || 'smartexn.com@gmail.com',
         emailSenderPassword: settings.emailSenderPassword || '',
         whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
@@ -287,6 +319,51 @@ const Settings: React.FC = () => {
     }
     setIsDirty(true);
   }
+
+  const handleToggleSender = (senderId: string) => {
+    const currentSenders = localSettings.emailSenders || [];
+    const updated = currentSenders.map(s => s.id === senderId ? { ...s, enabled: !s.enabled } : s);
+    setLocalSettings(prev => ({ ...prev, emailSenders: updated }));
+    setIsDirty(true);
+  };
+
+  const handleSetDefaultSender = (email: string) => {
+    setLocalSettings(prev => ({ ...prev, defaultSenderEmail: email }));
+    setIsDirty(true);
+  };
+
+  const handleEventSenderChange = (eventKey: string, senderEmail: string) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      eventSenders: {
+        ...(prev.eventSenders || {}),
+        [eventKey]: senderEmail
+      }
+    }));
+    setIsDirty(true);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddress || !testEmailAddress.includes('@')) {
+      alert('Please enter a valid recipient email address for testing.');
+      return;
+    }
+    setIsSendingTestEmail(true);
+    setTestEmailFeedback(null);
+    try {
+      const activeSender = testEmailSender || localSettings.defaultSenderEmail || 'notifications@smartexn.com';
+      const res = await sendAdminTestEmail({
+        toEmail: testEmailAddress.trim(),
+        sender: activeSender,
+        provider: localSettings.emailProvider || 'existing'
+      });
+      setTestEmailFeedback({ success: true, message: res.message || 'Test email dispatched successfully!' });
+    } catch (err: any) {
+      setTestEmailFeedback({ success: false, message: err.message || 'Failed to dispatch test email.' });
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
 
   const handleSmartexnImageUpload = (field: 'dashboardPreviewImage' | 'mobilePreviewImage', file: File | null) => {
     if (!file) return;
@@ -3173,52 +3250,383 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* EMAIL CONFIGURATION (GMAIL) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
-                    <div className="flex justify-between items-center border-b dark:border-gray-700 pb-3">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xl">📧</span>
+                {/* CENTRALIZED TRANSACTIONAL EMAIL SERVICE */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                    {/* Header with Master Toggle */}
+                    <div className="flex justify-between items-center border-b dark:border-gray-700 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-xl">
+                                📧
+                            </div>
                             <div>
-                                <h4 className="font-bold text-gray-900 dark:text-white">Gmail Free SMTP Automation</h4>
-                                <p className="text-[10px] text-gray-400">Uses Gmail Secure App Password credentials for automated mailing</p>
+                                <h4 className="font-bold text-gray-900 dark:text-white text-base">Centralized Transactional Email Service</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Unified backend service for password reset OTPs, security alerts, financial notifications, and admin dispatches
+                                </p>
                             </div>
                         </div>
-                        <div className="relative inline-block w-10 h-5">
-                            <input 
-                                id="emailAutomationEnabled"
-                                name="emailAutomationEnabled"
-                                type="checkbox" 
-                                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
-                                checked={localSettings.emailAutomationEnabled || false}
-                                onChange={handleCheckboxChange}
-                            />
-                            <label htmlFor="emailAutomationEnabled" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.emailAutomationEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                {localSettings.emailAutomationEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <div className="relative inline-block w-10 h-5">
+                                <input 
+                                    id="emailAutomationEnabled"
+                                    name="emailAutomationEnabled"
+                                    type="checkbox" 
+                                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 checked:border-blue-500"
+                                    checked={localSettings.emailAutomationEnabled || false}
+                                    onChange={handleCheckboxChange}
+                                />
+                                <label htmlFor="emailAutomationEnabled" className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${localSettings.emailAutomationEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}></label>
+                            </div>
                         </div>
                     </div>
 
                     {localSettings.emailAutomationEnabled && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-up">
+                        <div className="space-y-6 animate-slide-up">
+                            {/* SECTION 1: PROVIDER SWITCH */}
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Sender Gmail Address</label>
-                                <input 
-                                    type="email"
-                                    name="emailSenderAddress"
-                                    value={localSettings.emailSenderAddress || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0"
-                                    placeholder="your-email@gmail.com"
-                                />
+                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-2">
+                                    Active Email Provider
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div 
+                                        onClick={() => {
+                                            setLocalSettings(prev => ({ ...prev, emailProvider: 'existing' }));
+                                            setIsDirty(true);
+                                        }}
+                                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                            (localSettings.emailProvider || 'existing') === 'existing' 
+                                                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20' 
+                                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                <span>📬</span> Existing Email Provider
+                                            </div>
+                                            <input 
+                                                type="radio" 
+                                                name="emailProvider" 
+                                                value="existing"
+                                                checked={(localSettings.emailProvider || 'existing') === 'existing'}
+                                                onChange={() => {}}
+                                                className="text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Uses standard SMTP credentials with Gmail Secure App Password.
+                                        </p>
+                                    </div>
+
+                                    <div 
+                                        onClick={() => {
+                                            setLocalSettings(prev => ({ ...prev, emailProvider: 'resend' }));
+                                            setIsDirty(true);
+                                        }}
+                                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                            localSettings.emailProvider === 'resend' 
+                                                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20' 
+                                                : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                <span>⚡</span> Resend SMTP
+                                            </div>
+                                            <input 
+                                                type="radio" 
+                                                name="emailProvider" 
+                                                value="resend"
+                                                checked={localSettings.emailProvider === 'resend'}
+                                                onChange={() => {}}
+                                                className="text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            High-deliverability transactional infrastructure via Resend SMTP.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Gmail App Password (16-char)</label>
-                                <input 
-                                    type="text"
-                                    name="emailSenderPassword"
-                                    value={localSettings.emailSenderPassword || ''}
-                                    onChange={handleTextChange}
-                                    className="w-full text-sm p-3 rounded-xl border dark:bg-gray-900 dark:border-gray-700 focus:ring-0 font-mono"
-                                    placeholder="xxxx xxxx xxxx xxxx"
-                                />
+
+                            {/* PROVIDER CREDENTIALS CONFIGURATION */}
+                            {(localSettings.emailProvider || 'existing') === 'existing' ? (
+                                <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/50 border dark:border-gray-700 space-y-3">
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        <span>⚙️</span> Existing Provider Credentials
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Sender Gmail Address</label>
+                                            <input 
+                                                type="email"
+                                                name="emailSenderAddress"
+                                                value={localSettings.emailSenderAddress || ''}
+                                                onChange={handleTextChange}
+                                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 focus:ring-0"
+                                                placeholder="smartexn.com@gmail.com"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase text-gray-400 tracking-wider mb-1">Gmail App Password (16-char)</label>
+                                            <input 
+                                                type="text"
+                                                name="emailSenderPassword"
+                                                value={localSettings.emailSenderPassword || ''}
+                                                onChange={handleTextChange}
+                                                className="w-full text-sm p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 focus:ring-0 font-mono"
+                                                placeholder="xxxx xxxx xxxx xxxx"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/50 border dark:border-gray-700 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                            <span>🔒</span> Resend SMTP Configuration
+                                        </div>
+                                        <span className="px-2.5 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
+                                            Environment Variables Protected
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                        <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border dark:border-gray-700">
+                                            <span className="text-gray-400 block text-[10px] uppercase font-bold">SMTP Host</span>
+                                            <span className="font-mono text-gray-800 dark:text-gray-200">smtp.resend.com</span>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border dark:border-gray-700">
+                                            <span className="text-gray-400 block text-[10px] uppercase font-bold">SMTP Port</span>
+                                            <span className="font-mono text-gray-800 dark:text-gray-200">465 (SSL/TLS)</span>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border dark:border-gray-700">
+                                            <span className="text-gray-400 block text-[10px] uppercase font-bold">SMTP User</span>
+                                            <span className="font-mono text-gray-800 dark:text-gray-200">resend</span>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border dark:border-gray-700">
+                                            <span className="text-gray-400 block text-[10px] uppercase font-bold">SMTP Password</span>
+                                            <span className="font-mono text-gray-800 dark:text-gray-200">••••••••••••••••</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                                        SMTP credentials and API keys are stored exclusively in server environment variables (<code className="text-blue-600 dark:text-blue-400">SMTP_HOST</code>, <code className="text-blue-600 dark:text-blue-400">SMTP_PORT</code>, <code className="text-blue-600 dark:text-blue-400">SMTP_PASSWORD</code> / <code className="text-blue-600 dark:text-blue-400">RESEND_API_KEY</code>) and are never exposed to the client.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* SECTION 2: APPROVED SMARTEXN SENDERS */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h5 className="text-sm font-bold text-gray-900 dark:text-white">
+                                            Approved SmartExn Senders
+                                        </h5>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Configure verified domain senders. Arbitrary external From addresses are strictly disallowed.
+                                        </p>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        Default: <strong className="text-blue-600 dark:text-blue-400">{localSettings.defaultSenderEmail || 'notifications@smartexn.com'}</strong>
+                                    </div>
+                                </div>
+
+                                <div className="divide-y dark:divide-gray-700 border dark:border-gray-700 rounded-xl overflow-hidden bg-white dark:bg-gray-900/30">
+                                    {(localSettings.emailSenders || [
+                                        { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information', enabled: true },
+                                        { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support', enabled: true },
+                                        { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications', enabled: true },
+                                        { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance', enabled: true },
+                                        { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team', enabled: true },
+                                        { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
+                                    ]).map(sender => {
+                                        const isDefault = (localSettings.defaultSenderEmail || 'notifications@smartexn.com').toLowerCase() === sender.email.toLowerCase();
+                                        return (
+                                            <div key={sender.id} className="p-3.5 flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                                        sender.enabled 
+                                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' 
+                                                            : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                                                    }`}>
+                                                        {sender.id.substring(0, 2).toUpperCase()}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                                                                {sender.email}
+                                                            </span>
+                                                            {isDefault && (
+                                                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-full">
+                                                                    Default
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                            {sender.name}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    {!isDefault && sender.enabled && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleSetDefaultSender(sender.email)}
+                                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                        >
+                                                            Set Default
+                                                        </button>
+                                                    )}
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="sr-only peer"
+                                                            checked={sender.enabled}
+                                                            onChange={() => handleToggleSender(sender.id)}
+                                                            disabled={isDefault}
+                                                        />
+                                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* SECTION 3: NOTIFICATION EVENT SENDER ASSIGNMENT */}
+                            <div className="space-y-3">
+                                <div>
+                                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">
+                                        Event & Notification Sender Routing
+                                    </h5>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Assign which approved sender dispatches emails for specific platform events. If disabled, the default sender is used.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {[
+                                        { key: 'password_reset', label: 'Password Reset & OTP', desc: 'Auto forgot password OTP & reset links', defaultVal: 'security@smartexn.com' },
+                                        { key: 'security', label: 'Security & Login Alerts', desc: 'Suspicious logins and security events', defaultVal: 'security@smartexn.com' },
+                                        { key: 'support', label: 'Support & Inquiries', desc: 'Contact forms and member tickets', defaultVal: 'support@smartexn.com' },
+                                        { key: 'disputes', label: 'Task & Member Disputes', desc: 'Proof rejections and appeal notices', defaultVal: 'support@smartexn.com' },
+                                        { key: 'finance', label: 'Deposits & Withdrawals', desc: 'Payout confirmations and deposit proofs', defaultVal: 'finance@smartexn.com' },
+                                        { key: 'tasks', label: 'Tasks & Campaigns', desc: 'New campaign slots and worker approvals', defaultVal: 'notifications@smartexn.com' },
+                                        { key: 'legal', label: 'Legal & Policy Notices', desc: 'Terms updates and compliance reviews', defaultVal: 'legal@smartexn.com' },
+                                        { key: 'welcome', label: 'Welcome & Onboarding', desc: 'Account registration greeting', defaultVal: 'info@smartexn.com' }
+                                    ].map(event => {
+                                        const assignedSender = localSettings.eventSenders?.[event.key] || event.defaultVal;
+                                        const availableSenders = (localSettings.emailSenders || []).filter(s => s.enabled);
+                                        return (
+                                            <div key={event.key} className="p-3 rounded-xl border dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30 flex items-center justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="text-xs font-bold text-gray-900 dark:text-white">
+                                                        {event.label}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400 truncate">
+                                                        {event.desc}
+                                                    </div>
+                                                </div>
+                                                <select
+                                                    value={assignedSender}
+                                                    onChange={(e) => handleEventSenderChange(event.key, e.target.value)}
+                                                    className="text-xs py-1.5 px-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 text-gray-800 dark:text-gray-200 font-mono focus:ring-0"
+                                                >
+                                                    {availableSenders.map(s => (
+                                                        <option key={s.id} value={s.email}>
+                                                            {s.email}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* SECTION 4: SEND TEST EMAIL */}
+                            <div className="p-4 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/30 dark:bg-blue-900/10 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base">🧪</span>
+                                        <h5 className="text-sm font-bold text-gray-900 dark:text-white">
+                                            Test Transactional Email Dispatch
+                                        </h5>
+                                    </div>
+                                    <span className="text-[11px] font-medium text-gray-500">
+                                        Active: <strong>{(localSettings.emailProvider || 'existing').toUpperCase()}</strong>
+                                    </span>
+                                </div>
+
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Dispatch a live test email to verify DNS, SPF, DKIM, and deliverability with the active provider and chosen sender.
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                    <div className="sm:col-span-5">
+                                        <label className="block text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">
+                                            Recipient Email Address
+                                        </label>
+                                        <input 
+                                            type="email" 
+                                            value={testEmailAddress}
+                                            onChange={(e) => setTestEmailAddress(e.target.value)}
+                                            placeholder="admin@example.com"
+                                            className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-4">
+                                        <label className="block text-[10px] font-bold uppercase text-gray-400 tracking-wider mb-1">
+                                            From Sender
+                                        </label>
+                                        <select 
+                                            value={testEmailSender || localSettings.defaultSenderEmail || 'notifications@smartexn.com'}
+                                            onChange={(e) => setTestEmailSender(e.target.value)}
+                                            className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 text-gray-900 dark:text-white font-mono"
+                                        >
+                                            {(localSettings.emailSenders || [])
+                                                .filter(s => s.enabled)
+                                                .map(s => (
+                                                    <option key={s.id} value={s.email}>
+                                                        {s.email} ({s.name})
+                                                    </option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                        <Button 
+                                            type="button"
+                                            onClick={handleSendTestEmail}
+                                            disabled={isSendingTestEmail || !testEmailAddress}
+                                            className="w-full text-xs py-2.5"
+                                        >
+                                            {isSendingTestEmail ? 'Sending Test...' : 'Send Test Email'}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {testEmailFeedback && (
+                                    <div className={`p-3 rounded-lg text-xs flex items-center justify-between ${
+                                        testEmailFeedback.success 
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                    }`}>
+                                        <div className="flex items-center gap-2">
+                                            <span>{testEmailFeedback.success ? '✅' : '❌'}</span>
+                                            <span>{testEmailFeedback.message}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setTestEmailFeedback(null)}
+                                            className="text-gray-400 hover:text-gray-600 font-bold"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

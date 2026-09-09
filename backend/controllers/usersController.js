@@ -800,7 +800,9 @@ export const userRequestPasswordReset = async (req, res) => {
             // Automatic Password Reset handling wrapped in localized try-catch so it won't crash DB writes
             try {
                 const resetToken = randomBytes(20).toString('hex');
+                const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
                 user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+                user.passwordResetOtp = createHash('sha256').update(otpCode).digest('hex');
                 user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
                 await user.save();
 
@@ -811,14 +813,27 @@ export const userRequestPasswordReset = async (req, res) => {
                     username: user.username,
                     fullName: user.fullName || '',
                     resetLink: link,
+                    resetToken: resetToken,
+                    otp: otpCode,
                     date: new Date().toLocaleString()
                 };
 
-                sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_email', variables: resetVars });
-                sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_whatsapp', variables: resetVars });
+                // Await automatic email dispatch using the centralized email service with security sender
+                await sendTemplateNotification({
+                    userId: user._id,
+                    templateKey: 'password_reset_email',
+                    variables: resetVars,
+                    sender: 'security@smartexn.com'
+                });
+
+                sendTemplateNotification({
+                    userId: user._id,
+                    templateKey: 'password_reset_whatsapp',
+                    variables: resetVars
+                }).catch(waErr => console.error('Password reset WhatsApp dispatch error:', waErr.message));
 
                 // Update request details as auto-sent
-                resetRequest.process = 'Auto-sent reset link to user';
+                resetRequest.process = 'Auto-sent reset link and OTP to user';
                 resetRequest.sendType = 'Automatic';
                 resetRequest.channel = 'Email & WhatsApp';
                 resetRequest.sentAt = new Date();
@@ -844,7 +859,9 @@ export const adminInitiatePasswordReset = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
         const resetToken = randomBytes(20).toString('hex');
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         user.passwordResetToken = createHash('sha256').update(resetToken).digest('hex');
+        user.passwordResetOtp = createHash('sha256').update(otpCode).digest('hex');
         user.passwordResetExpires = Date.now() + 48 * 60 * 60 * 1000;
         await user.save();
 
@@ -858,16 +875,29 @@ export const adminInitiatePasswordReset = async (req, res) => {
                 username: user.username,
                 fullName: user.fullName || '',
                 resetLink: link,
+                resetToken: resetToken,
+                otp: otpCode,
                 date: new Date().toLocaleString()
             };
             
-            sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_email', variables: resetVars, sentBy: 'Admin' });
-            sendTemplateNotification({ userId: user._id, templateKey: 'password_reset_whatsapp', variables: resetVars, sentBy: 'Admin' });
+            await sendTemplateNotification({
+                userId: user._id,
+                templateKey: 'password_reset_email',
+                variables: resetVars,
+                sentBy: 'Admin',
+                sender: 'security@smartexn.com'
+            });
+            sendTemplateNotification({
+                userId: user._id,
+                templateKey: 'password_reset_whatsapp',
+                variables: resetVars,
+                sentBy: 'Admin'
+            }).catch(waErr => console.error('Admin password reset WhatsApp dispatch error:', waErr.message));
         } catch (autoErr) {
             console.error('Automation failed during adminInitiatePasswordReset:', autoErr);
         }
 
-        res.status(200).json({ success: true, data: { resetToken } });
+        res.status(200).json({ success: true, data: { resetToken, otp: otpCode } });
     } catch (err) { 
         console.error('Error in adminInitiatePasswordReset:', err);
         res.status(500).json({ success: false, error: err.message }); 
@@ -876,9 +906,16 @@ export const adminInitiatePasswordReset = async (req, res) => {
 
 export const verifyAndStartResetTimer = async (req, res) => {
     try {
-        const hashedToken = createHash('sha256').update(req.params.token).digest('hex');
-        const user = await User.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() } });
-        if (!user) return res.status(404).json({ success: false, error: 'Your password reset link is invalid or has expired. Please request a new link.' });
+        const rawToken = String(req.params.token || '').trim();
+        const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+        const user = await User.findOne({
+            $or: [
+                { passwordResetToken: hashedToken },
+                { passwordResetOtp: hashedToken }
+            ],
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!user) return res.status(404).json({ success: false, error: 'Your password reset link or OTP code is invalid or has expired. Please request a new one.' });
         user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
         await user.save();
         res.status(200).json({ success: true });
@@ -887,11 +924,20 @@ export const verifyAndStartResetTimer = async (req, res) => {
 
 export const resetPasswordWithToken = async (req, res) => {
     try {
-        const hashedToken = createHash('sha256').update(req.params.token).digest('hex');
-        const user = await User.findOne({ passwordResetToken: hashedToken, passwordResetExpires: { $gt: Date.now() } });
-        if (!user) return res.status(400).json({ success: false, error: 'Your password reset link has expired or is invalid. Please request a new one.' });
+        const rawToken = String(req.params.token || '').trim();
+        const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+        const user = await User.findOne({
+            $or: [
+                { passwordResetToken: hashedToken },
+                { passwordResetOtp: hashedToken }
+            ],
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!user) return res.status(400).json({ success: false, error: 'Your password reset link or OTP code has expired or is invalid. Please request a new one.' });
         user.password = req.body.password;
-        user.passwordResetToken = undefined; user.passwordResetExpires = undefined;
+        user.passwordResetToken = undefined;
+        user.passwordResetOtp = undefined;
+        user.passwordResetExpires = undefined;
         await user.save();
         res.status(200).json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message || 'Server error during password reset.' }); }

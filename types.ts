@@ -319,6 +319,15 @@ export interface Settings {
     dmcaPolicyUpdated?: string;
     dmcaPolicyContent?: string;
     emailAutomationEnabled?: boolean;
+    emailProvider?: 'existing' | 'resend';
+    emailSenders?: {
+        id: string;
+        email: string;
+        name: string;
+        enabled: boolean;
+    }[];
+    defaultSenderEmail?: string;
+    eventSenders?: Record<string, string>;
     emailSenderAddress?: string;
     emailSenderPassword?: string;
     whatsappAutomationEnabled?: boolean;

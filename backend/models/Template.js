@@ -882,28 +882,34 @@ SmartEarning Team
         key: 'password_reset_email',
         name: 'Automatic Password Reset Delivery (Email)',
         type: 'email',
-        subject: 'Password Reset Request - SmartEarning',
+        subject: 'Password Reset & OTP Verification - SmartExn',
         body: `
 <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f6f8; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e1e8ed;">
     <div style="text-align: center; margin-bottom: 25px;">
         <span style="font-size: 48px;">🔒</span>
-        <h2 style="color: #f59e0b; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Password Reset Request</h2>
+        <h2 style="color: #2563eb; margin: 10px 0 0 0; font-size: 24px; font-weight: 700;">Password Reset Request</h2>
     </div>
     <div style="background-color: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong> ({fullName}),</p>
-        <p style="font-size: 15px; color: #555555; line-height: 1.6;">We received a request to reset your password on SmartEarning. Click the secure button below to set a new password. This link is valid for 48 hours:</p>
+        <p style="font-size: 16px; color: #333333; margin-top: 0;">Hello <strong>@{username}</strong> {fullName},</p>
+        <p style="font-size: 15px; color: #555555; line-height: 1.6;">We received a request to reset your password on SmartExn. You can reset your password immediately using the button below:</p>
         
         <div style="text-align: center; margin: 25px 0;">
-            <a href="{resetLink}" style="background-color: #3b82f6; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Reset Password</a>
+            <a href="{resetLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block;">Reset Password</a>
         </div>
         
-        <p style="font-size: 13px; color: #6b7280; word-break: break-all;">Or copy and paste this link in your browser: <br/>{resetLink}</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 20px 0; text-align: center;">
+            <p style="font-size: 13px; color: #475569; margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Your One-Time Passcode (OTP)</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #1e3a8a; font-family: monospace;">{otp}</div>
+            <p style="font-size: 12px; color: #64748b; margin: 6px 0 0 0;">This OTP and reset link are valid for 48 hours. Never share this code with anyone.</p>
+        </div>
+        
+        <p style="font-size: 13px; color: #6b7280; word-break: break-all;">Direct link: <br/>{resetLink}</p>
         
         <p style="font-size: 14px; color: #6b7280; line-height: 1.5; margin-bottom: 0;">If you did not request a password reset, you can safely ignore this email.</p>
     </div>
     <div style="text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af;">
-        <p style="margin: 0;">This is an automated security notification from SmartEarning support.</p>
-        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartEarning Platform. All rights reserved.</p>
+        <p style="margin: 0;">This is an automated security notification from SmartExn Security Team.</p>
+        <p style="margin: 5px 0 0 0;">&copy; 2026 SmartExn Platform. All rights reserved.</p>
     </div>
 </div>
         `.trim(),
@@ -916,18 +922,20 @@ SmartEarning Team
         type: 'whatsapp',
         subject: '',
         body: `
-*SmartEarning - Password Reset* 🔐
+*SmartExn - Password Reset OTP* 🔐
 
 Hello @{username},
 
-We received a request to reset your password. Use the secure link below to reset your password (valid for 48 hours):
+We received a request to reset your password.
+Your One-Time Passcode (OTP) is: *{otp}*
 
+Or use the secure link below to reset your password:
 🔗 {resetLink}
 
-If you did not request this, please ignore this message.
+This OTP is valid for 48 hours. If you did not request this, please ignore this message.
 
-Regards,
-SmartEarning Support
+Security Team
+SmartExn
         `.trim(),
         isEnabled: true,
         graphicTheme: 'default'

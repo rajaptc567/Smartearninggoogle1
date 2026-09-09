@@ -527,6 +527,47 @@ const SettingSchema = new mongoose.Schema({
     hubDmcaPolicyUpdated: { type: String, default: "Last updated: July 21, 2026" },
     hubDmcaPolicyContent: { type: String, default: "We respect the intellectual property of creators. If you find any tasks, campaigns, social profiles, or images hosted in our hub that infringe upon your copyrighted material, please send a DMCA Takedown Notice containing registration proofs to our support team for prompt review and deletion." },
     emailAutomationEnabled: { type: Boolean, default: false },
+    emailProvider: { type: String, enum: ['existing', 'resend'], default: 'existing' },
+    emailSenders: {
+        type: [
+            {
+                id: { type: String, required: true },
+                email: { type: String, required: true },
+                name: { type: String, required: true },
+                enabled: { type: Boolean, default: true }
+            }
+        ],
+        default: () => [
+            { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information', enabled: true },
+            { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support', enabled: true },
+            { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications', enabled: true },
+            { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance', enabled: true },
+            { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team', enabled: true },
+            { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
+        ]
+    },
+    defaultSenderEmail: { type: String, default: 'notifications@smartexn.com' },
+    eventSenders: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({
+            password_reset: 'security@smartexn.com',
+            password_reset_email: 'security@smartexn.com',
+            security: 'security@smartexn.com',
+            disputes: 'support@smartexn.com',
+            support: 'support@smartexn.com',
+            finance: 'finance@smartexn.com',
+            deposit: 'finance@smartexn.com',
+            withdrawal: 'finance@smartexn.com',
+            transfer: 'finance@smartexn.com',
+            investment: 'finance@smartexn.com',
+            tasks: 'notifications@smartexn.com',
+            campaigns: 'notifications@smartexn.com',
+            notifications: 'notifications@smartexn.com',
+            legal: 'legal@smartexn.com',
+            info: 'info@smartexn.com',
+            welcome: 'info@smartexn.com'
+        })
+    },
     emailSenderAddress: { type: String, default: 'smartexn.com@gmail.com' },
     emailSenderPassword: { type: String, default: '' },
     whatsappAutomationEnabled: { type: Boolean, default: false },
@@ -571,6 +612,25 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.signUpConfig) {
         settings.signUpConfig = {};
+        needsSave = true;
+    }
+    if (!settings.emailSenders || settings.emailSenders.length === 0) {
+        settings.emailSenders = [
+            { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information', enabled: true },
+            { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support', enabled: true },
+            { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications', enabled: true },
+            { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance', enabled: true },
+            { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team', enabled: true },
+            { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
+        ];
+        needsSave = true;
+    }
+    if (!settings.emailProvider) {
+        settings.emailProvider = 'existing';
+        needsSave = true;
+    }
+    if (!settings.defaultSenderEmail) {
+        settings.defaultSenderEmail = 'notifications@smartexn.com';
         needsSave = true;
     }
     if (!settings.taskCategoryPresets) {

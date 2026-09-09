@@ -5,7 +5,9 @@ import {
     getSettings,
     getPublicSettings,
     updateSettings,
-    getDataVersion
+    getDataVersion,
+    sendTestEmail,
+    getEmailLogs
 } from '../controllers/settingsController.js';
 
 const router = express.Router();
@@ -15,6 +17,10 @@ router.get('/version', getDataVersion);
 
 // Dedicated lightweight public settings endpoint
 router.get('/public', getPublicSettings);
+
+// Admin email testing and logs
+router.post('/send-test-email', authorize(['super_admin', 'admin']), sendTestEmail);
+router.get('/email-logs', authorize(['super_admin', 'admin']), getEmailLogs);
 
 router.route('/')
     .get(getSettings) // Removed authorize requirement for GET. Public needs rates/ticker settings.

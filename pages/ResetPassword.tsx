@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import { verifyResetToken, resetPasswordWithToken as apiResetPassword } from '../services/api';
 import { SEOHead } from '../components/SEOHead';
 
-type ResetStatus = 'verifying' | 'invalid' | 'ready' | 'expired' | 'success';
+type ResetStatus = 'verifying' | 'invalid' | 'ready' | 'expired' | 'success' | 'enter_code';
 
 const ResetPassword = () => {
     const [token, setToken] = useState<string | null>(null);
@@ -13,6 +13,7 @@ const ResetPassword = () => {
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [manualCode, setManualCode] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -38,10 +39,31 @@ const ResetPassword = () => {
         if (parsedToken) {
             setToken(parsedToken);
         } else {
-            setStatus('invalid');
-            setError('The security token is missing from the link. Please request a new password reset link.');
+            setStatus('enter_code');
         }
     }, []);
+
+    const handleVerifyManualCode = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const codeToVerify = manualCode.trim();
+        if (!codeToVerify) {
+            setError('Please enter the 6-digit OTP or security token from your email.');
+            return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        try {
+            await verifyResetToken(codeToVerify);
+            setToken(codeToVerify);
+            setStatus('ready');
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+            setError(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // 2. Verify token with backend once token is parsed
     useEffect(() => {
@@ -118,11 +140,55 @@ const ResetPassword = () => {
     const renderContent = () => {
         switch (status) {
             case 'verifying':
-                return <p className="text-center">Verifying reset link...</p>;
+                return <p className="text-center">Verifying reset credentials...</p>;
+            case 'enter_code':
+                return (
+                    <form className="space-y-4" onSubmit={handleVerifyManualCode}>
+                        <div>
+                            <label htmlFor="manualCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Enter 6-Digit OTP or Reset Token
+                            </label>
+                            <input 
+                                id="manualCode"
+                                name="manualCode"
+                                type="text"
+                                required
+                                value={manualCode}
+                                onChange={(e) => setManualCode(e.target.value.trim())}
+                                placeholder="e.g. 748920"
+                                className="w-full px-4 py-3 mt-1 border rounded-lg dark:bg-gray-700 dark:border-gray-600 font-mono tracking-widest text-center text-lg uppercase"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Check your inbox or WhatsApp for your 6-digit one-time passcode.</p>
+                        </div>
+                        {error && (
+                            <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-300">
+                                <strong>Error:</strong> {error}
+                            </div>
+                        )}
+                        <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+                            {isLoading ? 'Verifying OTP...' : 'Verify OTP & Set Password'}
+                        </Button>
+                        <div className="text-center pt-2">
+                            <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
+                                Request a new reset email
+                            </Link>
+                        </div>
+                    </form>
+                );
             case 'invalid':
                 return (
-                    <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-300">
-                        <strong>Error:</strong> {error || 'This reset link is invalid or has expired.'} Please request a new one.
+                    <div className="space-y-4">
+                        <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md dark:bg-red-900/50 dark:text-red-300">
+                            <strong>Error:</strong> {error || 'This reset link or OTP code is invalid or has expired.'}
+                        </div>
+                        <Button onClick={() => { setError(null); setStatus('enter_code'); }} variant="outline" className="w-full">
+                            Enter 6-Digit OTP Manually
+                        </Button>
+                        <div className="text-center">
+                            <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">
+                                Request a new password reset link
+                            </Link>
+                        </div>
                     </div>
                 );
             case 'expired':

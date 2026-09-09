@@ -1,7 +1,9 @@
 
 import Setting from '../models/Setting.js';
 import User from '../models/User.js';
+import EmailLog from '../models/EmailLog.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
+import { sendEmail, APPROVED_SENDERS } from '../services/emailService.js';
 
 // Clean standard fallback logos map for popular gateways
 const STANDARD_FALLBACK_LOGOS = {
@@ -246,6 +248,31 @@ export const updateSettings = async (req, res) => {
                 .filter(item => item.name || item.logoUrl);
         }
 
+        // Strictly sanitize email senders: Never allow arbitrary external From addresses
+        if (Array.isArray(req.body.emailSenders)) {
+            const approvedEmails = APPROVED_SENDERS.map(s => s.email.toLowerCase());
+            req.body.emailSenders = req.body.emailSenders
+                .filter(s => s && typeof s === 'object' && s.email && approvedEmails.includes(String(s.email).toLowerCase()))
+                .map(s => ({
+                    id: String(s.id || s.email.split('@')[0]),
+                    email: String(s.email).toLowerCase(),
+                    name: String(s.name || 'SmartExn'),
+                    enabled: s.enabled !== false
+                }));
+        }
+
+        if (req.body.defaultSenderEmail) {
+            const approvedEmails = APPROVED_SENDERS.map(s => s.email.toLowerCase());
+            if (!approvedEmails.includes(String(req.body.defaultSenderEmail).toLowerCase())) {
+                delete req.body.defaultSenderEmail;
+            }
+        }
+
+        // Validate provider option
+        if (req.body.emailProvider && !['existing', 'resend'].includes(req.body.emailProvider)) {
+            req.body.emailProvider = 'existing';
+        }
+
         const settings = await Setting.findOneAndUpdate({}, { 
             ...req.body, 
             dataVersion: Date.now() 
@@ -292,5 +319,77 @@ export const getDataVersion = async (req, res) => {
     } catch (err) {
         // Return a stable version on error to prevent re-fetch loops
         res.status(200).json({ success: true, version: 1 });
+    }
+};
+
+// Admin Test Email Dispatch
+export const sendTestEmail = async (req, res) => {
+    try {
+        const { toEmail, sender, provider } = req.body;
+        if (!toEmail || !toEmail.includes('@')) {
+            return res.status(400).json({ success: false, error: 'A valid destination email is required.' });
+        }
+
+        const settings = await Setting.getSettings();
+        const activeProvider = provider || settings.emailProvider || 'existing';
+        const testSender = sender || settings.defaultSenderEmail || 'notifications@smartexn.com';
+
+        const result = await sendEmail({
+            to: toEmail,
+            subject: `SmartExn Email Service Test [${activeProvider.toUpperCase()}]`,
+            sender: testSender,
+            provider: activeProvider,
+            event: 'test_email',
+            sentBy: req.user?.username || 'Admin',
+            html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+                <div style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px;">
+                    <h2 style="color: #0284c7; margin: 0; font-size: 20px;">SmartExn Email Service Verification</h2>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; margin: 0 0 16px 0;">Hello,</p>
+                <p style="font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">This test email confirms that your transactional email infrastructure is operating smoothly and successfully delivering messages.</p>
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 0 0 20px 0; font-size: 13px; line-height: 1.8;">
+                    <div><strong>Active Provider:</strong> ${activeProvider === 'resend' ? 'Resend SMTP' : 'Existing Email Provider (Gmail)'}</div>
+                    <div><strong>Dispatched From:</strong> ${testSender}</div>
+                    <div><strong>Delivered To:</strong> ${toEmail}</div>
+                    <div><strong>Dispatched By:</strong> ${req.user?.username || 'Admin'}</div>
+                    <div><strong>Server Time:</strong> ${new Date().toUTCString()}</div>
+                </div>
+                <p style="font-size: 12px; color: #64748b; margin: 0;">This message was triggered by an authorized administrator from the SmartExn settings panel.</p>
+            </div>
+            `
+        });
+
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                error: result.error || 'Failed to send test email',
+                provider: activeProvider,
+                sender: result.sender
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Test email successfully sent via ${activeProvider.toUpperCase()}`,
+            data: {
+                messageId: result.messageId,
+                provider: activeProvider,
+                sender: result.sender
+            }
+        });
+    } catch (err) {
+        console.error('Error in sendTestEmail:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Internal server error while sending test email' });
+    }
+};
+
+// Admin Email Logs Retrieval
+export const getEmailLogs = async (req, res) => {
+    try {
+        const logs = await EmailLog.find().sort({ createdAt: -1 }).limit(100);
+        res.status(200).json({ success: true, count: logs.length, data: logs });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 };
