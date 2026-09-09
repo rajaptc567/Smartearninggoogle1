@@ -21,7 +21,8 @@ export const sendAutomatedMessage = async ({
     sender = null,
     provider = null,
     userId = null,
-    forceEmail = false
+    forceEmail = false,
+    sentBy = 'System'
 }) => {
     try {
         const settings = await Setting.getSettings();
@@ -39,8 +40,9 @@ export const sendAutomatedMessage = async ({
         let emailMessageId = null;
 
         // 1. Email Sending via Central EmailService
-        // Allow sending if emailAutomationEnabled is true OR if forceEmail is requested (transactional/reset/verification)
-        const isEmailAllowed = settings.emailAutomationEnabled || forceEmail || settings.emailProvider === 'resend';
+        // Normal automatic email requires emailAutomationEnabled = true
+        // Explicit security/transactional forceEmail may send when intentionally required
+        const isEmailAllowed = forceEmail || Boolean(settings.emailAutomationEnabled);
 
         if (toEmail && isEmailAllowed) {
             emailAttempted = true;
@@ -52,7 +54,8 @@ export const sendAutomatedMessage = async ({
                     event,
                     sender,
                     provider,
-                    userId
+                    userId,
+                    sentBy
                 });
 
                 emailSuccess = emailResult.success;
@@ -148,7 +151,8 @@ export const sendTemplateNotification = async ({
     variables,
     sentBy = 'System',
     sender = null,
-    provider = null
+    provider = null,
+    forceEmail = false
 }) => {
     try {
         const user = await User.findById(userId);
@@ -215,6 +219,39 @@ export const sendTemplateNotification = async ({
         let sendResult = null;
 
         if (template.type === 'email') {
+            const settings = await Setting.getSettings();
+            const isSecurityTransactional = forceEmail ||
+                sentBy === 'Admin' ||
+                templateKey === 'password_reset_email' ||
+                templateKey === 'password_reset_otp' ||
+                templateKey === 'email_verification' ||
+                templateKey === 'transactional_otp';
+
+            if (!settings?.emailAutomationEnabled && !isSecurityTransactional) {
+                const errorMsg = 'Email automation is currently disabled in settings';
+                console.log(`[sendTemplateNotification] Skipping automatic email for ${templateKey}: ${errorMsg}`);
+                try {
+                    await TemplateLog.create({
+                        userId: user._id,
+                        username: user.username,
+                        userEmail: user.email,
+                        userPhone: user.phone || user.whatsapp,
+                        templateKey: template.key,
+                        templateName: template.name,
+                        type: 'email',
+                        recipient: user.email || 'N/A',
+                        subject: replacedSubject || template.subject,
+                        body: replacedBody || template.body,
+                        status: 'Failed',
+                        error: errorMsg,
+                        sentBy
+                    });
+                } catch (logErr) {
+                    console.error('Failed to create disabled TemplateLog:', logErr);
+                }
+                return { success: false, error: errorMsg };
+            }
+
             recipient = user.email || 'N/A';
             sendResult = await sendEmail({
                 to: user.email,

@@ -151,6 +151,9 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
     };
 };
 
+// In-memory idempotency cache for automatic event handling (expires after 60s)
+const recentSends = new Map();
+
 /**
  * Creates the appropriate nodemailer transporter based on provider settings.
  * Supports:
@@ -159,15 +162,19 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
  */
 const createTransporterForProvider = (provider, settings) => {
     if (provider === 'resend') {
-        const host = process.env.SMTP_HOST || 'smtp.resend.com';
-        const port = parseInt(process.env.SMTP_PORT || '465', 10);
-        const secure = process.env.SMTP_SECURE !== 'false';
-        const user = process.env.SMTP_USER || 'resend';
-        const pass = process.env.SMTP_PASSWORD || process.env.RESEND_API_KEY || '';
-
-        if (!pass) {
-            console.warn('[EmailService] Warning: Resend SMTP password/API key (SMTP_PASSWORD or RESEND_API_KEY) is not set in environment.');
+        const password = process.env.SMTP_PASSWORD || process.env.RESEND_API_KEY;
+        if (!password) {
+            const err = new Error('Resend SMTP credentials missing: please define RESEND_API_KEY or SMTP_PASSWORD in environment variables');
+            err.code = 'MISSING_CREDENTIALS';
+            throw err;
         }
+
+        const host = process.env.SMTP_HOST || 'smtp.resend.com';
+        const port = Number(process.env.SMTP_PORT) || 465;
+        const secure = process.env.SMTP_SECURE !== undefined
+            ? (process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === true)
+            : (port === 465);
+        const user = process.env.SMTP_USER || 'resend';
 
         return {
             transporter: nodemailer.createTransport({
@@ -176,7 +183,7 @@ const createTransporterForProvider = (provider, settings) => {
                 secure,
                 auth: {
                     user,
-                    pass
+                    pass: password
                 }
             }),
             providerName: 'resend',
@@ -185,8 +192,8 @@ const createTransporterForProvider = (provider, settings) => {
     }
 
     // Existing Provider (Gmail SMTP)
-    const user = (settings && settings.emailSenderAddress) || 'smartexn.com@gmail.com';
-    const pass = (settings && settings.emailSenderPassword) || '';
+    const user = (settings && settings.emailSenderAddress) || process.env.GMAIL_USER || 'smartexn.com@gmail.com';
+    const pass = (settings && settings.emailSenderPassword) || process.env.GMAIL_APP_PASSWORD || '';
 
     return {
         transporter: nodemailer.createTransport({
@@ -209,6 +216,7 @@ const sanitizeLogContent = (text) => {
     return String(text)
         .replace(/\b\d{6}\b/g, '******') // Mask 6-digit OTP codes
         .replace(/token=[a-f0-9]{32,64}/gi, 'token=******') // Mask hex tokens
+        .replace(/re_[a-zA-Z0-9_]{20,}/g, 're_******') // Mask Resend API keys
         .replace(/(pass(word)?|key|secret)\s*[:=]\s*["']?[^"'}\s]+["']?/gi, '$1=******');
 };
 
@@ -244,6 +252,23 @@ export const sendEmail = async ({
 
     // Resolve approved sender
     const resolvedSender = resolveApprovedSender(sender, event || templateKey, settings);
+
+    // Idempotency / duplicate protection for automatic event handling (within 60-second window)
+    // Admin manual sends and resends always execute without suppression
+    const idempotencyKey = `${to}:${event || templateKey || 'none'}:${userId || 'none'}:${subject || ''}`;
+    if (sentBy !== 'Admin') {
+        const lastSent = recentSends.get(idempotencyKey);
+        if (lastSent && (Date.now() - lastSent < 60000)) {
+            console.log(`[EmailService] Duplicate email suppressed within 60s window for ${idempotencyKey}`);
+            return {
+                success: true,
+                messageId: `idempotent_${lastSent}`,
+                provider: activeProvider,
+                sender: resolvedSender.email,
+                duplicateSuppressed: true
+            };
+        }
+    }
 
     // Validate recipient
     if (!to || !to.includes('@')) {
@@ -295,6 +320,18 @@ export const sendEmail = async ({
 
         console.log(`[EmailService] Email sent successfully via ${activeProvider.toUpperCase()} [${messageId}] to: ${to} (Sender: ${fromAddress})`);
 
+        // Record successful send timestamp for automatic idempotency tracking
+        if (sentBy !== 'Admin') {
+            recentSends.set(idempotencyKey, Date.now());
+            // Periodic cleanup to avoid memory leaks
+            if (recentSends.size > 1000) {
+                const cutoff = Date.now() - 120000;
+                for (const [k, v] of recentSends.entries()) {
+                    if (v < cutoff) recentSends.delete(k);
+                }
+            }
+        }
+
         await logEmailAttempt({
             event,
             sender: resolvedSender.email,
@@ -319,7 +356,31 @@ export const sendEmail = async ({
             sender: resolvedSender.email
         };
     } catch (sendError) {
-        const errorMsg = sendError.message || 'Unknown email sending failure';
+        let errorMsg = sendError.message || 'Unknown email sending failure';
+
+        // Translate and format specific provider errors for clear diagnostics without exposing secrets
+        if (activeProvider === 'resend') {
+            if (sendError.code === 'MISSING_CREDENTIALS' || errorMsg.includes('Resend SMTP credentials missing')) {
+                errorMsg = 'Resend SMTP credentials missing: please define RESEND_API_KEY or SMTP_PASSWORD in environment variables';
+            } else if (
+                sendError.code === 'EAUTH' || 
+                sendError.responseCode === 535 || 
+                /invalid login|authentication failed|bad auth|username and password not accepted/i.test(errorMsg)
+            ) {
+                errorMsg = 'Resend SMTP authentication failed. Check your API key / password and sender verification.';
+            } else if (
+                sendError.code === 'ESOCKET' || 
+                sendError.code === 'ECONNREFUSED' || 
+                sendError.code === 'ETIMEDOUT' || 
+                sendError.code === 'ENOTFOUND' ||
+                /connect|timeout|network|econnrefused/i.test(errorMsg)
+            ) {
+                const host = process.env.SMTP_HOST || 'smtp.resend.com';
+                const port = Number(process.env.SMTP_PORT) || 465;
+                errorMsg = `Unable to connect to Resend SMTP server (${host}:${port}). Check network or port configuration.`;
+            }
+        }
+
         console.error(`[EmailService] Failed to send email via ${activeProvider.toUpperCase()} to ${to}:`, errorMsg);
 
         await logEmailAttempt({

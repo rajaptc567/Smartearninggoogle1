@@ -1,4 +1,4 @@
-import { createNotification } from './api';
+import { createNotification, sendCustomAdminMessage } from './api';
 
 export interface NotificationEventRule {
     id: string;
@@ -324,9 +324,23 @@ export const triggerSystemNotification = async (
             }
         }
 
-        // 2. Email Notification Dispatch Log & Simulation
+        // 2. Real Automatic Event Email Delivery via Centralized EmailService
         if (rule.emailEnabled && targetUser.email) {
-            console.log(`[EMAIL DISPATCH] To: ${targetUser.email} | Subject: "${emailSubject}"`);
+            const isAutomationAllowed = settings ? Boolean(settings.emailAutomationEnabled) : true;
+            if (isAutomationAllowed) {
+                try {
+                    await sendCustomAdminMessage({
+                        toEmail: targetUser.email,
+                        subject: emailSubject,
+                        messageText: emailBody
+                    });
+                    console.log(`[EMAIL DISPATCH SUCCESS] Event: ${ruleKey} | To: ${targetUser.email} | Subject: "${emailSubject}"`);
+                } catch (emailErr) {
+                    console.warn(`[EMAIL DISPATCH FAILED] Event: ${ruleKey} | To: ${targetUser.email}:`, emailErr);
+                }
+            } else {
+                console.log(`[EMAIL DISPATCH SKIPPED] Global email automation is disabled in settings for event: ${ruleKey}`);
+            }
         }
 
         // 3. WhatsApp Notification Link & Trigger
