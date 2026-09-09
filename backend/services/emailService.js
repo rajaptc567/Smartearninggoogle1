@@ -1,4 +1,3 @@
-import nodemailer from 'nodemailer';
 import Setting from '../models/Setting.js';
 import EmailLog from '../models/EmailLog.js';
 import TemplateLog from '../models/TemplateLog.js';
@@ -154,66 +153,205 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
 // In-memory idempotency cache for automatic event handling (expires after 60s)
 const recentSends = new Map();
 
+// Cached access token for Gmail OAuth
+let cachedGmailAccessToken = null;
+let gmailAccessTokenExpiresAt = 0;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
- * Creates the appropriate nodemailer transporter based on provider settings.
- * Supports:
- * - 'existing': Gmail / Custom SMTP using settings.emailSenderAddress & settings.emailSenderPassword
- * - 'resend': Resend SMTP using SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASSWORD (or RESEND_API_KEY)
+ * Executes an async delivery function with up to maxRetries for transient HTTP failures.
+ * Never retries configuration or authentication failures.
  */
-const createTransporterForProvider = (provider, settings) => {
-    if (provider === 'resend') {
-        console.log('[EmailService] RESEND_RUNTIME_CONFIG', {
-            RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
-            SMTP_PASSWORD: Boolean(process.env.SMTP_PASSWORD),
-            SMTP_HOST: Boolean(process.env.SMTP_HOST),
-            SMTP_PORT: Boolean(process.env.SMTP_PORT),
-            SMTP_USER: Boolean(process.env.SMTP_USER),
-            SMTP_SECURE: Boolean(process.env.SMTP_SECURE)
-        });
-
-        const password = process.env.SMTP_PASSWORD || process.env.RESEND_API_KEY;
-        if (!password) {
-            const err = new Error('Resend SMTP credentials missing: please define RESEND_API_KEY or SMTP_PASSWORD in environment variables');
-            err.code = 'MISSING_CREDENTIALS';
-            throw err;
+const executeWithRetry = async (fn, maxRetries = 2) => {
+    let lastError = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            lastError = err;
+            // Do NOT retry authentication or configuration errors
+            if (err.isConfigError || err.isAuthError || err.status === 400 || err.status === 401 || err.status === 403) {
+                throw err;
+            }
+            if (attempt === maxRetries) {
+                throw err;
+            }
+            const delay = (attempt + 1) * 350;
+            console.warn(`[EmailService] Transient delivery failure (attempt ${attempt + 1}/${maxRetries + 1}): ${err.message}. Retrying in ${delay}ms...`);
+            await sleep(delay);
         }
+    }
+    throw lastError;
+};
 
-        const host = process.env.SMTP_HOST || 'smtp.resend.com';
-        const port = Number(process.env.SMTP_PORT) || 465;
-        const secure = process.env.SMTP_SECURE !== undefined
-            ? (process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === true)
-            : (port === 465);
-        const user = process.env.SMTP_USER || 'resend';
-
-        return {
-            transporter: nodemailer.createTransport({
-                host,
-                port,
-                secure,
-                auth: {
-                    user,
-                    pass: password
-                }
-            }),
-            providerName: 'resend',
-            fromSuffix: ''
-        };
+/**
+ * Send email via Resend HTTPS Email API (POST https://api.resend.com/emails)
+ * Avoids outbound SMTP port blocking on Render Free.
+ */
+const sendViaResendHttp = async ({ from, to, subject, html, text }) => {
+    const apiKey = process.env.RESEND_API_KEY || (process.env.SMTP_PASSWORD && process.env.SMTP_PASSWORD.startsWith('re_') ? process.env.SMTP_PASSWORD : null);
+    if (!apiKey) {
+        const err = new Error('Resend API key missing: please define RESEND_API_KEY in environment variables');
+        err.isConfigError = true;
+        throw err;
     }
 
-    // Existing Provider (Gmail SMTP)
-    const user = (settings && settings.emailSenderAddress) || process.env.GMAIL_USER || 'smartexn.com@gmail.com';
-    const pass = (settings && settings.emailSenderPassword) || process.env.GMAIL_APP_PASSWORD || '';
+    const payload = {
+        from,
+        to: Array.isArray(to) ? to : [to],
+        subject: subject || 'Notification from SmartExn',
+        html: html || text || '',
+        text: text || (html ? html.replace(/<[^>]*>/g, '') : '')
+    };
+
+    const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const errorMsg = data?.message || data?.error || `Resend API returned HTTP ${response.status}`;
+        const err = new Error(errorMsg);
+        err.status = response.status;
+        if (response.status === 401 || response.status === 403) {
+            err.isAuthError = true;
+        }
+        throw err;
+    }
 
     return {
-        transporter: nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user,
-                pass
-            }
-        }),
-        providerName: 'existing',
-        fromSuffix: user
+        messageId: data?.id || `resend_${Date.now()}`
+    };
+};
+
+/**
+ * Retrieve a fresh OAuth access token for Gmail API using server environment credentials
+ */
+const getGmailAccessToken = async () => {
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+        const err = new Error('Gmail OAuth credentials missing: please define GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in environment variables');
+        err.isConfigError = true;
+        throw err;
+    }
+
+    // Return cached token if valid (with 60-second buffer)
+    if (cachedGmailAccessToken && Date.now() < (gmailAccessTokenExpiresAt - 60000)) {
+        return cachedGmailAccessToken;
+    }
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+        })
+    });
+
+    const tokenData = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokenData.access_token) {
+        const desc = tokenData.error_description || tokenData.error || `HTTP ${tokenRes.status}`;
+        const err = new Error(`Gmail OAuth token refresh failed: ${desc}`);
+        err.status = tokenRes.status;
+        err.isAuthError = true;
+        throw err;
+    }
+
+    cachedGmailAccessToken = tokenData.access_token;
+    gmailAccessTokenExpiresAt = Date.now() + ((tokenData.expires_in || 3600) * 1000);
+    return cachedGmailAccessToken;
+};
+
+/**
+ * Send email via Gmail HTTPS API / OAuth users.messages.send
+ * Avoids outbound SMTP port blocking on Render Free.
+ */
+const sendViaGmailHttp = async ({ from, to, subject, html, text, replyTo }) => {
+    const accessToken = await getGmailAccessToken();
+    const gmailUser = process.env.GMAIL_USER || 'me';
+
+    // Construct standard RFC 2822 email payload
+    const boundary = `__boundary_${Date.now()}_${Math.random().toString(36).substring(2)}__`;
+    const cleanSubject = (subject || 'Notification from SmartExn').replace(/[\r\n]/g, ' ');
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(cleanSubject, 'utf-8').toString('base64')}?=`;
+
+    const headers = [
+        `From: ${from}`,
+        `To: ${to}`,
+        `Subject: ${encodedSubject}`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/alternative; boundary="${boundary}"`
+    ];
+
+    if (replyTo && replyTo !== from) {
+        headers.push(`Reply-To: ${replyTo}`);
+    }
+
+    const plainContent = text || (html ? html.replace(/<[^>]*>/g, '') : '');
+    const htmlContent = html || text || '';
+
+    const messageLines = [
+        headers.join('\r\n'),
+        '',
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        Buffer.from(plainContent, 'utf-8').toString('base64'),
+        '',
+        `--${boundary}`,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        Buffer.from(htmlContent, 'utf-8').toString('base64'),
+        '',
+        `--${boundary}--`
+    ];
+
+    const rawMime = messageLines.join('\r\n');
+    // base64url encoding (RFC 4648 §5) required by Gmail REST API
+    const base64UrlRaw = Buffer.from(rawMime, 'utf-8')
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+    const sendRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(gmailUser)}/messages/send`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ raw: base64UrlRaw })
+    });
+
+    const sendData = await sendRes.json().catch(() => ({}));
+    if (!sendRes.ok) {
+        const errorDesc = sendData?.error?.message || `Gmail API HTTP ${sendRes.status}`;
+        const err = new Error(`Gmail API sending error: ${errorDesc}`);
+        err.status = sendRes.status;
+        if (sendRes.status === 401 || sendRes.status === 403) {
+            err.isAuthError = true;
+            cachedGmailAccessToken = null; // Invalidate cached token on auth error
+        }
+        throw err;
+    }
+
+    return {
+        messageId: sendData?.id || `gmail_${Date.now()}`
     };
 };
 
@@ -226,12 +364,14 @@ const sanitizeLogContent = (text) => {
         .replace(/\b\d{6}\b/g, '******') // Mask 6-digit OTP codes
         .replace(/token=[a-f0-9]{32,64}/gi, 'token=******') // Mask hex tokens
         .replace(/re_[a-zA-Z0-9_]{20,}/g, 're_******') // Mask Resend API keys
-        .replace(/(pass(word)?|key|secret)\s*[:=]\s*["']?[^"'}\s]+["']?/gi, '$1=******');
+        .replace(/ya29\.[a-zA-Z0-9_-]+/g, 'ya29.******') // Mask Google OAuth tokens
+        .replace(/(pass(word)?|key|secret|token|refresh_token)\s*[:=]\s*["']?[^"'}\s]+["']?/gi, '$1=******');
 };
 
 /**
  * Centralized Email Sending Method
- * Handles provider selection, sender resolution, logging, and error tracking.
+ * Handles provider selection, sender resolution, HTTPS delivery, logging, and error tracking.
+ * Routes all emails via HTTPS APIs instead of blocked SMTP ports.
  */
 export const sendEmail = async ({
     to,
@@ -262,13 +402,22 @@ export const sendEmail = async ({
     // Resolve approved sender
     const resolvedSender = resolveApprovedSender(sender, event || templateKey, settings);
 
+    // Identify manual admin action or resend to ensure real delivery attempt
+    const isManualAction = Boolean(
+        sentBy && (
+            sentBy === 'Admin' ||
+            sentBy === 'Manual' ||
+            /admin|manual|resend/i.test(String(sentBy))
+        )
+    ) || event === 'manual_resend' || event === 'test_email';
+
     // Idempotency / duplicate protection for automatic event handling (within 60-second window)
     // Admin manual sends and resends always execute without suppression
     const idempotencyKey = `${to}:${event || templateKey || 'none'}:${userId || 'none'}:${subject || ''}`;
-    if (sentBy !== 'Admin') {
+    if (!isManualAction) {
         const lastSent = recentSends.get(idempotencyKey);
         if (lastSent && (Date.now() - lastSent < 60000)) {
-            console.log(`[EmailService] Duplicate email suppressed within 60s window for ${idempotencyKey}`);
+            console.log(`[EmailService] Duplicate automatic email suppressed within 60s window for ${idempotencyKey}`);
             return {
                 success: true,
                 messageId: `idempotent_${lastSent}`,
@@ -310,29 +459,51 @@ export const sendEmail = async ({
     }
 
     try {
-        const { transporter } = createTransporterForProvider(activeProvider, settings);
+        let deliveryResult = null;
 
-        // When using Resend, From is the resolved verified sender (e.g. "SmartExn Security" <security@smartexn.com>)
-        // When using Existing Gmail, we use the resolved sender name and email
-        const fromAddress = `"${resolvedSender.name}" <${resolvedSender.email}>`;
+        if (activeProvider === 'resend') {
+            console.log('[EmailService] RESEND_RUNTIME_CONFIG', {
+                RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY || (process.env.SMTP_PASSWORD && process.env.SMTP_PASSWORD.startsWith('re_'))),
+                API_MODE: 'HTTPS_REST'
+            });
 
-        const mailOptions = {
-            from: fromAddress,
-            to,
-            subject: subject || 'Notification from SmartExn',
-            text: text || (html ? html.replace(/<[^>]*>/g, '') : ''),
-            html: html || text || ''
-        };
+            const fromAddress = `"${resolvedSender.name}" <${resolvedSender.email}>`;
+            deliveryResult = await executeWithRetry(() => sendViaResendHttp({
+                from: fromAddress,
+                to,
+                subject,
+                html,
+                text
+            }), 2);
+        } else {
+            console.log('[EmailService] GMAIL_RUNTIME_CONFIG', {
+                GMAIL_CLIENT_ID: Boolean(process.env.GMAIL_CLIENT_ID),
+                GMAIL_CLIENT_SECRET: Boolean(process.env.GMAIL_CLIENT_SECRET),
+                GMAIL_REFRESH_TOKEN: Boolean(process.env.GMAIL_REFRESH_TOKEN),
+                GMAIL_USER: Boolean(process.env.GMAIL_USER),
+                API_MODE: 'HTTPS_OAUTH_REST'
+            });
 
-        const sendResult = await transporter.sendMail(mailOptions);
-        const messageId = sendResult?.messageId || `msg_${Date.now()}`;
+            const gmailSenderEmail = process.env.GMAIL_USER || (settings && settings.emailSenderAddress) || 'smartexn.com@gmail.com';
+            const fromAddress = `"${resolvedSender.name}" <${gmailSenderEmail}>`;
 
-        console.log(`[EmailService] Email sent successfully via ${activeProvider.toUpperCase()} [${messageId}] to: ${to} (Sender: ${fromAddress})`);
+            deliveryResult = await executeWithRetry(() => sendViaGmailHttp({
+                from: fromAddress,
+                to,
+                subject,
+                html,
+                text,
+                replyTo: resolvedSender.email
+            }), 2);
+        }
+
+        const messageId = deliveryResult?.messageId || `msg_${Date.now()}`;
+
+        console.log(`[EmailService] Email delivered successfully via ${activeProvider.toUpperCase()} HTTPS API [${messageId}] to: ${to} (Sender: ${resolvedSender.email})`);
 
         // Record successful send timestamp for automatic idempotency tracking
-        if (sentBy !== 'Admin') {
+        if (!isManualAction) {
             recentSends.set(idempotencyKey, Date.now());
-            // Periodic cleanup to avoid memory leaks
             if (recentSends.size > 1000) {
                 const cutoff = Date.now() - 120000;
                 for (const [k, v] of recentSends.entries()) {
@@ -369,28 +540,20 @@ export const sendEmail = async ({
 
         // Translate and format specific provider errors for clear diagnostics without exposing secrets
         if (activeProvider === 'resend') {
-            if (sendError.code === 'MISSING_CREDENTIALS' || errorMsg.includes('Resend SMTP credentials missing')) {
-                errorMsg = 'Resend SMTP credentials missing: please define RESEND_API_KEY or SMTP_PASSWORD in environment variables';
-            } else if (
-                sendError.code === 'EAUTH' || 
-                sendError.responseCode === 535 || 
-                /invalid login|authentication failed|bad auth|username and password not accepted/i.test(errorMsg)
-            ) {
-                errorMsg = 'Resend SMTP authentication failed. Check your API key / password and sender verification.';
-            } else if (
-                sendError.code === 'ESOCKET' || 
-                sendError.code === 'ECONNREFUSED' || 
-                sendError.code === 'ETIMEDOUT' || 
-                sendError.code === 'ENOTFOUND' ||
-                /connect|timeout|network|econnrefused/i.test(errorMsg)
-            ) {
-                const host = process.env.SMTP_HOST || 'smtp.resend.com';
-                const port = Number(process.env.SMTP_PORT) || 465;
-                errorMsg = `Unable to connect to Resend SMTP server (${host}:${port}). Check network or port configuration.`;
+            if (sendError.isConfigError || errorMsg.includes('Resend API key missing')) {
+                errorMsg = 'Resend API key missing: please define RESEND_API_KEY in environment variables';
+            } else if (sendError.isAuthError || sendError.status === 401 || sendError.status === 403 || /api key is invalid|unauthorized|forbidden/i.test(errorMsg)) {
+                errorMsg = 'Resend API authentication failed. Check your RESEND_API_KEY and domain verification status in Resend dashboard.';
+            }
+        } else if (activeProvider === 'existing') {
+            if (sendError.isConfigError || errorMsg.includes('Gmail OAuth credentials missing')) {
+                errorMsg = 'Gmail OAuth credentials missing: please define GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in environment variables';
+            } else if (sendError.isAuthError || sendError.status === 401 || sendError.status === 403 || /invalid_grant|unauthorized|invalid_client/i.test(errorMsg)) {
+                errorMsg = 'Gmail OAuth authentication failed. Verify GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and refresh token validity in Google Cloud Console.';
             }
         }
 
-        console.error(`[EmailService] Failed to send email via ${activeProvider.toUpperCase()} to ${to}:`, errorMsg);
+        console.error(`[EmailService] Failed to send email via ${activeProvider.toUpperCase()} HTTPS to ${to}:`, errorMsg);
 
         await logEmailAttempt({
             event,

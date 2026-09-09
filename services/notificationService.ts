@@ -1,4 +1,4 @@
-import { createNotification, sendCustomAdminMessage } from './api';
+import { createNotification } from './api';
 
 export interface NotificationEventRule {
     id: string;
@@ -302,48 +302,40 @@ export const triggerSystemNotification = async (
         const emailBody = replacePlaceholders(rule.emailBody, combinedData);
         const whatsappMsg = replacePlaceholders(rule.whatsappTemplate, combinedData);
 
-        // 1. In-App Bell & Inbox Notification
-        if (rule.inAppEnabled) {
+        const selectedChannels: string[] = [];
+        const isAutomationAllowed = settings ? Boolean(settings.emailAutomationEnabled) : true;
+        if (rule.emailEnabled && targetUser.email && isAutomationAllowed) {
+            selectedChannels.push('email');
+        }
+
+        // 1. Centralized Backend Notification & Email Delivery
+        if (rule.inAppEnabled || selectedChannels.length > 0) {
             const notifPayload = {
                 userId: targetUser._id,
+                subject: emailSubject,
                 title: emailSubject,
-                message: emailBody.replace(/<[^>]*>?/gm, ''), // strip html for brief message
+                message: emailBody,
                 htmlContent: emailBody,
                 read: false,
                 type: rule.category || 'System',
-                date: new Date().toISOString()
+                date: new Date().toISOString(),
+                selectedChannels
             };
 
             try {
-                const res = await createNotification(notifPayload);
-                if (dispatch && res?.data) {
+                const res = await createNotification(notifPayload as any);
+                if (dispatch && res?.data && rule.inAppEnabled) {
                     dispatch({ type: 'ADD_NOTIFICATION', payload: res.data[0] || notifPayload });
                 }
-            } catch (err) {
-                console.warn('In-app notification save warning:', err);
-            }
-        }
-
-        // 2. Real Automatic Event Email Delivery via Centralized EmailService
-        if (rule.emailEnabled && targetUser.email) {
-            const isAutomationAllowed = settings ? Boolean(settings.emailAutomationEnabled) : true;
-            if (isAutomationAllowed) {
-                try {
-                    await sendCustomAdminMessage({
-                        toEmail: targetUser.email,
-                        subject: emailSubject,
-                        messageText: emailBody
-                    });
-                    console.log(`[EMAIL DISPATCH SUCCESS] Event: ${ruleKey} | To: ${targetUser.email} | Subject: "${emailSubject}"`);
-                } catch (emailErr) {
-                    console.warn(`[EMAIL DISPATCH FAILED] Event: ${ruleKey} | To: ${targetUser.email}:`, emailErr);
+                if (selectedChannels.includes('email')) {
+                    console.log(`[EMAIL DISPATCH ENQUEUED] Event: ${ruleKey} | To: ${targetUser.email} | Subject: "${emailSubject}"`);
                 }
-            } else {
-                console.log(`[EMAIL DISPATCH SKIPPED] Global email automation is disabled in settings for event: ${ruleKey}`);
+            } catch (err) {
+                console.warn('Backend notification dispatch warning:', err);
             }
         }
 
-        // 3. WhatsApp Notification Link & Trigger
+        // 2. WhatsApp Notification Link & Trigger
         if (rule.whatsappEnabled && (targetUser.whatsapp || targetUser.phone)) {
             const cleanPhone = (targetUser.whatsapp || targetUser.phone || '').replace(/[^0-9]/g, '');
             const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(whatsappMsg)}`;
