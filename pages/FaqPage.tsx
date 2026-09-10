@@ -128,13 +128,14 @@ const defaultComprehensiveFaqs: FAQCategoryItem[] = [
   {
     category: 'account',
     question: "How can I reach customer support if I need assistance?",
-    answer: "You can submit an inquiry through our contact desk at smartexn.com@gmail.com or use our official WhatsApp support (+447846775662) available on the website."
+    answer: "You can submit an inquiry through our contact desk at support@smartexn.com or use our official WhatsApp support (+447846775662) available on the website."
   }
 ];
 
 const FaqPage: React.FC = () => {
     const { state } = useData();
     const { settings } = state;
+    const supportEmail = settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -313,10 +314,10 @@ const FaqPage: React.FC = () => {
                         </p>
                         <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
                             <a 
-                                href="mailto:smartexn.com@gmail.com" 
+                                href={`mailto:${supportEmail}`} 
                                 className="px-6 py-3 bg-white text-slate-900 hover:bg-sky-50 rounded-xl font-bold text-sm shadow-md transition-all inline-flex items-center justify-center gap-2"
                             >
-                                <span>Email: smartexn.com@gmail.com</span>
+                                <span>Email: {supportEmail}</span>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                             </a>
                             <a 

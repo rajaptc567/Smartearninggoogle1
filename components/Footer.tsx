@@ -11,7 +11,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = true }) => {
   const { settings } = useData();
 
-  const officialEmail = settings?.supportOfficeEmail || settings?.contactUsEmailAddress || 'smartexn.com@gmail.com';
+  const officialEmail = settings?.supportEmail || settings?.supportOfficeEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
   const rawPhone = settings?.supportOfficePhone || settings?.contactUsWhatsAppNumber || '+447846775662';
   const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
   const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent('Hello SmartExn Support Team, I need assistance.')}`;

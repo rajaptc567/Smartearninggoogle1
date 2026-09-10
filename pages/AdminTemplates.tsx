@@ -8,7 +8,10 @@ import {
     getTemplatesHistory,
     deleteTemplatesHistoryBulk,
     manualSendTemplate,
-    resendTemplateLog
+    resendTemplateLog,
+    getAudienceEstimate,
+    getAudienceList,
+    getPublicSettings
 } from '../services/api';
 import { Template, TemplateLog, User } from '../types';
 import { 
@@ -30,7 +33,14 @@ import {
     Filter,
     CheckSquare,
     Square,
-    RefreshCw
+    RefreshCw,
+    Users,
+    Send,
+    Target,
+    Sliders,
+    UserCheck,
+    Layers,
+    ChevronRight
 } from 'lucide-react';
 
 const AdminTemplates: React.FC = () => {
@@ -82,6 +92,41 @@ const AdminTemplates: React.FC = () => {
         txId: '',
         notes: ''
     });
+
+    // Manual Bulk Message: Message Mode (Template vs Custom Message)
+    const [manualMessageMode, setManualMessageMode] = useState<'template' | 'custom'>('template');
+    // Recipient Targeting Mode: Manual Pick vs Audience Filter
+    const [recipientMode, setRecipientMode] = useState<'manual' | 'audience'>('manual');
+    const [customSender, setCustomSender] = useState<string>('notifications@smartexn.com');
+    const [customSubject, setCustomSubject] = useState<string>('');
+    const [customBody, setCustomBody] = useState<string>('');
+    const [showCustomPreview, setShowCustomPreview] = useState<boolean>(false);
+
+    // Dynamic approved senders from DB settings
+    const [approvedSenders, setApprovedSenders] = useState<Array<{ id: string; email: string; name: string }>>([
+        { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information' },
+        { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support' },
+        { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications' },
+        { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance' },
+        { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team' },
+        { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing' }
+    ]);
+
+    // Audience Filtering States
+    const [audienceFilters, setAudienceFilters] = useState({
+        userStatus: 'all',
+        planStatus: 'all',
+        payoutStatus: 'all',
+        activityStatus: 'all',
+        newUsersWindow: 'all',
+        emailVerified: 'all',
+        search: ''
+    });
+    const [audienceEstimate, setAudienceEstimate] = useState<{ eligibleCount: number; totalUsers: number; sampleUsers: any[] } | null>(null);
+    const [loadingEstimate, setLoadingEstimate] = useState<boolean>(false);
+    const [previewUsers, setPreviewUsers] = useState<any[]>([]);
+    const [loadingPreviewUsers, setLoadingPreviewUsers] = useState<boolean>(false);
+    const [showAudiencePreviewModal, setShowAudiencePreviewModal] = useState<boolean>(false);
 
     // History filter states
     const [historySearch, setHistorySearch] = useState<string>('');
@@ -186,7 +231,44 @@ The SmartEarning Desk
 
     useEffect(() => {
         fetchTemplatesData();
+        getPublicSettings().then(res => {
+            if (res.emailSenders && res.emailSenders.length > 0) {
+                const active = res.emailSenders.filter((s: any) => s.enabled !== false);
+                if (active.length > 0) {
+                    setApprovedSenders(active);
+                    const notifSender = active.find((s: any) => s.id === 'notifications') || active[0];
+                    if (notifSender?.email) {
+                        setCustomSender(notifSender.email);
+                    }
+                }
+            }
+        }).catch(() => {});
     }, []);
+
+    const fetchAudienceCount = async (filtersToUse = audienceFilters) => {
+        setLoadingEstimate(true);
+        try {
+            const res = await getAudienceEstimate(filtersToUse, { channel: 'email' });
+            setAudienceEstimate(res);
+        } catch (err: any) {
+            console.warn('Failed to estimate audience:', err);
+        } finally {
+            setLoadingEstimate(false);
+        }
+    };
+
+    const handlePreviewAudience = async () => {
+        setLoadingPreviewUsers(true);
+        setShowAudiencePreviewModal(true);
+        try {
+            const res = await getAudienceList(audienceFilters, { channel: 'email', limit: 20 });
+            setPreviewUsers(res.users || []);
+        } catch (err: any) {
+            alert('Failed to preview audience: ' + (err.message || err));
+        } finally {
+            setLoadingPreviewUsers(false);
+        }
+    };
 
     useEffect(() => {
         if (activeTab === 'history') {
@@ -194,8 +276,11 @@ The SmartEarning Desk
         } else if (activeTab === 'manual') {
             fetchUsersData();
             fetchTemplatesData();
+            if (recipientMode === 'audience') {
+                fetchAudienceCount();
+            }
         }
-    }, [activeTab]);
+    }, [activeTab, recipientMode, audienceFilters]);
 
     const fetchHistoryData = async () => {
         setLoadingHistory(true);
@@ -256,41 +341,134 @@ The SmartEarning Desk
     };
 
     const handleManualSend = async () => {
-        if (manualSelectedUserIds.length === 0) {
-            alert('Please select at least one user.');
-            return;
-        }
-        if (!manualSelectedTemplateKey) {
-            alert('Please select a template to send.');
+        if (recipientMode === 'manual' && manualSelectedUserIds.length === 0) {
+            alert('Please select at least one recipient user from the list.');
             return;
         }
 
-        const template = templates.find(t => t.key === manualSelectedTemplateKey);
-        if (!template) {
-            alert('Selected template not found.');
-            return;
-        }
+        if (manualMessageMode === 'template') {
+            if (!manualSelectedTemplateKey) {
+                alert('Please select a template to send.');
+                return;
+            }
 
-        const confirmMsg = `Are you sure you want to manually send the "${template.name}" (${template.type}) template to ${manualSelectedUserIds.length} user(s)?`;
-        if (!window.confirm(confirmMsg)) {
-            return;
-        }
+            const template = templates.find(t => t.key === manualSelectedTemplateKey);
+            if (!template) {
+                alert('Selected template not found.');
+                return;
+            }
 
-        setSendingManual(true);
-        try {
-            await manualSendTemplate(manualSelectedUserIds, manualSelectedTemplateKey, {
-                amount: manualVars.amount,
-                txId: manualVars.txId,
-                notes: manualVars.notes
-            });
-            setSuccessMsg(`Successfully sent template to ${manualSelectedUserIds.length} users!`);
-            setManualSelectedUserIds([]);
-            setTimeout(() => setSuccessMsg(null), 3500);
-        } catch (err: any) {
-            alert(`Failed to send manual templates: ${err.message}`);
-        } finally {
-            setSendingManual(false);
+            const recipientDesc = recipientMode === 'manual'
+                ? `${manualSelectedUserIds.length} individually selected user(s)`
+                : `${audienceEstimate?.eligibleCount ?? 'matching'} audience users`;
+
+            const confirmMsg = `Are you sure you want to manually broadcast template "${template.name}" (${template.type}) to ${recipientDesc}?`;
+            if (!window.confirm(confirmMsg)) {
+                return;
+            }
+
+            setSendingManual(true);
+            try {
+                if (recipientMode === 'manual') {
+                    await manualSendTemplate({
+                        mode: 'template',
+                        templateKey: manualSelectedTemplateKey,
+                        targetUserIds: manualSelectedUserIds,
+                        variables: manualVars
+                    });
+                } else {
+                    await manualSendTemplate({
+                        mode: 'template',
+                        templateKey: manualSelectedTemplateKey,
+                        filters: audienceFilters,
+                        variables: manualVars
+                    });
+                }
+
+                setSuccessMsg(`Successfully queued template broadcast to ${recipientDesc}!`);
+                if (recipientMode === 'manual') {
+                    setManualSelectedUserIds([]);
+                }
+                setTimeout(() => setSuccessMsg(null), 4000);
+            } catch (err: any) {
+                alert(`Failed to send manual templates: ${err.message}`);
+            } finally {
+                setSendingManual(false);
+            }
+        } else {
+            // Custom Message Mode
+            if (!customSubject.trim()) {
+                alert('Please enter a message subject.');
+                return;
+            }
+            if (!customBody.trim()) {
+                alert('Please enter a message body.');
+                return;
+            }
+
+            const recipientDesc = recipientMode === 'manual'
+                ? `${manualSelectedUserIds.length} individually selected user(s)`
+                : `${audienceEstimate?.eligibleCount ?? 'matching'} audience users`;
+
+            const confirmMsg = `Are you sure you want to broadcast this custom email from "${customSender}" to ${recipientDesc}?\n\nSubject: ${customSubject}`;
+            if (!window.confirm(confirmMsg)) {
+                return;
+            }
+
+            setSendingManual(true);
+            try {
+                if (recipientMode === 'manual') {
+                    await manualSendTemplate({
+                        mode: 'custom',
+                        customEmail: {
+                            fromSender: customSender,
+                            subject: customSubject.trim(),
+                            body: customBody.trim()
+                        },
+                        targetUserIds: manualSelectedUserIds,
+                        variables: manualVars
+                    });
+                } else {
+                    await manualSendTemplate({
+                        mode: 'custom',
+                        customEmail: {
+                            fromSender: customSender,
+                            subject: customSubject.trim(),
+                            body: customBody.trim()
+                        },
+                        filters: audienceFilters,
+                        variables: manualVars
+                    });
+                }
+
+                setSuccessMsg(`Successfully dispatched custom email broadcast to ${recipientDesc}!`);
+                if (recipientMode === 'manual') {
+                    setManualSelectedUserIds([]);
+                }
+                setTimeout(() => setSuccessMsg(null), 4000);
+            } catch (err: any) {
+                alert(`Failed to send custom message: ${err.message}`);
+            } finally {
+                setSendingManual(false);
+            }
         }
+    };
+
+    const insertPlaceholderIntoBody = (tag: string) => {
+        setCustomBody(prev => prev + ' ' + tag);
+    };
+
+    const getRenderedPreviewBody = () => {
+        let content = customBody || '<p style="color: #9ca3af; font-style: italic;">No message body written yet...</p>';
+        return content
+            .replace(/\{username\}/g, '<strong>john_doe</strong>')
+            .replace(/\{fullName\}/g, '<strong>John Doe</strong>')
+            .replace(/\{amount\}/g, `<strong>${manualVars.amount || '$50.00'}</strong>`)
+            .replace(/\{currency\}/g, 'USD')
+            .replace(/\{txId\}/g, `<code>${manualVars.txId || 'TXN-8842109'}</code>`)
+            .replace(/\{date\}/g, new Date().toLocaleString())
+            .replace(/\{notes\}/g, manualVars.notes || 'Administrative account settlement notes.')
+            .replace(/\{taskTitle\}/g, 'Social Media Campaign Verification');
     };
 
     const handleToggleSelectUser = (id: string) => {
@@ -1321,211 +1499,705 @@ The SmartEarning Desk
 
             {/* Manual Send Tab */}
             {activeTab === 'manual' && (
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                    {/* Left Panel: Configuration (Col Span 5) */}
-                    <div className="xl:col-span-5 space-y-6">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-5">
-                            <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                1. Select Template & Setup Parameters
+                <div className="space-y-6">
+                    {/* Mode Selection Banners */}
+                    <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Send className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                <span>Bulk & Manual Communications Desk</span>
                             </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                Dispatch templated notifications or custom administrative emails to manual picks or dynamic audience filters.
+                            </p>
+                        </div>
 
-                            {/* Template Selection */}
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">
-                                    Message Template
-                                </label>
-                                <select
-                                    value={manualSelectedTemplateKey}
-                                    onChange={(e) => setManualSelectedTemplateKey(e.target.value)}
-                                    className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
-                                >
-                                    <option value="">-- Choose Template --</option>
-                                    {templates.map(tpl => (
-                                        <option key={tpl.key} value={tpl.key}>
-                                            {tpl.name} ({tpl.type === 'email' ? '✉️ Email' : '💬 WhatsApp'})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* Variable inputs card */}
-                            <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-xl border border-gray-150 dark:border-gray-800 space-y-4">
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                                    <Info className="w-4 h-4 text-blue-500" />
-                                    <span>Optional Substitution Variables</span>
-                                </div>
-
-                                <div>
-                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
-                                        Amount value ({'{amount}'})
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 5,000"
-                                        value={manualVars.amount}
-                                        onChange={(e) => setManualVars(prev => ({ ...prev, amount: e.target.value }))}
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
-                                        Transaction reference ID ({'{txId}'})
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. TXN-9274920"
-                                        value={manualVars.txId}
-                                        onChange={(e) => setManualVars(prev => ({ ...prev, txId: e.target.value }))}
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
-                                        Remarks / Notes ({'{notes}'})
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        placeholder="e.g. Verified by accountant desk."
-                                        value={manualVars.notes}
-                                        onChange={(e) => setManualVars(prev => ({ ...prev, notes: e.target.value }))}
-                                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none resize-none"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Dispatch Trigger Panel */}
-                            <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                                <div className="flex items-center justify-between mb-3 text-xs text-gray-500 dark:text-gray-400">
-                                    <span>Recipient Count:</span>
-                                    <span className="font-bold text-blue-600 dark:text-blue-400">
-                                        {manualSelectedUserIds.length} User(s) selected
-                                    </span>
-                                </div>
-
+                        {/* Top Dual Toggles */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Mode:</span>
                                 <button
-                                    onClick={handleManualSend}
-                                    id="btn-trigger-manual-send"
-                                    disabled={sendingManual || manualSelectedUserIds.length === 0 || !manualSelectedTemplateKey}
-                                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-bold rounded-xl transition-all shadow-sm gap-2"
+                                    type="button"
+                                    onClick={() => setManualMessageMode('template')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        manualMessageMode === 'template'
+                                            ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                    }`}
                                 >
-                                    {sendingManual ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                                            <span>Sending Broadcast...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="w-4 h-4" />
-                                            <span>Manually Send Template ({manualSelectedUserIds.length})</span>
-                                        </>
-                                    )}
+                                    Template
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setManualMessageMode('custom')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        manualMessageMode === 'custom'
+                                            ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                    }`}
+                                >
+                                    Custom Email
+                                </button>
+                            </div>
+
+                            <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Audience:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setRecipientMode('manual')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        recipientMode === 'manual'
+                                            ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                    }`}
+                                >
+                                    Manual Pick
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRecipientMode('audience')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        recipientMode === 'audience'
+                                            ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                    }`}
+                                >
+                                    Audience Filter
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Panel: Recipient list (Col Span 7) */}
-                    <div className="xl:col-span-7 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-[700px]">
-                        <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
-                            2. Select Recipient Users ({manualSelectedUserIds.length} Selected)
-                        </h3>
-
-                        {/* Recipient Search */}
-                        <div className="relative mb-4">
-                            <input
-                                type="text"
-                                placeholder="Search users by name, email, or username..."
-                                value={manualUserSearch}
-                                onChange={(e) => setManualUserSearch(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-                        </div>
-
-                        {/* Selection Options Header */}
-                        <div className="flex items-center justify-between mb-3 px-1">
-                            <button
-                                onClick={handleSelectAllUsersVisible}
-                                className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                                {filteredUsers.length > 0 && filteredUsers.every(u => manualSelectedUserIds.includes(u._id)) ? (
-                                    <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                ) : (
-                                    <Square className="w-4 h-4 text-gray-400" />
-                                )}
-                                <span>Select All Visible ({filteredUsers.length})</span>
-                            </button>
-
-                            {manualSelectedUserIds.length > 0 && (
-                                <button
-                                    onClick={() => setManualSelectedUserIds([])}
-                                    className="text-[11px] font-bold text-red-500 hover:underline"
-                                >
-                                    Clear Selection
-                    </button>
-                            )}
-                        </div>
-
-                        {/* User Selection table container */}
-                        <div className="flex-1 overflow-y-auto pr-1">
-                            {loadingUsers ? (
-                                <div className="flex justify-center items-center py-12">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+                        {/* Left Panel: Configuration (Col Span 5) */}
+                        <div className="xl:col-span-5 space-y-6">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-5">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <span>1. Message Content</span>
+                                        <span className="text-[10px] lowercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 font-bold">
+                                            {manualMessageMode}
+                                        </span>
+                                    </h3>
                                 </div>
-                            ) : filteredUsers.length === 0 ? (
-                                <div className="text-center py-12 text-gray-400">
-                                    <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                                    <p className="text-xs">No users match search query.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {filteredUsers.map(user => {
-                                        const isUserSelected = manualSelectedUserIds.includes(user._id);
-                                        return (
-                                            <div
-                                                key={user._id}
-                                                onClick={() => handleToggleSelectUser(user._id)}
-                                                className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${
-                                                    isUserSelected
-                                                        ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900'
-                                                        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-750'
-                                                }`}
+
+                                {manualMessageMode === 'template' ? (
+                                    /* Existing Template Selection */
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
+                                                Select System Template
+                                            </label>
+                                            <select
+                                                value={manualSelectedTemplateKey}
+                                                onChange={(e) => setManualSelectedTemplateKey(e.target.value)}
+                                                className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
-                                                <div className="flex items-center justify-center">
-                                                    {isUserSelected ? (
-                                                        <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                <option value="">-- Choose Template --</option>
+                                                {templates.map(tpl => (
+                                                    <option key={tpl.key} value={tpl.key}>
+                                                        {tpl.name} ({tpl.type === 'email' ? '✉️ Email' : '💬 WhatsApp'})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {manualSelectedTemplateKey && (
+                                            <div className="p-3 bg-blue-50/60 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl text-xs space-y-1">
+                                                {(() => {
+                                                    const cur = templates.find(t => t.key === manualSelectedTemplateKey);
+                                                    if (!cur) return null;
+                                                    return (
+                                                        <>
+                                                            <div className="font-bold text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                                                                <span>{cur.name}</span>
+                                                                <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-100">
+                                                                    {cur.type}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-gray-600 dark:text-gray-400 text-[11px]">
+                                                                Key: <code className="font-mono">{cur.key}</code>
+                                                            </p>
+                                                            {cur.subject && (
+                                                                <p className="text-gray-600 dark:text-gray-400 text-[11px] truncate">
+                                                                    Subject: <strong>{cur.subject}</strong>
+                                                                </p>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* Custom Message Composer */
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                From Approved Sender
+                                            </label>
+                                            <select
+                                                value={customSender}
+                                                onChange={(e) => setCustomSender(e.target.value)}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                {approvedSenders.map(sender => (
+                                                    <option key={sender.id} value={sender.email}>
+                                                        {sender.email} ({sender.name})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                Verified SmartExn domain address. External From addresses are strictly restricted.
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                Email Subject Line
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Important Account Announcement for {fullName}"
+                                                value={customSubject}
+                                                onChange={(e) => setCustomSubject(e.target.value)}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                    Email Body (HTML or Text)
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowCustomPreview(!showCustomPreview)}
+                                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                                >
+                                                    {showCustomPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                                    <span>{showCustomPreview ? 'Hide Preview' : 'Live Preview'}</span>
+                                                </button>
+                                            </div>
+
+                                            {/* Quick placeholder insertion buttons */}
+                                            <div className="flex flex-wrap items-center gap-1 mb-2">
+                                                <span className="text-[10px] text-gray-400 mr-1">Insert tag:</span>
+                                                {['{username}', '{fullName}', '{amount}', '{currency}', '{txId}', '{date}', '{notes}'].map(tag => (
+                                                    <button
+                                                        key={tag}
+                                                        type="button"
+                                                        onClick={() => insertPlaceholderIntoBody(tag)}
+                                                        className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100 hover:bg-blue-50 text-gray-700 hover:text-blue-700 dark:bg-gray-750 dark:hover:bg-blue-900/40 dark:text-gray-300 dark:hover:text-blue-300 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                                    >
+                                                        {tag}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <textarea
+                                                rows={7}
+                                                placeholder="Write your email body here. You may use standard HTML tags such as <p>, <strong>, <a href='...'>, <br/>..."
+                                                value={customBody}
+                                                onChange={(e) => setCustomBody(e.target.value)}
+                                                className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                                            />
+                                        </div>
+
+                                        {/* Live Preview Container */}
+                                        {showCustomPreview && (
+                                            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
+                                                <div className="flex items-center justify-between text-[11px] font-bold text-blue-900 dark:text-blue-200">
+                                                    <span>Live Preview Output (Sample Data)</span>
+                                                    <span className="text-[9px] uppercase px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                                        From: {customSender}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                                                    Subject: {customSubject ? customSubject.replace(/\{fullName\}/g, 'John Doe').replace(/\{username\}/g, 'john_doe') : '(Empty Subject)'}
+                                                </div>
+                                                <div className="p-3 bg-white dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-750 text-xs text-gray-800 dark:text-gray-200 shadow-sm leading-relaxed break-words">
+                                                    {customBody.includes('<') && customBody.includes('>') ? (
+                                                        <div dangerouslySetInnerHTML={{ __html: getRenderedPreviewBody() }} />
                                                     ) : (
-                                                        <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                        <div className="whitespace-pre-wrap">{getRenderedPreviewBody().replace(/<[^>]*>/g, '')}</div>
                                                     )}
                                                 </div>
-
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                                                            {user.fullName} (@{user.username})
-                                                        </span>
-                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
-                                                            user.status === 'Active' || user.status === 'Verified'
-                                                                ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400'
-                                                                : 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-500'
-                                                        }`}>
-                                                            {user.status}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-mono truncate">
-                                                        <span>{user.email}</span>
-                                                        <span>{user.whatsapp || user.phone || 'No phone'}</span>
-                                                    </div>
-                                                </div>
                                             </div>
-                                        );
-                                    })}
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Substitution Variables Card */}
+                                <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-xl border border-gray-150 dark:border-gray-800 space-y-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
+                                        <Info className="w-4 h-4 text-blue-500" />
+                                        <span>Optional Substitution Values</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                                Amount ({'{amount}'})
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. 5,000"
+                                                value={manualVars.amount}
+                                                onChange={(e) => setManualVars(prev => ({ ...prev, amount: e.target.value }))}
+                                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                                Reference ID ({'{txId}'})
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. TXN-9274920"
+                                                value={manualVars.txId}
+                                                onChange={(e) => setManualVars(prev => ({ ...prev, txId: e.target.value }))}
+                                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1">
+                                            Remarks / Notes ({'{notes}'})
+                                        </label>
+                                        <textarea
+                                            rows={2}
+                                            placeholder="e.g. Verified by management desk."
+                                            value={manualVars.notes}
+                                            onChange={(e) => setManualVars(prev => ({ ...prev, notes: e.target.value }))}
+                                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-850 dark:text-white focus:outline-none resize-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Dispatch Trigger Panel */}
+                                <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                        <span>Target Audience:</span>
+                                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                                            {recipientMode === 'manual'
+                                                ? `${manualSelectedUserIds.length} User(s) selected`
+                                                : `${audienceEstimate?.eligibleCount ?? 'Calculating...'} User(s) match filters`}
+                                        </span>
+                                    </div>
+
+                                    <button
+                                        onClick={handleManualSend}
+                                        id="btn-trigger-manual-send"
+                                        disabled={
+                                            sendingManual || 
+                                            (recipientMode === 'manual' && manualSelectedUserIds.length === 0) ||
+                                            (manualMessageMode === 'template' && !manualSelectedTemplateKey) ||
+                                            (manualMessageMode === 'custom' && (!customSubject.trim() || !customBody.trim()))
+                                        }
+                                        className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-bold rounded-xl transition-all shadow-sm gap-2"
+                                    >
+                                        {sendingManual ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                                                <span>Broadcasting Messages...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Send className="w-4 h-4" />
+                                                <span>
+                                                    {manualMessageMode === 'template'
+                                                        ? `Broadcast Template (${recipientMode === 'manual' ? manualSelectedUserIds.length : (audienceEstimate?.eligibleCount ?? 0)})`
+                                                        : `Send Custom Broadcast (${recipientMode === 'manual' ? manualSelectedUserIds.length : (audienceEstimate?.eligibleCount ?? 0)})`}
+                                                </span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Panel: Recipient Selection & Audience Filtering (Col Span 7) */}
+                        <div className="xl:col-span-7 space-y-6">
+                            {recipientMode === 'manual' ? (
+                                /* Manual User Checklist Panel */
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-[750px]">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                            2. Select Individual Recipients ({manualSelectedUserIds.length} Selected)
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRecipientMode('audience')}
+                                            className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline inline-flex items-center gap-1"
+                                        >
+                                            <span>Switch to Filter Segments</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+
+                                    {/* Recipient Search */}
+                                    <div className="relative mb-4">
+                                        <input
+                                            type="text"
+                                            placeholder="Search users by name, email, or username..."
+                                            value={manualUserSearch}
+                                            onChange={(e) => setManualUserSearch(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                                    </div>
+
+                                    {/* Selection Options Header */}
+                                    <div className="flex items-center justify-between mb-3 px-1">
+                                        <button
+                                            onClick={handleSelectAllUsersVisible}
+                                            className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                                        >
+                                            {filteredUsers.length > 0 && filteredUsers.every(u => manualSelectedUserIds.includes(u._id)) ? (
+                                                <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                            ) : (
+                                                <Square className="w-4 h-4 text-gray-400" />
+                                            )}
+                                            <span>Select All Visible ({filteredUsers.length})</span>
+                                        </button>
+
+                                        {manualSelectedUserIds.length > 0 && (
+                                            <button
+                                                onClick={() => setManualSelectedUserIds([])}
+                                                className="text-[11px] font-bold text-red-500 hover:underline"
+                                            >
+                                                Clear Selection
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* User Selection table container */}
+                                    <div className="flex-1 overflow-y-auto pr-1">
+                                        {loadingUsers ? (
+                                            <div className="flex justify-center items-center py-12">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                                            </div>
+                                        ) : filteredUsers.length === 0 ? (
+                                            <div className="text-center py-12 text-gray-400">
+                                                <Search className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                                                <p className="text-xs">No users match search query.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {filteredUsers.map(user => {
+                                                    const isUserSelected = manualSelectedUserIds.includes(user._id);
+                                                    return (
+                                                        <div
+                                                            key={user._id}
+                                                            onClick={() => handleToggleSelectUser(user._id)}
+                                                            className={`p-3 rounded-xl border transition-all flex items-center gap-3 cursor-pointer select-none ${
+                                                                isUserSelected
+                                                                    ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900'
+                                                                    : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-750'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-center">
+                                                                {isUserSelected ? (
+                                                                    <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                                ) : (
+                                                                    <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                                                        {user.fullName} (@{user.username})
+                                                                    </span>
+                                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider ${
+                                                                        user.status === 'Active' || user.status === 'Verified'
+                                                                            ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+                                                                            : 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-500'
+                                                                    }`}>
+                                                                        {user.status}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1 font-mono truncate">
+                                                                    <span>{user.email}</span>
+                                                                    <span>{user.whatsapp || user.phone || 'No phone'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Audience Segmentation Filter Panel */
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Target className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                                <span>2. Advanced Audience Filter Rules</span>
+                                            </h3>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                Target entire cohorts based on account activity, plans, and successful payouts.
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setRecipientMode('manual')}
+                                            className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline inline-flex items-center gap-1"
+                                        >
+                                            <span>Switch to Manual Pick</span>
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+
+                                    {/* Real-time Estimate Metric Card */}
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-gray-900 dark:to-blue-950/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/50 flex flex-wrap items-center justify-between gap-4">
+                                        <div>
+                                            <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Users className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                                <span>Estimated Matching Audience</span>
+                                            </div>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                                <span className="text-3xl font-black text-gray-900 dark:text-white">
+                                                    {loadingEstimate ? (
+                                                        <span className="inline-block animate-pulse text-gray-400">...</span>
+                                                    ) : (
+                                                        audienceEstimate?.eligibleCount ?? 0
+                                                    )}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    recipients with deliverable email address
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                                Total registered users considered: {audienceEstimate?.totalUsers ?? 'all'}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => fetchAudienceCount()}
+                                                disabled={loadingEstimate}
+                                                className="px-3 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm inline-flex items-center gap-1.5 transition-all"
+                                            >
+                                                <RefreshCw className={`w-3.5 h-3.5 ${loadingEstimate ? 'animate-spin' : ''}`} />
+                                                <span>Recalculate</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={handlePreviewAudience}
+                                                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm inline-flex items-center gap-1.5 transition-all"
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                                <span>Preview Users</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Filter Controls Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* 1. Account Status */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                User Account Status
+                                            </label>
+                                            <select
+                                                value={audienceFilters.userStatus}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, userStatus: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All User Accounts</option>
+                                                <option value="active">Active Accounts Only (Active & Verified)</option>
+                                                <option value="Verified">Verified Users</option>
+                                                <option value="Pending">Pending Verification</option>
+                                                <option value="Blocked">Blocked / Suspended Users</option>
+                                                <option value="non_active">Non-Active (Blocked / Pending / Inactive)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 2. Plan Status */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Investment Plan Status
+                                            </label>
+                                            <select
+                                                value={audienceFilters.planStatus}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, planStatus: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users (With or without Plan)</option>
+                                                <option value="has_active_plan">Has Active / Enrolled Plan</option>
+                                                <option value="no_active_plan">No Active Investment Plan</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 3. Payout History */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Payout & Withdrawal History
+                                            </label>
+                                            <select
+                                                value={audienceFilters.payoutStatus}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, payoutStatus: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users</option>
+                                                <option value="paid_once">Has At Least 1 Approved Payout</option>
+                                                <option value="never_paid">Never Received a Payout (New Earners)</option>
+                                                <option value="frequent_payout">Frequent Earners (3+ Payouts)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 4. Registration Date Window */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Registration Cohort
+                                            </label>
+                                            <select
+                                                value={audienceFilters.newUsersWindow}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, newUsersWindow: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Time (Any Join Date)</option>
+                                                <option value="7">Joined in Last 7 Days</option>
+                                                <option value="30">Joined in Last 30 Days</option>
+                                                <option value="90">Joined in Last 90 Days</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 5. User Activity Window */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Recent Login / Activity
+                                            </label>
+                                            <select
+                                                value={audienceFilters.activityStatus}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, activityStatus: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users (Regardless of Activity)</option>
+                                                <option value="active_recent">Recently Active (Within Last 7 Days)</option>
+                                                <option value="inactive_30d">Dormant / Inactive (30+ Days)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 6. Email Verification */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Email Verification Status
+                                            </label>
+                                            <select
+                                                value={audienceFilters.emailVerified}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, emailVerified: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users</option>
+                                                <option value="verified">Verified Email Addresses Only</option>
+                                                <option value="unverified">Unverified Email Addresses Only</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Optional Search / Keyword within Filter */}
+                                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                            Optional Keyword Filter
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Filter by keyword in name or email..."
+                                            value={audienceFilters.search}
+                                            onChange={(e) => setAudienceFilters(prev => ({ ...prev, search: e.target.value }))}
+                                            className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>
                     </div>
+
+                    {/* Audience Preview Modal */}
+                    {showAudiencePreviewModal && (
+                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-white dark:bg-gray-850 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <div className="p-4 border-b border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                            <Users className="w-4 h-4 text-blue-600" />
+                                            <span>Matching Audience Preview (First 20 Users)</span>
+                                        </h4>
+                                        <p className="text-xs text-gray-500">
+                                            Sample of users who will receive this broadcast based on active filter rules.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowAudiencePreviewModal(false)}
+                                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                                    {loadingPreviewUsers ? (
+                                        <div className="py-12 flex justify-center items-center">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                                        </div>
+                                    ) : previewUsers.length === 0 ? (
+                                        <div className="py-12 text-center text-gray-400">
+                                            <p className="text-xs">No users matched this audience filter combination.</p>
+                                        </div>
+                                    ) : (
+                                        previewUsers.map((u, idx) => (
+                                            <div
+                                                key={u._id || idx}
+                                                className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-150 dark:border-gray-800 flex items-center justify-between gap-3 text-xs"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-gray-900 dark:text-white truncate">
+                                                        {u.fullName || 'User'} <span className="text-gray-400 font-normal">(@{u.username})</span>
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-500 font-mono truncate">
+                                                        {u.email}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                                        u.status === 'Active' || u.status === 'Verified'
+                                                            ? 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300'
+                                                            : 'bg-gray-200 text-gray-700 dark:bg-gray-750 dark:text-gray-400'
+                                                    }`}>
+                                                        {u.status || 'Active'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                <div className="p-4 border-t border-gray-100 dark:border-gray-750 flex items-center justify-between">
+                                    <span className="text-xs text-gray-500">
+                                        Showing up to 20 users for verification.
+                                    </span>
+                                    <button
+                                        onClick={() => setShowAudiencePreviewModal(false)}
+                                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-xl"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

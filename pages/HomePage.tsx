@@ -342,7 +342,7 @@ const HomePage: React.FC = () => {
                     "contactPoint": {
                         "@type": "ContactPoint",
                         "contactType": "customer support",
-                        "email": "smartexn.com@gmail.com",
+                        "email": settings?.supportEmail || settings?.supportOfficeEmail || settings?.contactUsEmailAddress || "support@smartexn.com",
                         "telephone": "+447846775662",
                         "url": "https://smartexn.com/faqs"
                     },

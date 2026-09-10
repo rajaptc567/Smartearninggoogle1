@@ -88,11 +88,88 @@ export const DEFAULT_EVENT_SENDERS = {
     test_email: 'notifications@smartexn.com'
 };
 
+// Role-to-event routing map for SmartExn system notifications
+export const EVENT_TO_ROLE = {
+    // Security & Auth -> security
+    password_reset: 'security',
+    password_reset_email: 'security',
+    password_reset_otp: 'security',
+    security: 'security',
+    auth: 'security',
+    email_verification: 'security',
+    transactional_otp: 'security',
+
+    // Support & Disputes -> support
+    support: 'support',
+    dispute: 'support',
+    disputes: 'support',
+    dispute_opened_email: 'support',
+    dispute_resolved_worker_email: 'support',
+    dispute_resolved_employer_email: 'support',
+    DISPUTE_OPENED: 'support',
+    DISPUTE_REPLIED: 'support',
+
+    // Finance & Billing -> finance
+    finance: 'finance',
+    deposit: 'finance',
+    deposit_pending_email: 'finance',
+    deposit_success_email: 'finance',
+    deposit_rejected_email: 'finance',
+    withdrawal: 'finance',
+    transfer: 'finance',
+    transfer_request_email: 'finance',
+    transfer_pending_email: 'finance',
+    transfer_sent_email: 'finance',
+    transfer_received_email: 'finance',
+    transfer_rejected_email: 'finance',
+    investment: 'finance',
+    plan_activated_email: 'finance',
+    INVESTMENT_PROFIT_CREDITED: 'finance',
+    wallet_adjusted_email: 'finance',
+    commission: 'finance',
+    commission_locked_email: 'finance',
+    commission_unlocked_email: 'finance',
+    commission_missed_email: 'finance',
+
+    // Tasks & Campaigns -> notifications
+    task: 'notifications',
+    tasks: 'notifications',
+    notifications: 'notifications',
+    campaign: 'notifications',
+    campaigns: 'notifications',
+    TASK_PROOF_SUBMITTED: 'notifications',
+    TASK_PROOF_APPROVED: 'notifications',
+    TASK_PROOF_REJECTED: 'notifications',
+    CAMPAIGN_SUBMITTED_FOR_APPROVAL: 'notifications',
+    task_campaign_created_email: 'notifications',
+    task_campaign_approved_email: 'notifications',
+    task_campaign_rejected_email: 'notifications',
+    task_submission_received_email: 'notifications',
+    task_submission_approved_email: 'notifications',
+    task_submission_rejected_email: 'notifications',
+
+    // Legal & Compliance -> legal
+    legal: 'legal',
+    compliance: 'legal',
+    dmca: 'legal',
+    terms: 'legal',
+
+    // General & Announcements -> info
+    info: 'info',
+    general: 'info',
+    welcome: 'info',
+    welcome_message_email: 'info',
+    general_announcement_email: 'info',
+    test_email: 'notifications'
+};
+
 /**
  * Resolves an approved sender address with safety validation and fallbacks.
  * Enforces:
- * 1. Never allow arbitrary external From addresses.
- * 2. If a selected sender is disabled/unavailable, use the configured default sender.
+ * 1. Read admin-saved configurations from Settings (email, name, enabled state).
+ * 2. Route events by semantic role (security, finance, notifications, support, legal, info).
+ * 3. Never allow arbitrary unverified external From addresses.
+ * 4. If a selected sender is disabled/unavailable, use the configured default sender.
  */
 export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
     const configuredSenders = (settings && Array.isArray(settings.emailSenders) && settings.emailSenders.length > 0)
@@ -101,32 +178,69 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
 
     const defaultSenderEmail = (settings && settings.defaultSenderEmail) || DEFAULT_SENDER_EMAIL;
 
-    // Check event-specific override if no specific sender was passed
-    let targetEmail = requestedSender;
-    if (!targetEmail && eventKey) {
-        const customEventSenders = (settings && settings.eventSenders) || {};
-        targetEmail = customEventSenders[eventKey] || DEFAULT_EVENT_SENDERS[eventKey];
+    let targetSender = null;
+
+    // 1. If an explicit sender (role id or email address) was requested
+    if (requestedSender) {
+        const cleanRequested = String(requestedSender).trim().toLowerCase();
+        // Check by role ID first (e.g., 'info', 'support', 'finance')
+        targetSender = configuredSenders.find(s => String(s.id).toLowerCase() === cleanRequested);
+        // If not found by role ID, check by email address
+        if (!targetSender) {
+            targetSender = configuredSenders.find(s => String(s.email).toLowerCase() === cleanRequested);
+        }
     }
 
-    if (!targetEmail) {
-        targetEmail = defaultSenderEmail;
+    // 2. If no explicit sender was passed, resolve by event routing
+    if (!targetSender && eventKey) {
+        // Check custom event override in settings if present
+        const customEventMapping = (settings && settings.eventSenders) || {};
+        const mappedTarget = customEventMapping[eventKey];
+
+        if (mappedTarget) {
+            const cleanMapped = String(mappedTarget).trim().toLowerCase();
+            targetSender = configuredSenders.find(s => String(s.id).toLowerCase() === cleanMapped || String(s.email).toLowerCase() === cleanMapped);
+        }
+
+        // Standard semantic event-to-role routing
+        if (!targetSender) {
+            let role = EVENT_TO_ROLE[eventKey];
+            if (!role) {
+                // Heuristic regex keyword fallback
+                const keyLower = String(eventKey).toLowerCase();
+                if (/password|security|auth|verification|otp/i.test(keyLower)) {
+                    role = 'security';
+                } else if (/finance|deposit|withdrawal|transfer|investment|plan|wallet|commission|payout/i.test(keyLower)) {
+                    role = 'finance';
+                } else if (/task|campaign|notification/i.test(keyLower)) {
+                    role = 'notifications';
+                } else if (/dispute|support|ticket/i.test(keyLower)) {
+                    role = 'support';
+                } else if (/legal|compliance|dmca|terms/i.test(keyLower)) {
+                    role = 'legal';
+                } else if (/welcome|info|general|announcement/i.test(keyLower)) {
+                    role = 'info';
+                } else {
+                    role = 'notifications';
+                }
+            }
+
+            if (role) {
+                targetSender = configuredSenders.find(s => String(s.id).toLowerCase() === role);
+            }
+        }
     }
 
-    targetEmail = String(targetEmail).trim().toLowerCase();
-
-    // Verify against configured approved senders
-    const matchedSender = configuredSenders.find(s => s.email.toLowerCase() === targetEmail);
-
-    // If approved and enabled, use it
-    if (matchedSender && matchedSender.enabled !== false) {
+    // 3. If target sender found and enabled, return it
+    if (targetSender && targetSender.enabled !== false) {
         return {
-            email: matchedSender.email,
-            name: matchedSender.name || 'SmartExn'
+            email: targetSender.email,
+            name: targetSender.name || 'SmartExn'
         };
     }
 
-    // Fallback 1: Configured default sender
-    const defaultSender = configuredSenders.find(s => s.email.toLowerCase() === defaultSenderEmail.toLowerCase());
+    // 4. Fallback 1: Configured default sender from settings
+    const defaultSender = configuredSenders.find(s => String(s.email).toLowerCase() === String(defaultSenderEmail).toLowerCase());
     if (defaultSender && defaultSender.enabled !== false) {
         return {
             email: defaultSender.email,
@@ -134,7 +248,7 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
         };
     }
 
-    // Fallback 2: First enabled approved sender
+    // 5. Fallback 2: First enabled approved sender in configured list
     const firstEnabled = configuredSenders.find(s => s.enabled !== false);
     if (firstEnabled) {
         return {
@@ -143,7 +257,7 @@ export const resolveApprovedSender = (requestedSender, eventKey, settings) => {
         };
     }
 
-    // Absolute fallback to notifications@smartexn.com
+    // 6. Absolute safety fallback
     return {
         email: DEFAULT_SENDER_EMAIL,
         name: 'SmartExn Notifications'

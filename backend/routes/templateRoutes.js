@@ -8,7 +8,9 @@ import {
     getTemplatesHistory,
     deleteTemplatesHistoryBulk,
     manualSendTemplate,
-    resendTemplateLog
+    resendTemplateLog,
+    getAudienceEstimate,
+    getAudienceList
 } from '../controllers/templatesController.js';
 
 const router = express.Router();
@@ -33,6 +35,12 @@ router.route('/history/bulk-delete')
 
 router.route('/manual-send')
     .post(authorize(['admin']), manualSendTemplate);
+
+router.route('/audience/count')
+    .post(authorize(['admin']), getAudienceEstimate);
+
+router.route('/audience/users')
+    .post(authorize(['admin']), getAudienceList);
 
 router.route('/:key')
     .put(authorize(['admin']), updateTemplate);

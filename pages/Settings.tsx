@@ -171,7 +171,7 @@ const Settings: React.FC = () => {
         enableContactUsBox: settings.enableContactUsBox !== false,
         enableContactViaEmail: settings.enableContactViaEmail !== false,
         enableContactViaWhatsApp: settings.enableContactViaWhatsApp !== false,
-        contactUsEmailAddress: settings.contactUsEmailAddress || 'smartexn.com@gmail.com',
+        contactUsEmailAddress: settings.contactUsEmailAddress || 'support@smartexn.com',
         contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
         contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
         contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
@@ -183,7 +183,7 @@ const Settings: React.FC = () => {
         supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
         supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
         supportOfficePhone: settings.supportOfficePhone || '+447846775662',
-        supportOfficeEmail: settings.supportOfficeEmail || 'smartexn.com@gmail.com',
+        supportOfficeEmail: settings.supportOfficeEmail || 'support@smartexn.com',
         supportOfficeHours: settings.supportOfficeHours || '15 – 60 Minutes',
         aboutUsTitle: settings.aboutUsTitle || defaultAboutUsTitle,
         aboutUsUpdated: settings.aboutUsUpdated || defaultAboutUsUpdated,
@@ -323,6 +323,24 @@ const Settings: React.FC = () => {
   const handleToggleSender = (senderId: string) => {
     const currentSenders = localSettings.emailSenders || [];
     const updated = currentSenders.map(s => s.id === senderId ? { ...s, enabled: !s.enabled } : s);
+    setLocalSettings(prev => ({ ...prev, emailSenders: updated }));
+    setIsDirty(true);
+  };
+
+  const handleSenderChange = (senderId: string, field: 'name' | 'email', value: string) => {
+    const defaultSenders = [
+      { id: 'info', email: 'info@smartexn.com', name: 'SmartExn Information', enabled: true },
+      { id: 'support', email: 'support@smartexn.com', name: 'SmartExn Support', enabled: true },
+      { id: 'notifications', email: 'notifications@smartexn.com', name: 'SmartExn Notifications', enabled: true },
+      { id: 'legal', email: 'legal@smartexn.com', name: 'SmartExn Legal & Compliance', enabled: true },
+      { id: 'security', email: 'security@smartexn.com', name: 'SmartExn Security Team', enabled: true },
+      { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
+    ];
+    const currentSenders = localSettings.emailSenders && localSettings.emailSenders.length > 0
+      ? [...localSettings.emailSenders]
+      : defaultSenders;
+
+    const updated = currentSenders.map(s => s.id === senderId ? { ...s, [field]: value } : s);
     setLocalSettings(prev => ({ ...prev, emailSenders: updated }));
     setIsDirty(true);
   };
@@ -1974,7 +1992,7 @@ const Settings: React.FC = () => {
                                name="supportOfficeEmail"
                                value={localSettings.supportOfficeEmail || ''}
                                onChange={handleTextChange}
-                               placeholder="smartexn.com@gmail.com"
+                               placeholder="support@smartexn.com"
                                className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-mono"
                            />
                        </div>
@@ -2567,7 +2585,7 @@ const Settings: React.FC = () => {
                                                 name="contactUsEmailAddress"
                                                 value={localSettings.contactUsEmailAddress || ''}
                                                 onChange={handleTextChange}
-                                                placeholder="smartexn.com@gmail.com"
+                                                placeholder="support@smartexn.com"
                                                 className="w-full text-xs p-2.5 rounded-xl border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                                             />
                                         </div>
@@ -2772,7 +2790,7 @@ const Settings: React.FC = () => {
                                                     name="supportOfficeEmail"
                                                     value={localSettings.supportOfficeEmail || ''}
                                                     onChange={handleTextChange}
-                                                    placeholder="smartexn.com@gmail.com"
+                                                    placeholder="support@smartexn.com"
                                                     className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-mono"
                                                 />
                                             </div>
@@ -3442,53 +3460,86 @@ const Settings: React.FC = () => {
                                         { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing', enabled: true }
                                     ]).map(sender => {
                                         const isDefault = (localSettings.defaultSenderEmail || 'notifications@smartexn.com').toLowerCase() === sender.email.toLowerCase();
+                                        const roleDescriptions: Record<string, string> = {
+                                            info: 'General announcements, newsletter & corporate information',
+                                            support: 'Help desk, customer service & support tickets',
+                                            notifications: 'System alerts, task updates & activity broadcasts',
+                                            legal: 'Terms, compliance, KYC & regulatory disclosures',
+                                            security: 'OTPs, login verifications, password resets & security alerts',
+                                            finance: 'Deposits, withdrawals, payouts & invoice receipts'
+                                        };
+                                        const description = roleDescriptions[sender.id] || 'Transactional & administrative emails';
+
                                         return (
-                                            <div key={sender.id} className="p-3.5 flex items-center justify-between gap-4">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                                        sender.enabled 
-                                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' 
-                                                            : 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
-                                                    }`}>
-                                                        {sender.id.substring(0, 2).toUpperCase()}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">
-                                                                {sender.email}
+                                            <div key={sender.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition-colors">
+                                                <div className="space-y-2 flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                                                            {sender.id}
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {description}
+                                                        </span>
+                                                        {isDefault && (
+                                                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 rounded-full">
+                                                                Primary Default
                                                             </span>
-                                                            {isDefault && (
-                                                                <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded-full">
-                                                                    Default
-                                                                </span>
-                                                            )}
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                                        <div>
+                                                            <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                                Sender Display Name
+                                                            </label>
+                                                            <input 
+                                                                type="text"
+                                                                value={sender.name || ''}
+                                                                onChange={(e) => handleSenderChange(sender.id, 'name', e.target.value)}
+                                                                placeholder="Sender Name"
+                                                                className="w-full text-xs px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                                                            />
                                                         </div>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                                            {sender.name}
-                                                        </p>
+                                                        <div>
+                                                            <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                                                From Email Address
+                                                            </label>
+                                                            <input 
+                                                                type="email"
+                                                                value={sender.email || ''}
+                                                                onChange={(e) => handleSenderChange(sender.id, 'email', e.target.value)}
+                                                                placeholder="name@smartexn.com"
+                                                                className="w-full text-xs px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-3 shrink-0">
+                                                <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 dark:border-gray-800">
                                                     {!isDefault && sender.enabled && (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleSetDefaultSender(sender.email)}
-                                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/60 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                                                         >
                                                             Set Default
                                                         </button>
                                                     )}
-                                                    <label className="relative inline-flex items-center cursor-pointer">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="sr-only peer"
-                                                            checked={sender.enabled}
-                                                            onChange={() => handleToggleSender(sender.id)}
-                                                            disabled={isDefault}
-                                                        />
-                                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                                    </label>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {sender.enabled ? 'Active' : 'Disabled'}
+                                                        </span>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="sr-only peer"
+                                                                checked={sender.enabled}
+                                                                onChange={() => handleToggleSender(sender.id)}
+                                                                disabled={isDefault}
+                                                            />
+                                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -4509,7 +4560,7 @@ const Settings: React.FC = () => {
                                         value={localSettings.contactUsEmailAddress || ''} 
                                         onChange={handleTextChange} 
                                         className="w-full mt-1 text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white" 
-                                        placeholder="smartexn.com@gmail.com" 
+                                        placeholder="support@smartexn.com" 
                                     />
                                 </div>
                                 <div>

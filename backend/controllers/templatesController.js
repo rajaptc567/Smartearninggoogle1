@@ -2,6 +2,26 @@ import Template from '../models/Template.js';
 import TemplateLog from '../models/TemplateLog.js';
 import User from '../models/User.js';
 import { sendTemplateNotification, sendAutomatedMessage } from '../utils/automation.js';
+import { getAudienceCount, resolveAudienceUsers } from '../services/audienceFilterService.js';
+import { sendEmail } from '../services/emailService.js';
+
+// Helper to replace standard SmartExn placeholders in custom subject & body
+const replacePlaceholders = (text, user, customVars = {}) => {
+    if (!text) return '';
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    return String(text)
+        .replace(/{username}/g, user.username || 'Member')
+        .replace(/{fullName}/g, user.fullName || user.username || 'Valued Member')
+        .replace(/{email}/g, user.email || '')
+        .replace(/{phone}/g, user.phone || user.whatsapp || '')
+        .replace(/{amount}/g, customVars.amount || '0.00')
+        .replace(/{currency}/g, customVars.currency || user.currency || 'USD')
+        .replace(/{txId}/g, customVars.txId || 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase())
+        .replace(/{date}/g, customVars.date || dateFormatted)
+        .replace(/{notes}/g, customVars.notes || 'Admin manual message');
+};
 
 // @desc    Get all message templates (seeds if empty)
 // @route   GET /api/v1/templates
@@ -95,36 +115,211 @@ export const deleteTemplatesHistoryBulk = async (req, res) => {
     }
 };
 
-// @desc    Manually send a template to bulk users
+// @desc    Get audience recipient count preview based on advanced filters
+// @route   POST /api/v1/templates/audience/count
+export const getAudienceEstimate = async (req, res) => {
+    try {
+        const { filters = {}, options = {} } = req.body;
+        const result = await getAudienceCount(filters, options);
+        res.status(200).json({ success: true, ...result });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Resolve audience user list based on advanced filters
+// @route   POST /api/v1/templates/audience/users
+export const getAudienceList = async (req, res) => {
+    try {
+        const { filters = {}, options = {} } = req.body;
+        const users = await resolveAudienceUsers(filters, options);
+        res.status(200).json({ success: true, count: users.length, users });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// @desc    Manually send a template or custom message to bulk users with advanced audience filtering
 // @route   POST /api/v1/templates/manual-send
 export const manualSendTemplate = async (req, res) => {
     try {
-        const { userIds, templateKey, variables } = req.body;
-        if (!Array.isArray(userIds) || userIds.length === 0) {
-            return res.status(400).json({ success: false, error: 'Please provide an array of user IDs' });
+        let { 
+            mode = 'template', // 'template' | 'custom'
+            userIds, 
+            targetUserIds,
+            filters, 
+            templateKey, 
+            customSubject, 
+            customBody, 
+            fromSender, 
+            customEmail,
+            variables = {} 
+        } = req.body;
+
+        // Fallbacks for flexible payload formats
+        if (!userIds && targetUserIds) {
+            userIds = targetUserIds;
         }
-        if (!templateKey) {
-            return res.status(400).json({ success: false, error: 'Please provide a template key' });
+        if (customEmail && typeof customEmail === 'object') {
+            if (!customSubject && customEmail.subject) customSubject = customEmail.subject;
+            if (!customBody && customEmail.body) customBody = customEmail.body;
+            if (!fromSender && customEmail.fromSender) fromSender = customEmail.fromSender;
         }
 
-        // Verify template exists
-        const template = await Template.findOne({ key: templateKey });
-        if (!template) {
-            return res.status(404).json({ success: false, error: `Template with key '${templateKey}' not found` });
+        // Resolve message mode: If customSubject & customBody provided, mode is 'custom'
+        const isCustomMode = mode === 'custom' || (!templateKey && Boolean(customSubject && customBody));
+
+        let template = null;
+        let channel = 'email';
+
+        if (!isCustomMode) {
+            if (!templateKey) {
+                return res.status(400).json({ success: false, error: 'Please select a template to send, or switch to Custom Message mode.' });
+            }
+            template = await Template.findOne({ key: templateKey });
+            if (!template) {
+                return res.status(404).json({ success: false, error: `Template with key '${templateKey}' not found` });
+            }
+            channel = template.type === 'whatsapp' ? 'whatsapp' : 'email';
+        } else {
+            if (!customSubject || !String(customSubject).trim()) {
+                return res.status(400).json({ success: false, error: 'Please provide an email Subject for the custom message.' });
+            }
+            if (!customBody || !String(customBody).trim()) {
+                return res.status(400).json({ success: false, error: 'Please provide email Body content for the custom message.' });
+            }
         }
 
-        // Send to each user in a robust sequence/concurrent execution
-        const sendPromises = userIds.map(userId => 
-            sendTemplateNotification({ 
-                userId, 
-                templateKey, 
-                variables: variables || {}, 
-                sentBy: 'Admin' 
-            })
-        );
-        await Promise.all(sendPromises);
+        // Resolve recipients: either via filters or explicit userIds
+        let targetUsers = [];
+        if (filters && typeof filters === 'object' && Object.keys(filters).length > 0) {
+            // Apply audience filters
+            const filterOptions = {
+                channel,
+                selectedUserIds: Array.isArray(userIds) && userIds.length > 0 ? userIds : undefined
+            };
+            targetUsers = await resolveAudienceUsers(filters, filterOptions);
+        } else if (Array.isArray(userIds) && userIds.length > 0) {
+            // Manual selection query ensuring channel requirements
+            const query = { _id: { $in: userIds } };
+            if (channel === 'email') {
+                query.email = { $exists: true, $ne: '', $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i };
+            } else if (channel === 'whatsapp') {
+                query.$or = [
+                    { phone: { $exists: true, $ne: '' } },
+                    { whatsapp: { $exists: true, $ne: '' } }
+                ];
+            }
+            targetUsers = await User.find(query).select('username fullName email phone whatsapp currency country status activePlan walletBalance taskWalletBalance').lean();
+        } else {
+            return res.status(400).json({ success: false, error: 'Please specify target recipients via audience filters or selected user IDs.' });
+        }
 
-        res.status(200).json({ success: true, message: `Successfully triggered sending template to ${userIds.length} user(s)` });
+        if (targetUsers.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `No eligible recipients found matching the audience criteria for channel '${channel}'.` 
+            });
+        }
+
+        let successCount = 0;
+        let failureCount = 0;
+
+        if (isCustomMode) {
+            // Broadcast custom email message
+            const sendPromises = targetUsers.map(async (user) => {
+                const replacedSubject = replacePlaceholders(customSubject, user, variables);
+                const replacedBody = replacePlaceholders(customBody, user, variables);
+                const plainText = replacedBody.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+
+                try {
+                    const result = await sendEmail({
+                        to: user.email,
+                        subject: replacedSubject,
+                        html: replacedBody,
+                        text: plainText,
+                        event: 'admin_custom_bulk',
+                        sender: fromSender || 'notifications',
+                        userId: user._id,
+                        sentBy: 'Admin',
+                        templateName: 'Custom Admin Broadcast'
+                    });
+
+                    // Log custom message in TemplateLog for history tracking
+                    await TemplateLog.create({
+                        userId: user._id,
+                        username: user.username,
+                        userEmail: user.email,
+                        userPhone: user.phone || user.whatsapp,
+                        templateKey: 'custom_message',
+                        templateName: 'Custom Admin Broadcast',
+                        type: 'email',
+                        recipient: user.email,
+                        subject: replacedSubject,
+                        body: replacedBody,
+                        status: result.success ? 'Success' : 'Failed',
+                        provider: result.provider || 'unknown',
+                        messageId: result.messageId || null,
+                        error: result.error || null,
+                        sentBy: 'Admin',
+                        variables
+                    });
+
+                    if (result.success) successCount++;
+                    else failureCount++;
+                } catch (sendErr) {
+                    failureCount++;
+                    await TemplateLog.create({
+                        userId: user._id,
+                        username: user.username,
+                        userEmail: user.email,
+                        userPhone: user.phone || user.whatsapp,
+                        templateKey: 'custom_message',
+                        templateName: 'Custom Admin Broadcast',
+                        type: 'email',
+                        recipient: user.email,
+                        subject: replacedSubject,
+                        body: replacedBody,
+                        status: 'Failed',
+                        provider: 'system',
+                        error: sendErr.message,
+                        sentBy: 'Admin',
+                        variables
+                    }).catch(() => {});
+                }
+            });
+
+            await Promise.all(sendPromises);
+        } else {
+            // Broadcast template notification
+            const sendPromises = targetUsers.map(async (user) => {
+                try {
+                    const resNotification = await sendTemplateNotification({
+                        userId: user._id,
+                        templateKey,
+                        variables,
+                        sentBy: 'Admin'
+                    });
+                    if (resNotification && resNotification.success !== false) {
+                        successCount++;
+                    } else {
+                        failureCount++;
+                    }
+                } catch (err) {
+                    failureCount++;
+                }
+            });
+
+            await Promise.all(sendPromises);
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            message: `Successfully processed broadcast to ${targetUsers.length} recipient(s) (${successCount} succeeded, ${failureCount} failed).`,
+            totalTargeted: targetUsers.length,
+            successCount,
+            failureCount
+        });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -140,7 +335,37 @@ export const resendTemplateLog = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Template log not found' });
         }
 
-        if (log.userId && log.templateKey) {
+        if (log.templateKey === 'custom_message') {
+            const plainText = (log.body || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+            const resEmail = await sendEmail({
+                to: log.recipient,
+                subject: log.subject || 'Admin Broadcast',
+                html: log.body,
+                text: plainText,
+                event: 'admin_custom_bulk',
+                sender: 'notifications',
+                userId: log.userId,
+                sentBy: 'Admin',
+                templateName: 'Custom Admin Broadcast (Resend)'
+            });
+
+            await TemplateLog.create({
+                userId: log.userId,
+                username: log.username || 'AdminResend',
+                userEmail: log.userEmail,
+                userPhone: log.userPhone,
+                templateKey: 'custom_message',
+                templateName: 'Custom Admin Broadcast (Resend)',
+                type: 'email',
+                recipient: log.recipient,
+                subject: log.subject,
+                body: log.body,
+                status: resEmail.success ? 'Success' : 'Failed',
+                provider: resEmail.provider || 'unknown',
+                error: resEmail.error || null,
+                sentBy: 'Admin'
+            });
+        } else if (log.userId && log.templateKey) {
             await sendTemplateNotification({
                 userId: log.userId,
                 templateKey: log.templateKey,

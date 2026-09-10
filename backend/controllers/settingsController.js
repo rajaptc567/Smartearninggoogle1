@@ -80,6 +80,18 @@ export const getPublicSettings = async (req, res) => {
                 };
             });
 
+        // Resolve public-facing role emails from emailSenders
+        const publicEmailSenders = (settings.emailSenders && settings.emailSenders.length > 0)
+            ? settings.emailSenders.map(s => ({ id: s.id, email: s.email, name: s.name, enabled: s.enabled }))
+            : APPROVED_SENDERS;
+
+        const supportSender = publicEmailSenders.find(s => s.id === 'support');
+        const legalSender = publicEmailSenders.find(s => s.id === 'legal');
+        const financeSender = publicEmailSenders.find(s => s.id === 'finance');
+        const infoSender = publicEmailSenders.find(s => s.id === 'info');
+        const securitySender = publicEmailSenders.find(s => s.id === 'security');
+        const notificationsSender = publicEmailSenders.find(s => s.id === 'notifications');
+
         // Build compact public response (~2-3 KB total payload)
         const publicData = {
             seoTitle: settings.seoTitle || "SmartExn | Online Micro-Tasks, Surveys & Global Gigs",
@@ -108,14 +120,21 @@ export const getPublicSettings = async (req, res) => {
             supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
             supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
             supportOfficePhone: settings.supportOfficePhone || '+447846775662',
-            supportOfficeEmail: settings.supportOfficeEmail || 'smartexn.com@gmail.com',
+            supportOfficeEmail: supportSender?.email || settings.supportOfficeEmail || 'support@smartexn.com',
             supportOfficeHours: settings.supportOfficeHours || '15 – 60 Minutes',
             supportOfficeRegistrationNumber: settings.supportOfficeRegistrationNumber || '14529081',
             supportOfficeJurisdiction: settings.supportOfficeJurisdiction || 'England & Wales (Companies House Registered)',
             enableContactUsBox: settings.enableContactUsBox !== false,
             enableContactViaEmail: settings.enableContactViaEmail !== false,
             enableContactViaWhatsApp: settings.enableContactViaWhatsApp !== false,
-            contactUsEmailAddress: settings.contactUsEmailAddress || 'smartexn.com@gmail.com',
+            contactUsEmailAddress: supportSender?.email || settings.contactUsEmailAddress || 'support@smartexn.com',
+            supportEmail: supportSender?.email || 'support@smartexn.com',
+            legalEmail: legalSender?.email || 'legal@smartexn.com',
+            financeEmail: financeSender?.email || 'finance@smartexn.com',
+            infoEmail: infoSender?.email || 'info@smartexn.com',
+            securityEmail: securitySender?.email || 'security@smartexn.com',
+            notificationsEmail: notificationsSender?.email || 'notifications@smartexn.com',
+            emailSenders: publicEmailSenders,
             contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
             contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
             contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
@@ -248,22 +267,51 @@ export const updateSettings = async (req, res) => {
                 .filter(item => item.name || item.logoUrl);
         }
 
-        // Strictly sanitize email senders: Never allow arbitrary external From addresses
+        // Admin-Editable Email Senders Management (Preserve all 6 roles: info, support, notifications, legal, security, finance)
+        const VALID_ROLES = ['info', 'support', 'notifications', 'legal', 'security', 'finance'];
+        const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
         if (Array.isArray(req.body.emailSenders)) {
-            const approvedEmails = APPROVED_SENDERS.map(s => s.email.toLowerCase());
-            req.body.emailSenders = req.body.emailSenders
-                .filter(s => s && typeof s === 'object' && s.email && approvedEmails.includes(String(s.email).toLowerCase()))
-                .map(s => ({
-                    id: String(s.id || s.email.split('@')[0]),
-                    email: String(s.email).toLowerCase(),
-                    name: String(s.name || 'SmartExn'),
-                    enabled: s.enabled !== false
-                }));
+            const currentSenders = prevSettings?.emailSenders || APPROVED_SENDERS;
+            const updatedSenders = [];
+
+            VALID_ROLES.forEach(roleId => {
+                const incoming = req.body.emailSenders.find(s => s && String(s.id).toLowerCase() === roleId);
+                const existing = currentSenders.find(s => s && String(s.id).toLowerCase() === roleId) || APPROVED_SENDERS.find(s => s.id === roleId);
+
+                let email = existing?.email || `${roleId}@smartexn.com`;
+                let name = existing?.name || `SmartExn ${roleId.charAt(0).toUpperCase() + roleId.slice(1)}`;
+                let enabled = existing?.enabled !== false;
+
+                if (incoming && typeof incoming === 'object') {
+                    if (incoming.email && EMAIL_REGEX.test(String(incoming.email).trim())) {
+                        email = String(incoming.email).trim().toLowerCase();
+                    }
+                    if (incoming.name && String(incoming.name).trim()) {
+                        name = String(incoming.name).trim();
+                    }
+                    if (typeof incoming.enabled === 'boolean') {
+                        enabled = incoming.enabled;
+                    }
+                }
+
+                updatedSenders.push({
+                    id: roleId,
+                    email,
+                    name,
+                    enabled
+                });
+            });
+
+            req.body.emailSenders = updatedSenders;
         }
 
         if (req.body.defaultSenderEmail) {
-            const approvedEmails = APPROVED_SENDERS.map(s => s.email.toLowerCase());
-            if (!approvedEmails.includes(String(req.body.defaultSenderEmail).toLowerCase())) {
+            const cleanDefault = String(req.body.defaultSenderEmail).trim().toLowerCase();
+            const allowedEmails = (req.body.emailSenders || prevSettings?.emailSenders || APPROVED_SENDERS).map(s => s.email.toLowerCase());
+            if (allowedEmails.includes(cleanDefault)) {
+                req.body.defaultSenderEmail = cleanDefault;
+            } else {
                 delete req.body.defaultSenderEmail;
             }
         }

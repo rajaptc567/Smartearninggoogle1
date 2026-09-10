@@ -1031,13 +1031,62 @@ export const deleteTemplatesHistoryBulk = async (ids: string[]): Promise<void> =
     await handleResponse(response);
 };
 
-export const manualSendTemplate = async (userIds: string[], templateKey: string, variables?: Record<string, string>): Promise<void> => {
+export interface ManualSendPayload {
+    mode?: 'template' | 'custom';
+    userIds?: string[];
+    targetUserIds?: string[];
+    filters?: Record<string, any>;
+    templateKey?: string;
+    customSubject?: string;
+    customBody?: string;
+    fromSender?: string;
+    customEmail?: {
+        fromSender?: string;
+        subject?: string;
+        body?: string;
+    };
+    variables?: Record<string, string>;
+}
+
+export const manualSendTemplate = async (
+    payloadOrUserIds: ManualSendPayload | string[],
+    legacyTemplateKey?: string,
+    legacyVariables?: Record<string, string>
+): Promise<any> => {
+    const payload = Array.isArray(payloadOrUserIds)
+        ? { userIds: payloadOrUserIds, templateKey: legacyTemplateKey, variables: legacyVariables }
+        : payloadOrUserIds;
+
     const response = await fetch(`${API_BASE_URL}/templates/manual-send`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ userIds, templateKey, variables }),
+        body: JSON.stringify(payload),
     });
-    await handleResponse(response);
+    return await handleResponse(response);
+};
+
+export const getAudienceEstimate = async (
+    filters: Record<string, any>,
+    options?: { channel?: string }
+): Promise<{ eligibleCount: number; totalUsers: number; sampleUsers: any[] }> => {
+    const response = await fetch(`${API_BASE_URL}/templates/audience/count`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ filters, options }),
+    });
+    return await handleResponse(response);
+};
+
+export const getAudienceList = async (
+    filters: Record<string, any>,
+    options?: { channel?: string; limit?: number }
+): Promise<{ count: number; users: any[] }> => {
+    const response = await fetch(`${API_BASE_URL}/templates/audience/users`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ filters, options }),
+    });
+    return await handleResponse(response);
 };
 
 export const resendTemplateLog = async (id: string): Promise<TemplateLog[]> => {
