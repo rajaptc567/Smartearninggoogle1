@@ -24,11 +24,19 @@ function backendServerPlugin(): Plugin {
         console.warn('Could not automatically start backend process:', err);
       }
 
-      server.httpServer?.on('close', () => {
+      const cleanup = () => {
         if (backendProcess) {
-          backendProcess.kill();
+          try {
+            backendProcess.kill('SIGTERM');
+          } catch {}
+          backendProcess = null;
         }
-      });
+      };
+
+      server.httpServer?.on('close', cleanup);
+      process.on('exit', cleanup);
+      process.on('SIGINT', cleanup);
+      process.on('SIGTERM', cleanup);
     }
   };
 }
@@ -39,6 +47,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        strictPort: true,
         proxy: {
           '/api': {
             target: 'http://127.0.0.1:5000',

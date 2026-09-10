@@ -154,7 +154,6 @@ const OfferwallProviderSchema = new mongoose.Schema({
     timestamps: true
 });
 
-OfferwallProviderSchema.index({ providerKey: 1 });
 OfferwallProviderSchema.index({ enabled: 1, category: 1 });
 
 export default mongoose.model('OfferwallProvider', OfferwallProviderSchema);
