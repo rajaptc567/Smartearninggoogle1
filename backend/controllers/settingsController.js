@@ -114,21 +114,22 @@ export const getPublicSettings = async (req, res) => {
             },
             showUkSupportOffice: settings.showUkSupportOffice !== false && settings.homepageContent?.showUkSupportOffice !== false,
             showUkSupportOfficeInFooter: settings.showUkSupportOfficeInFooter !== false && settings.homepageContent?.showUkSupportOfficeInFooter !== false,
+            publicSupportEmail: settings.publicSupportEmail || supportSender?.email || 'support@smartexn.com',
             supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
             supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
             supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
             supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
             supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
             supportOfficePhone: settings.supportOfficePhone || '+447846775662',
-            supportOfficeEmail: supportSender?.email || settings.supportOfficeEmail || 'support@smartexn.com',
+            supportOfficeEmail: settings.publicSupportEmail || supportSender?.email || settings.supportOfficeEmail || 'support@smartexn.com',
             supportOfficeHours: settings.supportOfficeHours || '15 – 60 Minutes',
             supportOfficeRegistrationNumber: settings.supportOfficeRegistrationNumber || '14529081',
             supportOfficeJurisdiction: settings.supportOfficeJurisdiction || 'England & Wales (Companies House Registered)',
             enableContactUsBox: settings.enableContactUsBox !== false,
             enableContactViaEmail: settings.enableContactViaEmail !== false,
             enableContactViaWhatsApp: settings.enableContactViaWhatsApp !== false,
-            contactUsEmailAddress: supportSender?.email || settings.contactUsEmailAddress || 'support@smartexn.com',
-            supportEmail: supportSender?.email || 'support@smartexn.com',
+            contactUsEmailAddress: settings.publicSupportEmail || supportSender?.email || settings.contactUsEmailAddress || 'support@smartexn.com',
+            supportEmail: settings.publicSupportEmail || supportSender?.email || 'support@smartexn.com',
             legalEmail: legalSender?.email || 'legal@smartexn.com',
             financeEmail: financeSender?.email || 'finance@smartexn.com',
             infoEmail: infoSender?.email || 'info@smartexn.com',
@@ -319,6 +320,18 @@ export const updateSettings = async (req, res) => {
         // Validate provider option
         if (req.body.emailProvider && !['existing', 'resend'].includes(req.body.emailProvider)) {
             req.body.emailProvider = 'existing';
+        }
+
+        // Validate and sanitize publicSupportEmail
+        if (req.body.publicSupportEmail) {
+            const cleanEmail = String(req.body.publicSupportEmail).trim().toLowerCase();
+            if (EMAIL_REGEX.test(cleanEmail)) {
+                req.body.publicSupportEmail = cleanEmail;
+                if (!req.body.supportOfficeEmail) req.body.supportOfficeEmail = cleanEmail;
+                if (!req.body.contactUsEmailAddress) req.body.contactUsEmailAddress = cleanEmail;
+            } else {
+                delete req.body.publicSupportEmail;
+            }
         }
 
         const settings = await Setting.findOneAndUpdate({}, { 

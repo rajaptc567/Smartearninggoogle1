@@ -302,6 +302,7 @@ export interface Settings {
     supportOfficeAddress?: string; // Custom registered address
     supportOfficePhone?: string; // Custom Phone / WhatsApp
     supportOfficeEmail?: string; // Custom Email
+    publicSupportEmail?: string; // Global public support email address
     supportOfficeHours?: string; // Average response time / hours window
     aboutUsTitle?: string;
     aboutUsUpdated?: string;

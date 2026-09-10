@@ -16,7 +16,7 @@ export const SupportOfficeCard: React.FC<SupportOfficeCardProps> = ({
 
   const officeAddress = settings?.supportOfficeAddress || "71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom";
   const phoneWhatsApp = settings?.supportOfficePhone || settings?.contactUsWhatsAppNumber || "+447846775662";
-  const officialEmail = settings?.supportEmail || settings?.supportOfficeEmail || settings?.contactUsEmailAddress || "support@smartexn.com";
+  const officialEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.supportOfficeEmail || settings?.contactUsEmailAddress || "support@smartexn.com";
   const officeTitle = settings?.supportOfficeTitle || "Customer Support Office (UK)";
   const badge1 = settings?.supportOfficeBadge1 || "Official Registered Support Desk";
   const badge2 = settings?.supportOfficeBadge2 || "UK Registered Office";

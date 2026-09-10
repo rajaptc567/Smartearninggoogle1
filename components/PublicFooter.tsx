@@ -198,8 +198,8 @@ export const PublicFooter: React.FC = () => {
             <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2.5 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Official Support Email:</span>
-                <a href={`mailto:${settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}`} className="font-mono text-sky-400 font-bold hover:underline">
-                  {settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}
+                <a href={`mailto:${settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}`} className="font-mono text-sky-400 font-bold hover:underline">
+                  {settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}
                 </a>
               </div>
               <div className="flex justify-between">

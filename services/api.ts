@@ -1032,6 +1032,7 @@ export const deleteTemplatesHistoryBulk = async (ids: string[]): Promise<void> =
 };
 
 export interface ManualSendPayload {
+    channel?: 'email' | 'whatsapp';
     mode?: 'template' | 'custom';
     userIds?: string[];
     targetUserIds?: string[];
