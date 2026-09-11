@@ -43,12 +43,25 @@ export const getPublicSettings = async (req, res) => {
         const rawSmartexn = (settings.homepageContent && settings.homepageContent.smartexnContent) || {};
         const cleanSmartexn = {};
         const allowedSmartexnKeys = [
-            'heroTitle', 'heroSubtitle', 'heroStartBtn', 'heroPublishBtn',
-            'howItWorksTitle', 'step1Title', 'step1Desc', 'step2Title', 'step2Desc',
-            'step3Title', 'step3Desc', 'step4Title', 'step4Desc',
-            'oppsTitle', 'opp1Title', 'opp1Desc', 'opp2Title', 'opp2Desc', 'opp3Title', 'opp3Desc', 'opp4Title', 'opp4Desc',
-            'bizTitle', 'bizPoint1Title', 'bizPoint1Desc', 'bizPoint2Title', 'bizPoint2Desc', 'bizPoint3Title', 'bizPoint3Desc', 'bizPoint4Title', 'bizPoint4Desc',
-            'footerCopyright'
+            'metaTitle', 'metaDescription', 'websiteSchemaDesc', 'headerSlogan', 'seoTitle', 'seoKeywords', 'seoDescription',
+            'heroEyebrow', 'heroTitle', 'heroSubtitle', 'heroStartBtn', 'heroStartBtnCaption', 'heroPublishBtn', 'heroPublishBtnCaption',
+            'heroTrust1', 'heroTrust2', 'heroTrust3', 'heroTrustPayouts', 'heroTrustTasks', 'heroTrustCountries', 'heroCaptionGlobal', 'heroCaptionEscrow',
+            'howItWorksEyebrow', 'howItWorksTitle', 'howItWorksSubtitle',
+            'step1Title', 'step1Desc', 'step1Footer', 'step2Title', 'step2Desc', 'step2Footer',
+            'step3Title', 'step3Desc', 'step3Footer', 'step4Title', 'step4Desc', 'step4Footer',
+            'oppsEyebrow', 'oppsTitle', 'oppsSubtitle',
+            'opp1Title', 'opp1Desc', 'opp2Title', 'opp2Desc', 'opp3Title', 'opp3Desc', 'opp4Title', 'opp4Desc',
+            'oppsDisclosureLabel', 'oppsDisclosureText',
+            'bizEyebrow', 'bizTitle', 'bizSubtitle', 'bizCtaText', 'bizCtaBtn',
+            'bizPoint1Title', 'bizPoint1Desc', 'bizPoint2Title', 'bizPoint2Desc', 'bizPoint3Title', 'bizPoint3Desc', 'bizPoint4Title', 'bizPoint4Desc',
+            'escrowEyebrow', 'escrowTitle', 'escrowSubtitle',
+            'escrowCard1Title', 'escrowCard1Desc', 'escrowCard2Title', 'escrowCard2Desc', 'escrowCard3Title', 'escrowCard3Desc',
+            'paymentEyebrow', 'paymentTitle', 'paymentDesc',
+            'paymentBadge1Title', 'paymentBadge1Desc', 'paymentBadge2Title', 'paymentBadge2Desc', 'paymentBadge3Title', 'paymentBadge3Desc',
+            'faqEyebrow', 'faqTitle', 'faqSubtitle',
+            'faq1Q', 'faq1A', 'faq2Q', 'faq2A', 'faq3Q', 'faq3A', 'faq4Q', 'faq4A', 'faq5Q', 'faq5A', 'faq6Q', 'faq6A', 'faqKnowledgeBtn',
+            'finalCtaEyebrow', 'finalCtaTitle', 'finalCtaSubtitle', 'finalCtaStartBtn', 'finalCtaPublishBtn',
+            'footerTagline', 'footerCol1Title', 'footerCol2Title', 'footerCol3Title', 'footerCol4Title', 'footerCopyright', 'footerEscrowBadge'
         ];
 
         for (const key of allowedSmartexnKeys) {
@@ -116,9 +129,10 @@ export const getPublicSettings = async (req, res) => {
             showUkSupportOfficeInFooter: settings.showUkSupportOfficeInFooter !== false && settings.homepageContent?.showUkSupportOfficeInFooter !== false,
             publicSupportEmail: settings.publicSupportEmail || supportSender?.email || 'support@smartexn.com',
             supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
-            supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
-            supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
+            supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Customer Support',
+            supportOfficeTitle: settings.supportOfficeTitle || 'UK Customer Support',
             supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
+            supportOfficeAddressLabel: settings.supportOfficeAddressLabel || 'Support Address:',
             supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
             supportOfficePhone: settings.supportOfficePhone || '+447846775662',
             supportOfficeEmail: settings.publicSupportEmail || supportSender?.email || settings.supportOfficeEmail || 'support@smartexn.com',

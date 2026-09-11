@@ -179,9 +179,10 @@ const Settings: React.FC = () => {
         showUkSupportOfficeInFooter: (settings.showUkSupportOfficeInFooter !== undefined ? settings.showUkSupportOfficeInFooter !== false : (settings.homepageContent?.showUkSupportOfficeInFooter !== false)),
         publicSupportEmail: settings.publicSupportEmail || settings.supportOfficeEmail || 'support@smartexn.com',
         supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
-        supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
-        supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
+        supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Customer Support',
+        supportOfficeTitle: settings.supportOfficeTitle || 'UK Customer Support',
         supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
+        supportOfficeAddressLabel: settings.supportOfficeAddressLabel || 'Support Address:',
         supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
         supportOfficePhone: settings.supportOfficePhone || '+447846775662',
         supportOfficeEmail: settings.publicSupportEmail || settings.supportOfficeEmail || 'support@smartexn.com',
@@ -1739,6 +1740,36 @@ const Settings: React.FC = () => {
                                 />
                             </div>
                             <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Checkmark 1</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrust1"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrust1 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Escrow-Based Payment Protection"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Checkmark 2</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrust2"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrust2 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Fast Proof Verification"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Checkmark 3</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrust3"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrust3 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Multi-Currency Payouts"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
                                 <label className="text-xs text-slate-300 font-semibold">Hero Caption 1 (Global Coverage)</label>
                                 <input 
                                     name="homepageContent.smartexnContent.heroCaptionGlobal"
@@ -2519,7 +2550,7 @@ const Settings: React.FC = () => {
                                name="supportOfficeBadge2"
                                value={localSettings.supportOfficeBadge2 || ''}
                                onChange={handleTextChange}
-                               placeholder="UK Registered Office"
+                               placeholder="UK Customer Support"
                                className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
                            />
                        </div>
@@ -2530,7 +2561,7 @@ const Settings: React.FC = () => {
                                name="supportOfficeTitle"
                                value={localSettings.supportOfficeTitle || ''}
                                onChange={handleTextChange}
-                               placeholder="Customer Support Office (UK)"
+                               placeholder="UK Customer Support"
                                className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-bold"
                            />
                        </div>
@@ -2558,8 +2589,19 @@ const Settings: React.FC = () => {
                            />
                        </div>
 
-                       <div className="md:col-span-2">
-                           <label className="text-xs font-bold text-sky-200">Official Registered Office Address</label>
+                       <div>
+                           <label className="text-xs font-bold text-sky-200">Support Address Label</label>
+                           <input 
+                               name="supportOfficeAddressLabel"
+                               value={localSettings.supportOfficeAddressLabel || ''}
+                               onChange={handleTextChange}
+                               placeholder="Support Address:"
+                               className="w-full mt-1 text-xs p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-sky-400 focus:ring-1 focus:ring-sky-400"
+                           />
+                       </div>
+
+                       <div>
+                           <label className="text-xs font-bold text-sky-200">Support Office Address</label>
                            <input 
                                name="supportOfficeAddress"
                                value={localSettings.supportOfficeAddress || ''}
@@ -3300,7 +3342,7 @@ const Settings: React.FC = () => {
                                                     name="supportOfficeBadge2"
                                                     value={localSettings.supportOfficeBadge2 || ''}
                                                     onChange={handleTextChange}
-                                                    placeholder="UK Registered Office"
+                                                    placeholder="UK Customer Support"
                                                     className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                                                 />
                                             </div>
@@ -3314,7 +3356,7 @@ const Settings: React.FC = () => {
                                                     name="supportOfficeTitle"
                                                     value={localSettings.supportOfficeTitle || ''}
                                                     onChange={handleTextChange}
-                                                    placeholder="Customer Support Office (UK)"
+                                                    placeholder="UK Customer Support"
                                                     className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white font-bold"
                                                 />
                                             </div>
@@ -3347,9 +3389,23 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
 
-                                            <div className="sm:col-span-2">
+                                            <div>
                                                 <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                                    Registered Office Address
+                                                    Support Address Label
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    name="supportOfficeAddressLabel"
+                                                    value={localSettings.supportOfficeAddressLabel || ''}
+                                                    onChange={handleTextChange}
+                                                    placeholder="Support Address:"
+                                                    className="w-full text-xs p-2 rounded-lg border dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                    Support Office Address
                                                 </label>
                                                 <input 
                                                     type="text"

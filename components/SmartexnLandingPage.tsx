@@ -558,7 +558,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               {/* Trust signals mini-row */}
               <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span> {sc.heroTrust1 || "100% Escrow Protected"}
+                  <span className="text-emerald-400 font-bold">✓</span> {sc.heroTrust1 || "Escrow-Based Payment Protection"}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sky-400 font-bold">✓</span> {sc.heroTrust2 || "Fast Proof Verification"}
@@ -942,13 +942,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <span className="text-xs font-black uppercase tracking-widest text-emerald-300 bg-emerald-950/80 px-3.5 py-1 rounded-full border border-emerald-800">
-              {sc.escrowEyebrow || "Security & Fairness Guaranteed"}
+              {sc.escrowEyebrow || "Security, Verification & Dispute Protection"}
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">
               {sc.escrowTitle || "Platform Escrow & Dispute Protection"}
             </h2>
             <p className="text-slate-300 text-sm sm:text-base">
-              {sc.escrowSubtitle || "SmartExn eliminates payment uncertainty with an automated escrow layer and a fair arbitration desk."}
+              {sc.escrowSubtitle || "SmartExn reduces payment uncertainty through an escrow-based workflow and dispute resolution process."}
             </p>
           </div>
 
@@ -958,9 +958,9 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-lg">
                 🔒
               </div>
-              <h3 className="text-lg font-bold text-white">{sc.escrowCard1Title || "Guaranteed Escrow Lock"}</h3>
+              <h3 className="text-lg font-bold text-white">{sc.escrowCard1Title || "Escrow Payment Protection"}</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                {sc.escrowCard1Desc || "When a campaign is published, the creator's budget is locked in escrow. Workers who complete the task as requested are guaranteed to receive their reward upon approval."}
+                {sc.escrowCard1Desc || "Workers who complete the task according to the campaign requirements can receive their reward once the submission is approved under SmartExn's campaign and dispute policies."}
               </p>
             </div>
 
@@ -1188,7 +1188,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               </div>
 
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
-                {sc.footerTagline || "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety."}
+                {sc.footerTagline || "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs through an escrow-based campaign protection system"}
               </p>
 
               {/* Embedded Customer Support Office UK Card */}
@@ -1297,11 +1297,11 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
             <div className="flex items-center gap-4">
               {(settings?.showUkSupportOffice !== false || settings?.showUkSupportOfficeInFooter !== false) && (
                 <>
-                  <span>{settings?.supportOfficeTitle || 'Customer Support Desk (UK)'}</span>
+                  <span>{settings?.supportOfficeTitle || 'UK Customer Support'}</span>
                   <span>•</span>
                 </>
               )}
-              <span>{sc.footerEscrowBadge || "100% Escrow Protected"}</span>
+              <span>{sc.footerEscrowBadge || "Escrow-Based Payment Protection"}</span>
             </div>
           </div>
 
@@ -1336,8 +1336,9 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                 })()}
               </div>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
-                <p className="text-xs text-slate-400 font-semibold">Customer Support Office (UK):</p>
-                <p className="text-xs text-slate-200 leading-snug">71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom</p>
+                <p className="text-xs text-slate-400 font-semibold">{settings?.supportOfficeTitle || 'UK Customer Support'}:</p>
+                <p className="text-xs text-sky-300 font-semibold">{settings?.supportOfficeAddressLabel || 'Support Address:'}</p>
+                <p className="text-xs text-slate-200 leading-snug">{settings?.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom'}</p>
               </div>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
                 <p className="text-xs text-slate-400 font-semibold">Phone/WhatsApp:</p>

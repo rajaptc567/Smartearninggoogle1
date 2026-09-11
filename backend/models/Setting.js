@@ -100,7 +100,7 @@ const SmartexnContentSchema = new mongoose.Schema({
     heroStartBtnCaption: { type: String, default: "Free to create an account" },
     heroPublishBtn: { type: String, default: "Create a Campaign" },
     heroPublishBtnCaption: { type: String, default: "Reach verified crowdsourced workers" },
-    heroTrust1: { type: String, default: "100% Escrow Protected" },
+    heroTrust1: { type: String, default: "Escrow-Based Payment Protection" },
     heroTrust2: { type: String, default: "Fast Proof Verification" },
     heroTrust3: { type: String, default: "Multi-Currency Payouts" },
     dashboardPreviewImage: { type: String, default: "" },
@@ -152,11 +152,11 @@ const SmartexnContentSchema = new mongoose.Schema({
     bizPoint4Desc: { type: String, default: "Launch campaigns starting with flexible slots, set custom worker reward rates, and achieve fast engagement." },
 
     // Escrow & Dispute Protection
-    escrowEyebrow: { type: String, default: "Security & Fairness Guaranteed" },
+    escrowEyebrow: { type: String, default: "Security, Verification & Dispute Protection" },
     escrowTitle: { type: String, default: "Platform Escrow & Dispute Protection" },
-    escrowSubtitle: { type: String, default: "SmartExn eliminates payment uncertainty with an automated escrow layer and a fair arbitration desk." },
-    escrowCard1Title: { type: String, default: "Guaranteed Escrow Lock" },
-    escrowCard1Desc: { type: String, default: "When a campaign is published, the creator's budget is locked in escrow. Workers who complete the task as requested are guaranteed to receive their reward upon approval." },
+    escrowSubtitle: { type: String, default: "SmartExn reduces payment uncertainty through an escrow-based workflow and dispute resolution process." },
+    escrowCard1Title: { type: String, default: "Escrow Payment Protection" },
+    escrowCard1Desc: { type: String, default: "Workers who complete the task according to the campaign requirements can receive their reward once the submission is approved under SmartExn's campaign and dispute policies." },
     escrowCard2Title: { type: String, default: "Two-Level Dispute Resolution" },
     escrowCard2Desc: { type: String, default: "If a proof submission is incorrectly rejected, workers can initiate Level-1 review with the creator or escalate to Level-2 admin arbitration for impartial verification." },
     escrowCard3Title: { type: String, default: "Unused Budget Refunds" },
@@ -196,9 +196,9 @@ const SmartexnContentSchema = new mongoose.Schema({
     finalCtaPublishBtn: { type: String, default: "Create a Campaign" },
 
     // Footer
-    footerTagline: { type: String, default: "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety." },
+    footerTagline: { type: String, default: "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs through an escrow-based campaign protection system" },
     footerCopyright: { type: String, default: "© 2026 SmartExn.com. All rights reserved." },
-    footerEscrowBadge: { type: String, default: "100% Escrow Protected" }
+    footerEscrowBadge: { type: String, default: "Escrow-Based Payment Protection" }
 }, { _id: false });
 
 const HomepageContentSchema = new mongoose.Schema({
@@ -403,9 +403,10 @@ const SettingSchema = new mongoose.Schema({
     isInvestmentModuleEnabled: { type: Boolean, default: true },
     publicSupportEmail: { type: String, default: 'support@smartexn.com' },
     supportOfficeBadge1: { type: String, default: 'Official Registered Support Desk' },
-    supportOfficeBadge2: { type: String, default: 'UK Registered Office' },
-    supportOfficeTitle: { type: String, default: 'Customer Support Office (UK)' },
+    supportOfficeBadge2: { type: String, default: 'UK Customer Support' },
+    supportOfficeTitle: { type: String, default: 'UK Customer Support' },
     supportOfficeSubtitle: { type: String, default: 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.' },
+    supportOfficeAddressLabel: { type: String, default: 'Support Address:' },
     supportOfficeAddress: { type: String, default: '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom' },
     supportOfficePhone: { type: String, default: '+447846775662' },
     supportOfficeEmail: { type: String, default: 'support@smartexn.com' },

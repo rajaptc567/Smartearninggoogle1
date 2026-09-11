@@ -296,9 +296,10 @@ export interface Settings {
     showUkSupportOffice?: boolean; // Enable/disable UK Customer Support Office showcase section on Homepage
     showUkSupportOfficeInFooter?: boolean; // Enable/disable UK Customer Support Office card in Footers
     supportOfficeBadge1?: string; // e.g. "Official Registered Support Desk"
-    supportOfficeBadge2?: string; // e.g. "UK Registered Office"
-    supportOfficeTitle?: string; // Custom title for UK Support Office, e.g. "Customer Support Office (UK)"
+    supportOfficeBadge2?: string; // e.g. "UK Registered Office" or "UK Customer Support"
+    supportOfficeTitle?: string; // Custom title for UK Support Office, e.g. "UK Customer Support"
     supportOfficeSubtitle?: string; // Custom subtitle/description for UK Support Office
+    supportOfficeAddressLabel?: string; // e.g. "Support Address:"
     supportOfficeAddress?: string; // Custom registered address
     supportOfficePhone?: string; // Custom Phone / WhatsApp
     supportOfficeEmail?: string; // Custom Email
@@ -907,22 +908,48 @@ export interface HomepagePaymentLogo {
 }
 
 export interface SmartexnContent {
+    metaTitle?: string;
+    metaDescription?: string;
+    websiteSchemaDesc?: string;
+    headerSlogan?: string;
+    seoTitle?: string;
+    seoKeywords?: string;
+    seoDescription?: string;
+    heroEyebrow?: string;
     heroTitle?: string;
     heroSubtitle?: string;
     heroStartBtn?: string;
+    heroStartBtnCaption?: string;
     heroPublishBtn?: string;
+    heroPublishBtnCaption?: string;
+    heroTrust1?: string;
+    heroTrust2?: string;
+    heroTrust3?: string;
+    heroTrustPayouts?: string;
+    heroTrustTasks?: string;
+    heroTrustCountries?: string;
+    heroCaptionGlobal?: string;
+    heroCaptionEscrow?: string;
     dashboardPreviewImage?: string;
     mobilePreviewImage?: string;
+    howItWorksEyebrow?: string;
     howItWorksTitle?: string;
+    howItWorksSubtitle?: string;
     step1Title?: string;
     step1Desc?: string;
+    step1Footer?: string;
     step2Title?: string;
     step2Desc?: string;
+    step2Footer?: string;
     step3Title?: string;
     step3Desc?: string;
+    step3Footer?: string;
     step4Title?: string;
     step4Desc?: string;
+    step4Footer?: string;
+    oppsEyebrow?: string;
     oppsTitle?: string;
+    oppsSubtitle?: string;
     opp1Title?: string;
     opp1Desc?: string;
     opp2Title?: string;
@@ -931,7 +958,13 @@ export interface SmartexnContent {
     opp3Desc?: string;
     opp4Title?: string;
     opp4Desc?: string;
+    oppsDisclosureLabel?: string;
+    oppsDisclosureText?: string;
+    bizEyebrow?: string;
     bizTitle?: string;
+    bizSubtitle?: string;
+    bizCtaText?: string;
+    bizCtaBtn?: string;
     bizPoint1Title?: string;
     bizPoint1Desc?: string;
     bizPoint2Title?: string;
@@ -940,7 +973,52 @@ export interface SmartexnContent {
     bizPoint3Desc?: string;
     bizPoint4Title?: string;
     bizPoint4Desc?: string;
+    escrowEyebrow?: string;
+    escrowTitle?: string;
+    escrowSubtitle?: string;
+    escrowCard1Title?: string;
+    escrowCard1Desc?: string;
+    escrowCard2Title?: string;
+    escrowCard2Desc?: string;
+    escrowCard3Title?: string;
+    escrowCard3Desc?: string;
+    paymentEyebrow?: string;
+    paymentTitle?: string;
+    paymentDesc?: string;
+    paymentBadge1Title?: string;
+    paymentBadge1Desc?: string;
+    paymentBadge2Title?: string;
+    paymentBadge2Desc?: string;
+    paymentBadge3Title?: string;
+    paymentBadge3Desc?: string;
+    faqEyebrow?: string;
+    faqTitle?: string;
+    faqSubtitle?: string;
+    faq1Q?: string;
+    faq1A?: string;
+    faq2Q?: string;
+    faq2A?: string;
+    faq3Q?: string;
+    faq3A?: string;
+    faq4Q?: string;
+    faq4A?: string;
+    faq5Q?: string;
+    faq5A?: string;
+    faq6Q?: string;
+    faq6A?: string;
+    faqKnowledgeBtn?: string;
+    finalCtaEyebrow?: string;
+    finalCtaTitle?: string;
+    finalCtaSubtitle?: string;
+    finalCtaStartBtn?: string;
+    finalCtaPublishBtn?: string;
+    footerTagline?: string;
+    footerCol1Title?: string;
+    footerCol2Title?: string;
+    footerCol3Title?: string;
+    footerCol4Title?: string;
     footerCopyright?: string;
+    footerEscrowBadge?: string;
     showUkSupportOffice?: boolean;
     showUkSupportOfficeInFooter?: boolean;
 }

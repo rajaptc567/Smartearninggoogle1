@@ -18,10 +18,11 @@ export const SupportOfficeCard: React.FC<SupportOfficeCardProps> = ({
   const phoneWhatsApp = settings?.supportOfficePhone || settings?.contactUsWhatsAppNumber || "+447846775662";
   const rawEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.supportOfficeEmail || settings?.contactUsEmailAddress || "support@smartexn.com";
   const officialEmail = (!rawEmail || rawEmail.toLowerCase() === 'smartexn.com@gmail.com') ? 'support@smartexn.com' : rawEmail;
-  const officeTitle = settings?.supportOfficeTitle || "Customer Support Office (UK)";
+  const officeTitle = settings?.supportOfficeTitle || "UK Customer Support";
   const badge1 = settings?.supportOfficeBadge1 || "Official Registered Support Desk";
-  const badge2 = settings?.supportOfficeBadge2 || "UK Registered Office";
+  const badge2 = settings?.supportOfficeBadge2 || "UK Customer Support";
   const officeSubtitle = settings?.supportOfficeSubtitle || "Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.";
+  const addressLabel = settings?.supportOfficeAddressLabel || "Support Address:";
   const responseTime = settings?.supportOfficeHours || "15 – 60 Minutes";
 
   const rawPhone = phoneWhatsApp.replace(/[^0-9+]/g, '').replace('+', '');
@@ -71,7 +72,7 @@ export const SupportOfficeCard: React.FC<SupportOfficeCardProps> = ({
             {/* Address Box */}
             <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs space-y-1.5 max-w-xl">
               <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 block">
-                Official Registered Office Address
+                {addressLabel}
               </span>
               <p className="text-slate-200 font-medium leading-relaxed flex items-start gap-2">
                 <span className="text-sky-400 mt-0.5 shrink-0">📍</span>
@@ -148,7 +149,7 @@ export const SupportOfficeCard: React.FC<SupportOfficeCardProps> = ({
       <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200/80 dark:border-gray-700/60 space-y-2 text-xs">
         <div>
           <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
-            Registered Office Address:
+            {addressLabel}
           </span>
           <p className="text-gray-700 dark:text-gray-300 font-medium leading-snug">
             {officeAddress}
