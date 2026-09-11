@@ -205,12 +205,8 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
             { phone: searchRegex },
             { whatsapp: searchRegex }
         ];
-        if (userQuery.$or) {
-            userQuery.$and = userQuery.$and || [];
-            userQuery.$and.push({ $or: searchConditions });
-        } else {
-            userQuery.$or = searchConditions;
-        }
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({ $or: searchConditions });
     }
 
     // 8. Manual individual selection or exclusion
