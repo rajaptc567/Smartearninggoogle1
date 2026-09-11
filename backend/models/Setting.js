@@ -647,6 +647,10 @@ SettingSchema.statics.getSettings = async function() {
         settings.contactUsEmailAddress = 'support@smartexn.com';
         needsSave = true;
     }
+    if (settings.emailSenderAddress && settings.emailSenderAddress.toLowerCase() === 'smartexn.com@gmail.com') {
+        settings.emailSenderAddress = 'support@smartexn.com';
+        needsSave = true;
+    }
     if (!settings.taskCategoryPresets) {
         settings.taskCategoryPresets = {
             youtube: {

@@ -598,7 +598,10 @@ export const sendEmail = async ({
                 API_MODE: 'HTTPS_OAUTH_REST'
             });
 
-            const gmailSenderEmail = process.env.GMAIL_USER || (settings && settings.emailSenderAddress) || 'smartexn.com@gmail.com';
+            const resolvedConfigSender = settings && settings.emailSenderAddress && settings.emailSenderAddress.toLowerCase() !== 'smartexn.com@gmail.com'
+                ? settings.emailSenderAddress
+                : 'support@smartexn.com';
+            const gmailSenderEmail = process.env.GMAIL_USER || resolvedConfigSender;
             const fromAddress = `"${resolvedSender.name}" <${gmailSenderEmail}>`;
 
             deliveryResult = await executeWithRetry(() => sendViaGmailHttp({

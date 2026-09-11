@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
+import Setting from '../models/Setting.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Deposit from '../models/Deposit.js';
 import Transaction from '../models/Transaction.js';
@@ -24,10 +25,24 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
     if (channel === 'email') {
         userQuery.email = { $exists: true, $ne: '', $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i };
     } else if (channel === 'whatsapp') {
-        userQuery.$or = [
-            { phone: { $exists: true, $ne: '' } },
-            { whatsapp: { $exists: true, $ne: '' } }
-        ];
+        // Group channel eligibility in $and separately to prevent $or collisions with other filters
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { phone: { $exists: true, $ne: '' } },
+                { whatsapp: { $exists: true, $ne: '' } }
+            ]
+        });
+
+        // Enforce verified recipients for WhatsApp channel if existing product rule requires it
+        try {
+            const currentSettings = await Setting.getSettings();
+            if (currentSettings?.whatsappVerificationRequired) {
+                userQuery.whatsappVerified = true;
+            }
+        } catch (err) {
+            // Non-blocking fallback
+        }
     }
 
     // 2. User Status (All / Active / Non-active)
@@ -158,15 +173,25 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
     if (filters.emailVerified === 'verified' || filters.emailVerified === true || filters.emailVerified === 'true') {
         userQuery.emailVerified = true;
     } else if (filters.emailVerified === 'unverified' || filters.emailVerified === false || filters.emailVerified === 'false') {
-        userQuery.$or = userQuery.$or || [];
-        userQuery.$or.push({ emailVerified: false }, { emailVerified: { $exists: false } });
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { emailVerified: false },
+                { emailVerified: { $exists: false } }
+            ]
+        });
     }
 
     if (filters.whatsappVerified === 'verified' || filters.whatsappVerified === true || filters.whatsappVerified === 'true') {
         userQuery.whatsappVerified = true;
     } else if (filters.whatsappVerified === 'unverified' || filters.whatsappVerified === false || filters.whatsappVerified === 'false') {
-        userQuery.$or = userQuery.$or || [];
-        userQuery.$or.push({ whatsappVerified: false }, { whatsappVerified: { $exists: false } });
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { whatsappVerified: false },
+                { whatsappVerified: { $exists: false } }
+            ]
+        });
     }
 
     // 7. Keyword Search (username, fullName, email, phone)

@@ -228,7 +228,7 @@ const Settings: React.FC = () => {
             info: 'info@smartexn.com',
             welcome: 'info@smartexn.com'
         },
-        emailSenderAddress: settings.emailSenderAddress || 'smartexn.com@gmail.com',
+        emailSenderAddress: (!settings.emailSenderAddress || settings.emailSenderAddress.toLowerCase() === 'smartexn.com@gmail.com') ? 'support@smartexn.com' : settings.emailSenderAddress,
         emailSenderPassword: settings.emailSenderPassword || '',
         whatsappAutomationEnabled: settings.whatsappAutomationEnabled || false,
         whatsappInstanceId: settings.whatsappInstanceId || 'instance183081',
@@ -3393,7 +3393,7 @@ const Settings: React.FC = () => {
                                                 value={localSettings.emailSenderAddress || ''}
                                                 onChange={handleTextChange}
                                                 className="w-full text-sm p-3 rounded-xl border dark:bg-gray-800 dark:border-gray-700 focus:ring-0"
-                                                placeholder="smartexn.com@gmail.com"
+                                                placeholder="support@smartexn.com"
                                             />
                                         </div>
                                         <div>
