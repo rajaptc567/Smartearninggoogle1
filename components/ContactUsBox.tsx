@@ -78,7 +78,8 @@ export const ContactUsBox: React.FC<ContactUsBoxProps> = ({
     } | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
 
-    const adminEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
+    const rawAdminEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
+    const adminEmail = (!rawAdminEmail || rawAdminEmail.toLowerCase() === 'smartexn.com@gmail.com') ? 'support@smartexn.com' : rawAdminEmail;
     const adminWhatsApp = settings?.contactUsWhatsAppNumber || '+447846775662';
 
     const handleSendInquiry = (e: React.FormEvent) => {

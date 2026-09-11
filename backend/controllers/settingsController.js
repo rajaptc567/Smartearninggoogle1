@@ -204,6 +204,20 @@ export const getSettings = async (req, res) => {
         // Strip massive evaluation logs from regular settings GET to prevent megabyte payload bloat
         delete settingsObj.ruleEvaluationLogs;
 
+        const rawPublicEmail = (settingsObj.publicSupportEmail || '').trim();
+        if (!rawPublicEmail || rawPublicEmail.toLowerCase() === 'smartexn.com@gmail.com') {
+            settingsObj.publicSupportEmail = 'support@smartexn.com';
+        }
+        if (!settingsObj.supportOfficeEmail || settingsObj.supportOfficeEmail.toLowerCase() === 'smartexn.com@gmail.com') {
+            settingsObj.supportOfficeEmail = 'support@smartexn.com';
+        }
+        if (!settingsObj.contactUsEmailAddress || settingsObj.contactUsEmailAddress.toLowerCase() === 'smartexn.com@gmail.com') {
+            settingsObj.contactUsEmailAddress = 'support@smartexn.com';
+        }
+        if (settingsObj.emailSenderAddress && settingsObj.emailSenderAddress.toLowerCase() === 'smartexn.com@gmail.com') {
+            settingsObj.emailSenderAddress = 'notifications@smartexn.com';
+        }
+
         // Strip sensitive credentials from non-admin requests
         const isAuthorizedAdmin = req.user && (
             req.user.role === 'admin' || 
@@ -323,12 +337,15 @@ export const updateSettings = async (req, res) => {
         }
 
         // Validate and sanitize publicSupportEmail
-        if (req.body.publicSupportEmail) {
-            const cleanEmail = String(req.body.publicSupportEmail).trim().toLowerCase();
+        if (req.body.publicSupportEmail !== undefined) {
+            let cleanEmail = String(req.body.publicSupportEmail).trim().toLowerCase();
+            if (cleanEmail === 'smartexn.com@gmail.com' || !cleanEmail) {
+                cleanEmail = 'support@smartexn.com';
+            }
             if (EMAIL_REGEX.test(cleanEmail)) {
                 req.body.publicSupportEmail = cleanEmail;
-                if (!req.body.supportOfficeEmail) req.body.supportOfficeEmail = cleanEmail;
-                if (!req.body.contactUsEmailAddress) req.body.contactUsEmailAddress = cleanEmail;
+                if (!req.body.supportOfficeEmail || req.body.supportOfficeEmail.toLowerCase() === 'smartexn.com@gmail.com') req.body.supportOfficeEmail = cleanEmail;
+                if (!req.body.contactUsEmailAddress || req.body.contactUsEmailAddress.toLowerCase() === 'smartexn.com@gmail.com') req.body.contactUsEmailAddress = cleanEmail;
             } else {
                 delete req.body.publicSupportEmail;
             }

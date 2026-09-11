@@ -375,7 +375,7 @@ const SettingSchema = new mongoose.Schema({
     termsOfUseUpdated: { type: String, default: "Last updated: June 28, 2026" },
     termsOfUseContent: { type: String, default: "" },
     emailAutomationEnabled: { type: Boolean, default: false },
-    emailSenderAddress: { type: String, default: 'smartexn.com@gmail.com' },
+    emailSenderAddress: { type: String, default: 'notifications@smartexn.com' },
     emailSenderPassword: { type: String, default: '' },
     whatsappAutomationEnabled: { type: Boolean, default: false },
     whatsappInstanceId: { type: String, default: 'instance183081' },
@@ -569,7 +569,7 @@ const SettingSchema = new mongoose.Schema({
             welcome: 'info@smartexn.com'
         })
     },
-    emailSenderAddress: { type: String, default: 'smartexn.com@gmail.com' },
+    emailSenderAddress: { type: String, default: 'notifications@smartexn.com' },
     emailSenderPassword: { type: String, default: '' },
     whatsappAutomationEnabled: { type: Boolean, default: false },
     whatsappInstanceId: { type: String, default: 'instance183081' },
@@ -632,6 +632,19 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.defaultSenderEmail) {
         settings.defaultSenderEmail = 'notifications@smartexn.com';
+        needsSave = true;
+    }
+    const rawPublicEmail = (settings.publicSupportEmail || '').trim();
+    if (!rawPublicEmail || rawPublicEmail.toLowerCase() === 'smartexn.com@gmail.com') {
+        settings.publicSupportEmail = 'support@smartexn.com';
+        needsSave = true;
+    }
+    if (!settings.supportOfficeEmail || settings.supportOfficeEmail.toLowerCase() === 'smartexn.com@gmail.com') {
+        settings.supportOfficeEmail = 'support@smartexn.com';
+        needsSave = true;
+    }
+    if (!settings.contactUsEmailAddress || settings.contactUsEmailAddress.toLowerCase() === 'smartexn.com@gmail.com') {
+        settings.contactUsEmailAddress = 'support@smartexn.com';
         needsSave = true;
     }
     if (!settings.taskCategoryPresets) {

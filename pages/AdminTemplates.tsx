@@ -11,9 +11,10 @@ import {
     resendTemplateLog,
     getAudienceEstimate,
     getAudienceList,
-    getPublicSettings
+    getPublicSettings,
+    getInvestmentPlans
 } from '../services/api';
-import { Template, TemplateLog, User } from '../types';
+import { Template, TemplateLog, User, InvestmentPlan } from '../types';
 import { 
     Mail, 
     MessageSquare, 
@@ -93,9 +94,9 @@ const AdminTemplates: React.FC = () => {
         notes: ''
     });
 
-    // Manual Bulk Message: Message Mode (Template vs Custom Message)
+    // Manual Bulk Message: Channel (Email vs WhatsApp), Message Mode (Template vs Custom), Recipient Mode (Manual Pick vs Audience Filter)
+    const [manualChannel, setManualChannel] = useState<'email' | 'whatsapp'>('email');
     const [manualMessageMode, setManualMessageMode] = useState<'template' | 'custom'>('template');
-    // Recipient Targeting Mode: Manual Pick vs Audience Filter
     const [recipientMode, setRecipientMode] = useState<'manual' | 'audience'>('manual');
     const [customSender, setCustomSender] = useState<string>('notifications@smartexn.com');
     const [customSubject, setCustomSubject] = useState<string>('');
@@ -112,11 +113,16 @@ const AdminTemplates: React.FC = () => {
         { id: 'finance', email: 'finance@smartexn.com', name: 'SmartExn Finance & Billing' }
     ]);
 
+    // Investment plans for specific plan multi-selection
+    const [availablePlans, setAvailablePlans] = useState<InvestmentPlan[]>([]);
+
     // Audience Filtering States
     const [audienceFilters, setAudienceFilters] = useState({
         userStatus: 'all',
         planStatus: 'all',
+        specificPlanIds: [] as string[],
         payoutStatus: 'all',
+        taskActivity: 'all',
         activityStatus: 'all',
         newUsersWindow: 'all',
         emailVerified: 'all',
@@ -231,6 +237,12 @@ The SmartEarning Desk
 
     useEffect(() => {
         fetchTemplatesData();
+        getInvestmentPlans().then(plans => {
+            if (Array.isArray(plans)) {
+                setAvailablePlans(plans);
+            }
+        }).catch(() => {});
+
         getPublicSettings().then(res => {
             if (res.emailSenders && res.emailSenders.length > 0) {
                 const active = res.emailSenders.filter((s: any) => s.enabled !== false);
@@ -246,8 +258,31 @@ The SmartEarning Desk
     }, []);
 
     const activeChannel: 'email' | 'whatsapp' = manualMessageMode === 'template'
-        ? (templates.find(t => t.key === manualSelectedTemplateKey)?.type === 'whatsapp' ? 'whatsapp' : 'email')
-        : 'email';
+        ? (templates.find(t => t.key === manualSelectedTemplateKey)?.type === 'whatsapp' ? 'whatsapp' : manualChannel)
+        : manualChannel;
+
+    const handleChannelChange = (newChannel: 'email' | 'whatsapp') => {
+        setManualChannel(newChannel);
+        if (manualMessageMode === 'template') {
+            const currentTpl = templates.find(t => t.key === manualSelectedTemplateKey);
+            if (currentTpl && currentTpl.type !== newChannel) {
+                const match = templates.find(t => t.type === newChannel);
+                if (match) {
+                    setManualSelectedTemplateKey(match.key);
+                } else {
+                    setManualSelectedTemplateKey('');
+                }
+            }
+        }
+    };
+
+    const handleTemplateSelect = (templateKey: string) => {
+        setManualSelectedTemplateKey(templateKey);
+        const tpl = templates.find(t => t.key === templateKey);
+        if (tpl) {
+            setManualChannel(tpl.type === 'whatsapp' ? 'whatsapp' : 'email');
+        }
+    };
 
     const fetchAudienceCount = async (filtersToUse = audienceFilters) => {
         setLoadingEstimate(true);
@@ -284,7 +319,7 @@ The SmartEarning Desk
                 fetchAudienceCount();
             }
         }
-    }, [activeTab, recipientMode, audienceFilters, manualMessageMode, manualSelectedTemplateKey]);
+    }, [activeTab, recipientMode, audienceFilters, manualMessageMode, manualSelectedTemplateKey, manualChannel, activeChannel]);
 
     const fetchHistoryData = async () => {
         setLoadingHistory(true);
@@ -402,54 +437,57 @@ The SmartEarning Desk
                 setSendingManual(false);
             }
         } else {
-            // Custom Message Mode
-            if (!customSubject.trim()) {
-                alert('Please enter a message subject.');
-                return;
-            }
-            if (!customBody.trim()) {
-                alert('Please enter a message body.');
-                return;
+            // Custom Message Mode: supports Email and WhatsApp
+            if (manualChannel === 'email') {
+                if (!customSubject.trim()) {
+                    alert('Please enter a message subject.');
+                    return;
+                }
+                if (!customBody.trim()) {
+                    alert('Please enter a message body.');
+                    return;
+                }
+            } else {
+                if (!customBody.trim()) {
+                    alert('Please enter a WhatsApp message body.');
+                    return;
+                }
             }
 
             const recipientDesc = recipientMode === 'manual'
                 ? `${manualSelectedUserIds.length} individually selected user(s)`
                 : `${audienceEstimate?.eligibleCount ?? 'matching'} audience users`;
 
-            const confirmMsg = `Are you sure you want to broadcast this custom email from "${customSender}" to ${recipientDesc}?\n\nSubject: ${customSubject}`;
+            const confirmMsg = manualChannel === 'whatsapp'
+                ? `Are you sure you want to broadcast this custom WhatsApp message to ${recipientDesc}?`
+                : `Are you sure you want to broadcast this custom email from "${customSender}" to ${recipientDesc}?\n\nSubject: ${customSubject}`;
+
             if (!window.confirm(confirmMsg)) {
                 return;
             }
 
             setSendingManual(true);
             try {
-                if (recipientMode === 'manual') {
-                    await manualSendTemplate({
-                        channel: 'email',
-                        mode: 'custom',
+                const payload: any = {
+                    channel: manualChannel,
+                    mode: 'custom',
+                    customBody: customBody.trim(),
+                    ...(manualChannel === 'email' ? {
+                        customSubject: customSubject.trim(),
+                        fromSender: customSender,
                         customEmail: {
                             fromSender: customSender,
                             subject: customSubject.trim(),
                             body: customBody.trim()
-                        },
-                        targetUserIds: manualSelectedUserIds,
-                        variables: manualVars
-                    });
-                } else {
-                    await manualSendTemplate({
-                        channel: 'email',
-                        mode: 'custom',
-                        customEmail: {
-                            fromSender: customSender,
-                            subject: customSubject.trim(),
-                            body: customBody.trim()
-                        },
-                        filters: audienceFilters,
-                        variables: manualVars
-                    });
-                }
+                        }
+                    } : {}),
+                    ...(recipientMode === 'manual' ? { targetUserIds: manualSelectedUserIds } : { filters: audienceFilters }),
+                    variables: manualVars
+                };
 
-                setSuccessMsg(`Successfully dispatched custom email broadcast to ${recipientDesc}!`);
+                await manualSendTemplate(payload);
+
+                setSuccessMsg(`Successfully dispatched custom ${manualChannel === 'whatsapp' ? 'WhatsApp' : 'email'} broadcast to ${recipientDesc}!`);
                 if (recipientMode === 'manual') {
                     setManualSelectedUserIds([]);
                 }
@@ -1520,17 +1558,47 @@ The SmartEarning Desk
                             </p>
                         </div>
 
-                        {/* Top Dual Toggles */}
+                        {/* Top Dual Toggles in exact requested order: Channel -> Message Mode -> Recipient Mode */}
                         <div className="flex flex-wrap items-center gap-3">
+                            {/* 1. Channel */}
                             <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
-                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Mode:</span>
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Channel:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleChannelChange('email')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        manualChannel === 'email'
+                                            ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    <span>Email</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleChannelChange('whatsapp')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        manualChannel === 'whatsapp'
+                                            ? 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    <span>WhatsApp</span>
+                                </button>
+                            </div>
+
+                            {/* 2. Message Mode */}
+                            <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Message Mode:</span>
                                 <button
                                     type="button"
                                     onClick={() => setManualMessageMode('template')}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                         manualMessageMode === 'template'
                                             ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                                 >
                                     Template
@@ -1541,22 +1609,23 @@ The SmartEarning Desk
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                         manualMessageMode === 'custom'
                                             ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                                 >
-                                    Custom Email
+                                    Custom
                                 </button>
                             </div>
 
+                            {/* 3. Recipient Mode */}
                             <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
-                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Audience:</span>
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Recipient Mode:</span>
                                 <button
                                     type="button"
                                     onClick={() => setRecipientMode('manual')}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                         recipientMode === 'manual'
                                             ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                                 >
                                     Manual Pick
@@ -1567,7 +1636,7 @@ The SmartEarning Desk
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                         recipientMode === 'audience'
                                             ? 'bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                     }`}
                                 >
                                     Audience Filter
@@ -1583,8 +1652,12 @@ The SmartEarning Desk
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                                         <span>1. Message Content</span>
-                                        <span className="text-[10px] lowercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 font-bold">
-                                            {manualMessageMode}
+                                        <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full font-bold ${
+                                            manualChannel === 'whatsapp' 
+                                                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300' 
+                                                : 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                                        }`}>
+                                            {manualChannel} • {manualMessageMode}
                                         </span>
                                     </h3>
                                 </div>
@@ -1594,11 +1667,11 @@ The SmartEarning Desk
                                     <div className="space-y-4">
                                         <div>
                                             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">
-                                                Select System Template
+                                                Select System Template ({manualChannel === 'whatsapp' ? 'WhatsApp' : 'Email'})
                                             </label>
                                             <select
                                                 value={manualSelectedTemplateKey}
-                                                onChange={(e) => setManualSelectedTemplateKey(e.target.value)}
+                                                onChange={(e) => handleTemplateSelect(e.target.value)}
                                                 className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             >
                                                 <option value="">-- Choose Template --</option>
@@ -1611,15 +1684,25 @@ The SmartEarning Desk
                                         </div>
 
                                         {manualSelectedTemplateKey && (
-                                            <div className="p-3 bg-blue-50/60 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl text-xs space-y-1">
+                                            <div className={`p-3 border rounded-xl text-xs space-y-1 ${
+                                                activeChannel === 'whatsapp'
+                                                    ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-150 dark:border-emerald-800'
+                                                    : 'bg-blue-50/60 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800'
+                                            }`}>
                                                 {(() => {
                                                     const cur = templates.find(t => t.key === manualSelectedTemplateKey);
                                                     if (!cur) return null;
                                                     return (
                                                         <>
-                                                            <div className="font-bold text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                                                            <div className={`font-bold flex items-center justify-between ${
+                                                                activeChannel === 'whatsapp' ? 'text-emerald-900 dark:text-emerald-200' : 'text-blue-900 dark:text-blue-200'
+                                                            }`}>
                                                                 <span>{cur.name}</span>
-                                                                <span className="uppercase text-[9px] px-1.5 py-0.5 rounded bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-100">
+                                                                <span className={`uppercase text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                                                    cur.type === 'whatsapp'
+                                                                        ? 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-100'
+                                                                        : 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-100'
+                                                                }`}>
                                                                     {cur.type}
                                                                 </span>
                                                             </div>
@@ -1640,98 +1723,197 @@ The SmartEarning Desk
                                 ) : (
                                     /* Custom Message Composer */
                                     <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                                From Approved Sender
-                                            </label>
-                                            <select
-                                                value={customSender}
-                                                onChange={(e) => setCustomSender(e.target.value)}
-                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            >
-                                                {approvedSenders.map(sender => (
-                                                    <option key={sender.id} value={sender.email}>
-                                                        {sender.email} ({sender.name})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <p className="text-[10px] text-gray-400 mt-1">
-                                                Verified SmartExn domain address. External From addresses are strictly restricted.
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                                Email Subject Line
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Important Account Announcement for {fullName}"
-                                                value={customSubject}
-                                                onChange={(e) => setCustomSubject(e.target.value)}
-                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <div className="flex items-center justify-between mb-1.5">
-                                                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                                    Email Body (HTML or Text)
-                                                </label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowCustomPreview(!showCustomPreview)}
-                                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                                                >
-                                                    {showCustomPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                                    <span>{showCustomPreview ? 'Hide Preview' : 'Live Preview'}</span>
-                                                </button>
-                                            </div>
-
-                                            {/* Quick placeholder insertion buttons */}
-                                            <div className="flex flex-wrap items-center gap-1 mb-2">
-                                                <span className="text-[10px] text-gray-400 mr-1">Insert tag:</span>
-                                                {['{username}', '{fullName}', '{amount}', '{currency}', '{txId}', '{date}', '{notes}'].map(tag => (
-                                                    <button
-                                                        key={tag}
-                                                        type="button"
-                                                        onClick={() => insertPlaceholderIntoBody(tag)}
-                                                        className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100 hover:bg-blue-50 text-gray-700 hover:text-blue-700 dark:bg-gray-750 dark:hover:bg-blue-900/40 dark:text-gray-300 dark:hover:text-blue-300 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                        {manualChannel === 'email' ? (
+                                            /* Email Custom Mode: From Sender + Subject + Body */
+                                            <>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                        From Approved Sender
+                                                    </label>
+                                                    <select
+                                                        value={customSender}
+                                                        onChange={(e) => setCustomSender(e.target.value)}
+                                                        className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     >
-                                                        {tag}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                                        {approvedSenders.map(sender => (
+                                                            <option key={sender.id} value={sender.email}>
+                                                                {sender.email} ({sender.name})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <p className="text-[10px] text-gray-400 mt-1">
+                                                        Verified SmartExn domain address. External From addresses are strictly restricted.
+                                                    </p>
+                                                </div>
 
-                                            <textarea
-                                                rows={7}
-                                                placeholder="Write your email body here. You may use standard HTML tags such as <p>, <strong>, <a href='...'>, <br/>..."
-                                                value={customBody}
-                                                onChange={(e) => setCustomBody(e.target.value)}
-                                                className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-                                            />
-                                        </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                                        Email Subject Line
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. Important Account Announcement for {fullName}"
+                                                        value={customSubject}
+                                                        onChange={(e) => setCustomSubject(e.target.value)}
+                                                        className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    />
+                                                </div>
 
-                                        {/* Live Preview Container */}
-                                        {showCustomPreview && (
-                                            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
-                                                <div className="flex items-center justify-between text-[11px] font-bold text-blue-900 dark:text-blue-200">
-                                                    <span>Live Preview Output (Sample Data)</span>
-                                                    <span className="text-[9px] uppercase px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                                                        From: {customSender}
-                                                    </span>
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                            Email Body (HTML or Text)
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowCustomPreview(!showCustomPreview)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                                        >
+                                                            {showCustomPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                                            <span>{showCustomPreview ? 'Hide Preview' : 'Live Preview'}</span>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Quick placeholder insertion buttons */}
+                                                    <div className="flex flex-wrap items-center gap-1 mb-2">
+                                                        <span className="text-[10px] text-gray-400 mr-1">Insert tag:</span>
+                                                        {['{username}', '{fullName}', '{amount}', '{currency}', '{txId}', '{date}', '{notes}'].map(tag => (
+                                                            <button
+                                                                key={tag}
+                                                                type="button"
+                                                                onClick={() => insertPlaceholderIntoBody(tag)}
+                                                                className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100 hover:bg-blue-50 text-gray-700 hover:text-blue-700 dark:bg-gray-750 dark:hover:bg-blue-900/40 dark:text-gray-300 dark:hover:text-blue-300 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                                            >
+                                                                {tag}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    <textarea
+                                                        rows={7}
+                                                        placeholder="Write your email body here. You may use standard HTML tags such as <p>, <strong>, <a href='...'>, <br/>..."
+                                                        value={customBody}
+                                                        onChange={(e) => setCustomBody(e.target.value)}
+                                                        className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                                                    />
                                                 </div>
-                                                <div className="text-xs font-bold text-gray-800 dark:text-gray-100">
-                                                    Subject: {customSubject ? customSubject.replace(/\{fullName\}/g, 'John Doe').replace(/\{username\}/g, 'john_doe') : '(Empty Subject)'}
+
+                                                {/* Live Preview Container */}
+                                                {showCustomPreview && (
+                                                    <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
+                                                        <div className="flex items-center justify-between text-[11px] font-bold text-blue-900 dark:text-blue-200">
+                                                            <span>Live Preview Output (Sample Data)</span>
+                                                            <span className="text-[9px] uppercase px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+                                                                From: {customSender}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                                                            Subject: {customSubject ? customSubject.replace(/\{fullName\}/g, 'John Doe').replace(/\{username\}/g, 'john_doe') : '(Empty Subject)'}
+                                                        </div>
+                                                        <div className="p-3 bg-white dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-750 text-xs text-gray-800 dark:text-gray-200 shadow-sm leading-relaxed break-words">
+                                                            {customBody.includes('<') && customBody.includes('>') ? (
+                                                                <div dangerouslySetInnerHTML={{ __html: getRenderedPreviewBody() }} />
+                                                            ) : (
+                                                                <div className="whitespace-pre-wrap">{getRenderedPreviewBody().replace(/<[^>]*>/g, '')}</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            /* WhatsApp Custom Mode: Body Only (Subject and From Sender hidden/disabled) */
+                                            <>
+                                                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
+                                                    <Smartphone className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                                                    <div className="space-y-0.5">
+                                                        <div className="font-bold text-emerald-900 dark:text-emerald-200">
+                                                            WhatsApp Direct Broadcast
+                                                        </div>
+                                                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-normal">
+                                                            Dispatched directly through the configured UltraMsg WhatsApp gateway. Subject and sender email address are not required.
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="p-3 bg-white dark:bg-gray-850 rounded-lg border border-gray-200 dark:border-gray-750 text-xs text-gray-800 dark:text-gray-200 shadow-sm leading-relaxed break-words">
-                                                    {customBody.includes('<') && customBody.includes('>') ? (
-                                                        <div dangerouslySetInnerHTML={{ __html: getRenderedPreviewBody() }} />
-                                                    ) : (
-                                                        <div className="whitespace-pre-wrap">{getRenderedPreviewBody().replace(/<[^>]*>/g, '')}</div>
-                                                    )}
+
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                            WhatsApp Message Body
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowCustomPreview(!showCustomPreview)}
+                                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                                        >
+                                                            {showCustomPreview ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                                            <span>{showCustomPreview ? 'Hide Preview' : 'Live WhatsApp Preview'}</span>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Quick placeholder insertion buttons */}
+                                                    <div className="flex flex-wrap items-center gap-1 mb-2">
+                                                        <span className="text-[10px] text-gray-400 mr-1">Insert tag:</span>
+                                                        {['{username}', '{fullName}', '{amount}', '{currency}', '{txId}', '{date}', '{notes}'].map(tag => (
+                                                            <button
+                                                                key={tag}
+                                                                type="button"
+                                                                onClick={() => insertPlaceholderIntoBody(tag)}
+                                                                className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-gray-100 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 dark:bg-gray-750 dark:hover:bg-emerald-900/40 dark:text-gray-300 dark:hover:text-emerald-300 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                                            >
+                                                                {tag}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    <textarea
+                                                        rows={8}
+                                                        placeholder="Hello {fullName}, your account update from SmartExn: Your deposit of {currency} {amount} has been processed. Reference: {txId}."
+                                                        value={customBody}
+                                                        onChange={(e) => setCustomBody(e.target.value)}
+                                                        className="w-full px-3 py-2 text-xs font-sans rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+                                                    />
+
+                                                    <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
+                                                        <span>Formatting: *bold*, _italic_, ~strike~</span>
+                                                        <span>{customBody.length} characters</span>
+                                                    </div>
                                                 </div>
-                                            </div>
+
+                                                {/* Live WhatsApp Bubble Preview */}
+                                                {showCustomPreview && (
+                                                    <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-[#E5DDD5] dark:bg-gray-950 space-y-2">
+                                                        <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                                                                <span>WhatsApp Message Preview</span>
+                                                            </span>
+                                                            <span className="text-[9px] uppercase px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 rounded font-bold">
+                                                                UltraMsg Direct
+                                                            </span>
+                                                        </div>
+
+                                                        {/* WhatsApp Message Bubble */}
+                                                        <div className="max-w-[88%] ml-auto bg-[#DCF8C6] dark:bg-emerald-900 text-gray-900 dark:text-emerald-50 p-3 rounded-2xl rounded-tr-none shadow-sm text-xs leading-relaxed break-words whitespace-pre-wrap">
+                                                            {customBody ? (
+                                                                customBody
+                                                                    .replace(/\{username\}/g, 'john_doe')
+                                                                    .replace(/\{fullName\}/g, 'John Doe')
+                                                                    .replace(/\{amount\}/g, manualVars.amount || '50.00')
+                                                                    .replace(/\{currency\}/g, 'USD')
+                                                                    .replace(/\{txId\}/g, manualVars.txId || 'TXN-8842109')
+                                                                    .replace(/\{date\}/g, new Date().toLocaleDateString())
+                                                                    .replace(/\{notes\}/g, manualVars.notes || 'Administrative account settlement notes.')
+                                                            ) : (
+                                                                <span className="italic text-gray-400">Type a message to see live WhatsApp preview...</span>
+                                                            )}
+                                                            <div className="text-[9px] text-gray-500 dark:text-emerald-300 text-right mt-1 flex items-center justify-end gap-1">
+                                                                <span>12:00 PM</span>
+                                                                <span>✓✓</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 )}
@@ -1789,7 +1971,7 @@ The SmartEarning Desk
                                 <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
                                     <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                                         <span>Target Audience:</span>
-                                        <span className="font-bold text-blue-600 dark:text-blue-400">
+                                        <span className={`font-bold ${manualChannel === 'whatsapp' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
                                             {recipientMode === 'manual'
                                                 ? `${manualSelectedUserIds.length} User(s) selected`
                                                 : `${audienceEstimate?.eligibleCount ?? 'Calculating...'} User(s) match filters`}
@@ -1803,9 +1985,17 @@ The SmartEarning Desk
                                             sendingManual || 
                                             (recipientMode === 'manual' && manualSelectedUserIds.length === 0) ||
                                             (manualMessageMode === 'template' && !manualSelectedTemplateKey) ||
-                                            (manualMessageMode === 'custom' && (!customSubject.trim() || !customBody.trim()))
+                                            (manualMessageMode === 'custom' && (
+                                                manualChannel === 'email'
+                                                    ? (!customSubject.trim() || !customBody.trim())
+                                                    : !customBody.trim()
+                                            ))
                                         }
-                                        className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-bold rounded-xl transition-all shadow-sm gap-2"
+                                        className={`w-full inline-flex items-center justify-center px-4 py-3 text-white font-bold rounded-xl transition-all shadow-sm gap-2 ${
+                                            manualChannel === 'whatsapp'
+                                                ? 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700'
+                                                : 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700'
+                                        }`}
                                     >
                                         {sendingManual ? (
                                             <>
@@ -1818,7 +2008,7 @@ The SmartEarning Desk
                                                 <span>
                                                     {manualMessageMode === 'template'
                                                         ? `Broadcast Template (${recipientMode === 'manual' ? manualSelectedUserIds.length : (audienceEstimate?.eligibleCount ?? 0)})`
-                                                        : `Send Custom Broadcast (${recipientMode === 'manual' ? manualSelectedUserIds.length : (audienceEstimate?.eligibleCount ?? 0)})`}
+                                                        : `Send Custom ${manualChannel === 'whatsapp' ? 'WhatsApp' : 'Email'} (${recipientMode === 'manual' ? manualSelectedUserIds.length : (audienceEstimate?.eligibleCount ?? 0)})`}
                                                 </span>
                                             </>
                                         )}
@@ -1980,7 +2170,7 @@ The SmartEarning Desk
                                                     )}
                                                 </span>
                                                 <span className="text-xs text-gray-500">
-                                                    recipients with deliverable email address
+                                                    {activeChannel === 'whatsapp' ? 'recipients with reachable WhatsApp / phone number' : 'recipients with deliverable email address'}
                                                 </span>
                                             </div>
                                             <div className="text-[11px] text-gray-400 mt-0.5">
@@ -2044,8 +2234,84 @@ The SmartEarning Desk
                                                 <option value="all">All Users (With or without Plan)</option>
                                                 <option value="has_active_plan">Has Active / Enrolled Plan</option>
                                                 <option value="no_active_plan">No Active Investment Plan</option>
+                                                <option value="specific_plan">Specific Investment Plan(s)...</option>
                                             </select>
                                         </div>
+
+                                        {/* Specific Plans Multi-Select Selector (Appears when specific_plan is chosen) */}
+                                        {audienceFilters.planStatus === 'specific_plan' && (
+                                            <div className="md:col-span-2 p-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                                                        <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                                        <span>Select Target Investment Plans ({audienceFilters.specificPlanIds.length} Selected)</span>
+                                                    </label>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAudienceFilters(prev => ({
+                                                                ...prev,
+                                                                specificPlanIds: availablePlans.map(p => p._id)
+                                                            }))}
+                                                            className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                                                        >
+                                                            Select All
+                                                        </button>
+                                                        <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAudienceFilters(prev => ({
+                                                                ...prev,
+                                                                specificPlanIds: []
+                                                            }))}
+                                                            className="text-[11px] text-gray-500 dark:text-gray-400 hover:underline"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {availablePlans.length === 0 ? (
+                                                    <p className="text-xs text-gray-400 italic">No investment plans configured in system.</p>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto pr-1">
+                                                        {availablePlans.map(plan => {
+                                                            const isChecked = audienceFilters.specificPlanIds.includes(plan._id);
+                                                            return (
+                                                                <label
+                                                                    key={plan._id}
+                                                                    className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${
+                                                                        isChecked
+                                                                            ? 'bg-blue-100/70 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-100 font-medium'
+                                                                            : 'bg-white dark:bg-gray-850 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                                                    }`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => {
+                                                                            setAudienceFilters(prev => {
+                                                                                const exists = prev.specificPlanIds.includes(plan._id);
+                                                                                return {
+                                                                                    ...prev,
+                                                                                    specificPlanIds: exists
+                                                                                        ? prev.specificPlanIds.filter(id => id !== plan._id)
+                                                                                        : [...prev.specificPlanIds, plan._id]
+                                                                                };
+                                                                            });
+                                                                        }}
+                                                                        className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                                                    />
+                                                                    <div className="truncate flex-1">
+                                                                        <span className="font-bold">{plan.name}</span>
+                                                                        <span className="text-[10px] text-gray-400 ml-1">({plan.currency} {plan.price})</span>
+                                                                    </div>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {/* 3. Payout History */}
                                         <div className="space-y-1">
@@ -2058,13 +2324,35 @@ The SmartEarning Desk
                                                 className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
                                             >
                                                 <option value="all">All Users</option>
-                                                <option value="paid_once">Has At Least 1 Approved Payout</option>
+                                                <option value="at_least_one_payout">Has At Least 1 Approved Payout</option>
                                                 <option value="never_paid">Never Received a Payout (New Earners)</option>
                                                 <option value="frequent_payout">Frequent Earners (3+ Payouts)</option>
                                             </select>
                                         </div>
 
-                                        {/* 4. Registration Date Window */}
+                                        {/* 4. Task Activity Window */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                                Task Activity Window
+                                            </label>
+                                            <select
+                                                value={audienceFilters.taskActivity}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, taskActivity: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users (No Task Filter)</option>
+                                                <option value="any_7d">Submitted Any Task in Last 7 Days</option>
+                                                <option value="any_30d">Submitted Any Task in Last 30 Days</option>
+                                                <option value="approved_7d">Approved Task in Last 7 Days</option>
+                                                <option value="approved_30d">Approved Task in Last 30 Days</option>
+                                                <option value="rejected_7d">Rejected Task in Last 7 Days</option>
+                                                <option value="rejected_30d">Rejected Task in Last 30 Days</option>
+                                                <option value="pending_7d">Pending Task in Last 7 Days</option>
+                                                <option value="pending_30d">Pending Task in Last 30 Days</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 5. Registration Date Window */}
                                         <div className="space-y-1">
                                             <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
                                                 Registration Cohort
@@ -2081,7 +2369,7 @@ The SmartEarning Desk
                                             </select>
                                         </div>
 
-                                        {/* 5. User Activity Window */}
+                                        {/* 6. User Activity Window */}
                                         <div className="space-y-1">
                                             <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
                                                 Recent Login / Activity
@@ -2097,7 +2385,7 @@ The SmartEarning Desk
                                             </select>
                                         </div>
 
-                                        {/* 6. Email Verification */}
+                                        {/* 7. Email Verification */}
                                         <div className="space-y-1">
                                             <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
                                                 Email Verification Status

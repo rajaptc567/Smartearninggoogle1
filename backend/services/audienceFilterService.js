@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Withdrawal from '../models/Withdrawal.js';
 import Deposit from '../models/Deposit.js';
 import Transaction from '../models/Transaction.js';
+import UserTaskSubmission from '../models/UserTaskSubmission.js';
 
 /**
  * Reusable Audience Filtering Service
@@ -107,15 +108,28 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
                     { activePlans: { $exists: false } }
                 ]
             });
-        } else if (filters.planStatus === 'specific_plan' && filters.specificPlanId) {
-            userQuery.$and = userQuery.$and || [];
-            const planIdOrName = filters.specificPlanId;
-            const isObjectId = mongoose.Types.ObjectId.isValid(planIdOrName);
-            const orConditions = [{ activePlan: planIdOrName }];
-            if (isObjectId) {
-                orConditions.push({ 'activePlans.planId': new mongoose.Types.ObjectId(planIdOrName) });
+        } else if (filters.planStatus === 'specific_plan') {
+            const planIds = (Array.isArray(filters.specificPlanIds) && filters.specificPlanIds.length > 0)
+                ? filters.specificPlanIds.filter(Boolean)
+                : (filters.specificPlanId ? [filters.specificPlanId] : []);
+
+            if (planIds.length > 0) {
+                userQuery.$and = userQuery.$and || [];
+                const orConditions = [];
+
+                // Match in activePlan (string plan ID or plan name)
+                orConditions.push({ activePlan: { $in: planIds } });
+
+                // Match in activePlans.planId (ObjectId)
+                const validObjectIds = planIds
+                    .filter(id => mongoose.Types.ObjectId.isValid(id))
+                    .map(id => new mongoose.Types.ObjectId(id));
+                if (validObjectIds.length > 0) {
+                    orConditions.push({ 'activePlans.planId': { $in: validObjectIds } });
+                }
+
+                userQuery.$and.push({ $or: orConditions });
             }
-            userQuery.$and.push({ $or: orConditions });
         }
     }
 
@@ -213,7 +227,11 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
             });
         } else {
             let targetUserIds = [];
-            if (filters.payoutStatus === 'first_payout') {
+            if (filters.payoutStatus === 'at_least_one_payout' || filters.payoutStatus === 'paid_once') {
+                targetUserIds = Array.from(payoutCounts.entries())
+                    .filter(([_, count]) => count >= 1)
+                    .map(([id]) => id);
+            } else if (filters.payoutStatus === 'first_payout') {
                 targetUserIds = Array.from(payoutCounts.entries())
                     .filter(([_, count]) => count === 1)
                     .map(([id]) => id);
@@ -221,7 +239,7 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
                 targetUserIds = Array.from(payoutCounts.entries())
                     .filter(([_, count]) => count === 2)
                     .map(([id]) => id);
-            } else if (filters.payoutStatus === 'three_plus_payouts') {
+            } else if (filters.payoutStatus === 'three_plus_payouts' || filters.payoutStatus === 'frequent_payout') {
                 targetUserIds = Array.from(payoutCounts.entries())
                     .filter(([_, count]) => count >= 3)
                     .map(([id]) => id);
@@ -231,6 +249,35 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
             userQuery.$and = userQuery.$and || [];
             userQuery.$and.push({ _id: { $in: validTargetObjectIds } });
         }
+    }
+
+    // Task Activity Filter using UserTaskSubmission
+    if (filters.taskActivity && filters.taskActivity !== 'all') {
+        const taskQuery = {};
+        const now = Date.now();
+        const activity = String(filters.taskActivity).toLowerCase();
+
+        if (activity.includes('7d')) {
+            taskQuery.createdAt = { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) };
+        } else if (activity.includes('30d')) {
+            taskQuery.createdAt = { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) };
+        }
+
+        if (activity.startsWith('approved')) {
+            taskQuery.status = { $in: ['Approved', 'Paid'] };
+        } else if (activity.startsWith('rejected')) {
+            taskQuery.status = 'Rejected';
+        } else if (activity.startsWith('pending') || activity.startsWith('submitted')) {
+            taskQuery.status = 'Pending';
+        }
+
+        const distinctWorkerIds = await UserTaskSubmission.distinct('workerId', taskQuery);
+        const validWorkerObjectIds = distinctWorkerIds
+            .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+            .map(id => new mongoose.Types.ObjectId(id));
+
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({ _id: { $in: validWorkerObjectIds } });
     }
 
     // Deposit filters using existing Deposit records (status 'Approved')

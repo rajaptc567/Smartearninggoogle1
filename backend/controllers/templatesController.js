@@ -166,11 +166,11 @@ export const manualSendTemplate = async (req, res) => {
             if (!fromSender && customEmail.fromSender) fromSender = customEmail.fromSender;
         }
 
-        // Resolve message mode: If customSubject & customBody provided, mode is 'custom'
-        const isCustomMode = mode === 'custom' || (!templateKey && Boolean(customSubject && customBody));
+        // Resolve message mode: If mode is 'custom' or if templateKey is absent but custom content is provided
+        let channel = (req.body.channel || 'email').toLowerCase();
+        const isCustomMode = mode === 'custom' || (!templateKey && Boolean(customBody));
 
         let template = null;
-        let channel = req.body.channel || 'email';
 
         if (!isCustomMode) {
             if (!templateKey) {
@@ -182,11 +182,17 @@ export const manualSendTemplate = async (req, res) => {
             }
             channel = template.type === 'whatsapp' ? 'whatsapp' : (req.body.channel || 'email');
         } else {
-            if (!customSubject || !String(customSubject).trim()) {
-                return res.status(400).json({ success: false, error: 'Please provide an email Subject for the custom message.' });
-            }
-            if (!customBody || !String(customBody).trim()) {
-                return res.status(400).json({ success: false, error: 'Please provide email Body content for the custom message.' });
+            if (channel === 'whatsapp') {
+                if (!customBody || !String(customBody).trim()) {
+                    return res.status(400).json({ success: false, error: 'Please provide WhatsApp message Body content for the custom message.' });
+                }
+            } else {
+                if (!customSubject || !String(customSubject).trim()) {
+                    return res.status(400).json({ success: false, error: 'Please provide an email Subject for the custom message.' });
+                }
+                if (!customBody || !String(customBody).trim()) {
+                    return res.status(400).json({ success: false, error: 'Please provide email Body content for the custom message.' });
+                }
             }
         }
 
@@ -226,70 +232,140 @@ export const manualSendTemplate = async (req, res) => {
         let failureCount = 0;
 
         if (isCustomMode) {
-            // Broadcast custom email message
-            const sendPromises = targetUsers.map(async (user) => {
-                const replacedSubject = replacePlaceholders(customSubject, user, variables);
-                const replacedBody = replacePlaceholders(customBody, user, variables);
-                const plainText = replacedBody.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+            if (channel === 'whatsapp') {
+                // Broadcast custom WhatsApp message
+                const sendPromises = targetUsers.map(async (user) => {
+                    const recipientPhone = user.phone || user.whatsapp;
+                    const replacedBody = replacePlaceholders(customBody, user, variables);
+                    // Strip HTML tags for clean WhatsApp text formatting
+                    const plainText = replacedBody
+                        .replace(/<br\s*[\/]?>/gi, '\n')
+                        .replace(/<\/p>/gi, '\n\n')
+                        .replace(/<[^>]*>?/gm, '')
+                        .trim();
 
-                try {
-                    const result = await sendEmail({
-                        to: user.email,
-                        subject: replacedSubject,
-                        html: replacedBody,
-                        text: plainText,
-                        event: 'admin_custom_bulk',
-                        sender: fromSender || 'notifications',
-                        userId: user._id,
-                        sentBy: 'Admin',
-                        templateName: 'Custom Admin Broadcast'
-                    });
+                    try {
+                        const result = await sendAutomatedMessage({
+                            toPhone: recipientPhone,
+                            messageText: plainText,
+                            event: 'admin_custom_whatsapp',
+                            userId: user._id,
+                            sentBy: 'Admin'
+                        });
 
-                    // Log custom message in TemplateLog for history tracking
-                    await TemplateLog.create({
-                        userId: user._id,
-                        username: user.username,
-                        userEmail: user.email,
-                        userPhone: user.phone || user.whatsapp,
-                        templateKey: 'custom_message',
-                        templateName: 'Custom Admin Broadcast',
-                        type: 'email',
-                        recipient: user.email,
-                        subject: replacedSubject,
-                        body: replacedBody,
-                        status: result.success ? 'Success' : 'Failed',
-                        provider: result.provider || 'unknown',
-                        messageId: result.messageId || null,
-                        error: result.error || null,
-                        sentBy: 'Admin',
-                        variables
-                    });
+                        const waSuccess = Boolean(result.whatsapp?.success);
+                        const waError = result.whatsapp?.error || result.error || null;
 
-                    if (result.success) successCount++;
-                    else failureCount++;
-                } catch (sendErr) {
-                    failureCount++;
-                    await TemplateLog.create({
-                        userId: user._id,
-                        username: user.username,
-                        userEmail: user.email,
-                        userPhone: user.phone || user.whatsapp,
-                        templateKey: 'custom_message',
-                        templateName: 'Custom Admin Broadcast',
-                        type: 'email',
-                        recipient: user.email,
-                        subject: replacedSubject,
-                        body: replacedBody,
-                        status: 'Failed',
-                        provider: 'system',
-                        error: sendErr.message,
-                        sentBy: 'Admin',
-                        variables
-                    }).catch(() => {});
-                }
-            });
+                        await TemplateLog.create({
+                            userId: user._id,
+                            username: user.username,
+                            userEmail: user.email,
+                            userPhone: recipientPhone,
+                            templateKey: 'custom_message',
+                            templateName: 'Custom Admin WhatsApp Broadcast',
+                            type: 'whatsapp',
+                            recipient: recipientPhone,
+                            subject: 'Custom WhatsApp Broadcast',
+                            body: plainText,
+                            status: waSuccess ? 'Success' : 'Failed',
+                            provider: 'ultramsg',
+                            messageId: null,
+                            error: waError,
+                            sentBy: 'Admin',
+                            variables
+                        });
 
-            await Promise.all(sendPromises);
+                        if (waSuccess) successCount++;
+                        else failureCount++;
+                    } catch (sendErr) {
+                        failureCount++;
+                        await TemplateLog.create({
+                            userId: user._id,
+                            username: user.username,
+                            userEmail: user.email,
+                            userPhone: recipientPhone,
+                            templateKey: 'custom_message',
+                            templateName: 'Custom Admin WhatsApp Broadcast',
+                            type: 'whatsapp',
+                            recipient: recipientPhone,
+                            subject: 'Custom WhatsApp Broadcast',
+                            body: plainText,
+                            status: 'Failed',
+                            provider: 'ultramsg',
+                            error: sendErr.message,
+                            sentBy: 'Admin',
+                            variables
+                        }).catch(() => {});
+                    }
+                });
+
+                await Promise.all(sendPromises);
+            } else {
+                // Broadcast custom email message
+                const sendPromises = targetUsers.map(async (user) => {
+                    const replacedSubject = replacePlaceholders(customSubject, user, variables);
+                    const replacedBody = replacePlaceholders(customBody, user, variables);
+                    const plainText = replacedBody.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+
+                    try {
+                        const result = await sendEmail({
+                            to: user.email,
+                            subject: replacedSubject,
+                            html: replacedBody,
+                            text: plainText,
+                            event: 'admin_custom_bulk',
+                            sender: fromSender || 'notifications',
+                            userId: user._id,
+                            sentBy: 'Admin',
+                            templateName: 'Custom Admin Broadcast'
+                        });
+
+                        // Log custom message in TemplateLog for history tracking
+                        await TemplateLog.create({
+                            userId: user._id,
+                            username: user.username,
+                            userEmail: user.email,
+                            userPhone: user.phone || user.whatsapp,
+                            templateKey: 'custom_message',
+                            templateName: 'Custom Admin Broadcast',
+                            type: 'email',
+                            recipient: user.email,
+                            subject: replacedSubject,
+                            body: replacedBody,
+                            status: result.success ? 'Success' : 'Failed',
+                            provider: result.provider || 'unknown',
+                            messageId: result.messageId || null,
+                            error: result.error || null,
+                            sentBy: 'Admin',
+                            variables
+                        });
+
+                        if (result.success) successCount++;
+                        else failureCount++;
+                    } catch (sendErr) {
+                        failureCount++;
+                        await TemplateLog.create({
+                            userId: user._id,
+                            username: user.username,
+                            userEmail: user.email,
+                            userPhone: user.phone || user.whatsapp,
+                            templateKey: 'custom_message',
+                            templateName: 'Custom Admin Broadcast',
+                            type: 'email',
+                            recipient: user.email,
+                            subject: replacedSubject,
+                            body: replacedBody,
+                            status: 'Failed',
+                            provider: 'system',
+                            error: sendErr.message,
+                            sentBy: 'Admin',
+                            variables
+                        }).catch(() => {});
+                    }
+                });
+
+                await Promise.all(sendPromises);
+            }
         } else {
             // Broadcast template notification
             const sendPromises = targetUsers.map(async (user) => {
@@ -336,35 +412,67 @@ export const resendTemplateLog = async (req, res) => {
         }
 
         if (log.templateKey === 'custom_message') {
-            const plainText = (log.body || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
-            const resEmail = await sendEmail({
-                to: log.recipient,
-                subject: log.subject || 'Admin Broadcast',
-                html: log.body,
-                text: plainText,
-                event: 'admin_custom_bulk',
-                sender: 'notifications',
-                userId: log.userId,
-                sentBy: 'Admin',
-                templateName: 'Custom Admin Broadcast (Resend)'
-            });
+            if (log.type === 'whatsapp') {
+                const plainText = (log.body || '').replace(/<[^>]*>?/gm, '').trim();
+                const recipientPhone = log.recipient || log.userPhone;
+                const resWa = await sendAutomatedMessage({
+                    toPhone: recipientPhone,
+                    messageText: plainText,
+                    event: 'admin_custom_whatsapp_resend',
+                    userId: log.userId,
+                    sentBy: 'Admin'
+                });
 
-            await TemplateLog.create({
-                userId: log.userId,
-                username: log.username || 'AdminResend',
-                userEmail: log.userEmail,
-                userPhone: log.userPhone,
-                templateKey: 'custom_message',
-                templateName: 'Custom Admin Broadcast (Resend)',
-                type: 'email',
-                recipient: log.recipient,
-                subject: log.subject,
-                body: log.body,
-                status: resEmail.success ? 'Success' : 'Failed',
-                provider: resEmail.provider || 'unknown',
-                error: resEmail.error || null,
-                sentBy: 'Admin'
-            });
+                const waSuccess = Boolean(resWa.whatsapp?.success);
+                const waError = resWa.whatsapp?.error || resWa.error || null;
+
+                await TemplateLog.create({
+                    userId: log.userId,
+                    username: log.username || 'AdminResend',
+                    userEmail: log.userEmail,
+                    userPhone: recipientPhone,
+                    templateKey: 'custom_message',
+                    templateName: 'Custom Admin WhatsApp Broadcast (Resend)',
+                    type: 'whatsapp',
+                    recipient: recipientPhone,
+                    subject: log.subject || 'Custom WhatsApp Broadcast (Resend)',
+                    body: plainText,
+                    status: waSuccess ? 'Success' : 'Failed',
+                    provider: 'ultramsg',
+                    error: waError,
+                    sentBy: 'Admin'
+                });
+            } else {
+                const plainText = (log.body || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+                const resEmail = await sendEmail({
+                    to: log.recipient,
+                    subject: log.subject || 'Admin Broadcast',
+                    html: log.body,
+                    text: plainText,
+                    event: 'admin_custom_bulk',
+                    sender: 'notifications',
+                    userId: log.userId,
+                    sentBy: 'Admin',
+                    templateName: 'Custom Admin Broadcast (Resend)'
+                });
+
+                await TemplateLog.create({
+                    userId: log.userId,
+                    username: log.username || 'AdminResend',
+                    userEmail: log.userEmail,
+                    userPhone: log.userPhone,
+                    templateKey: 'custom_message',
+                    templateName: 'Custom Admin Broadcast (Resend)',
+                    type: 'email',
+                    recipient: log.recipient,
+                    subject: log.subject,
+                    body: log.body,
+                    status: resEmail.success ? 'Success' : 'Failed',
+                    provider: resEmail.provider || 'unknown',
+                    error: resEmail.error || null,
+                    sentBy: 'Admin'
+                });
+            }
         } else if (log.userId && log.templateKey) {
             await sendTemplateNotification({
                 userId: log.userId,

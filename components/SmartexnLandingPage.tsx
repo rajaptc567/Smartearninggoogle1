@@ -1310,9 +1310,15 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <p>Have questions about micro-jobs, withdrawals, or advertising campaigns?</p>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
                 <p className="text-xs text-slate-400 font-semibold">Official Support Email:</p>
-                <a href={`mailto:${settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}`} className="font-bold text-sky-400 hover:underline">
-                  {settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com'}
-                </a>
+                {(() => {
+                  const rawEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
+                  const email = (!rawEmail || rawEmail.toLowerCase() === 'smartexn.com@gmail.com') ? 'support@smartexn.com' : rawEmail;
+                  return (
+                    <a href={`mailto:${email}`} className="font-bold text-sky-400 hover:underline">
+                      {email}
+                    </a>
+                  );
+                })()}
               </div>
               <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/50 space-y-1">
                 <p className="text-xs text-slate-400 font-semibold">Customer Support Office (UK):</p>
