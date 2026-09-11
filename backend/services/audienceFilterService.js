@@ -99,7 +99,9 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
                     { activePlan: '' },
                     { activePlan: { $exists: false } },
                     { activePlan: null }
-                ],
+                ]
+            });
+            userQuery.$and.push({
                 $or: [
                     { activePlans: { $size: 0 } },
                     { activePlans: { $exists: false } }

@@ -135,7 +135,7 @@ const defaultComprehensiveFaqs: FAQCategoryItem[] = [
 const FaqPage: React.FC = () => {
     const { state } = useData();
     const { settings } = state;
-    const supportEmail = settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
+    const supportEmail = settings?.publicSupportEmail || settings?.supportEmail || settings?.contactUsEmailAddress || 'support@smartexn.com';
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');

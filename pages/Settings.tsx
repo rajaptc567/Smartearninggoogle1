@@ -171,19 +171,20 @@ const Settings: React.FC = () => {
         enableContactUsBox: settings.enableContactUsBox !== false,
         enableContactViaEmail: settings.enableContactViaEmail !== false,
         enableContactViaWhatsApp: settings.enableContactViaWhatsApp !== false,
-        contactUsEmailAddress: settings.contactUsEmailAddress || 'support@smartexn.com',
+        contactUsEmailAddress: settings.publicSupportEmail || settings.contactUsEmailAddress || 'support@smartexn.com',
         contactUsWhatsAppNumber: settings.contactUsWhatsAppNumber || '+447846775662',
         contactUsBoxTitle: settings.contactUsBoxTitle || 'International Member Support & Contact Desk',
         contactUsBoxSubtitle: settings.contactUsBoxSubtitle || 'Have questions regarding your withdrawal, payout settlement, or account verification?',
         showUkSupportOffice: (settings.showUkSupportOffice !== undefined ? settings.showUkSupportOffice !== false : (settings.homepageContent?.showUkSupportOffice !== false)),
         showUkSupportOfficeInFooter: (settings.showUkSupportOfficeInFooter !== undefined ? settings.showUkSupportOfficeInFooter !== false : (settings.homepageContent?.showUkSupportOfficeInFooter !== false)),
+        publicSupportEmail: settings.publicSupportEmail || settings.supportOfficeEmail || 'support@smartexn.com',
         supportOfficeBadge1: settings.supportOfficeBadge1 || 'Official Registered Support Desk',
         supportOfficeBadge2: settings.supportOfficeBadge2 || 'UK Registered Office',
         supportOfficeTitle: settings.supportOfficeTitle || 'Customer Support Office (UK)',
         supportOfficeSubtitle: settings.supportOfficeSubtitle || 'Have questions or need assistance before creating an account? Our dedicated UK headquarters desk provides direct support for workers, campaign creators, and international partners.',
         supportOfficeAddress: settings.supportOfficeAddress || '71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom',
         supportOfficePhone: settings.supportOfficePhone || '+447846775662',
-        supportOfficeEmail: settings.supportOfficeEmail || 'support@smartexn.com',
+        supportOfficeEmail: settings.publicSupportEmail || settings.supportOfficeEmail || 'support@smartexn.com',
         supportOfficeHours: settings.supportOfficeHours || '15 – 60 Minutes',
         aboutUsTitle: settings.aboutUsTitle || defaultAboutUsTitle,
         aboutUsUpdated: settings.aboutUsUpdated || defaultAboutUsUpdated,
@@ -315,7 +316,15 @@ const Settings: React.FC = () => {
         const field = name.split('.')[1];
         setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
     } else {
-        setLocalSettings(prev => ({...prev, [name]: value }));
+        setLocalSettings(prev => {
+            const updated = { ...prev, [name]: value };
+            if (name === 'supportOfficeEmail' || name === 'contactUsEmailAddress' || name === 'publicSupportEmail') {
+                updated.publicSupportEmail = value;
+                if (!updated.supportOfficeEmail) updated.supportOfficeEmail = value;
+                if (!updated.contactUsEmailAddress) updated.contactUsEmailAddress = value;
+            }
+            return updated;
+        });
     }
     setIsDirty(true);
   }

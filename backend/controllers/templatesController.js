@@ -170,7 +170,7 @@ export const manualSendTemplate = async (req, res) => {
         const isCustomMode = mode === 'custom' || (!templateKey && Boolean(customSubject && customBody));
 
         let template = null;
-        let channel = 'email';
+        let channel = req.body.channel || 'email';
 
         if (!isCustomMode) {
             if (!templateKey) {
@@ -180,7 +180,7 @@ export const manualSendTemplate = async (req, res) => {
             if (!template) {
                 return res.status(404).json({ success: false, error: `Template with key '${templateKey}' not found` });
             }
-            channel = template.type === 'whatsapp' ? 'whatsapp' : 'email';
+            channel = template.type === 'whatsapp' ? 'whatsapp' : (req.body.channel || 'email');
         } else {
             if (!customSubject || !String(customSubject).trim()) {
                 return res.status(400).json({ success: false, error: 'Please provide an email Subject for the custom message.' });

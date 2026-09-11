@@ -245,10 +245,14 @@ The SmartEarning Desk
         }).catch(() => {});
     }, []);
 
+    const activeChannel: 'email' | 'whatsapp' = manualMessageMode === 'template'
+        ? (templates.find(t => t.key === manualSelectedTemplateKey)?.type === 'whatsapp' ? 'whatsapp' : 'email')
+        : 'email';
+
     const fetchAudienceCount = async (filtersToUse = audienceFilters) => {
         setLoadingEstimate(true);
         try {
-            const res = await getAudienceEstimate(filtersToUse, { channel: 'email' });
+            const res = await getAudienceEstimate(filtersToUse, { channel: activeChannel });
             setAudienceEstimate(res);
         } catch (err: any) {
             console.warn('Failed to estimate audience:', err);
@@ -261,7 +265,7 @@ The SmartEarning Desk
         setLoadingPreviewUsers(true);
         setShowAudiencePreviewModal(true);
         try {
-            const res = await getAudienceList(audienceFilters, { channel: 'email', limit: 20 });
+            const res = await getAudienceList(audienceFilters, { channel: activeChannel, limit: 20 });
             setPreviewUsers(res.users || []);
         } catch (err: any) {
             alert('Failed to preview audience: ' + (err.message || err));
@@ -280,7 +284,7 @@ The SmartEarning Desk
                 fetchAudienceCount();
             }
         }
-    }, [activeTab, recipientMode, audienceFilters]);
+    }, [activeTab, recipientMode, audienceFilters, manualMessageMode, manualSelectedTemplateKey]);
 
     const fetchHistoryData = async () => {
         setLoadingHistory(true);
@@ -371,6 +375,7 @@ The SmartEarning Desk
             try {
                 if (recipientMode === 'manual') {
                     await manualSendTemplate({
+                        channel: activeChannel,
                         mode: 'template',
                         templateKey: manualSelectedTemplateKey,
                         targetUserIds: manualSelectedUserIds,
@@ -378,6 +383,7 @@ The SmartEarning Desk
                     });
                 } else {
                     await manualSendTemplate({
+                        channel: activeChannel,
                         mode: 'template',
                         templateKey: manualSelectedTemplateKey,
                         filters: audienceFilters,
@@ -419,6 +425,7 @@ The SmartEarning Desk
             try {
                 if (recipientMode === 'manual') {
                     await manualSendTemplate({
+                        channel: 'email',
                         mode: 'custom',
                         customEmail: {
                             fromSender: customSender,
@@ -430,6 +437,7 @@ The SmartEarning Desk
                     });
                 } else {
                     await manualSendTemplate({
+                        channel: 'email',
                         mode: 'custom',
                         customEmail: {
                             fromSender: customSender,
