@@ -1515,243 +1515,828 @@ const Settings: React.FC = () => {
                        </span>
                    </div>
 
-                   {/* 1. Landing Page Pictures (Dashboard & Mobile) */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-4">
-                       <h4 className="font-bold text-sky-300 text-sm flex items-center gap-2">
-                           🖼️ Landing Page Showcase Pictures (Dashboard & Mobile)
-                       </h4>
-                       <p className="text-xs text-slate-300">
-                           Upload or provide image URLs to showcase your custom user dashboard layout and mobile app version on the hero right section.
-                       </p>
+                   {/* 1. Header & SEO Settings */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm flex items-center gap-2">
+                            🌐 Header & Global SEO Metadata (SmartExn Landing Page)
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Header Tagline / Slogan</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.headerSlogan"
+                                    value={localSettings.homepageContent?.smartexnContent?.headerSlogan || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Global Digital Work, Micro-Jobs & Escrow Multi-Channel Earning Ecosystem"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">SEO Meta Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.seoTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.seoTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="SmartExn | Global Digital Work & Escrow Earning Platform"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">SEO Meta Keywords</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.seoKeywords"
+                                    value={localSettings.homepageContent?.smartexnContent?.seoKeywords || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="micro-jobs, freelance work, paid surveys, app testing, escrow payments"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">SEO Meta Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.seoDescription"
+                                    value={localSettings.homepageContent?.smartexnContent?.seoDescription || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="SmartExn connects global workers with verified digital micro-jobs..."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {/* Dashboard Picture */}
-                           <div className="space-y-2 p-3 bg-slate-900/80 rounded-lg border border-slate-700">
-                               <label className="text-xs font-bold text-sky-200 block">
-                                   Dashboard Layout Image (Desktop)
-                               </label>
-                               <input 
-                                   type="text"
-                                   name="homepageContent.smartexnContent.dashboardPreviewImage"
-                                   value={localSettings.homepageContent?.smartexnContent?.dashboardPreviewImage || ''}
-                                   onChange={handleTextChange}
-                                   placeholder="https://example.com/dashboard-preview.png"
-                                   className="w-full text-xs p-2 rounded bg-slate-800 border border-slate-600 text-white"
-                               />
-                               <div className="flex items-center gap-2 pt-1">
-                                   <input 
-                                       type="file" 
-                                       accept="image/*"
-                                       onChange={(e) => handleSmartexnImageUpload('dashboardPreviewImage', e.target.files?.[0] || null)}
-                                       className="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-500"
-                                   />
-                               </div>
-                               {localSettings.homepageContent?.smartexnContent?.dashboardPreviewImage && (
-                                   <div className="mt-2 rounded overflow-hidden max-h-28 border border-sky-500/30">
-                                       <img src={localSettings.homepageContent.smartexnContent.dashboardPreviewImage} alt="Dashboard Preview" className="w-full object-cover" />
-                                   </div>
-                               )}
-                           </div>
+                    {/* 2. Landing Page Pictures (Dashboard & Mobile) */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-4">
+                        <h4 className="font-bold text-sky-300 text-sm flex items-center gap-2">
+                            🖼️ Landing Page Showcase Pictures (Dashboard & Mobile)
+                        </h4>
+                        <p className="text-xs text-slate-300">
+                            Upload or provide image URLs to showcase your custom user dashboard layout and mobile app version on the hero right section.
+                        </p>
 
-                           {/* Mobile Picture */}
-                           <div className="space-y-2 p-3 bg-slate-900/80 rounded-lg border border-slate-700">
-                               <label className="text-xs font-bold text-amber-200 block">
-                                   Mobile Version Image (Phone)
-                               </label>
-                               <input 
-                                   type="text"
-                                   name="homepageContent.smartexnContent.mobilePreviewImage"
-                                   value={localSettings.homepageContent?.smartexnContent?.mobilePreviewImage || ''}
-                                   onChange={handleTextChange}
-                                   placeholder="https://example.com/mobile-preview.png"
-                                   className="w-full text-xs p-2 rounded bg-slate-800 border border-slate-600 text-white"
-                               />
-                               <div className="flex items-center gap-2 pt-1">
-                                   <input 
-                                       type="file" 
-                                       accept="image/*"
-                                       onChange={(e) => handleSmartexnImageUpload('mobilePreviewImage', e.target.files?.[0] || null)}
-                                       className="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-500"
-                                   />
-                               </div>
-                               {localSettings.homepageContent?.smartexnContent?.mobilePreviewImage && (
-                                   <div className="mt-2 rounded overflow-hidden max-h-28 border border-amber-500/30">
-                                       <img src={localSettings.homepageContent.smartexnContent.mobilePreviewImage} alt="Mobile Preview" className="w-full object-cover" />
-                                   </div>
-                               )}
-                           </div>
-                       </div>
-                   </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Dashboard Picture */}
+                            <div className="space-y-2 p-3 bg-slate-900/80 rounded-lg border border-slate-700">
+                                <label className="text-xs font-bold text-sky-200 block">
+                                    Dashboard Layout Image (Desktop)
+                                </label>
+                                <input 
+                                    type="text"
+                                    name="homepageContent.smartexnContent.dashboardPreviewImage"
+                                    value={localSettings.homepageContent?.smartexnContent?.dashboardPreviewImage || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="https://example.com/dashboard-preview.png"
+                                    className="w-full text-xs p-2 rounded bg-slate-800 border border-slate-600 text-white"
+                                />
+                                <div>
+                                    <label className="text-[11px] text-slate-400 font-semibold">Preview Card Title</label>
+                                    <input 
+                                        name="homepageContent.smartexnContent.heroPreviewDashboardTitle"
+                                        value={localSettings.homepageContent?.smartexnContent?.heroPreviewDashboardTitle || ''}
+                                        onChange={handleTextChange}
+                                        placeholder="Live Member Dashboard"
+                                        className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white mt-1"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        onChange={(e) => handleSmartexnImageUpload('dashboardPreviewImage', e.target.files?.[0] || null)}
+                                        className="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-sky-600 file:text-white hover:file:bg-sky-500"
+                                    />
+                                </div>
+                                {localSettings.homepageContent?.smartexnContent?.dashboardPreviewImage && (
+                                    <div className="mt-2 rounded overflow-hidden max-h-28 border border-sky-500/30">
+                                        <img src={localSettings.homepageContent.smartexnContent.dashboardPreviewImage} alt="Dashboard Preview" className="w-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
 
-                   {/* 2. Hero Section Settings */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
-                       <h4 className="font-bold text-sky-300 text-sm">Hero Section Text & Buttons</h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                           <div className="md:col-span-2">
-                               <label className="text-xs text-slate-300 font-semibold">Hero Title</label>
-                               <input 
-                                   name="homepageContent.smartexnContent.heroTitle"
-                                   value={localSettings.homepageContent?.smartexnContent?.heroTitle || ''}
-                                   onChange={handleTextChange}
-                                   placeholder="Unlock Your Earning Potential with SmartExn.com..."
-                                   className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                               />
-                           </div>
-                           <div className="md:col-span-2">
-                               <label className="text-xs text-slate-300 font-semibold">Hero Subtitle</label>
-                               <textarea 
-                                   name="homepageContent.smartexnContent.heroSubtitle"
-                                   value={localSettings.homepageContent?.smartexnContent?.heroSubtitle || ''}
-                                   onChange={handleTextChange}
-                                   rows={2}
-                                   placeholder="Join thousands of global earners or leverage our vast workforce..."
-                                   className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                               />
-                           </div>
-                           <div>
-                               <label className="text-xs text-slate-300 font-semibold">Primary Button Text</label>
-                               <input 
-                                   name="homepageContent.smartexnContent.heroStartBtn"
-                                   value={localSettings.homepageContent?.smartexnContent?.heroStartBtn || ''}
-                                   onChange={handleTextChange}
-                                   placeholder="Start Earning Now"
-                                   className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                               />
-                           </div>
-                           <div>
-                               <label className="text-xs text-slate-300 font-semibold">Secondary Button Text</label>
-                               <input 
-                                   name="homepageContent.smartexnContent.heroPublishBtn"
-                                   value={localSettings.homepageContent?.smartexnContent?.heroPublishBtn || ''}
-                                   onChange={handleTextChange}
-                                   placeholder="Publish Your Own Project"
-                                   className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                               />
-                           </div>
-                       </div>
-                   </div>
+                            {/* Mobile Picture */}
+                            <div className="space-y-2 p-3 bg-slate-900/80 rounded-lg border border-slate-700">
+                                <label className="text-xs font-bold text-amber-200 block">
+                                    Mobile Version Image (Phone)
+                                </label>
+                                <input 
+                                    type="text"
+                                    name="homepageContent.smartexnContent.mobilePreviewImage"
+                                    value={localSettings.homepageContent?.smartexnContent?.mobilePreviewImage || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="https://example.com/mobile-preview.png"
+                                    className="w-full text-xs p-2 rounded bg-slate-800 border border-slate-600 text-white"
+                                />
+                                <div>
+                                    <label className="text-[11px] text-slate-400 font-semibold">Preview Card Title</label>
+                                    <input 
+                                        name="homepageContent.smartexnContent.heroPreviewMobileTitle"
+                                        value={localSettings.homepageContent?.smartexnContent?.heroPreviewMobileTitle || ''}
+                                        onChange={handleTextChange}
+                                        placeholder="Mobile Web & App View"
+                                        className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white mt-1"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        onChange={(e) => handleSmartexnImageUpload('mobilePreviewImage', e.target.files?.[0] || null)}
+                                        className="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-white hover:file:bg-amber-500"
+                                    />
+                                </div>
+                                {localSettings.homepageContent?.smartexnContent?.mobilePreviewImage && (
+                                    <div className="mt-2 rounded overflow-hidden max-h-28 border border-amber-500/30">
+                                        <img src={localSettings.homepageContent.smartexnContent.mobilePreviewImage} alt="Mobile Preview" className="w-full object-cover" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                   {/* 3. How It Works Steps */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
-                       <h4 className="font-bold text-sky-300 text-sm">How It Works Steps</h4>
-                       <div>
-                           <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
-                           <input 
-                               name="homepageContent.smartexnContent.howItWorksTitle"
-                               value={localSettings.homepageContent?.smartexnContent?.howItWorksTitle || ''}
-                               onChange={handleTextChange}
-                               placeholder="How It Works"
-                               className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                           />
-                       </div>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Step 1</span>
-                               <input name="homepageContent.smartexnContent.step1Title" value={localSettings.homepageContent?.smartexnContent?.step1Title || ''} onChange={handleTextChange} placeholder="Sign Up" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.step1Desc" value={localSettings.homepageContent?.smartexnContent?.step1Desc || ''} onChange={handleTextChange} placeholder="Create your free account" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Step 2</span>
-                               <input name="homepageContent.smartexnContent.step2Title" value={localSettings.homepageContent?.smartexnContent?.step2Title || ''} onChange={handleTextChange} placeholder="Choose Projects" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.step2Desc" value={localSettings.homepageContent?.smartexnContent?.step2Desc || ''} onChange={handleTextChange} placeholder="Surveys, data entry..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Step 3</span>
-                               <input name="homepageContent.smartexnContent.step3Title" value={localSettings.homepageContent?.smartexnContent?.step3Title || ''} onChange={handleTextChange} placeholder="Complete Tasks" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.step3Desc" value={localSettings.homepageContent?.smartexnContent?.step3Desc || ''} onChange={handleTextChange} placeholder="Follow simple instructions" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Step 4</span>
-                               <input name="homepageContent.smartexnContent.step4Title" value={localSettings.homepageContent?.smartexnContent?.step4Title || ''} onChange={handleTextChange} placeholder="Get Paid" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.step4Desc" value={localSettings.homepageContent?.smartexnContent?.step4Desc || ''} onChange={handleTextChange} placeholder="Receive fast payouts" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                       </div>
-                   </div>
+                    {/* 3. Hero Section Settings */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Hero Section Text, Buttons & Trust Indicators</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Hero Eyebrow Badge</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Verified Global Micro-Task & Freelance Network"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Hero Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Unlock Your Earning Potential with SmartExn.com..."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Hero Subtitle</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.heroSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Join thousands of global earners or leverage our vast workforce..."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Primary Button Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroStartBtn"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroStartBtn || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Start Earning Now"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Secondary Button Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroPublishBtn"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroPublishBtn || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Publish Your Own Project"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Indicator 1 (Payouts)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrustPayouts"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrustPayouts || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="$2.4M+ Total Payouts"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Indicator 2 (Tasks)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrustTasks"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrustTasks || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="850,000+ Completed Tasks"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Indicator 3 (Countries)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroTrustCountries"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroTrustCountries || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="180+ Supported Countries"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Hero Caption 1 (Global Coverage)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroCaptionGlobal"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroCaptionGlobal || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Global Multi-Currency Coverage"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Hero Caption 2 (Escrow Protection)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.heroCaptionEscrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.heroCaptionEscrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Escrow-Protected Worker Balances"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                   {/* 4. Featured Earning Opportunities */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
-                       <h4 className="font-bold text-sky-300 text-sm">Featured Earning Opportunities</h4>
-                       <div>
-                           <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
-                           <input 
-                               name="homepageContent.smartexnContent.oppsTitle"
-                               value={localSettings.homepageContent?.smartexnContent?.oppsTitle || ''}
-                               onChange={handleTextChange}
-                               placeholder="Featured Earning Opportunities"
-                               className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                           />
-                       </div>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-emerald-400">Opportunity 1</span>
-                               <input name="homepageContent.smartexnContent.opp1Title" value={localSettings.homepageContent?.smartexnContent?.opp1Title || ''} onChange={handleTextChange} placeholder="Paid Surveys & Feedback" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.opp1Desc" value={localSettings.homepageContent?.smartexnContent?.opp1Desc || ''} onChange={handleTextChange} placeholder="In-depth surveys" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-amber-400">Opportunity 2</span>
-                               <input name="homepageContent.smartexnContent.opp2Title" value={localSettings.homepageContent?.smartexnContent?.opp2Title || ''} onChange={handleTextChange} placeholder="Micro-Jobs & Data" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.opp2Desc" value={localSettings.homepageContent?.smartexnContent?.opp2Desc || ''} onChange={handleTextChange} placeholder="Data entry, tagging..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Opportunity 3</span>
-                               <input name="homepageContent.smartexnContent.opp3Title" value={localSettings.homepageContent?.smartexnContent?.opp3Title || ''} onChange={handleTextChange} placeholder="Play Games & Test Apps" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.opp3Desc" value={localSettings.homepageContent?.smartexnContent?.opp3Desc || ''} onChange={handleTextChange} placeholder="Fun game testing..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-purple-400">Opportunity 4</span>
-                               <input name="homepageContent.smartexnContent.opp4Title" value={localSettings.homepageContent?.smartexnContent?.opp4Title || ''} onChange={handleTextChange} placeholder="Creative & Freelance" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.opp4Desc" value={localSettings.homepageContent?.smartexnContent?.opp4Desc || ''} onChange={handleTextChange} placeholder="Writing, design..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                       </div>
-                   </div>
+                    {/* 4. How It Works Steps */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">How It Works Steps</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.howItWorksEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.howItWorksEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Step-by-Step Workflow"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.howItWorksTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.howItWorksTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="How It Works"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Section Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.howItWorksSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.howItWorksSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Get started in four seamless steps with guaranteed escrow transparency from assignment to settlement."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Step 1</span>
+                                <input name="homepageContent.smartexnContent.step1Title" value={localSettings.homepageContent?.smartexnContent?.step1Title || ''} onChange={handleTextChange} placeholder="Sign Up" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step1Desc" value={localSettings.homepageContent?.smartexnContent?.step1Desc || ''} onChange={handleTextChange} placeholder="Create your free account" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step1Footer" value={localSettings.homepageContent?.smartexnContent?.step1Footer || ''} onChange={handleTextChange} placeholder="Takes under 60 seconds" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Step 2</span>
+                                <input name="homepageContent.smartexnContent.step2Title" value={localSettings.homepageContent?.smartexnContent?.step2Title || ''} onChange={handleTextChange} placeholder="Choose Projects" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step2Desc" value={localSettings.homepageContent?.smartexnContent?.step2Desc || ''} onChange={handleTextChange} placeholder="Surveys, data entry..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step2Footer" value={localSettings.homepageContent?.smartexnContent?.step2Footer || ''} onChange={handleTextChange} placeholder="New tasks updated 24/7" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Step 3</span>
+                                <input name="homepageContent.smartexnContent.step3Title" value={localSettings.homepageContent?.smartexnContent?.step3Title || ''} onChange={handleTextChange} placeholder="Complete Tasks" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step3Desc" value={localSettings.homepageContent?.smartexnContent?.step3Desc || ''} onChange={handleTextChange} placeholder="Follow simple instructions" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step3Footer" value={localSettings.homepageContent?.smartexnContent?.step3Footer || ''} onChange={handleTextChange} placeholder="Clear proof requirements" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Step 4</span>
+                                <input name="homepageContent.smartexnContent.step4Title" value={localSettings.homepageContent?.smartexnContent?.step4Title || ''} onChange={handleTextChange} placeholder="Get Paid" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step4Desc" value={localSettings.homepageContent?.smartexnContent?.step4Desc || ''} onChange={handleTextChange} placeholder="Receive fast payouts" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.step4Footer" value={localSettings.homepageContent?.smartexnContent?.step4Footer || ''} onChange={handleTextChange} placeholder="Low minimum cashout" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                        </div>
+                    </div>
 
-                   {/* 5. Business & Advertisers */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
-                       <h4 className="font-bold text-sky-300 text-sm">Business & Advertisers Points</h4>
-                       <div>
-                           <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
-                           <input 
-                               name="homepageContent.smartexnContent.bizTitle"
-                               value={localSettings.homepageContent?.smartexnContent?.bizTitle || ''}
-                               onChange={handleTextChange}
-                               placeholder="Business & Advertisers"
-                               className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                           />
-                       </div>
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Point 1</span>
-                               <input name="homepageContent.smartexnContent.bizPoint1Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint1Title || ''} onChange={handleTextChange} placeholder="Access a Vast Global Workforce" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.bizPoint1Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint1Desc || ''} onChange={handleTextChange} placeholder="Access thousands of workers" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Point 2</span>
-                               <input name="homepageContent.smartexnContent.bizPoint2Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint2Title || ''} onChange={handleTextChange} placeholder="Fast Quality Results" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.bizPoint2Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint2Desc || ''} onChange={handleTextChange} placeholder="Verified worker output" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Point 3</span>
-                               <input name="homepageContent.smartexnContent.bizPoint3Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint3Title || ''} onChange={handleTextChange} placeholder="Easy Project Management" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.bizPoint3Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint3Desc || ''} onChange={handleTextChange} placeholder="Dashboard tools for tracking" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                           <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
-                               <span className="text-[10px] font-bold text-sky-400">Point 4</span>
-                               <input name="homepageContent.smartexnContent.bizPoint4Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint4Title || ''} onChange={handleTextChange} placeholder="Flexible Budgeting" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                               <input name="homepageContent.smartexnContent.bizPoint4Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint4Desc || ''} onChange={handleTextChange} placeholder="Options for any size project" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
-                           </div>
-                       </div>
-                   </div>
+                    {/* 5. Featured Earning Opportunities */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Featured Earning Opportunities</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.oppsEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.oppsEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Flexible Earning Verticals"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.oppsTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.oppsTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Featured Earning Opportunities"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Section Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.oppsSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.oppsSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Choose from hundreds of varied digital tasks that match your skills, location, and schedule."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-emerald-400">Opportunity 1</span>
+                                <input name="homepageContent.smartexnContent.opp1Title" value={localSettings.homepageContent?.smartexnContent?.opp1Title || ''} onChange={handleTextChange} placeholder="Paid Surveys & Feedback" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.opp1Desc" value={localSettings.homepageContent?.smartexnContent?.opp1Desc || ''} onChange={handleTextChange} placeholder="In-depth surveys" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-amber-400">Opportunity 2</span>
+                                <input name="homepageContent.smartexnContent.opp2Title" value={localSettings.homepageContent?.smartexnContent?.opp2Title || ''} onChange={handleTextChange} placeholder="Micro-Jobs & Data" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.opp2Desc" value={localSettings.homepageContent?.smartexnContent?.opp2Desc || ''} onChange={handleTextChange} placeholder="Data entry, tagging..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Opportunity 3</span>
+                                <input name="homepageContent.smartexnContent.opp3Title" value={localSettings.homepageContent?.smartexnContent?.opp3Title || ''} onChange={handleTextChange} placeholder="Play Games & Test Apps" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.opp3Desc" value={localSettings.homepageContent?.smartexnContent?.opp3Desc || ''} onChange={handleTextChange} placeholder="Fun game testing..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-purple-400">Opportunity 4</span>
+                                <input name="homepageContent.smartexnContent.opp4Title" value={localSettings.homepageContent?.smartexnContent?.opp4Title || ''} onChange={handleTextChange} placeholder="Creative & Freelance" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.opp4Desc" value={localSettings.homepageContent?.smartexnContent?.opp4Desc || ''} onChange={handleTextChange} placeholder="Writing, design..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Earnings Disclosure Label</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.oppsEarningsLabel"
+                                    value={localSettings.homepageContent?.smartexnContent?.oppsEarningsLabel || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Transparent Earnings Disclosure"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Earnings Disclosure Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.oppsEarningsDesc"
+                                    value={localSettings.homepageContent?.smartexnContent?.oppsEarningsDesc || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Individual rewards vary by task complexity, user country, and project requirements. Payouts are credited immediately upon client approval."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
-                   {/* 6. Footer Copyright */}
-                   <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-2">
-                       <h4 className="font-bold text-sky-300 text-sm">Footer Copyright Text</h4>
-                       <input 
-                           name="homepageContent.smartexnContent.footerCopyright"
-                           value={localSettings.homepageContent?.smartexnContent?.footerCopyright || ''}
-                           onChange={handleTextChange}
-                           placeholder="© 2023 SmartExn.com. All rights reserved."
-                            className="w-full text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
-                        />
+                    {/* 6. Business & Advertisers */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Business & Advertisers Points</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.bizEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.bizEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Enterprise & Growth Solutions"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.bizTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.bizTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Business & Advertisers"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Section Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.bizSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.bizSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Scale your campaigns, crowdsource data collection, or boost engagement with verified global participants."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Point 1</span>
+                                <input name="homepageContent.smartexnContent.bizPoint1Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint1Title || ''} onChange={handleTextChange} placeholder="Access a Vast Global Workforce" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.bizPoint1Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint1Desc || ''} onChange={handleTextChange} placeholder="Access thousands of workers" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Point 2</span>
+                                <input name="homepageContent.smartexnContent.bizPoint2Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint2Title || ''} onChange={handleTextChange} placeholder="Fast Quality Results" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.bizPoint2Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint2Desc || ''} onChange={handleTextChange} placeholder="Verified worker output" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Point 3</span>
+                                <input name="homepageContent.smartexnContent.bizPoint3Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint3Title || ''} onChange={handleTextChange} placeholder="Easy Project Management" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.bizPoint3Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint3Desc || ''} onChange={handleTextChange} placeholder="Dashboard tools for tracking" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Point 4</span>
+                                <input name="homepageContent.smartexnContent.bizPoint4Title" value={localSettings.homepageContent?.smartexnContent?.bizPoint4Title || ''} onChange={handleTextChange} placeholder="Flexible Budgeting" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <input name="homepageContent.smartexnContent.bizPoint4Desc" value={localSettings.homepageContent?.smartexnContent?.bizPoint4Desc || ''} onChange={handleTextChange} placeholder="Options for any size project" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Advertiser Callout Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.bizCtaText"
+                                    value={localSettings.homepageContent?.smartexnContent?.bizCtaText || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Ready to run your campaign with high ROI and verified real users?"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Advertiser Action Button Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.bizCtaBtn"
+                                    value={localSettings.homepageContent?.smartexnContent?.bizCtaBtn || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Create Advertiser Account"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 7. Escrow & Fraud Defense Section */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Escrow Protection & Anti-Fraud Architecture</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.escrowEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.escrowEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Institutional Trust & Financial Security"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Section Header Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.escrowTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.escrowTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Guaranteed Escrow Protection & Anti-Fraud Architecture"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Section Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.escrowSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.escrowSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Every transaction, job funding deposit, and worker balance is held in dedicated segregated escrow pools..."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-emerald-400">Escrow Feature 1</span>
+                                <input name="homepageContent.smartexnContent.escrowCard1Title" value={localSettings.homepageContent?.smartexnContent?.escrowCard1Title || ''} onChange={handleTextChange} placeholder="Segregated Escrow Vaults" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <textarea name="homepageContent.smartexnContent.escrowCard1Desc" rows={3} value={localSettings.homepageContent?.smartexnContent?.escrowCard1Desc || ''} onChange={handleTextChange} placeholder="Client campaign funds are locked in secure escrow..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-sky-400">Escrow Feature 2</span>
+                                <input name="homepageContent.smartexnContent.escrowCard2Title" value={localSettings.homepageContent?.smartexnContent?.escrowCard2Title || ''} onChange={handleTextChange} placeholder="AI Proof & Anti-Fraud Engine" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <textarea name="homepageContent.smartexnContent.escrowCard2Desc" rows={3} value={localSettings.homepageContent?.smartexnContent?.escrowCard2Desc || ''} onChange={handleTextChange} placeholder="Submissions are screened with neural duplicate detection..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                            <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700 space-y-2">
+                                <span className="text-[10px] font-bold text-purple-400">Escrow Feature 3</span>
+                                <input name="homepageContent.smartexnContent.escrowCard3Title" value={localSettings.homepageContent?.smartexnContent?.escrowCard3Title || ''} onChange={handleTextChange} placeholder="Instant Liquidity Settlements" className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                                <textarea name="homepageContent.smartexnContent.escrowCard3Desc" rows={3} value={localSettings.homepageContent?.smartexnContent?.escrowCard3Desc || ''} onChange={handleTextChange} placeholder="Once a submission meets instructions, funds release immediately..." className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 8. Payment Section Eyebrow & Security Badges */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Payment Section Headers & Trust Badges</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Payment Section Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.paymentEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Frictionless Global Settlements"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Payment Header Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.paymentTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Global Payment & Withdrawal Partners"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Payment Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.paymentDesc"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentDesc || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Fast, secure deposits and instant withdrawals supported through top regional and international payment networks."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Badge 1</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.paymentBadge1"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentBadge1 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="🔒 256-Bit Encrypted Gateways"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Trust Badge 2</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.paymentBadge2"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentBadge2 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="⚡ 100% Automated Instant Settlements"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Trust Badge 3</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.paymentBadge3"
+                                    value={localSettings.homepageContent?.smartexnContent?.paymentBadge3 || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="🛡️ Zero Hidden Withdrawal Fees"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 9. FAQ Section (Landing Page Knowledge Base) */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Landing Page FAQ Section (6 Structured Q&As)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">FAQ Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.faqEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.faqEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Clear Answers to Common Questions"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">FAQ Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.faqTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.faqTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Frequently Asked Questions"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">FAQ Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.faqSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.faqSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Everything you need to know about getting started, task validation, withdrawal security, and platform operations."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* 6 FAQ Cards */}
+                        <div className="space-y-3 pt-2">
+                            {[
+                                { num: 1, defaultQ: 'How does SmartExn work for earners?', defaultA: 'SmartExn provides a digital workspace where users can perform verified tasks...' },
+                                { num: 2, defaultQ: 'Is it completely free to sign up and start earning?', defaultA: 'Yes, creating an account and completing public micro-tasks is 100% free with no mandatory fees...' },
+                                { num: 3, defaultQ: 'How do I withdraw my earnings and what are the limits?', defaultA: 'Earnings can be withdrawn through multiple global gateways including crypto (USDT), digital wallets, and bank transfers...' },
+                                { num: 4, defaultQ: 'How does SmartExn protect employers and campaign creators?', defaultA: 'We employ automated fraud checks and escrow funding...' },
+                                { num: 5, defaultQ: 'Can I both earn and publish tasks from the same account?', defaultA: 'Yes, your unified SmartExn account allows you to switch between worker and advertiser modes seamlessly...' },
+                                { num: 6, defaultQ: 'What happens if a submitted task is unfairly rejected?', defaultA: 'SmartExn features an integrated dispute desk...' },
+                            ].map(faqItem => (
+                                <div key={faqItem.num} className="p-3 bg-slate-900/60 rounded-lg border border-slate-700 space-y-1.5">
+                                    <span className="text-[10px] font-bold text-sky-400">FAQ Question #{faqItem.num}</span>
+                                    <input 
+                                        name={'homepageContent.smartexnContent.faqQ' + faqItem.num}
+                                        value={(localSettings.homepageContent?.smartexnContent as any)?.[`faqQ${faqItem.num}`] || ''}
+                                        onChange={handleTextChange}
+                                        placeholder={faqItem.defaultQ}
+                                        className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white font-semibold"
+                                    />
+                                    <textarea 
+                                        name={'homepageContent.smartexnContent.faqA' + faqItem.num}
+                                        value={(localSettings.homepageContent?.smartexnContent as any)?.[`faqA${faqItem.num}`] || ''}
+                                        onChange={handleTextChange}
+                                        rows={2}
+                                        placeholder={faqItem.defaultA}
+                                        className="w-full text-xs p-1.5 rounded bg-slate-800 border border-slate-600 text-white"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">FAQ Footer Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.faqFooterText"
+                                    value={localSettings.homepageContent?.smartexnContent?.faqFooterText || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Still have questions? Explore our full Knowledge Base or reach out directly."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">FAQ Footer Action Link Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.faqFooterLinkText"
+                                    value={localSettings.homepageContent?.smartexnContent?.faqFooterLinkText || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Visit Help & Support Center →"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 10. Final Conversion Banner (Bottom CTA) */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Final Conversion Banner (Bottom CTA)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">CTA Eyebrow</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.ctaEyebrow"
+                                    value={localSettings.homepageContent?.smartexnContent?.ctaEyebrow || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Ready to Start?"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">CTA Title</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.ctaTitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.ctaTitle || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Start Earning or Scaling Today"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">CTA Subtitle / Description</label>
+                                <textarea 
+                                    name="homepageContent.smartexnContent.ctaSubtitle"
+                                    value={localSettings.homepageContent?.smartexnContent?.ctaSubtitle || ''}
+                                    onChange={handleTextChange}
+                                    rows={2}
+                                    placeholder="Create your free account in under 60 seconds and gain instant access to active tasks or publish your first campaign."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Primary Button Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.ctaStartBtn"
+                                    value={localSettings.homepageContent?.smartexnContent?.ctaStartBtn || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Create Free Account"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Secondary Button Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.ctaPublishBtn"
+                                    value={localSettings.homepageContent?.smartexnContent?.ctaPublishBtn || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Publish a Campaign"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 11. Footer Section Configuration */}
+                    <div className="p-4 bg-slate-800/80 rounded-xl border border-sky-500/20 space-y-3">
+                        <h4 className="font-bold text-sky-300 text-sm">Footer Section Configuration</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Footer Brand Tagline</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerTagline"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerTagline || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="The premier global micro-job & digital freelance platform connecting workers and businesses worldwide."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Column 1 Header (Earn)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerCol1Title"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerCol1Title || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Earn"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Column 2 Header (Advertisers)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerCol2Title"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerCol2Title || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Advertisers"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Column 3 Header (Platform)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerCol3Title"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerCol3Title || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Platform"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-300 font-semibold">Column 4 Header (Legal & Security)</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerCol4Title"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerCol4Title || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Legal & Security"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Footer Copyright Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerCopyright"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerCopyright || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="© 2023 SmartExn.com. All rights reserved."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-slate-300 font-semibold">Footer Security & Verification Badge Text</label>
+                                <input 
+                                    name="homepageContent.smartexnContent.footerSecurityText"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerSecurityText || ''}
+                                    onChange={handleTextChange}
+                                    placeholder="Protected by Escrow Vaults & 256-bit SSL encryption. All payments verified."
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Payment Partners Section Options */}

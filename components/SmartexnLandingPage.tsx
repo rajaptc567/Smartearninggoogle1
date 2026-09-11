@@ -210,42 +210,42 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
   };
 
   // Structured FAQ Data for Schema and DOM
-  const homepageFaqs = [
+  const homepageFaqs = useMemo(() => [
     {
-      q: "What is SmartExn?",
-      a: "SmartExn is a global online marketplace where users complete micro-tasks, surveys, and digital gigs for rewards, while businesses and advertisers access a verified crowdsourced workforce to promote campaigns."
+      q: sc.faq1Q || "What is SmartExn?",
+      a: sc.faq1A || "SmartExn is a global online marketplace where users complete micro-tasks, surveys, and digital gigs for rewards, while businesses and advertisers access a verified crowdsourced workforce to promote campaigns."
     },
     {
-      q: "How do online micro-tasks and gigs work?",
-      a: "Workers browse available tasks, review clear step-by-step instructions, execute the required actions (such as social & content engagement, app feedback, or surveys), and submit verifiable proof. Once the campaign creator verifies the submission, rewards are credited."
+      q: sc.faq2Q || "How do online micro-tasks and gigs work?",
+      a: sc.faq2A || "Workers browse available tasks, review clear step-by-step instructions, execute the required actions (such as social & content engagement, app feedback, or surveys), and submit verifiable proof. Once the campaign creator verifies the submission, rewards are credited."
     },
     {
-      q: "How does Campaign Escrow protect workers and advertisers?",
-      a: "When an advertiser launches a campaign, the total reward budget is held securely in platform escrow. When workers complete tasks accurately, rewards are guaranteed upon approval. If a campaign is cancelled, any remaining unspent escrow budget is safely refunded to the advertiser."
+      q: sc.faq3Q || "How does Campaign Escrow protect workers and advertisers?",
+      a: sc.faq3A || "When an advertiser launches a campaign, the total reward budget is held securely in platform escrow. When workers complete tasks accurately, rewards are guaranteed upon approval. If a campaign is cancelled, any remaining unspent escrow budget is safely refunded to the advertiser."
     },
     {
-      q: "What happens if a task submission is mistakenly rejected?",
-      a: "SmartExn features a fair two-level dispute desk. Workers can request Level-1 review directly with the campaign creator, or escalate to Level-2 admin arbitration for impartial verification."
+      q: sc.faq4Q || "What happens if a task submission is mistakenly rejected?",
+      a: sc.faq4A || "SmartExn features a fair two-level dispute desk. Workers can request Level-1 review directly with the campaign creator, or escalate to Level-2 admin arbitration for impartial verification."
     },
     {
-      q: "How do withdrawals work and what gateways are supported?",
-      a: "Workers can withdraw approved task earnings via supported gateways including EasyPaisa, JazzCash, USDT (TRC20), bank transfer, and international payment methods according to platform verification rules."
+      q: sc.faq5Q || "How do withdrawals work and what gateways are supported?",
+      a: sc.faq5A || "Workers can withdraw approved task earnings via supported gateways including EasyPaisa, JazzCash, USDT (TRC20), bank transfer, and international payment methods according to platform verification rules."
     },
     {
-      q: "Are earnings or income guaranteed on SmartExn?",
-      a: "No. Earnings vary depending on task availability, campaign requirements, completion quality, and advertiser verification. SmartExn does not promise fixed or passive hourly income."
+      q: sc.faq6Q || "Are earnings or income guaranteed on SmartExn?",
+      a: sc.faq6A || "No. Earnings vary depending on task availability, campaign requirements, completion quality, and advertiser verification. SmartExn does not promise fixed or passive hourly income."
     }
-  ];
+  ], [sc]);
 
-  const homepageSchema = {
+  const homepageSchema = useMemo(() => ({
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "WebSite",
         "@id": "https://smartexn.com/#website",
         "url": "https://smartexn.com/",
-        "name": "SmartExn",
-        "description": "Online micro-tasks, surveys, gigs, and global crowdsourcing platform.",
+        "name": siteName,
+        "description": sc.websiteSchemaDesc || "Online micro-tasks, surveys, gigs, and global crowdsourcing platform.",
         "potentialAction": {
           "@type": "SearchAction",
           "target": "https://smartexn.com/faqs?q={search_term_string}",
@@ -265,13 +265,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
         }))
       }
     ]
-  };
+  }), [siteName, sc.websiteSchemaDesc, homepageFaqs]);
 
   return (
     <div className="bg-[#0e2742] text-white min-h-screen font-sans selection:bg-blue-500 selection:text-white">
       <SEOHead 
-        title="SmartExn | Online Micro-Tasks, Surveys & Global Gigs"
-        description="Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce."
+        title={sc.metaTitle || "SmartExn | Online Micro-Tasks, Surveys & Global Gigs"}
+        description={sc.metaDescription || "Complete online micro-tasks, surveys and gigs on SmartExn, submit proof and earn rewards when approved. Businesses can create campaigns and reach a global task-based workforce."}
         canonical="https://smartexn.com/"
         robots="index, follow"
         schemaJson={homepageSchema}
@@ -507,7 +507,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
             {/* Hero Text */}
             <div className="lg:col-span-7 text-center lg:text-left space-y-6">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-sky-500/10 border border-sky-400/40 rounded-full text-sky-200 font-semibold text-xs uppercase tracking-wider">
-                <span>⚡ Global Crowdsourced Task & Gig Marketplace</span>
+                <span>{sc.heroEyebrow || "⚡ Global Crowdsourced Task & Gig Marketplace"}</span>
               </div>
 
               {/* Single Semantic H1 Element */}
@@ -534,7 +534,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                     <span>{sc.heroStartBtn || "Start Earning"}</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                   </button>
-                  <span className="block text-[11px] text-sky-200 mt-1.5 font-medium">Free to create an account</span>
+                  <span className="block text-[11px] text-sky-200 mt-1.5 font-medium">{sc.heroStartBtnCaption || "Free to create an account"}</span>
                 </div>
 
                 <div className="w-full sm:w-auto text-center sm:text-left">
@@ -551,104 +551,119 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   >
                     {sc.heroPublishBtn || "Create a Campaign"}
                   </button>
-                  <span className="block text-[11px] text-amber-200 mt-1.5 font-medium">Reach verified crowdsourced workers</span>
+                  <span className="block text-[11px] text-amber-200 mt-1.5 font-medium">{sc.heroPublishBtnCaption || "Reach verified crowdsourced workers"}</span>
                 </div>
               </div>
 
               {/* Trust signals mini-row */}
               <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-6 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span> 100% Escrow Protected
+                  <span className="text-emerald-400 font-bold">✓</span> {sc.heroTrust1 || "100% Escrow Protected"}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sky-400 font-bold">✓</span> Fast Proof Verification
+                  <span className="text-sky-400 font-bold">✓</span> {sc.heroTrust2 || "Fast Proof Verification"}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-amber-400 font-bold">✓</span> Multi-Currency Payouts
+                  <span className="text-amber-400 font-bold">✓</span> {sc.heroTrust3 || "Multi-Currency Payouts"}
                 </div>
               </div>
             </div>
 
-            {/* Hero Vector Banner Illustration */}
+            {/* Hero Showcase / Vector Banner Illustration */}
             <div className="lg:col-span-5 flex justify-center">
-              <div className="relative w-full max-w-md lg:max-w-none bg-gradient-to-br from-slate-800/40 to-slate-900/60 p-6 md:p-8 rounded-3xl border border-sky-500/20 shadow-2xl backdrop-blur-sm">
-                <svg viewBox="0 0 500 380" className="w-full h-auto drop-shadow-xl" xmlns="http://www.w3.org/2000/svg" width="500" height="380">
-                  <defs>
-                    <linearGradient id="bgGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="#818cf8" stopOpacity="0.1" />
-                    </linearGradient>
-                    <linearGradient id="laptopGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#334155" />
-                      <stop offset="100%" stopColor="#1e293b" />
-                    </linearGradient>
-                    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-                      <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000" floodOpacity="0.3" />
-                    </filter>
-                  </defs>
+              {sc.dashboardPreviewImage ? (
+                <div className="relative w-full max-w-md lg:max-w-none rounded-3xl overflow-hidden border border-sky-500/20 shadow-2xl bg-slate-900">
+                  <img 
+                    src={sc.dashboardPreviewImage} 
+                    alt="Platform Dashboard Showcase" 
+                    className="w-full h-auto object-cover rounded-3xl"
+                  />
+                  {sc.mobilePreviewImage && (
+                    <div className="absolute -bottom-2 -right-2 w-1/3 rounded-2xl overflow-hidden border-2 border-sky-400 shadow-2xl bg-slate-950">
+                      <img src={sc.mobilePreviewImage} alt="Mobile App Showcase" className="w-full h-auto object-cover" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="relative w-full max-w-md lg:max-w-none bg-gradient-to-br from-slate-800/40 to-slate-900/60 p-6 md:p-8 rounded-3xl border border-sky-500/20 shadow-2xl backdrop-blur-sm">
+                  <svg viewBox="0 0 500 380" className="w-full h-auto drop-shadow-xl" xmlns="http://www.w3.org/2000/svg" width="500" height="380">
+                    <defs>
+                      <linearGradient id="bgGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="#818cf8" stopOpacity="0.1" />
+                      </linearGradient>
+                      <linearGradient id="laptopGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#334155" />
+                        <stop offset="100%" stopColor="#1e293b" />
+                      </linearGradient>
+                      <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                        <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000" floodOpacity="0.3" />
+                      </filter>
+                    </defs>
 
-                  {/* Backdrop Shape */}
-                  <rect x="20" y="20" width="460" height="340" rx="24" fill="url(#bgGlow)" stroke="#38bdf8" strokeWidth="1" strokeDasharray="6 6" />
+                    {/* Backdrop Shape */}
+                    <rect x="20" y="20" width="460" height="340" rx="24" fill="url(#bgGlow)" stroke="#38bdf8" strokeWidth="1" strokeDasharray="6 6" />
 
-                  {/* Earner Avatars with Laptops */}
-                  {/* Left Avatar */}
-                  <g filter="url(#shadow)">
-                    <circle cx="120" cy="180" r="28" fill="#38bdf8" />
-                    <path d="M120 155 a12 12 0 0 1 12 12 v8 a12 12 0 0 1 -24 0 v-8 a12 12 0 0 1 12 -12" fill="#f8fafc" />
-                    <rect x="85" y="210" width="70" height="42" rx="6" fill="url(#laptopGrad)" stroke="#0284c7" strokeWidth="1.5" />
-                    <path d="M80 252 h80 v4 a2 2 0 0 1 -2 2 h-76 a2 2 0 0 1 -2 -2 z" fill="#64748b" />
-                  </g>
+                    {/* Earner Avatars with Laptops */}
+                    {/* Left Avatar */}
+                    <g filter="url(#shadow)">
+                      <circle cx="120" cy="180" r="28" fill="#38bdf8" />
+                      <path d="M120 155 a12 12 0 0 1 12 12 v8 a12 12 0 0 1 -24 0 v-8 a12 12 0 0 1 12 -12" fill="#f8fafc" />
+                      <rect x="85" y="210" width="70" height="42" rx="6" fill="url(#laptopGrad)" stroke="#0284c7" strokeWidth="1.5" />
+                      <path d="M80 252 h80 v4 a2 2 0 0 1 -2 2 h-76 a2 2 0 0 1 -2 -2 z" fill="#64748b" />
+                    </g>
 
-                  {/* Center Main Earner */}
-                  <g filter="url(#shadow)">
-                    <circle cx="250" cy="220" r="32" fill="#0284c7" />
-                    <path d="M250 192 a14 14 0 0 1 14 14 v10 a14 14 0 0 1 -28 0 v-10 a14 14 0 0 1 14 -14" fill="#f8fafc" />
-                    <rect x="210" y="255" width="80" height="48" rx="6" fill="url(#laptopGrad)" stroke="#38bdf8" strokeWidth="2" />
-                    <path d="M200 303 h100 v6 a2 2 0 0 1 -2 2 h-96 a2 2 0 0 1 -2 -2 z" fill="#94a3b8" />
-                  </g>
+                    {/* Center Main Earner */}
+                    <g filter="url(#shadow)">
+                      <circle cx="250" cy="220" r="32" fill="#0284c7" />
+                      <path d="M250 192 a14 14 0 0 1 14 14 v10 a14 14 0 0 1 -28 0 v-10 a14 14 0 0 1 14 -14" fill="#f8fafc" />
+                      <rect x="210" y="255" width="80" height="48" rx="6" fill="url(#laptopGrad)" stroke="#38bdf8" strokeWidth="2" />
+                      <path d="M200 303 h100 v6 a2 2 0 0 1 -2 2 h-96 a2 2 0 0 1 -2 -2 z" fill="#94a3b8" />
+                    </g>
 
-                  {/* Right Avatar */}
-                  <g filter="url(#shadow)">
-                    <circle cx="380" cy="190" r="28" fill="#818cf8" />
-                    <path d="M380 165 a12 12 0 0 1 12 12 v8 a12 12 0 0 1 -24 0 v-8 a12 12 0 0 1 12 -12" fill="#f8fafc" />
-                    <rect x="345" y="220" width="70" height="42" rx="6" fill="url(#laptopGrad)" stroke="#6366f1" strokeWidth="1.5" />
-                    <path d="M340 262 h80 v4 a2 2 0 0 1 -2 2 h-76 a2 2 0 0 1 -2 -2 z" fill="#64748b" />
-                  </g>
+                    {/* Right Avatar */}
+                    <g filter="url(#shadow)">
+                      <circle cx="380" cy="190" r="28" fill="#818cf8" />
+                      <path d="M380 165 a12 12 0 0 1 12 12 v8 a12 12 0 0 1 -24 0 v-8 a12 12 0 0 1 12 -12" fill="#f8fafc" />
+                      <rect x="345" y="220" width="70" height="42" rx="6" fill="url(#laptopGrad)" stroke="#6366f1" strokeWidth="1.5" />
+                      <path d="M340 262 h80 v4 a2 2 0 0 1 -2 2 h-76 a2 2 0 0 1 -2 -2 z" fill="#64748b" />
+                    </g>
 
-                  {/* Floating Task Cards & Badges */}
-                  <g filter="url(#shadow)">
-                    <rect x="40" y="45" width="100" height="85" rx="12" fill="#ffffff" />
-                    <rect x="52" y="60" width="12" height="12" rx="3" fill="#38bdf8" />
-                    <path d="M55 66 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
-                    <line x1="72" y1="66" x2="125" y2="66" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
-                    
-                    <rect x="52" y="80" width="12" height="12" rx="3" fill="#38bdf8" />
-                    <path d="M55 86 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
-                    <line x1="72" y1="86" x2="120" y2="86" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+                    {/* Floating Task Cards & Badges */}
+                    <g filter="url(#shadow)">
+                      <rect x="40" y="45" width="100" height="85" rx="12" fill="#ffffff" />
+                      <rect x="52" y="60" width="12" height="12" rx="3" fill="#38bdf8" />
+                      <path d="M55 66 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
+                      <line x1="72" y1="66" x2="125" y2="66" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+                      
+                      <rect x="52" y="80" width="12" height="12" rx="3" fill="#38bdf8" />
+                      <path d="M55 86 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
+                      <line x1="72" y1="86" x2="120" y2="86" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
 
-                    <rect x="52" y="100" width="12" height="12" rx="3" fill="#38bdf8" />
-                    <path d="M55 106 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
-                    <line x1="72" y1="106" x2="110" y2="106" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
-                  </g>
+                      <rect x="52" y="100" width="12" height="12" rx="3" fill="#38bdf8" />
+                      <path d="M55 106 l2 2 l4 -4" stroke="#ffffff" strokeWidth="2" fill="none" />
+                      <line x1="72" y1="106" x2="110" y2="106" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+                    </g>
 
-                  {/* Center Star & Golden Coins */}
-                  <g filter="url(#shadow)">
-                    <circle cx="250" cy="70" r="22" fill="#eab308" />
-                    <text x="250" y="76" textAnchor="middle" fill="#ffffff" fontSize="20" fontWeight="bold">★</text>
-                  </g>
+                    {/* Center Star & Golden Coins */}
+                    <g filter="url(#shadow)">
+                      <circle cx="250" cy="70" r="22" fill="#eab308" />
+                      <text x="250" y="76" textAnchor="middle" fill="#ffffff" fontSize="20" fontWeight="bold">★</text>
+                    </g>
 
-                  <g filter="url(#shadow)">
-                    <circle cx="300" cy="95" r="16" fill="#f59e0b" />
-                    <text x="300" y="100" textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="bold">$</text>
-                  </g>
+                    <g filter="url(#shadow)">
+                      <circle cx="300" cy="95" r="16" fill="#f59e0b" />
+                      <text x="300" y="100" textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="bold">$</text>
+                    </g>
 
-                  {/* Earn Pill Badge Top Right */}
-                  <g filter="url(#shadow)">
-                    <rect x="360" y="55" width="95" height="38" rx="19" fill="#0284c7" />
-                    <text x="407" y="79" textAnchor="middle" fill="#ffffff" fontSize="14" fontWeight="bold">★ Earn</text>
-                  </g>
-                </svg>
-              </div>
+                    {/* Earn Pill Badge Top Right */}
+                    <g filter="url(#shadow)">
+                      <rect x="360" y="55" width="95" height="38" rx="19" fill="#0284c7" />
+                      <text x="407" y="79" textAnchor="middle" fill="#ffffff" fontSize="14" fontWeight="bold">★ Earn</text>
+                    </g>
+                  </svg>
+                </div>
+              )}
             </div>
 
           </div>
@@ -661,13 +676,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           <div className="text-center max-w-3xl mx-auto mb-14">
             <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
-              Simple 4-Step Process
+              {sc.howItWorksEyebrow || "Simple 4-Step Process"}
             </span>
             <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mt-3">
               {sc.howItWorksTitle || "How SmartExn Works"}
             </h2>
             <p className="text-slate-700 mt-2 text-sm sm:text-base">
-              A transparent, escrow-backed workflow connecting task workers with campaign creators.
+              {sc.howItWorksSubtitle || "A transparent, escrow-backed workflow connecting task workers with campaign creators."}
             </p>
           </div>
 
@@ -687,7 +702,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step1Desc || "Create your free account as an earner or advertiser in less than a minute."}
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Zero registration fees</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">{sc.step1Footer || "Zero registration fees"}</span>
             </div>
 
             {/* Step 2 */}
@@ -703,7 +718,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step2Desc || "Browse available social tasks, surveys, app feedback gigs, and data tagging opportunities."}
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Clear instructions & rewards</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">{sc.step2Footer || "Clear instructions & rewards"}</span>
             </div>
 
             {/* Step 3 */}
@@ -719,7 +734,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step3Desc || "Follow the exact steps and upload verification proofs (screenshots, usernames, or answers)."}
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Escrow-backed reward protection</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">{sc.step3Footer || "Escrow-backed reward protection"}</span>
             </div>
 
             {/* Step 4 */}
@@ -735,7 +750,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   {sc.step4Desc || "Receive rewards in your Task Earnings wallet and withdraw via supported payment gateways."}
                 </p>
               </div>
-              <span className="text-[11px] font-bold text-sky-800 mt-4 block">Fast processing & low minimums</span>
+              <span className="text-[11px] font-bold text-sky-800 mt-4 block">{sc.step4Footer || "Fast processing & low minimums"}</span>
             </div>
 
           </div>
@@ -749,13 +764,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           {/* Section Header */}
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <span className="text-xs font-black uppercase tracking-widest text-sky-300 bg-sky-950/80 px-3.5 py-1 rounded-full border border-sky-800">
-              Versatile Earning Categories
+              {sc.oppsEyebrow || "Versatile Earning Categories"}
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">
               {sc.oppsTitle || "Featured Earning Opportunities"}
             </h2>
             <p className="text-slate-300 text-sm sm:text-base">
-              Choose from a variety of legitimate micro-tasks and surveys matched to your skills and devices.
+              {sc.oppsSubtitle || "Choose from a variety of legitimate micro-tasks and surveys matched to your skills and devices."}
             </p>
           </div>
 
@@ -818,7 +833,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
 
           {/* Responsible earnings disclosure */}
           <div className="p-4 bg-sky-950/60 rounded-2xl border border-sky-800/60 text-center text-xs text-sky-200 max-w-3xl mx-auto">
-            <span className="font-bold text-sky-300">Earnings Disclosure:</span> Earnings vary depending on task availability, requirements, completion quality, and advertiser verification. SmartExn does not guarantee fixed or passive hourly income.
+            <span className="font-bold text-sky-300">{sc.oppsDisclosureLabel || "Earnings Disclosure:"}</span> {sc.oppsDisclosureText || "Earnings vary depending on task availability, requirements, completion quality, and advertiser verification. SmartExn does not guarantee fixed or passive hourly income."}
           </div>
 
         </div>
@@ -831,7 +846,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
-                Advertiser & Campaign Solutions
+                {sc.bizEyebrow || "Advertiser & Campaign Solutions"}
               </span>
               <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight mt-3">
                 {sc.bizTitle || "For Businesses & Campaign Creators"}
@@ -848,7 +863,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               }}
               className="px-6 py-3 bg-[#1d5c8d] hover:bg-[#164a73] text-white rounded-xl font-bold text-sm shadow-md transition-all shrink-0"
             >
-              Post a Campaign Now
+              {sc.bizCtaBtn || "Post a Campaign Now"}
             </button>
           </div>
 
@@ -927,13 +942,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <span className="text-xs font-black uppercase tracking-widest text-emerald-300 bg-emerald-950/80 px-3.5 py-1 rounded-full border border-emerald-800">
-              Security & Fairness Guaranteed
+              {sc.escrowEyebrow || "Security & Fairness Guaranteed"}
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">
-              Platform Escrow & Dispute Protection
+              {sc.escrowTitle || "Platform Escrow & Dispute Protection"}
             </h2>
             <p className="text-slate-300 text-sm sm:text-base">
-              SmartExn eliminates payment uncertainty with an automated escrow layer and a fair arbitration desk.
+              {sc.escrowSubtitle || "SmartExn eliminates payment uncertainty with an automated escrow layer and a fair arbitration desk."}
             </p>
           </div>
 
@@ -943,9 +958,9 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <div className="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-lg">
                 🔒
               </div>
-              <h3 className="text-lg font-bold text-white">Guaranteed Escrow Lock</h3>
+              <h3 className="text-lg font-bold text-white">{sc.escrowCard1Title || "Guaranteed Escrow Lock"}</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                When a campaign is published, the creator's budget is locked in escrow. Workers who complete the task as requested are guaranteed to receive their reward upon approval.
+                {sc.escrowCard1Desc || "When a campaign is published, the creator's budget is locked in escrow. Workers who complete the task as requested are guaranteed to receive their reward upon approval."}
               </p>
             </div>
 
@@ -953,9 +968,9 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg">
                 ⚖️
               </div>
-              <h3 className="text-lg font-bold text-white">Two-Level Dispute Resolution</h3>
+              <h3 className="text-lg font-bold text-white">{sc.escrowCard2Title || "Two-Level Dispute Resolution"}</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                If a proof submission is incorrectly rejected, workers can initiate Level-1 review with the creator or escalate to Level-2 admin arbitration for impartial verification.
+                {sc.escrowCard2Desc || "If a proof submission is incorrectly rejected, workers can initiate Level-1 review with the creator or escalate to Level-2 admin arbitration for impartial verification."}
               </p>
             </div>
 
@@ -963,9 +978,9 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg">
                 🔄
               </div>
-              <h3 className="text-lg font-bold text-white">Unused Budget Refunds</h3>
+              <h3 className="text-lg font-bold text-white">{sc.escrowCard3Title || "Unused Budget Refunds"}</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Advertisers who stop or cancel an active campaign receive an instant, transparent refund of all unspent escrow budget directly back to their Campaign Wallet.
+                {sc.escrowCard3Desc || "Advertisers who stop or cancel an active campaign receive an instant, transparent refund of all unspent escrow budget directly back to their Campaign Wallet."}
               </p>
             </div>
 
@@ -994,7 +1009,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
             {/* Header */}
             <div className="text-center max-w-3xl mx-auto space-y-3">
               <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-sky-500/10 border border-sky-400/30 rounded-full text-sky-300 font-semibold text-xs uppercase tracking-widest">
-                ⚡ Supported Multi-Currency Payment Networks
+                {sc.paymentEyebrow || "⚡ Supported Multi-Currency Payment Networks"}
               </div>
               <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
                 {paymentMethodsTitle}
@@ -1028,13 +1043,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
             {/* Badges */}
             <div className="pt-2 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-300 font-medium">
               <div className="flex items-center gap-2 bg-[#0c223a] px-4 py-2.5 rounded-xl border border-sky-500/20 shadow-sm">
-                <span className="text-emerald-400 font-bold">✓ Secure HTTPS</span> Encrypted Sessions
+                <span className="text-emerald-400 font-bold">{sc.paymentBadge1Title || "✓ Secure HTTPS"}</span> {sc.paymentBadge1Desc || "Encrypted Sessions"}
               </div>
               <div className="flex items-center gap-2 bg-[#0c223a] px-4 py-2.5 rounded-xl border border-sky-500/20 shadow-sm">
-                <span className="text-sky-400 font-bold">⚡ Direct Deposit</span> Processing
+                <span className="text-sky-400 font-bold">{sc.paymentBadge2Title || "⚡ Direct Deposit"}</span> {sc.paymentBadge2Desc || "Processing"}
               </div>
               <div className="flex items-center gap-2 bg-[#0c223a] px-4 py-2.5 rounded-xl border border-sky-500/20 shadow-sm">
-                <span className="text-amber-400 font-bold">🚀 Multi-Gateway</span> Payout Support
+                <span className="text-amber-400 font-bold">{sc.paymentBadge3Title || "🚀 Multi-Gateway"}</span> {sc.paymentBadge3Desc || "Payout Support"}
               </div>
             </div>
 
@@ -1048,13 +1063,13 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
           
           <div className="text-center space-y-3">
             <span className="text-xs font-black uppercase tracking-widest text-sky-900 bg-sky-100 px-3.5 py-1 rounded-full border border-sky-300">
-              Got Questions?
+              {sc.faqEyebrow || "Got Questions?"}
             </span>
             <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
-              Frequently Asked Questions
+              {sc.faqTitle || "Frequently Asked Questions"}
             </h2>
             <p className="text-slate-600 text-sm sm:text-base">
-              Learn more about completing tasks, creating campaigns, escrow protection, and payments.
+              {sc.faqSubtitle || "Learn more about completing tasks, creating campaigns, escrow protection, and payments."}
             </p>
           </div>
 
@@ -1094,7 +1109,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               onClick={() => navigate('/faqs')}
               className="px-6 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-sm shadow-md transition-all inline-flex items-center gap-2"
             >
-              <span>Explore Complete Knowledge Base</span>
+              <span>{sc.faqKnowledgeBtn || "Explore Complete Knowledge Base"}</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
             </button>
           </div>
@@ -1115,10 +1130,10 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
       <section className="py-16 md:py-20 bg-gradient-to-r from-sky-900 via-blue-900 to-indigo-950 text-white text-center">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Ready to Join the Global Task Marketplace?
+            {sc.finalCtaTitle || "Ready to Join the Global Task Marketplace?"}
           </h2>
           <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto">
-            Whether you want to earn rewards completing tasks or promote your business with a global workforce, SmartExn provides the secure platform you need.
+            {sc.finalCtaSubtitle || "Whether you want to earn rewards completing tasks or promote your business with a global workforce, SmartExn provides the secure platform you need."}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <button
@@ -1128,7 +1143,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               }}
               className="w-full sm:w-auto px-8 py-3.5 bg-white text-slate-900 hover:bg-sky-50 font-bold rounded-xl shadow-lg transition-transform active:scale-95"
             >
-              Start Earning Now
+              {sc.finalCtaStartBtn || "Start Earning Now"}
             </button>
             <button
               onClick={() => {
@@ -1141,7 +1156,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               }}
               className="w-full sm:w-auto px-8 py-3.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95"
             >
-              Create a Campaign
+              {sc.finalCtaPublishBtn || "Create a Campaign"}
             </button>
           </div>
         </div>
@@ -1173,7 +1188,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
               </div>
 
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm">
-                SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety.
+                {sc.footerTagline || "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs with 100% campaign escrow safety."}
               </p>
 
               {/* Embedded Customer Support Office UK Card */}
@@ -1286,7 +1301,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   <span>•</span>
                 </>
               )}
-              <span>100% Escrow Protected</span>
+              <span>{sc.footerEscrowBadge || "100% Escrow Protected"}</span>
             </div>
           </div>
 
