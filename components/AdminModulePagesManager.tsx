@@ -17,40 +17,66 @@ export const AdminModulePagesManager: React.FC = () => {
     const [editingNoticePage, setEditingNoticePage] = useState<{ category: 'investment' | 'workAndEarn'; page: ModulePageControl } | null>(null);
     const [customNoticeDraft, setCustomNoticeDraft] = useState('');
 
-    // Local configuration initialized from settings or default
-    const [localConfig, setLocalConfig] = useState<ModulePageControlsConfig>(() => {
-        const defaults = getDefaultModulePagesConfig();
-        if (!settings?.modulePagesConfig) return defaults;
-        
-        // Merge with defaults to guarantee canonical names and menu locations
+    // Local configuration helper to merge defaults with saved config and preserve custom tabs
+    const mergeConfigWithSaved = (defaults: ModulePageControlsConfig, savedConfig?: ModulePageControlsConfig | null): ModulePageControlsConfig => {
+        if (!savedConfig) return defaults;
+
         const mergedInvestment: Record<string, ModulePageControl> = {};
         Object.keys(defaults.investment).forEach(key => {
             const def = defaults.investment[key];
-            const saved = settings.modulePagesConfig?.investment?.[key];
+            const saved = savedConfig.investment?.[key];
             mergedInvestment[key] = {
                 ...def,
                 isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
                 isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
-                disabledNotice: saved?.disabledNotice || def.disabledNotice
+                disabledNotice: saved?.disabledNotice || def.disabledNotice,
+                isCustom: saved?.isCustom || false
             };
         });
+        if (savedConfig.investment) {
+            Object.keys(savedConfig.investment).forEach(key => {
+                if (!mergedInvestment[key]) {
+                    mergedInvestment[key] = {
+                        ...savedConfig.investment[key],
+                        isCustom: true
+                    };
+                }
+            });
+        }
 
         const mergedWorkAndEarn: Record<string, ModulePageControl> = {};
         Object.keys(defaults.workAndEarn).forEach(key => {
             const def = defaults.workAndEarn[key];
-            const saved = settings.modulePagesConfig?.workAndEarn?.[key];
+            const saved = savedConfig.workAndEarn?.[key];
             mergedWorkAndEarn[key] = {
                 ...def,
                 isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
                 isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
-                disabledNotice: saved?.disabledNotice || def.disabledNotice
+                disabledNotice: saved?.disabledNotice || def.disabledNotice,
+                isCustom: saved?.isCustom || false
             };
         });
+        if (savedConfig.workAndEarn) {
+            Object.keys(savedConfig.workAndEarn).forEach(key => {
+                if (!mergedWorkAndEarn[key]) {
+                    mergedWorkAndEarn[key] = {
+                        ...savedConfig.workAndEarn[key],
+                        isCustom: true
+                    };
+                }
+            });
+        }
 
         return {
             investment: mergedInvestment,
             workAndEarn: mergedWorkAndEarn
         };
+    };
+
+    // Local configuration initialized from settings or default
+    const [localConfig, setLocalConfig] = useState<ModulePageControlsConfig>(() => {
+        const defaults = getDefaultModulePagesConfig();
+        return mergeConfigWithSaved(defaults, settings?.modulePagesConfig);
     });
 
     const [localQuickActions, setLocalQuickActions] = useState(() => ({
@@ -61,9 +87,24 @@ export const AdminModulePagesManager: React.FC = () => {
         transfer: settings?.userQuickActionsConfig?.transfer !== false,
     }));
 
+    const [localMyCampaignActions, setLocalMyCampaignActions] = useState(() => ({
+        deposit: settings?.myCampaignActionsConfig?.deposit !== false,
+        transfer: settings?.myCampaignActionsConfig?.transfer !== false,
+        analytics: settings?.myCampaignActionsConfig?.analytics !== false,
+        convert: settings?.myCampaignActionsConfig?.convert !== false,
+    }));
+
     const [localCampaignConvert, setLocalCampaignConvert] = useState<boolean>(
         () => settings?.campaignConvertEnabled !== false
     );
+
+    // Custom tab creation modal state
+    const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+    const [newCustomName, setNewCustomName] = useState('');
+    const [newCustomRoute, setNewCustomRoute] = useState('');
+    const [newCustomIcon, setNewCustomIcon] = useState('✨');
+    const [newCustomCategory, setNewCustomCategory] = useState<'investment' | 'workAndEarn'>('workAndEarn');
+    const [newCustomLocation, setNewCustomLocation] = useState('Main Navigation');
 
     React.useEffect(() => {
         if (settings) {
@@ -74,6 +115,12 @@ export const AdminModulePagesManager: React.FC = () => {
                 deposit: settings.userQuickActionsConfig?.deposit !== false,
                 transfer: settings.userQuickActionsConfig?.transfer !== false,
             });
+            setLocalMyCampaignActions({
+                deposit: settings.myCampaignActionsConfig?.deposit !== false,
+                transfer: settings.myCampaignActionsConfig?.transfer !== false,
+                analytics: settings.myCampaignActionsConfig?.analytics !== false,
+                convert: settings.myCampaignActionsConfig?.convert !== false,
+            });
             setLocalCampaignConvert(settings.campaignConvertEnabled !== false);
         }
     }, [settings]);
@@ -81,34 +128,7 @@ export const AdminModulePagesManager: React.FC = () => {
     React.useEffect(() => {
         if (settings?.modulePagesConfig) {
             const defaults = getDefaultModulePagesConfig();
-            const mergedInvestment: Record<string, ModulePageControl> = {};
-            Object.keys(defaults.investment).forEach(key => {
-                const def = defaults.investment[key];
-                const saved = settings.modulePagesConfig?.investment?.[key];
-                mergedInvestment[key] = {
-                    ...def,
-                    isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
-                    isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
-                    disabledNotice: saved?.disabledNotice || def.disabledNotice
-                };
-            });
-
-            const mergedWorkAndEarn: Record<string, ModulePageControl> = {};
-            Object.keys(defaults.workAndEarn).forEach(key => {
-                const def = defaults.workAndEarn[key];
-                const saved = settings.modulePagesConfig?.workAndEarn?.[key];
-                mergedWorkAndEarn[key] = {
-                    ...def,
-                    isEnabled: saved?.isEnabled !== undefined ? saved.isEnabled : def.isEnabled,
-                    isHiddenInNav: saved?.isHiddenInNav !== undefined ? saved.isHiddenInNav : def.isHiddenInNav,
-                    disabledNotice: saved?.disabledNotice || def.disabledNotice
-                };
-            });
-
-            setLocalConfig({
-                investment: mergedInvestment,
-                workAndEarn: mergedWorkAndEarn
-            });
+            setLocalConfig(mergeConfigWithSaved(defaults, settings.modulePagesConfig));
         }
     }, [settings?.modulePagesConfig]);
 
@@ -223,6 +243,60 @@ export const AdminModulePagesManager: React.FC = () => {
         setTimeout(() => setFeedbackMsg(null), 3500);
     };
 
+    const handleAddCustomPage = () => {
+        if (!newCustomName.trim() || !newCustomRoute.trim()) {
+            setFeedbackMsg({ type: 'error', text: 'Please provide a name and route path for the custom tab.' });
+            return;
+        }
+
+        const cleanId = newCustomName.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString().slice(-4);
+        const cleanRoute = newCustomRoute.startsWith('/') ? newCustomRoute : `/${newCustomRoute}`;
+
+        const newPage: ModulePageControl = {
+            id: cleanId,
+            name: newCustomName.trim(),
+            route: cleanRoute,
+            icon: newCustomIcon.trim() || '✨',
+            category: newCustomCategory,
+            menuLocation: newCustomLocation,
+            isEnabled: true,
+            isHiddenInNav: false,
+            disabledNotice: 'This page is temporarily unavailable.',
+            isCustom: true
+        };
+
+        setLocalConfig(prev => ({
+            ...prev,
+            [newCustomCategory]: {
+                ...prev[newCustomCategory],
+                [cleanId]: newPage
+            }
+        }));
+
+        setNewCustomName('');
+        setNewCustomRoute('');
+        setNewCustomIcon('✨');
+        setShowAddCustomModal(false);
+        setFeedbackMsg({ type: 'success', text: `Created custom tab "${newPage.name}". Click "Save Configuration" to persist live!` });
+        setTimeout(() => setFeedbackMsg(null), 4000);
+    };
+
+    const handleDeleteCustomPage = (category: 'investment' | 'workAndEarn', pageId: string) => {
+        const pageName = localConfig[category]?.[pageId]?.name || pageId;
+        if (window.confirm(`Are you sure you want to delete custom tab "${pageName}"?`)) {
+            setLocalConfig(prev => {
+                const updatedCategory = { ...prev[category] };
+                delete updatedCategory[pageId];
+                return {
+                    ...prev,
+                    [category]: updatedCategory
+                };
+            });
+            setFeedbackMsg({ type: 'success', text: `Deleted custom tab "${pageName}". Click "Save Configuration" to persist live!` });
+            setTimeout(() => setFeedbackMsg(null), 3500);
+        }
+    };
+
     const handleResetDefaults = () => {
         if (window.confirm('Reset all page visibility and enablement settings back to exact user site menu defaults?')) {
             const def = getDefaultModulePagesConfig();
@@ -240,6 +314,7 @@ export const AdminModulePagesManager: React.FC = () => {
                 ...settings,
                 modulePagesConfig: localConfig,
                 userQuickActionsConfig: localQuickActions,
+                myCampaignActionsConfig: localMyCampaignActions,
                 campaignConvertEnabled: localCampaignConvert
             };
             const result = await updateSettings(updatedSettings);
@@ -580,6 +655,91 @@ export const AdminModulePagesManager: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* My Campaign Independent Action Switches */}
+                <div className="pt-3 border-t border-slate-800/80">
+                    <div className="text-xs font-bold text-slate-300 mb-2.5 flex items-center justify-between">
+                        <span>My Campaign Action Controls:</span>
+                        <span className="text-[10px] text-slate-400 font-normal">Controls buttons inside My Created Campaigns view</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {/* Deposit */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localMyCampaignActions.deposit
+                                ? 'bg-emerald-950/30 border-emerald-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">💳</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localMyCampaignActions.deposit}
+                                    onChange={(e) => setLocalMyCampaignActions(prev => ({ ...prev, deposit: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-emerald-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Deposit Action</div>
+                            <div className="text-[10px] text-slate-400">Campaign Funding Deposit</div>
+                        </div>
+
+                        {/* Transfer */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localMyCampaignActions.transfer
+                                ? 'bg-blue-950/30 border-blue-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">📥</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localMyCampaignActions.transfer}
+                                    onChange={(e) => setLocalMyCampaignActions(prev => ({ ...prev, transfer: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Transfer Action</div>
+                            <div className="text-[10px] text-slate-400">Internal Balance Transfer</div>
+                        </div>
+
+                        {/* Analytics */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localMyCampaignActions.analytics
+                                ? 'bg-purple-950/30 border-purple-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">📊</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localMyCampaignActions.analytics}
+                                    onChange={(e) => setLocalMyCampaignActions(prev => ({ ...prev, analytics: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-purple-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Analytics Action</div>
+                            <div className="text-[10px] text-slate-400">Campaign Performance & ROI</div>
+                        </div>
+
+                        {/* Convert */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localMyCampaignActions.convert
+                                ? 'bg-indigo-950/30 border-indigo-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">🔄</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localMyCampaignActions.convert}
+                                    onChange={(e) => setLocalMyCampaignActions(prev => ({ ...prev, convert: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-indigo-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Convert Action</div>
+                            <div className="text-[10px] text-slate-400">Campaign Balance Converter</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Category Tabs & Quick Stats */}
@@ -686,8 +846,16 @@ export const AdminModulePagesManager: React.FC = () => {
                     </select>
                 </div>
 
-                {/* Bulk Actions */}
+                {/* Bulk Actions & Custom Tab Creation */}
                 <div className="flex items-center gap-2 overflow-x-auto shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setShowAddCustomModal(true)}
+                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 text-xs font-black whitespace-nowrap flex items-center gap-1.5"
+                    >
+                        <span>➕</span>
+                        <span>Add Custom Tab</span>
+                    </button>
                     <button
                         type="button"
                         onClick={() => handleBulkEnable(activeCategoryTab === 'all' ? undefined : activeCategoryTab)}
@@ -842,14 +1010,27 @@ export const AdminModulePagesManager: React.FC = () => {
                                         <span>✏️ Custom Disabled Notice</span>
                                     </button>
 
-                                    <a
-                                        href={`#${page.route}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[11px] font-bold text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
-                                    >
-                                        <span>↗ View Page</span>
-                                    </a>
+                                    <div className="flex items-center gap-2">
+                                        {(page.isCustom || (!defaultInvestmentPages[page.id] && !defaultWorkAndEarnPages[page.id])) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteCustomPage(category, page.id)}
+                                                className="text-[11px] font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+                                                title="Delete this custom tab"
+                                            >
+                                                <span>🗑️ Delete</span>
+                                            </button>
+                                        )}
+
+                                        <a
+                                            href={`#${page.route}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] font-bold text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+                                        >
+                                            <span>↗ View Page</span>
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -862,6 +1043,109 @@ export const AdminModulePagesManager: React.FC = () => {
                     <p className="text-3xl mb-2">🔍</p>
                     <h3 className="text-base font-bold text-white mb-1">No user dashboard pages found</h3>
                     <p className="text-xs text-slate-400">Try adjusting your search keywords or filter dropdown.</p>
+                </div>
+            )}
+
+            {/* Custom Tab Creation Modal */}
+            {showAddCustomModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+                                    <span>➕ Add New Custom Tab</span>
+                                </h3>
+                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                    Create a custom navigation entry and permissions control for user routes.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowAddCustomModal(false)}
+                                className="text-slate-400 hover:text-white font-black text-sm p-1"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-300 mb-1">Tab Title / Name</label>
+                                <input
+                                    type="text"
+                                    value={newCustomName}
+                                    onChange={(e) => setNewCustomName(e.target.value)}
+                                    placeholder="e.g. VIP Rewards, Promo Hub"
+                                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Route Path</label>
+                                    <input
+                                        type="text"
+                                        value={newCustomRoute}
+                                        onChange={(e) => setNewCustomRoute(e.target.value)}
+                                        placeholder="/member/vip-rewards"
+                                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Icon (Emoji)</label>
+                                    <input
+                                        type="text"
+                                        value={newCustomIcon}
+                                        onChange={(e) => setNewCustomIcon(e.target.value)}
+                                        placeholder="✨"
+                                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Module Category</label>
+                                    <select
+                                        value={newCustomCategory}
+                                        onChange={(e) => setNewCustomCategory(e.target.value as any)}
+                                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="workAndEarn">Work & Earn</option>
+                                        <option value="investment">Investment</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Menu Location</label>
+                                    <select
+                                        value={newCustomLocation}
+                                        onChange={(e) => setNewCustomLocation(e.target.value)}
+                                        className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="Main Navigation">Main Navigation</option>
+                                        <option value="Work & Earn - My Tasks Submenu">Work & Earn - My Tasks Submenu</option>
+                                        <option value="Work & Earn - My Campaigns Submenu">Work & Earn - My Campaigns Submenu</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowAddCustomModal(false)}
+                                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleAddCustomPage}
+                                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-lg shadow-indigo-500/25"
+                            >
+                                Create Tab
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

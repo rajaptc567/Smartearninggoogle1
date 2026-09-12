@@ -3819,29 +3819,52 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </div>
 
                                 {/* Quick Actions */}
-                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 self-stretch sm:self-auto">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowTransferModal(true)}
-                                        className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1"
-                                    >
-                                        <span>📥 Deposit / Transfer</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowConvertModal(true)}
-                                        className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1"
-                                    >
-                                        <span>🔄 Convert</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAnalyticsModal(true)}
-                                        className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/80 text-purple-700 dark:text-purple-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-1"
-                                    >
-                                        <span>📊 Analytics</span>
-                                    </button>
-                                </div>
+                                {(() => {
+                                    const isDepositEnabled = settings?.myCampaignActionsConfig?.deposit !== false;
+                                    const isTransferEnabled = settings?.myCampaignActionsConfig?.transfer !== false;
+                                    const isAnalyticsEnabled = settings?.myCampaignActionsConfig?.analytics !== false;
+                                    const isConvertEnabled = (settings?.myCampaignActionsConfig?.convert !== false) && (settings?.campaignConvertEnabled !== false);
+
+                                    return (
+                                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 self-stretch sm:self-auto">
+                                            {isDepositEnabled && (
+                                                <Link
+                                                    to="/member/deposit"
+                                                    className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1"
+                                                >
+                                                    <span>💳 Deposit</span>
+                                                </Link>
+                                            )}
+                                            {isTransferEnabled && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowTransferModal(true)}
+                                                    className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-1"
+                                                >
+                                                    <span>📥 Transfer</span>
+                                                </button>
+                                            )}
+                                            {isConvertEnabled && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowConvertModal(true)}
+                                                    className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1"
+                                                >
+                                                    <span>🔄 Convert</span>
+                                                </button>
+                                            )}
+                                            {isAnalyticsEnabled && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowAnalyticsModal(true)}
+                                                    className="flex-1 sm:flex-none px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/80 text-purple-700 dark:text-purple-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-1"
+                                                >
+                                                    <span>📊 Analytics</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* Compact Mobile-Friendly Campaign Financial Metrics Grid */}

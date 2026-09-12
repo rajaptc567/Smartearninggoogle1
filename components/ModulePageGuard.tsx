@@ -55,6 +55,10 @@ export const ModulePageGuard: React.FC<ModulePageGuardProps> = ({ pageId, catego
         if ((pageId === 'availableTasks' || pageId === 'createCampaign' || pageId === 'userTasks') && settings?.isUserTaskEnabled === false) isLegacyEnabled = false;
     }
 
+    if (pageId === 'convert' && settings?.campaignConvertEnabled === false) {
+        isLegacyEnabled = false;
+    }
+
     let isEffectivelyEnabled = pageControl.isEnabled && isLegacyEnabled;
     if (pageId === 'userTasks') {
         if (currentMode === 'investment' && investmentControl && !investmentControl.isEnabled) {

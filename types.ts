@@ -461,6 +461,12 @@ export interface Settings {
         withdraw?: boolean;
         deposit?: boolean;
     };
+    myCampaignActionsConfig?: {
+        deposit?: boolean;
+        transfer?: boolean;
+        analytics?: boolean;
+        convert?: boolean;
+    };
     campaignConvertEnabled?: boolean;
 }
 
@@ -474,6 +480,7 @@ export interface ModulePageControl {
     isEnabled: boolean;
     isHiddenInNav: boolean;
     disabledNotice?: string;
+    isCustom?: boolean;
 }
 
 export interface ModulePageControlsConfig {

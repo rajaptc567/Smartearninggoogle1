@@ -691,6 +691,15 @@ const SettingSchema = new mongoose.Schema({
             deposit: true
         })
     },
+    myCampaignActionsConfig: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({
+            deposit: true,
+            transfer: true,
+            analytics: true,
+            convert: true
+        })
+    },
     campaignConvertEnabled: { type: Boolean, default: true },
     investmentModuleEnabled: { type: Boolean, default: true },
     isInvestmentModuleEnabled: { type: Boolean, default: true },
