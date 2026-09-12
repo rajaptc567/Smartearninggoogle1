@@ -354,6 +354,54 @@ export const createUser = async (req, res) => {
         req.body.restrictions = { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: false, loginBlocked: false, purchaseBlocked: false };
         
         const settings = await Setting.getSettings();
+        const consentConfig = settings.signUpConsentConfig || {};
+
+        // Consent Validation
+        const termsRequired = consentConfig.termsRequired !== false && consentConfig.termsEnabled !== false;
+        const termsAccepted = req.body.termsAccepted === true || req.body.termsAccepted === 'true';
+        if (termsRequired && !termsAccepted) {
+            return res.status(400).json({ success: false, error: 'You must agree to the Terms & Conditions and Privacy Policy to create an account.' });
+        }
+
+        const privacyRequired = consentConfig.privacyRequired !== false && consentConfig.privacyEnabled !== false;
+        const privacyAcknowledged = req.body.privacyPolicyAcknowledged === true || req.body.privacyPolicyAcknowledged === 'true' || termsAccepted;
+        if (privacyRequired && !privacyAcknowledged) {
+            return res.status(400).json({ success: false, error: 'You must acknowledge the Privacy Policy to create an account.' });
+        }
+
+        const emailMarketingRequired = consentConfig.emailMarketingRequired === true && consentConfig.emailMarketingEnabled !== false;
+        const emailMarketingConsent = req.body.emailMarketingConsent === true || req.body.emailMarketingConsent === 'true';
+        if (emailMarketingRequired && !emailMarketingConsent) {
+            return res.status(400).json({ success: false, error: 'Email marketing consent is required by current platform policy.' });
+        }
+
+        const whatsappMarketingRequired = consentConfig.whatsappMarketingRequired === true && consentConfig.whatsappMarketingEnabled !== false;
+        const whatsappMarketingConsent = req.body.whatsappMarketingConsent === true || req.body.whatsappMarketingConsent === 'true';
+        if (whatsappMarketingRequired && !whatsappMarketingConsent) {
+            return res.status(400).json({ success: false, error: 'WhatsApp marketing consent is required by current platform policy.' });
+        }
+
+        // Record Consent State & Audit Timestamps
+        req.body.termsAccepted = Boolean(termsAccepted);
+        if (termsAccepted) {
+            req.body.termsAcceptedAt = new Date();
+            req.body.termsVersion = consentConfig.termsVersion || '1.0';
+        }
+        req.body.privacyPolicyAcknowledged = Boolean(privacyAcknowledged);
+        if (privacyAcknowledged) {
+            req.body.privacyPolicyAcknowledgedAt = new Date();
+            req.body.privacyPolicyVersion = consentConfig.privacyVersion || '1.0';
+        }
+        req.body.emailMarketingConsent = Boolean(emailMarketingConsent);
+        if (emailMarketingConsent) {
+            req.body.emailMarketingConsentAt = new Date();
+            req.body.marketingConsentVersion = consentConfig.marketingVersion || '1.0';
+        }
+        req.body.whatsappMarketingConsent = Boolean(whatsappMarketingConsent);
+        if (whatsappMarketingConsent) {
+            req.body.whatsappMarketingConsentAt = new Date();
+            req.body.marketingConsentVersion = consentConfig.marketingVersion || '1.0';
+        }
 
         if (settings.emailVerificationRequired) {
             const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -474,10 +522,10 @@ export const updateUser = async (req, res) => {
         // SECURITY: Role-aware field whitelisting
         
         // Fields standard users are allowed to modify
-        const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country'];
+        const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country', 'emailMarketingConsent', 'whatsappMarketingConsent', 'termsAccepted', 'privacyPolicyAcknowledged'];
         
         // Fields admins are allowed to modify via this specific endpoint
-        const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor', 'emailVerified', 'whatsappVerified'];
+        const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor', 'emailVerified', 'whatsappVerified', 'termsVersion', 'privacyPolicyVersion', 'marketingConsentVersion'];
 
         const allowedFields = isAdmin ? adminWhitelist : userWhitelist;
         
@@ -491,6 +539,36 @@ export const updateUser = async (req, res) => {
                 filteredUpdate[key] = req.body[key];
             }
         });
+
+        // Track consent timestamps when values change
+        if (req.body.emailMarketingConsent !== undefined) {
+            const val = req.body.emailMarketingConsent === true || req.body.emailMarketingConsent === 'true';
+            filteredUpdate.emailMarketingConsent = val;
+            if (val !== userToUpdate.emailMarketingConsent) {
+                filteredUpdate.emailMarketingConsentAt = new Date();
+            }
+        }
+        if (req.body.whatsappMarketingConsent !== undefined) {
+            const val = req.body.whatsappMarketingConsent === true || req.body.whatsappMarketingConsent === 'true';
+            filteredUpdate.whatsappMarketingConsent = val;
+            if (val !== userToUpdate.whatsappMarketingConsent) {
+                filteredUpdate.whatsappMarketingConsentAt = new Date();
+            }
+        }
+        if (req.body.termsAccepted !== undefined) {
+            const val = req.body.termsAccepted === true || req.body.termsAccepted === 'true';
+            if (val && !userToUpdate.termsAccepted) {
+                filteredUpdate.termsAccepted = true;
+                filteredUpdate.termsAcceptedAt = new Date();
+            }
+        }
+        if (req.body.privacyPolicyAcknowledged !== undefined) {
+            const val = req.body.privacyPolicyAcknowledged === true || req.body.privacyPolicyAcknowledged === 'true';
+            if (val && !userToUpdate.privacyPolicyAcknowledged) {
+                filteredUpdate.privacyPolicyAcknowledged = true;
+                filteredUpdate.privacyPolicyAcknowledgedAt = new Date();
+            }
+        }
 
         if (filteredUpdate.status && filteredUpdate.status !== userToUpdate.status) {
             await Notification.create({ 

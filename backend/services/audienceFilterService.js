@@ -194,6 +194,64 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
         });
     }
 
+    // 6b. Marketing & Legal Consent Filters
+    if (filters.emailMarketingConsent === 'opted_in' || filters.emailMarketingConsent === true || filters.emailMarketingConsent === 'true') {
+        userQuery.emailMarketingConsent = true;
+    } else if (filters.emailMarketingConsent === 'opted_out' || filters.emailMarketingConsent === false || filters.emailMarketingConsent === 'false') {
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { emailMarketingConsent: false },
+                { emailMarketingConsent: { $exists: false } }
+            ]
+        });
+    }
+
+    if (filters.whatsappMarketingConsent === 'opted_in' || filters.whatsappMarketingConsent === true || filters.whatsappMarketingConsent === 'true') {
+        userQuery.whatsappMarketingConsent = true;
+    } else if (filters.whatsappMarketingConsent === 'opted_out' || filters.whatsappMarketingConsent === false || filters.whatsappMarketingConsent === 'false') {
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { whatsappMarketingConsent: false },
+                { whatsappMarketingConsent: { $exists: false } }
+            ]
+        });
+    }
+
+    if (filters.termsAccepted === 'accepted' || filters.termsAccepted === true || filters.termsAccepted === 'true') {
+        userQuery.termsAccepted = true;
+    } else if (filters.termsAccepted === 'not_accepted' || filters.termsAccepted === false || filters.termsAccepted === 'false') {
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { termsAccepted: false },
+                { termsAccepted: { $exists: false } }
+            ]
+        });
+    }
+
+    if (filters.privacyAcknowledged === 'acknowledged' || filters.privacyAcknowledged === true || filters.privacyAcknowledged === 'true') {
+        userQuery.privacyPolicyAcknowledged = true;
+    } else if (filters.privacyAcknowledged === 'not_acknowledged' || filters.privacyAcknowledged === false || filters.privacyAcknowledged === 'false') {
+        userQuery.$and = userQuery.$and || [];
+        userQuery.$and.push({
+            $or: [
+                { privacyPolicyAcknowledged: false },
+                { privacyPolicyAcknowledged: { $exists: false } }
+            ]
+        });
+    }
+
+    // Explicit marketing broadcast target enforcement
+    if (filters.marketingOnly === true || filters.marketingOnly === 'true' || filters.audienceType === 'marketing_opted_in') {
+        if (channel === 'whatsapp') {
+            userQuery.whatsappMarketingConsent = true;
+        } else {
+            userQuery.emailMarketingConsent = true;
+        }
+    }
+
     // 7. Keyword Search (username, fullName, email, phone)
     if (filters.search && String(filters.search).trim()) {
         const term = String(filters.search).trim();

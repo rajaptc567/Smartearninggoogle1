@@ -30,6 +30,10 @@ const Register: React.FC = () => {
     const [isSponsorFromUrl, setIsSponsorFromUrl] = useState(false);
     const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
     const [customFieldsValues, setCustomFieldsValues] = useState<Record<string, string>>({});
+    const [termsAccepted, setTermsAccepted] = useState(false);
+    const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+    const [emailMarketingConsent, setEmailMarketingConsent] = useState(false);
+    const [whatsappMarketingConsent, setWhatsappMarketingConsent] = useState(false);
 
     const handleCustomFieldChange = (id: string, value: string) => {
         setCustomFieldsValues(prev => ({ ...prev, [id]: value }));
@@ -49,6 +53,23 @@ const Register: React.FC = () => {
         dateOfBirthRule: 'hidden',
         requireCountryCodeInPhone: false,
         requireCountryCodeInWhatsapp: false,
+    };
+
+    const consentConfig = state.settings?.signUpConsentConfig || {
+        termsEnabled: true,
+        termsRequired: true,
+        termsText: 'I agree to the SmartExn Terms & Conditions and acknowledge that I have read the Privacy Policy.',
+        termsUrl: '/terms',
+        privacyEnabled: true,
+        privacyRequired: true,
+        privacyText: 'I acknowledge that I have read and agree to the Privacy Policy.',
+        privacyUrl: '/privacy',
+        emailMarketingEnabled: true,
+        emailMarketingRequired: false,
+        emailMarketingText: 'I would like to receive promotional and marketing emails from SmartExn.',
+        whatsappMarketingEnabled: true,
+        whatsappMarketingRequired: false,
+        whatsappMarketingText: 'I would like to receive promotional and marketing messages from SmartExn on WhatsApp.'
     };
 
     useEffect(() => {
@@ -200,6 +221,22 @@ const Register: React.FC = () => {
                 return;
             }
         }
+
+        // 4. Consent Validation
+        if (consentConfig.termsEnabled !== false && consentConfig.termsRequired !== false && !termsAccepted) {
+            alert('Please agree to the Terms & Conditions and Privacy Policy to create an account.');
+            return;
+        }
+
+        if (consentConfig.emailMarketingEnabled !== false && consentConfig.emailMarketingRequired === true && !emailMarketingConsent) {
+            alert('Email marketing consent is required to complete registration.');
+            return;
+        }
+
+        if (consentConfig.whatsappMarketingEnabled !== false && consentConfig.whatsappMarketingRequired === true && !whatsappMarketingConsent) {
+            alert('WhatsApp marketing consent is required to complete registration.');
+            return;
+        }
         
         let finalUsername = formData.username;
         if (signUpConfig.usernameRule === 'hidden' || (signUpConfig.usernameRule === 'optional' && !formData.username)) {
@@ -213,6 +250,10 @@ const Register: React.FC = () => {
             username: finalUsername,
             customFields: customFieldsValues,
             status: Status.Active,
+            termsAccepted,
+            privacyPolicyAcknowledged: termsAccepted || privacyAcknowledged,
+            emailMarketingConsent,
+            whatsappMarketingConsent,
         };
 
         try {
@@ -577,6 +618,107 @@ const Register: React.FC = () => {
                         <label htmlFor="password"  className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                         <input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required className="w-full px-3 py-2 mt-1 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                      </div>
+
+                     {/* Consent & Communication Preferences */}
+                     <div className="space-y-3 pt-2">
+                         {consentConfig.termsEnabled !== false && (
+                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                 <label className="flex items-start gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                     <input
+                                         type="checkbox"
+                                         id="termsAccepted"
+                                         name="termsAccepted"
+                                         checked={termsAccepted}
+                                         onChange={(e) => {
+                                             setTermsAccepted(e.target.checked);
+                                             setPrivacyAcknowledged(e.target.checked);
+                                         }}
+                                         required={consentConfig.termsRequired !== false}
+                                         className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 shrink-0"
+                                     />
+                                     <span className="leading-snug">
+                                         {consentConfig.termsText ? (
+                                             <span>
+                                                 {consentConfig.termsText.includes('Terms') || consentConfig.termsText.includes('Privacy') ? (
+                                                     <span>
+                                                         I agree to the{' '}
+                                                         <Link to={consentConfig.termsUrl || '/terms'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                             Terms &amp; Conditions
+                                                         </Link>{' '}
+                                                         and acknowledge the{' '}
+                                                         <Link to={consentConfig.privacyUrl || '/privacy'} target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                             Privacy Policy
+                                                         </Link>.
+                                                     </span>
+                                                 ) : (
+                                                     consentConfig.termsText
+                                                 )}
+                                             </span>
+                                         ) : (
+                                             <span>
+                                                 I agree to the{' '}
+                                                 <Link to="/terms" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                     Terms &amp; Conditions
+                                                 </Link>{' '}
+                                                 and acknowledge the{' '}
+                                                 <Link to="/privacy" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                                                     Privacy Policy
+                                                 </Link>.
+                                             </span>
+                                         )}
+                                         {consentConfig.termsRequired !== false && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                     </span>
+                                 </label>
+                             </div>
+                         )}
+
+                         {consentConfig.emailMarketingEnabled !== false && (
+                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                 <label className="flex items-start gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                     <input
+                                         type="checkbox"
+                                         id="emailMarketingConsent"
+                                         name="emailMarketingConsent"
+                                         checked={emailMarketingConsent}
+                                         onChange={(e) => setEmailMarketingConsent(e.target.checked)}
+                                         required={consentConfig.emailMarketingRequired === true}
+                                         className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 shrink-0"
+                                     />
+                                     <span className="leading-snug">
+                                         <span>{consentConfig.emailMarketingText || 'I would like to receive promotional and marketing emails from SmartExn.'}</span>
+                                         {consentConfig.emailMarketingRequired === true && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                         <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                             You can update your email preferences or unsubscribe anytime in account settings.
+                                         </span>
+                                     </span>
+                                 </label>
+                             </div>
+                         )}
+
+                         {consentConfig.whatsappMarketingEnabled !== false && (
+                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                 <label className="flex items-start gap-3 text-xs sm:text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                     <input
+                                         type="checkbox"
+                                         id="whatsappMarketingConsent"
+                                         name="whatsappMarketingConsent"
+                                         checked={whatsappMarketingConsent}
+                                         onChange={(e) => setWhatsappMarketingConsent(e.target.checked)}
+                                         required={consentConfig.whatsappMarketingRequired === true}
+                                         className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-500 shrink-0"
+                                     />
+                                     <span className="leading-snug">
+                                         <span>{consentConfig.whatsappMarketingText || 'I would like to receive promotional and marketing messages from SmartExn on WhatsApp.'}</span>
+                                         {consentConfig.whatsappMarketingRequired === true && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                         <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                             Receive verified campaign updates and notifications via WhatsApp. Opt-out anytime.
+                                         </span>
+                                     </span>
+                                 </label>
+                             </div>
+                         )}
+                     </div>
+
                      <div className="pt-4">
                         <Button type="submit" size="lg" className="w-full">
                             Create Account

@@ -155,6 +155,46 @@ const UserSchema = new mongoose.Schema({
     whatsappVerificationCode: {
         type: String,
     },
+    emailMarketingConsent: {
+        type: Boolean,
+        default: false,
+    },
+    whatsappMarketingConsent: {
+        type: Boolean,
+        default: false,
+    },
+    termsAccepted: {
+        type: Boolean,
+        default: false,
+    },
+    privacyPolicyAcknowledged: {
+        type: Boolean,
+        default: false,
+    },
+    emailMarketingConsentAt: {
+        type: Date,
+    },
+    whatsappMarketingConsentAt: {
+        type: Date,
+    },
+    termsAcceptedAt: {
+        type: Date,
+    },
+    privacyPolicyAcknowledgedAt: {
+        type: Date,
+    },
+    termsVersion: {
+        type: String,
+        default: '1.0',
+    },
+    privacyPolicyVersion: {
+        type: String,
+        default: '1.0',
+    },
+    marketingConsentVersion: {
+        type: String,
+        default: '1.0',
+    },
     passwordResetToken: String,
     passwordResetOtp: String,
     passwordResetExpires: Date,

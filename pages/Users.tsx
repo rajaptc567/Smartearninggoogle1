@@ -35,6 +35,7 @@ const Users: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState('');
     const [planFilter, setPlanFilter] = useState('');
     const [currencyFilter, setCurrencyFilter] = useState<Currency | ''>('PKR');
+    const [consentFilter, setConsentFilter] = useState<string>('');
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -94,6 +95,10 @@ const Users: React.FC = () => {
             rows.push(['Status', user.status]);
             rows.push(['Wallet Balance', formatCurrency(user.walletBalance, user.currency)]);
             rows.push(['Registration Date', new Date(user.registrationDate).toLocaleString()]);
+            rows.push(['Terms Accepted', user.termsAccepted ? `Yes (v${user.termsVersion || '1.0'})` : 'No']);
+            rows.push(['Privacy Policy Acknowledged', user.privacyPolicyAcknowledged ? `Yes (v${user.privacyPolicyVersion || '1.0'})` : 'No']);
+            rows.push(['Email Marketing Consent', user.emailMarketingConsent ? `Opted In (${user.emailMarketingConsentAt ? new Date(user.emailMarketingConsentAt).toLocaleString() : 'Yes'})` : 'Opted Out']);
+            rows.push(['WhatsApp Marketing Consent', user.whatsappMarketingConsent ? `Opted In (${user.whatsappMarketingConsentAt ? new Date(user.whatsappMarketingConsentAt).toLocaleString() : 'Yes'})` : 'Opted Out']);
             rows.push([]); 
             rows.push(['--- ACTIVITY LOG ---']);
             rows.push(['Date', 'Type', 'Amount', 'Status', 'Description', 'Proof/Receipt']);
@@ -228,14 +233,25 @@ const Users: React.FC = () => {
                 return user.currency?.toUpperCase() === currencyFilter;
             })();
 
-            return matchesSearch && matchesStatus && matchesPlan && matchesCurrency;
+            const matchesConsent = (() => {
+                if (!consentFilter) return true;
+                if (consentFilter === 'email_opt_in') return user.emailMarketingConsent === true;
+                if (consentFilter === 'email_opt_out') return !user.emailMarketingConsent;
+                if (consentFilter === 'whatsapp_opt_in') return user.whatsappMarketingConsent === true;
+                if (consentFilter === 'whatsapp_opt_out') return !user.whatsappMarketingConsent;
+                if (consentFilter === 'terms_accepted') return user.termsAccepted === true;
+                if (consentFilter === 'terms_pending') return !user.termsAccepted;
+                return true;
+            })();
+
+            return matchesSearch && matchesStatus && matchesPlan && matchesCurrency && matchesConsent;
         });
-    }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter]);
+    }, [state.users, searchTerm, statusFilter, planFilter, currencyFilter, consentFilter]);
 
     // Reset pagination on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, planFilter, currencyFilter, itemsPerPage]);
+    }, [searchTerm, statusFilter, planFilter, currencyFilter, consentFilter, itemsPerPage]);
 
     // Pagination Calculation
     const totalItems = filteredUsers.length;
@@ -357,6 +373,19 @@ const Users: React.FC = () => {
                         <option value="EUR">EUR</option>
                         <option value="USD">USD</option>
                     </select>
+                    <select
+                        value={consentFilter}
+                        onChange={(e) => setConsentFilter(e.target.value)}
+                        className="block rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    >
+                        <option value="">All Consent States</option>
+                        <option value="email_opt_in">📧 Email Opted-In</option>
+                        <option value="email_opt_out">📧 Email Opted-Out</option>
+                        <option value="whatsapp_opt_in">💬 WhatsApp Opted-In</option>
+                        <option value="whatsapp_opt_out">💬 WhatsApp Opted-Out</option>
+                        <option value="terms_accepted">📜 Terms Accepted</option>
+                        <option value="terms_pending">📜 Terms Pending</option>
+                    </select>
                     <input 
                         type="text" 
                         placeholder="Search name, email, ID..."
@@ -443,6 +472,20 @@ const Users: React.FC = () => {
                                         <td className="px-4 py-3 text-sm">
                                             {user.email}<br/>
                                             <span className="text-xs text-gray-500 dark:text-gray-500 font-mono">{user.phone}</span>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                <span 
+                                                    className={`text-[9px] px-1 py-0.5 rounded font-semibold ${user.emailMarketingConsent ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-gray-100 text-gray-400 dark:bg-gray-700/60 dark:text-gray-500'}`}
+                                                    title={`Email Marketing: ${user.emailMarketingConsent ? 'Opted-In' : 'Opted-Out'}`}
+                                                >
+                                                    📧 {user.emailMarketingConsent ? 'In' : 'Out'}
+                                                </span>
+                                                <span 
+                                                    className={`text-[9px] px-1 py-0.5 rounded font-semibold ${user.whatsappMarketingConsent ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-400 dark:bg-gray-700/60 dark:text-gray-500'}`}
+                                                    title={`WhatsApp Marketing: ${user.whatsappMarketingConsent ? 'Opted-In' : 'Opted-Out'}`}
+                                                >
+                                                    💬 {user.whatsappMarketingConsent ? 'In' : 'Out'}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-sm font-semibold">
                                             <span className={user.walletBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
@@ -1351,6 +1394,58 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, onClose
                                                 onChange={() => setFormData(prev => ({ ...prev, whatsappVerified: !prev.whatsappVerified }))}
                                                 className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
                                             />
+                                        </div>
+
+                                        {/* Marketing & Legal Consent Controls */}
+                                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                                            <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Communication &amp; Legal Consent</p>
+                                            
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Email Marketing Opt-In</p>
+                                                    <p className="text-[10px] text-gray-500 max-w-[220px]">
+                                                        User consented to promotional &amp; marketing emails.
+                                                        {formData.emailMarketingConsentAt && ` (Recorded ${new Date(formData.emailMarketingConsentAt).toLocaleDateString()})`}
+                                                    </p>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!formData.emailMarketingConsent} 
+                                                    onChange={() => setFormData(prev => ({ ...prev, emailMarketingConsent: !prev.emailMarketingConsent }))}
+                                                    className="w-6 h-6 rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">WhatsApp Marketing Opt-In</p>
+                                                    <p className="text-[10px] text-gray-500 max-w-[220px]">
+                                                        User consented to direct WhatsApp campaigns.
+                                                        {formData.whatsappMarketingConsentAt && ` (Recorded ${new Date(formData.whatsappMarketingConsentAt).toLocaleDateString()})`}
+                                                    </p>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!formData.whatsappMarketingConsent} 
+                                                    onChange={() => setFormData(prev => ({ ...prev, whatsappMarketingConsent: !prev.whatsappMarketingConsent }))}
+                                                    className="w-6 h-6 rounded text-emerald-600 focus:ring-emerald-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">Terms Accepted</p>
+                                                    <p className="text-[10px] text-gray-500 max-w-[220px]">
+                                                        User agreed to Terms &amp; Conditions (v{formData.termsVersion || '1.0'}).
+                                                    </p>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!formData.termsAccepted} 
+                                                    onChange={() => setFormData(prev => ({ ...prev, termsAccepted: !prev.termsAccepted }))}
+                                                    className="w-6 h-6 rounded text-purple-600 focus:ring-purple-500 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

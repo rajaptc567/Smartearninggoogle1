@@ -188,6 +188,8 @@ export const getPublicSettings = async (req, res) => {
             refundPolicyUpdated: settings.refundPolicyUpdated,
             termsOfUseTitle: settings.termsOfUseTitle,
             termsOfUseUpdated: settings.termsOfUseUpdated,
+            signUpConfig: settings.signUpConfig || null,
+            signUpConsentConfig: settings.signUpConsentConfig || null,
             dataVersion: settings.dataVersion || 1,
             isInitialPageLoaderEnabled: false // Do not block initial public paint with loader
         };

@@ -81,6 +81,17 @@ export interface User {
     isVerified?: boolean;
     emailVerified?: boolean;
     whatsappVerified?: boolean;
+    emailMarketingConsent?: boolean;
+    whatsappMarketingConsent?: boolean;
+    termsAccepted?: boolean;
+    privacyPolicyAcknowledged?: boolean;
+    emailMarketingConsentAt?: string;
+    whatsappMarketingConsentAt?: string;
+    termsAcceptedAt?: string;
+    privacyPolicyAcknowledgedAt?: string;
+    termsVersion?: string;
+    privacyPolicyVersion?: string;
+    marketingConsentVersion?: string;
 }
 
 export interface PageStyling {
@@ -376,6 +387,25 @@ export interface Settings {
         requireCountryCodeInPhone?: boolean;
         requireCountryCodeInWhatsapp?: boolean;
         customFields?: CustomField[];
+    };
+    signUpConsentConfig?: {
+        termsEnabled?: boolean;
+        termsRequired?: boolean;
+        termsText?: string;
+        termsUrl?: string;
+        termsVersion?: string;
+        privacyEnabled?: boolean;
+        privacyRequired?: boolean;
+        privacyText?: string;
+        privacyUrl?: string;
+        privacyVersion?: string;
+        emailMarketingEnabled?: boolean;
+        emailMarketingRequired?: boolean;
+        emailMarketingText?: string;
+        whatsappMarketingEnabled?: boolean;
+        whatsappMarketingRequired?: boolean;
+        whatsappMarketingText?: string;
+        marketingVersion?: string;
     };
     hubEnabled?: boolean;
     hubMinDeposit?: number;

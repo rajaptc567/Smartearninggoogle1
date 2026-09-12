@@ -75,6 +75,26 @@ const SignUpConfigSchema = new mongoose.Schema({
     customFields: { type: [CustomFieldSchema], default: [] }
 }, { _id: false });
 
+const SignUpConsentConfigSchema = new mongoose.Schema({
+    termsEnabled: { type: Boolean, default: true },
+    termsRequired: { type: Boolean, default: true },
+    termsText: { type: String, default: 'I agree to the SmartExn Terms & Conditions and acknowledge that I have read the Privacy Policy.' },
+    termsUrl: { type: String, default: '/terms' },
+    termsVersion: { type: String, default: '1.0' },
+    privacyEnabled: { type: Boolean, default: true },
+    privacyRequired: { type: Boolean, default: true },
+    privacyText: { type: String, default: 'I acknowledge that I have read and agree to the Privacy Policy.' },
+    privacyUrl: { type: String, default: '/privacy' },
+    privacyVersion: { type: String, default: '1.0' },
+    emailMarketingEnabled: { type: Boolean, default: true },
+    emailMarketingRequired: { type: Boolean, default: false },
+    emailMarketingText: { type: String, default: 'I would like to receive promotional and marketing emails from SmartExn.' },
+    whatsappMarketingEnabled: { type: Boolean, default: true },
+    whatsappMarketingRequired: { type: Boolean, default: false },
+    whatsappMarketingText: { type: String, default: 'I would like to receive promotional and marketing messages from SmartExn on WhatsApp.' },
+    marketingVersion: { type: String, default: '1.0' }
+}, { _id: false });
+
 const FaqSchema = new mongoose.Schema({
     question: { type: String, required: true },
     answer: { type: String, required: true },
@@ -462,6 +482,7 @@ const SettingSchema = new mongoose.Schema({
     autoWelcomeEnabled: { type: Boolean, default: false },
     autoPasswordResetEnabled: { type: Boolean, default: false },
     signUpConfig: { type: SignUpConfigSchema, default: () => ({}) },
+    signUpConsentConfig: { type: SignUpConsentConfigSchema, default: () => ({}) },
     isUserTaskEnabled: { type: Boolean, default: true },
     userDashboardVersion: { type: String, enum: ['old', 'compact'], default: 'compact' },
     landingPageStyle: { type: String, enum: ['standard', 'smartexn'], default: 'smartexn' },
@@ -692,6 +713,10 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.signUpConfig) {
         settings.signUpConfig = {};
+        needsSave = true;
+    }
+    if (!settings.signUpConsentConfig) {
+        settings.signUpConsentConfig = {};
         needsSave = true;
     }
     if (!settings.emailSenders || settings.emailSenders.length === 0) {

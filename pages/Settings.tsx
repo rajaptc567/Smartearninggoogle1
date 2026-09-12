@@ -252,6 +252,25 @@ const Settings: React.FC = () => {
             requireCountryCodeInWhatsapp: settings.signUpConfig?.requireCountryCodeInWhatsapp || false,
             customFields: settings.signUpConfig?.customFields || []
         },
+        signUpConsentConfig: {
+            termsEnabled: settings.signUpConsentConfig?.termsEnabled ?? true,
+            termsRequired: settings.signUpConsentConfig?.termsRequired ?? true,
+            termsText: settings.signUpConsentConfig?.termsText || 'I agree to the SmartExn Terms & Conditions and acknowledge that I have read the Privacy Policy.',
+            termsUrl: settings.signUpConsentConfig?.termsUrl || '/terms',
+            termsVersion: settings.signUpConsentConfig?.termsVersion || '1.0',
+            privacyEnabled: settings.signUpConsentConfig?.privacyEnabled ?? true,
+            privacyRequired: settings.signUpConsentConfig?.privacyRequired ?? true,
+            privacyText: settings.signUpConsentConfig?.privacyText || 'I acknowledge that I have read and agree to the Privacy Policy.',
+            privacyUrl: settings.signUpConsentConfig?.privacyUrl || '/privacy',
+            privacyVersion: settings.signUpConsentConfig?.privacyVersion || '1.0',
+            emailMarketingEnabled: settings.signUpConsentConfig?.emailMarketingEnabled ?? true,
+            emailMarketingRequired: settings.signUpConsentConfig?.emailMarketingRequired ?? false,
+            emailMarketingText: settings.signUpConsentConfig?.emailMarketingText || 'I would like to receive promotional and marketing emails from SmartExn.',
+            whatsappMarketingEnabled: settings.signUpConsentConfig?.whatsappMarketingEnabled ?? true,
+            whatsappMarketingRequired: settings.signUpConsentConfig?.whatsappMarketingRequired ?? false,
+            whatsappMarketingText: settings.signUpConsentConfig?.whatsappMarketingText || 'I would like to receive promotional and marketing messages from SmartExn on WhatsApp.',
+            marketingVersion: settings.signUpConsentConfig?.marketingVersion || '1.0'
+        },
         userDashboardVersion: settings.userDashboardVersion || 'compact',
         landingPageStyle: settings.landingPageStyle || 'smartexn',
         defaultUserDashboardModule: settings.defaultUserDashboardModule || 'work_and_earn',
@@ -4776,6 +4795,251 @@ const Settings: React.FC = () => {
                                 ))}
                             </div>
                         )}
+                    </div>
+
+                    {/* LEGAL & MARKETING CONSENT CONFIGURATION */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                        <div className="border-b dark:border-gray-700 pb-3 flex items-center justify-between">
+                            <div>
+                                <h4 className="font-bold text-base text-gray-800 dark:text-gray-200">⚖️ Legal &amp; Marketing Consent Settings</h4>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Configure mandatory Terms &amp; Privacy agreements and optional Email/WhatsApp marketing consent checkboxes for new user registration.
+                                </p>
+                            </div>
+                            <span className="text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 font-bold px-2.5 py-1 rounded-full">
+                                GDPR &amp; Compliance Ready
+                            </span>
+                        </div>
+
+                        {/* 1. Terms & Conditions */}
+                        <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-sm text-gray-800 dark:text-gray-200">📜 Terms &amp; Conditions Agreement</h5>
+                                    <p className="text-xs text-gray-500">Require users to accept platform terms and acknowledge policies upon registration.</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.termsEnabled ?? true}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), termsEnabled: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span>Show on Signup</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.termsRequired ?? true}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), termsRequired: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        <span>Mandatory / Required</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Consent Label Text</label>
+                                    <input
+                                        type="text"
+                                        value={localSettings.signUpConsentConfig?.termsText || ''}
+                                        onChange={(e) => {
+                                            setLocalSettings(prev => ({
+                                                ...prev,
+                                                signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), termsText: e.target.value }
+                                            }));
+                                            setIsDirty(true);
+                                        }}
+                                        placeholder="I agree to the Terms & Conditions and Privacy Policy."
+                                        className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Terms URL</label>
+                                    <input
+                                        type="text"
+                                        value={localSettings.signUpConsentConfig?.termsUrl || '/terms'}
+                                        onChange={(e) => {
+                                            setLocalSettings(prev => ({
+                                                ...prev,
+                                                signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), termsUrl: e.target.value }
+                                            }));
+                                            setIsDirty(true);
+                                        }}
+                                        placeholder="/terms"
+                                        className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. Email Marketing */}
+                        <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-sm text-gray-800 dark:text-gray-200">📧 Email Marketing &amp; Newsletters</h5>
+                                    <p className="text-xs text-gray-500">Collect explicit opt-in for promotional updates, campaigns, and newsletter broadcasts.</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.emailMarketingEnabled ?? true}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), emailMarketingEnabled: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span>Show on Signup</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.emailMarketingRequired ?? false}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), emailMarketingRequired: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span>Mandatory Opt-in</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Email Opt-in Text</label>
+                                <input
+                                    type="text"
+                                    value={localSettings.signUpConsentConfig?.emailMarketingText || ''}
+                                    onChange={(e) => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), emailMarketingText: e.target.value }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                    placeholder="I would like to receive promotional and marketing emails from SmartExn."
+                                    className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* 3. WhatsApp Marketing */}
+                        <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-sm text-gray-800 dark:text-gray-200">💬 WhatsApp Marketing &amp; Direct Alerts</h5>
+                                    <p className="text-xs text-gray-500">Collect separate, explicit consent for direct WhatsApp marketing and campaign announcements.</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.whatsappMarketingEnabled ?? true}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), whatsappMarketingEnabled: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <span>Show on Signup</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={localSettings.signUpConsentConfig?.whatsappMarketingRequired ?? false}
+                                            onChange={(e) => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), whatsappMarketingRequired: e.target.checked }
+                                                }));
+                                                setIsDirty(true);
+                                            }}
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <span>Mandatory Opt-in</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">WhatsApp Opt-in Text</label>
+                                <input
+                                    type="text"
+                                    value={localSettings.signUpConsentConfig?.whatsappMarketingText || ''}
+                                    onChange={(e) => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), whatsappMarketingText: e.target.value }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                    placeholder="I would like to receive promotional and marketing messages from SmartExn on WhatsApp."
+                                    className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Version & Audit Tracking */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Terms &amp; Policy Version</label>
+                                <input
+                                    type="text"
+                                    value={localSettings.signUpConsentConfig?.termsVersion || '1.0'}
+                                    onChange={(e) => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), termsVersion: e.target.value }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                    placeholder="1.0"
+                                    className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-mono"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Incrementing version tracks user compliance audits automatically.</p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Marketing Consent Version</label>
+                                <input
+                                    type="text"
+                                    value={localSettings.signUpConsentConfig?.marketingVersion || '1.0'}
+                                    onChange={(e) => {
+                                        setLocalSettings(prev => ({
+                                            ...prev,
+                                            signUpConsentConfig: { ...(prev.signUpConsentConfig || {}), marketingVersion: e.target.value }
+                                        }));
+                                        setIsDirty(true);
+                                    }}
+                                    placeholder="1.0"
+                                    className="w-full text-xs p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white font-mono"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Version tag recorded alongside user marketing consent timestamps.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
