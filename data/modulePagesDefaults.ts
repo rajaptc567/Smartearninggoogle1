@@ -191,6 +191,17 @@ export const defaultWorkAndEarnPages: Record<string, ModulePageControl> = {
         isHiddenInNav: false,
         disabledNotice: 'Work & Earn reward withdrawals are temporarily under maintenance.'
     },
+    transfer: {
+        id: 'transfer',
+        name: 'Transfer Funds',
+        route: '/member/transfer',
+        icon: '🔄',
+        category: 'work_and_earn',
+        menuLocation: 'Main Navigation',
+        isEnabled: true,
+        isHiddenInNav: false,
+        disabledNotice: 'Internal user wallet transfers are currently disabled.'
+    },
     workHistory: {
         id: 'workHistory',
         name: 'Work & Earn History',
@@ -278,6 +289,17 @@ export const defaultWorkAndEarnPages: Record<string, ModulePageControl> = {
         isEnabled: true,
         isHiddenInNav: false,
         disabledNotice: 'Worker proof reviews are temporarily paused.'
+    },
+    convert: {
+        id: 'convert',
+        name: 'Convert / Transfer Balance',
+        route: '/member/convert',
+        icon: '⚡',
+        category: 'work_and_earn',
+        menuLocation: 'Submenu: My Campaigns',
+        isEnabled: true,
+        isHiddenInNav: false,
+        disabledNotice: 'Campaign balance conversion is currently paused by the administrator.'
     },
     messages: {
         id: 'messages',

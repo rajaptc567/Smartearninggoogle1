@@ -1034,6 +1034,7 @@ export const deleteTemplatesHistoryBulk = async (ids: string[]): Promise<void> =
 export interface ManualSendPayload {
     channel?: 'email' | 'whatsapp';
     mode?: 'template' | 'custom';
+    messageType?: 'marketing' | 'promotional' | 'transactional' | 'operational';
     userIds?: string[];
     targetUserIds?: string[];
     filters?: Record<string, any>;
@@ -1068,7 +1069,7 @@ export const manualSendTemplate = async (
 
 export const getAudienceEstimate = async (
     filters: Record<string, any>,
-    options?: { channel?: string }
+    options?: { channel?: string; messageType?: string }
 ): Promise<{ eligibleCount: number; totalUsers: number; sampleUsers: any[] }> => {
     const response = await fetch(`${API_BASE_URL}/templates/audience/count`, {
         method: 'POST',
@@ -1080,7 +1081,7 @@ export const getAudienceEstimate = async (
 
 export const getAudienceList = async (
     filters: Record<string, any>,
-    options?: { channel?: string; limit?: number }
+    options?: { channel?: string; limit?: number; messageType?: string }
 ): Promise<{ count: number; users: any[] }> => {
     const response = await fetch(`${API_BASE_URL}/templates/audience/users`, {
         method: 'POST',

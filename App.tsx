@@ -297,6 +297,7 @@ const App: React.FC = () => {
               <Route path="create-campaign" element={<ModulePageGuard category="workAndEarn" pageId="createCampaign"><UserTasksSubmit initialTab="submit" hideHeaderAndTabs={true} /></ModulePageGuard>} />
               <Route path="my-campaigns" element={<ModulePageGuard category="workAndEarn" pageId="myCampaigns"><UserTasksSubmit initialTab="my-tasks" hideHeaderAndTabs={true} /></ModulePageGuard>} />
               <Route path="review-proofs" element={<ModulePageGuard category="workAndEarn" pageId="reviewProofs"><UserTasksSubmit initialTab="review-proofs" hideHeaderAndTabs={true} /></ModulePageGuard>} />
+              <Route path="convert" element={<ModulePageGuard category="workAndEarn" pageId="convert"><UserTasksSubmit initialTab="converter" hideHeaderAndTabs={true} /></ModulePageGuard>} />
               <Route path="hub-faqs" element={<ModulePageGuard category="workAndEarn" pageId="hubFaqs"><HubFaqs /></ModulePageGuard>} />
               <Route path="hub-legal" element={<ModulePageGuard category="workAndEarn" pageId="hubLegal"><HubLegal /></ModulePageGuard>} />
               <Route path="work-history" element={<ModulePageGuard category="workAndEarn" pageId="workHistory"><WorkAndEarnHistory /></ModulePageGuard>} />

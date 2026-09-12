@@ -681,6 +681,17 @@ const SettingSchema = new mongoose.Schema({
     ruleEvaluationLogs: { type: mongoose.Schema.Types.Mixed, default: [] },
     modulePagesConfig: { type: mongoose.Schema.Types.Mixed, default: null },
     workAndEarnConfig: { type: mongoose.Schema.Types.Mixed, default: null },
+    userQuickActionsConfig: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({
+            transfer: true,
+            tasks: true,
+            campaign: true,
+            withdraw: true,
+            deposit: true
+        })
+    },
+    campaignConvertEnabled: { type: Boolean, default: true },
     investmentModuleEnabled: { type: Boolean, default: true },
     isInvestmentModuleEnabled: { type: Boolean, default: true },
     investmentActivePlanBypassEnabled: { type: Boolean, default: false },

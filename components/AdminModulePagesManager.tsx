@@ -53,6 +53,31 @@ export const AdminModulePagesManager: React.FC = () => {
         };
     });
 
+    const [localQuickActions, setLocalQuickActions] = useState(() => ({
+        tasks: settings?.userQuickActionsConfig?.tasks !== false,
+        campaign: settings?.userQuickActionsConfig?.campaign !== false,
+        withdraw: settings?.userQuickActionsConfig?.withdraw !== false,
+        deposit: settings?.userQuickActionsConfig?.deposit !== false,
+        transfer: settings?.userQuickActionsConfig?.transfer !== false,
+    }));
+
+    const [localCampaignConvert, setLocalCampaignConvert] = useState<boolean>(
+        () => settings?.campaignConvertEnabled !== false
+    );
+
+    React.useEffect(() => {
+        if (settings) {
+            setLocalQuickActions({
+                tasks: settings.userQuickActionsConfig?.tasks !== false,
+                campaign: settings.userQuickActionsConfig?.campaign !== false,
+                withdraw: settings.userQuickActionsConfig?.withdraw !== false,
+                deposit: settings.userQuickActionsConfig?.deposit !== false,
+                transfer: settings.userQuickActionsConfig?.transfer !== false,
+            });
+            setLocalCampaignConvert(settings.campaignConvertEnabled !== false);
+        }
+    }, [settings]);
+
     React.useEffect(() => {
         if (settings?.modulePagesConfig) {
             const defaults = getDefaultModulePagesConfig();
@@ -213,11 +238,13 @@ export const AdminModulePagesManager: React.FC = () => {
         try {
             const updatedSettings = {
                 ...settings,
-                modulePagesConfig: localConfig
+                modulePagesConfig: localConfig,
+                userQuickActionsConfig: localQuickActions,
+                campaignConvertEnabled: localCampaignConvert
             };
             const result = await updateSettings(updatedSettings);
             dispatch({ type: 'SET_SETTINGS', payload: result });
-            setFeedbackMsg({ type: 'success', text: 'Page permissions and menu visibility saved live!' });
+            setFeedbackMsg({ type: 'success', text: 'Page permissions, quick actions, and conversion controls saved live!' });
             setTimeout(() => setFeedbackMsg(null), 4000);
         } catch (err: any) {
             setFeedbackMsg({ type: 'error', text: err.message || 'Failed to save page controls.' });
@@ -410,6 +437,147 @@ export const AdminModulePagesManager: React.FC = () => {
                         >
                             {(settings?.investmentModuleEnabled !== false && settings?.isInvestmentModuleEnabled !== false) ? 'Turn OFF Module' : 'Turn ON Module'}
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* QUICK ACTIONS & CONVERT MASTER CONTROLS */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                    <div>
+                        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-wider border border-indigo-500/20 mb-1">
+                            ⚡ Dashboard Shortcuts & Conversion
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                            Work & Earn Quick Action Shortcuts & Balance Converter
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Configure individual shortcut buttons visible on the user dashboard and toggle the internal balance conversion feature.
+                        </p>
+                    </div>
+
+                    {/* Convert Feature Master Switch */}
+                    <div className="flex items-center gap-3 bg-slate-950 p-2.5 rounded-2xl border border-slate-800">
+                        <div className="text-right">
+                            <div className="text-xs font-bold text-white">Campaign Balance Convert</div>
+                            <div className="text-[10px] text-slate-400">
+                                {localCampaignConvert ? 'Enabled on user screens' : 'Disabled & locked'}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setLocalCampaignConvert(!localCampaignConvert)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                                localCampaignConvert
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                            }`}
+                        >
+                            {localCampaignConvert ? '✓ Enabled' : '✕ Disabled'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Individual Quick Action Buttons Toggles */}
+                <div>
+                    <div className="text-xs font-bold text-slate-300 mb-2.5">
+                        User Dashboard Quick Action Button Visibility:
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        {/* 1. Tasks */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localQuickActions.tasks
+                                ? 'bg-blue-950/30 border-blue-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">🎯</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localQuickActions.tasks}
+                                    onChange={(e) => setLocalQuickActions(prev => ({ ...prev, tasks: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Tasks Button</div>
+                            <div className="text-[10px] text-slate-400">/tasks-browse</div>
+                        </div>
+
+                        {/* 2. Campaign */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localQuickActions.campaign
+                                ? 'bg-indigo-950/30 border-indigo-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">📢</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localQuickActions.campaign}
+                                    onChange={(e) => setLocalQuickActions(prev => ({ ...prev, campaign: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-indigo-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Campaign Button</div>
+                            <div className="text-[10px] text-slate-400">/campaigns/create</div>
+                        </div>
+
+                        {/* 3. Withdraw */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localQuickActions.withdraw
+                                ? 'bg-amber-950/30 border-amber-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">💸</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localQuickActions.withdraw}
+                                    onChange={(e) => setLocalQuickActions(prev => ({ ...prev, withdraw: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-amber-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Withdraw Button</div>
+                            <div className="text-[10px] text-slate-400">/withdraw</div>
+                        </div>
+
+                        {/* 4. Deposit */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localQuickActions.deposit
+                                ? 'bg-emerald-950/30 border-emerald-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">💳</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localQuickActions.deposit}
+                                    onChange={(e) => setLocalQuickActions(prev => ({ ...prev, deposit: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-emerald-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Deposit Button</div>
+                            <div className="text-[10px] text-slate-400">/deposit</div>
+                        </div>
+
+                        {/* 5. Transfer / Convert */}
+                        <div className={`p-3 rounded-2xl border transition-all ${
+                            localQuickActions.transfer
+                                ? 'bg-purple-950/30 border-purple-500/40 text-white'
+                                : 'bg-slate-950/60 border-slate-800 text-slate-400'
+                        }`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-lg">🔄</span>
+                                <input
+                                    type="checkbox"
+                                    checked={localQuickActions.transfer}
+                                    onChange={(e) => setLocalQuickActions(prev => ({ ...prev, transfer: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-purple-600 bg-slate-800 border-slate-700 cursor-pointer"
+                                />
+                            </div>
+                            <div className="text-xs font-bold">Transfer / Convert</div>
+                            <div className="text-[10px] text-slate-400">/convert & modal</div>
+                        </div>
                     </div>
                 </div>
             </div>

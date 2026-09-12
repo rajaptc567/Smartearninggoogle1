@@ -2380,7 +2380,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 { id: 'submit', label: 'Create Campaign', icon: '🚀' },
                                 { id: 'my-tasks', label: 'My Campaigns', count: mySubmittedTasks.length, icon: '📂' },
                                 { id: 'review-proofs', label: 'Review Proofs', count: campaignSubmissions.filter(s => s.status === 'Pending').length, icon: '👁️' },
-                                { id: 'converter', label: 'Converter', icon: '🔄' },
+                                ...(state.settings?.campaignConvertEnabled !== false && state.settings?.modulePagesConfig?.workAndEarn?.convert?.isEnabled !== false
+                                    ? [{ id: 'converter', label: 'Converter', icon: '🔄' }]
+                                    : [])
                             ].map((tab, idx) => (
                                 <button
                                     key={tab.id}
@@ -4955,6 +4957,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
             {/* TAB 5: CURRENCY CONVERTER & WITHDRAW */}
             {activeTab === 'converter' && (
+                (state.settings?.campaignConvertEnabled === false || state.settings?.modulePagesConfig?.workAndEarn?.convert?.isEnabled === false) ? (
+                    <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-10 shadow-xl border dark:border-gray-700 max-w-2xl mx-auto text-center space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center text-3xl">
+                            🔒
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                            Conversion Feature Unavailable
+                        </h3>
+                        <p className="text-sm text-gray-500 max-w-md mx-auto">
+                            {state.settings?.modulePagesConfig?.workAndEarn?.convert?.disabledNotice || 'Campaign balance conversion is currently disabled by system administration.'}
+                        </p>
+                    </div>
+                ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-10 shadow-xl border dark:border-gray-700 max-w-2xl mx-auto space-y-6">
                     <div>
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 uppercase tracking-tight">Currency Converter & Withdrawal</h3>
@@ -5033,6 +5048,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     )}
                 </div>
+                )
             )}
 
             {/* INTERACTIVE SURVEY RUNNER MODAL */}

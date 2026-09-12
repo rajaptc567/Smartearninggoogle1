@@ -145,6 +145,7 @@ export const manualSendTemplate = async (req, res) => {
     try {
         let { 
             mode = 'template', // 'template' | 'custom'
+            messageType = 'transactional', // 'marketing' | 'promotional' | 'transactional' | 'operational'
             userIds, 
             targetUserIds,
             filters, 
@@ -196,12 +197,21 @@ export const manualSendTemplate = async (req, res) => {
             }
         }
 
+        const isMarketing = (
+            messageType === 'marketing' || 
+            messageType === 'promotional' || 
+            template?.category === 'marketing' || 
+            template?.category === 'promotional' ||
+            template?.category === 'Marketing'
+        );
+
         // Resolve recipients: either via filters or explicit userIds
         let targetUsers = [];
         if (filters && typeof filters === 'object' && Object.keys(filters).length > 0) {
             // Apply audience filters
             const filterOptions = {
                 channel,
+                messageType: isMarketing ? 'marketing' : 'transactional',
                 selectedUserIds: Array.isArray(userIds) && userIds.length > 0 ? userIds : undefined
             };
             targetUsers = await resolveAudienceUsers(filters, filterOptions);
@@ -216,15 +226,36 @@ export const manualSendTemplate = async (req, res) => {
                     { whatsapp: { $exists: true, $ne: '' } }
                 ];
             }
-            targetUsers = await User.find(query).select('username fullName email phone whatsapp currency country status activePlan walletBalance taskWalletBalance').lean();
+            targetUsers = await User.find(query).select('username fullName email phone whatsapp currency country status activePlan walletBalance taskWalletBalance emailMarketingConsent whatsappMarketingConsent').lean();
         } else {
             return res.status(400).json({ success: false, error: 'Please specify target recipients via audience filters or selected user IDs.' });
+        }
+
+        // --- PRE-SEND SAFETY CHECK FOR MARKETING MESSAGES ---
+        if (isMarketing && targetUsers.length > 0) {
+            const userDbIds = targetUsers.map(u => u._id);
+            const freshUsers = await User.find({ _id: { $in: userDbIds } })
+                .select('emailMarketingConsent whatsappMarketingConsent')
+                .lean();
+            const freshMap = new Map();
+            freshUsers.forEach(fu => freshMap.set(String(fu._id), fu));
+
+            targetUsers = targetUsers.filter(u => {
+                const fresh = freshMap.get(String(u._id));
+                if (channel === 'whatsapp') {
+                    return Boolean(fresh && fresh.whatsappMarketingConsent === true);
+                } else {
+                    return Boolean(fresh && fresh.emailMarketingConsent === true);
+                }
+            });
         }
 
         if (targetUsers.length === 0) {
             return res.status(400).json({ 
                 success: false, 
-                error: `No eligible recipients found matching the audience criteria for channel '${channel}'.` 
+                error: isMarketing
+                    ? `No eligible marketing recipients found. The selected users have not opted in to ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} marketing communications.`
+                    : `No eligible recipients found matching the audience criteria for channel '${channel}'.` 
             });
         }
 

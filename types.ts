@@ -454,6 +454,14 @@ export interface Settings {
     ruleEvaluationLogs?: RuleEvaluationLog[];
     modulePagesConfig?: ModulePageControlsConfig;
     workAndEarnConfig?: WorkAndEarnModuleConfig;
+    userQuickActionsConfig?: {
+        transfer?: boolean;
+        tasks?: boolean;
+        campaign?: boolean;
+        withdraw?: boolean;
+        deposit?: boolean;
+    };
+    campaignConvertEnabled?: boolean;
 }
 
 export interface ModulePageControl {

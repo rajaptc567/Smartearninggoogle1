@@ -18,12 +18,17 @@ import UserTaskSubmission from '../models/UserTaskSubmission.js';
  * @returns {Promise<{ userQuery: Object, matchedUserIds: string[] | null }>}
  */
 export const buildAudienceQuery = async (filters = {}, options = {}) => {
-    const channel = options.channel || 'email';
+    const channel = options.channel || filters.channel || 'email';
+    const messageType = options.messageType || filters.messageType || 'transactional';
+    const isMarketing = messageType === 'marketing' || messageType === 'promotional' || options.isMarketing === true || filters.isMarketing === true;
     const userQuery = {};
 
-    // 1. Channel Constraints
+    // 1. Channel Constraints & Marketing Consent Enforcement
     if (channel === 'email') {
         userQuery.email = { $exists: true, $ne: '', $regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/i };
+        if (isMarketing) {
+            userQuery.emailMarketingConsent = true;
+        }
     } else if (channel === 'whatsapp') {
         // Group channel eligibility in $and separately to prevent $or collisions with other filters
         userQuery.$and = userQuery.$and || [];
@@ -33,6 +38,10 @@ export const buildAudienceQuery = async (filters = {}, options = {}) => {
                 { whatsapp: { $exists: true, $ne: '' } }
             ]
         });
+
+        if (isMarketing) {
+            userQuery.whatsappMarketingConsent = true;
+        }
 
         // Enforce verified recipients for WhatsApp channel if existing product rule requires it
         try {
@@ -407,7 +416,7 @@ export const resolveAudienceUsers = async (filters = {}, options = {}) => {
     const limit = options.limit || 0; // 0 = no limit
 
     let query = User.find(userQuery)
-        .select('username fullName email phone whatsapp currency country status activePlan activePlans registrationDate walletBalance taskWalletBalance')
+        .select('username fullName email phone whatsapp currency country status activePlan activePlans registrationDate walletBalance taskWalletBalance emailMarketingConsent emailMarketingConsentAt whatsappMarketingConsent whatsappMarketingConsentAt termsAccepted termsVersion')
         .lean();
 
     if (limit > 0) {
@@ -429,7 +438,7 @@ export const getAudienceCount = async (filters = {}, options = {}) => {
         User.countDocuments(userQuery),
         User.countDocuments(),
         User.find(userQuery)
-            .select('username fullName email phone whatsapp currency country status activePlan')
+            .select('username fullName email phone whatsapp currency country status activePlan emailMarketingConsent emailMarketingConsentAt whatsappMarketingConsent whatsappMarketingConsentAt')
             .limit(10)
             .lean()
     ]);

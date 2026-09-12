@@ -332,8 +332,9 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                                 const showCreate = isItemVisible('workAndEarn', 'createCampaign');
                                 const showMyCampaigns = isItemVisible('workAndEarn', 'myCampaigns');
                                 const showReviewProofs = isItemVisible('workAndEarn', 'reviewProofs');
+                                const showConvert = isItemVisible('workAndEarn', 'convert') && settings?.campaignConvertEnabled !== false && settings?.userQuickActionsConfig?.transfer !== false;
 
-                                if (!showCreate && !showMyCampaigns && !showReviewProofs) {
+                                if (!showCreate && !showMyCampaigns && !showReviewProofs && !showConvert) {
                                     return null;
                                 }
 
@@ -409,6 +410,21 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                                                                 {pendingReviewCount}
                                                             </span>
                                                         )}
+                                                    </NavLink>
+                                                )}
+
+                                                {showConvert && (
+                                                    <NavLink
+                                                        to="/member/convert"
+                                                        onClick={() => setSidebarOpen(false)}
+                                                        className={({ isActive }) =>
+                                                            `flex items-center px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                                                                isActive ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                                                            }`
+                                                        }
+                                                    >
+                                                        <span className="mr-2">⚡</span>
+                                                        <span>Convert Balance</span>
                                                     </NavLink>
                                                 )}
                                             </div>

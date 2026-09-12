@@ -41,7 +41,11 @@ import {
     Sliders,
     UserCheck,
     Layers,
-    ChevronRight
+    ChevronRight,
+    Download,
+    ShieldCheck,
+    CheckCircle2,
+    XCircle
 } from 'lucide-react';
 
 const AdminTemplates: React.FC = () => {
@@ -71,7 +75,7 @@ const AdminTemplates: React.FC = () => {
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
     // New Tabs state
-    const [activeTab, setActiveTab] = useState<'editor' | 'history' | 'manual'>('editor');
+    const [activeTab, setActiveTab] = useState<'editor' | 'history' | 'manual' | 'audiences'>('editor');
 
     // Users and history states
     const [users, setUsers] = useState<User[]>([]);
@@ -84,6 +88,7 @@ const AdminTemplates: React.FC = () => {
     const [deletingHistory, setDeletingHistory] = useState<boolean>(false);
 
     // Manual send states
+    const [manualMessageType, setManualMessageType] = useState<'transactional' | 'marketing'>('transactional');
     const [manualSelectedUserIds, setManualSelectedUserIds] = useState<string[]>([]);
     const [manualSelectedTemplateKey, setManualSelectedTemplateKey] = useState<string>('');
     const [manualUserSearch, setManualUserSearch] = useState<string>('');
@@ -102,6 +107,12 @@ const AdminTemplates: React.FC = () => {
     const [customSubject, setCustomSubject] = useState<string>('');
     const [customBody, setCustomBody] = useState<string>('');
     const [showCustomPreview, setShowCustomPreview] = useState<boolean>(false);
+
+    // Marketing Audience View States
+    const [optinSearch, setOptinSearch] = useState<string>('');
+    const [optinConsentFilter, setOptinConsentFilter] = useState<'all' | 'email' | 'whatsapp' | 'both' | 'none'>('all');
+    const [optinStatusFilter, setOptinStatusFilter] = useState<'all' | 'Active' | 'Verified' | 'Pending' | 'Blocked'>('all');
+    const [optinCountryFilter, setOptinCountryFilter] = useState<string>('all');
 
     // Dynamic approved senders from DB settings
     const [approvedSenders, setApprovedSenders] = useState<Array<{ id: string; email: string; name: string }>>([
@@ -126,6 +137,8 @@ const AdminTemplates: React.FC = () => {
         activityStatus: 'all',
         newUsersWindow: 'all',
         emailVerified: 'all',
+        emailMarketingConsent: 'all',
+        whatsappMarketingConsent: 'all',
         search: ''
     });
     const [audienceEstimate, setAudienceEstimate] = useState<{ eligibleCount: number; totalUsers: number; sampleUsers: any[] } | null>(null);
@@ -287,7 +300,7 @@ The SmartEarning Desk
     const fetchAudienceCount = async (filtersToUse = audienceFilters) => {
         setLoadingEstimate(true);
         try {
-            const res = await getAudienceEstimate(filtersToUse, { channel: activeChannel });
+            const res = await getAudienceEstimate(filtersToUse, { channel: activeChannel, messageType: manualMessageType });
             setAudienceEstimate(res);
         } catch (err: any) {
             console.warn('Failed to estimate audience:', err);
@@ -300,7 +313,7 @@ The SmartEarning Desk
         setLoadingPreviewUsers(true);
         setShowAudiencePreviewModal(true);
         try {
-            const res = await getAudienceList(audienceFilters, { channel: activeChannel, limit: 20 });
+            const res = await getAudienceList(audienceFilters, { channel: activeChannel, limit: 20, messageType: manualMessageType });
             setPreviewUsers(res.users || []);
         } catch (err: any) {
             alert('Failed to preview audience: ' + (err.message || err));
@@ -318,8 +331,10 @@ The SmartEarning Desk
             if (recipientMode === 'audience') {
                 fetchAudienceCount();
             }
+        } else if (activeTab === 'audiences') {
+            fetchUsersData();
         }
-    }, [activeTab, recipientMode, audienceFilters, manualMessageMode, manualSelectedTemplateKey, manualChannel, activeChannel]);
+    }, [activeTab, recipientMode, audienceFilters, manualMessageMode, manualSelectedTemplateKey, manualChannel, activeChannel, manualMessageType]);
 
     const fetchHistoryData = async () => {
         setLoadingHistory(true);
@@ -414,7 +429,8 @@ The SmartEarning Desk
                         mode: 'template',
                         templateKey: manualSelectedTemplateKey,
                         targetUserIds: manualSelectedUserIds,
-                        variables: manualVars
+                        variables: manualVars,
+                        messageType: manualMessageType
                     });
                 } else {
                     await manualSendTemplate({
@@ -422,7 +438,8 @@ The SmartEarning Desk
                         mode: 'template',
                         templateKey: manualSelectedTemplateKey,
                         filters: audienceFilters,
-                        variables: manualVars
+                        variables: manualVars,
+                        messageType: manualMessageType
                     });
                 }
 
@@ -471,6 +488,7 @@ The SmartEarning Desk
                 const payload: any = {
                     channel: manualChannel,
                     mode: 'custom',
+                    messageType: manualMessageType,
                     customBody: customBody.trim(),
                     ...(manualChannel === 'email' ? {
                         customSubject: customSubject.trim(),
@@ -561,6 +579,101 @@ The SmartEarning Desk
             return matchesSearch && matchesStatus && matchesType && matchesSentBy;
         });
     }, [historyLogs, historySearch, historyStatusFilter, historyTypeFilter, historySentByFilter]);
+
+    // Marketing Opt-in Audience Directory Metrics & Filtering
+    const audienceStats = useMemo(() => {
+        const total = users.length;
+        const emailOptIns = users.filter(u => u.emailMarketingConsent === true).length;
+        const whatsappOptIns = users.filter(u => u.whatsappMarketingConsent === true).length;
+        const bothOptIns = users.filter(u => u.emailMarketingConsent === true && u.whatsappMarketingConsent === true).length;
+        const optedOut = users.filter(u => !u.emailMarketingConsent && !u.whatsappMarketingConsent).length;
+
+        return {
+            total,
+            emailOptIns,
+            whatsappOptIns,
+            bothOptIns,
+            optedOut,
+            emailPct: total ? Math.round((emailOptIns / total) * 100) : 0,
+            whatsappPct: total ? Math.round((whatsappOptIns / total) * 100) : 0,
+            bothPct: total ? Math.round((bothOptIns / total) * 100) : 0
+        };
+    }, [users]);
+
+    const filteredAudienceUsers = useMemo(() => {
+        return users.filter(user => {
+            const matchesSearch = 
+                (user.username && user.username.toLowerCase().includes(optinSearch.toLowerCase())) ||
+                (user.fullName && user.fullName.toLowerCase().includes(optinSearch.toLowerCase())) ||
+                (user.email && user.email.toLowerCase().includes(optinSearch.toLowerCase())) ||
+                (user.phone && user.phone.includes(optinSearch)) ||
+                (user.whatsapp && user.whatsapp.includes(optinSearch)) ||
+                (user.country && user.country.toLowerCase().includes(optinSearch.toLowerCase()));
+
+            if (!matchesSearch) return false;
+
+            if (optinConsentFilter === 'email' && !user.emailMarketingConsent) return false;
+            if (optinConsentFilter === 'whatsapp' && !user.whatsappMarketingConsent) return false;
+            if (optinConsentFilter === 'both' && (!user.emailMarketingConsent || !user.whatsappMarketingConsent)) return false;
+            if (optinConsentFilter === 'none' && (user.emailMarketingConsent || user.whatsappMarketingConsent)) return false;
+
+            if (optinStatusFilter !== 'all' && user.status !== optinStatusFilter) return false;
+            if (optinCountryFilter !== 'all' && user.country !== optinCountryFilter) return false;
+
+            return true;
+        });
+    }, [users, optinSearch, optinConsentFilter, optinStatusFilter, optinCountryFilter]);
+
+    const uniqueCountries = useMemo(() => {
+        const set = new Set<string>();
+        users.forEach(u => {
+            if (u.country) set.add(u.country);
+        });
+        return Array.from(set).sort();
+    }, [users]);
+
+    const handleExportMarketingCsv = () => {
+        if (filteredAudienceUsers.length === 0) {
+            alert('No users to export with current filters.');
+            return;
+        }
+
+        const headers = ['User ID', 'Username', 'Full Name', 'Email', 'WhatsApp / Phone', 'Country', 'Account Status', 'Email Marketing Consent', 'WhatsApp Marketing Consent', 'Terms & Consent Date', 'Registered At'];
+        const rows = filteredAudienceUsers.map(u => [
+            u._id || '',
+            u.username || '',
+            `"${(u.fullName || '').replace(/"/g, '""')}"`,
+            u.email || '',
+            u.whatsapp || u.phone || '',
+            u.country || '',
+            u.status || 'Active',
+            u.emailMarketingConsent ? 'YES' : 'NO',
+            u.whatsappMarketingConsent ? 'YES' : 'NO',
+            u.consentDate ? new Date(u.consentDate).toISOString() : '',
+            u.createdAt ? new Date(u.createdAt).toISOString() : ''
+        ]);
+
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `marketing_recipients_${optinConsentFilter}_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleQuickComposeForAudience = (channel: 'email' | 'whatsapp') => {
+        setActiveTab('manual');
+        setRecipientMode('audience');
+        setManualChannel(channel);
+        setManualMessageType('marketing');
+        if (channel === 'email') {
+            setAudienceFilters(prev => ({ ...prev, emailMarketingConsent: 'opted_in' }));
+        } else {
+            setAudienceFilters(prev => ({ ...prev, whatsappMarketingConsent: 'opted_in' }));
+        }
+    };
 
     const fetchTemplatesData = async () => {
         setLoading(true);
@@ -826,6 +939,18 @@ The SmartEarning Desk
                 >
                     <Mail className="w-4 h-4" />
                     <span>Manual Bulk Send</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('audiences')}
+                    id="btn-tab-audiences"
+                    className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${
+                        activeTab === 'audiences'
+                            ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Users className="w-4 h-4" />
+                    <span>Marketing Recipient Lists</span>
                 </button>
             </div>
 
@@ -1558,8 +1683,36 @@ The SmartEarning Desk
                             </p>
                         </div>
 
-                        {/* Top Dual Toggles in exact requested order: Channel -> Message Mode -> Recipient Mode */}
+                        {/* Top Toggles: Message Type -> Channel -> Message Mode -> Recipient Mode */}
                         <div className="flex flex-wrap items-center gap-3">
+                            {/* 0. Message Type (Transactional vs Marketing) */}
+                            <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
+                                <span className="text-[10px] font-black uppercase text-gray-400 px-2">Type:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setManualMessageType('transactional')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                        manualMessageType === 'transactional'
+                                            ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    Transactional
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setManualMessageType('marketing')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                                        manualMessageType === 'marketing'
+                                            ? 'bg-amber-500 text-white shadow-sm'
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                    <span>Marketing</span>
+                                </button>
+                            </div>
+
                             {/* 1. Channel */}
                             <div className="bg-gray-100 dark:bg-gray-900 p-1 rounded-xl flex items-center gap-1 border border-gray-200 dark:border-gray-700">
                                 <span className="text-[10px] font-black uppercase text-gray-400 px-2">Channel:</span>
@@ -2400,6 +2553,44 @@ The SmartEarning Desk
                                                 <option value="unverified">Unverified Email Addresses Only</option>
                                             </select>
                                         </div>
+
+                                        {/* 8. Email Marketing Consent */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                                                <span>Email Marketing Consent</span>
+                                                {manualMessageType === 'marketing' && (
+                                                    <span className="text-[10px] text-amber-500 font-bold">Auto-enforced</span>
+                                                )}
+                                            </label>
+                                            <select
+                                                value={audienceFilters.emailMarketingConsent}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, emailMarketingConsent: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users (Default)</option>
+                                                <option value="opted_in">Opted-In Only (emailMarketingConsent = true)</option>
+                                                <option value="opted_out">Opted-Out Only (emailMarketingConsent = false)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 9. WhatsApp Marketing Consent */}
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                                                <span>WhatsApp Marketing Consent</span>
+                                                {manualMessageType === 'marketing' && (
+                                                    <span className="text-[10px] text-amber-500 font-bold">Auto-enforced</span>
+                                                )}
+                                            </label>
+                                            <select
+                                                value={audienceFilters.whatsappMarketingConsent}
+                                                onChange={(e) => setAudienceFilters(prev => ({ ...prev, whatsappMarketingConsent: e.target.value }))}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="all">All Users (Default)</option>
+                                                <option value="opted_in">Opted-In Only (whatsappMarketingConsent = true)</option>
+                                                <option value="opted_out">Opted-Out Only (whatsappMarketingConsent = false)</option>
+                                            </select>
+                                        </div>
                                     </div>
 
                                     {/* Optional Search / Keyword within Filter */}
@@ -2494,6 +2685,336 @@ The SmartEarning Desk
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Marketing Audience Directory & Opt-in Recipient Management */}
+            {activeTab === 'audiences' && (
+                <div className="space-y-6">
+                    {/* Top KPI Metrics Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        {/* 1. Total Registered Users */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Total Users</span>
+                                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                    <Users className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="text-2xl font-black text-gray-900 dark:text-white mt-2">
+                                {audienceStats.total}
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                Registered platform accounts
+                            </div>
+                        </div>
+
+                        {/* 2. Email Marketing Opt-Ins */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Email Marketing</span>
+                                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                    <Mail className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                                    {audienceStats.emailOptIns}
+                                </span>
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full">
+                                    {audienceStats.emailPct}%
+                                </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                Explicit email opt-ins
+                            </div>
+                        </div>
+
+                        {/* 3. WhatsApp Marketing Opt-Ins */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">WhatsApp Marketing</span>
+                                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                                    <MessageSquare className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                                    {audienceStats.whatsappOptIns}
+                                </span>
+                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
+                                    {audienceStats.whatsappPct}%
+                                </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                Explicit WhatsApp opt-ins
+                            </div>
+                        </div>
+
+                        {/* 4. Dual Channel Opt-Ins */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Both Channels</span>
+                                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                                    {audienceStats.bothOptIns}
+                                </span>
+                                <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/50 px-2 py-0.5 rounded-full">
+                                    {audienceStats.bothPct}%
+                                </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                Opted into Email & WhatsApp
+                            </div>
+                        </div>
+
+                        {/* 5. Opted Out */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">No Marketing</span>
+                                <div className="p-2 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                    <XCircle className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="text-2xl font-black text-gray-700 dark:text-gray-300 mt-2">
+                                {audienceStats.optedOut}
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                                Transactional-only recipients
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Filter, Search & Export Bar */}
+                    <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                            {/* Search */}
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, @username, email, or phone..."
+                                    value={optinSearch}
+                                    onChange={(e) => setOptinSearch(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            {/* Dropdowns */}
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                {/* Channel Consent Filter */}
+                                <select
+                                    value={optinConsentFilter}
+                                    onChange={(e: any) => setOptinConsentFilter(e.target.value)}
+                                    className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="all">All Users (Any Consent)</option>
+                                    <option value="email">Email Opt-In Only</option>
+                                    <option value="whatsapp">WhatsApp Opt-In Only</option>
+                                    <option value="both">Both Email & WhatsApp Opt-In</option>
+                                    <option value="none">No Marketing Consent</option>
+                                </select>
+
+                                {/* Account Status Filter */}
+                                <select
+                                    value={optinStatusFilter}
+                                    onChange={(e) => setOptinStatusFilter(e.target.value)}
+                                    className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                >
+                                    <option value="all">All Account Statuses</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Verified">Verified</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Blocked">Blocked</option>
+                                </select>
+
+                                {/* Country Filter */}
+                                {uniqueCountries.length > 0 && (
+                                    <select
+                                        value={optinCountryFilter}
+                                        onChange={(e) => setOptinCountryFilter(e.target.value)}
+                                        className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:text-white focus:outline-none"
+                                    >
+                                        <option value="all">All Countries</option>
+                                        {uniqueCountries.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                {/* Export to CSV */}
+                                <button
+                                    type="button"
+                                    onClick={handleExportMarketingCsv}
+                                    className="px-3.5 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm inline-flex items-center gap-1.5 transition-all"
+                                >
+                                    <Download className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Export CSV</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Quick Broadcast Action Banners */}
+                        <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+                            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                                <span>Showing <strong>{filteredAudienceUsers.length}</strong> matching recipients</span>
+                                <span>•</span>
+                                <span className="text-gray-400">Marketing safe broadcasts automatically exclude opted-out recipients.</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickComposeForAudience('email')}
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm inline-flex items-center gap-1.5 transition-all"
+                                >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    <span>Broadcast Email ({audienceStats.emailOptIns})</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleQuickComposeForAudience('whatsapp')}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm inline-flex items-center gap-1.5 transition-all"
+                                >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    <span>Broadcast WhatsApp ({audienceStats.whatsappOptIns})</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Audience Users Table */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+                        {loadingUsers ? (
+                            <div className="p-16 flex flex-col items-center justify-center gap-3">
+                                <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+                                <span className="text-xs text-gray-400 font-medium">Loading opted-in audience data...</span>
+                            </div>
+                        ) : filteredAudienceUsers.length === 0 ? (
+                            <div className="p-16 text-center text-gray-400 space-y-2">
+                                <Users className="w-10 h-10 text-gray-300 mx-auto" />
+                                <p className="text-sm font-bold text-gray-600 dark:text-gray-300">No users match your filter criteria</p>
+                                <p className="text-xs text-gray-400">Try adjusting your channel consent or status search query.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr className="bg-gray-50/80 dark:bg-gray-900/60 border-b border-gray-100 dark:border-gray-700 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
+                                            <th className="py-3 px-4">User</th>
+                                            <th className="py-3 px-4">Contact Points</th>
+                                            <th className="py-3 px-4">Country</th>
+                                            <th className="py-3 px-4">Account Status</th>
+                                            <th className="py-3 px-4">Email Marketing</th>
+                                            <th className="py-3 px-4">WhatsApp Marketing</th>
+                                            <th className="py-3 px-4">Consent Date</th>
+                                            <th className="py-3 px-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                                        {filteredAudienceUsers.map((user) => (
+                                            <tr 
+                                                key={user._id}
+                                                className="hover:bg-gray-50/60 dark:hover:bg-gray-750/30 transition-colors"
+                                            >
+                                                {/* User Info */}
+                                                <td className="py-3 px-4">
+                                                    <div className="font-bold text-gray-900 dark:text-white">
+                                                        {user.fullName || 'User'}
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-400 font-mono">
+                                                        @{user.username}
+                                                    </div>
+                                                </td>
+
+                                                {/* Contact Points */}
+                                                <td className="py-3 px-4">
+                                                    <div className="font-mono text-gray-700 dark:text-gray-300">
+                                                        {user.email}
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-400 font-mono">
+                                                        {user.whatsapp || user.phone || 'No phone'}
+                                                    </div>
+                                                </td>
+
+                                                {/* Country */}
+                                                <td className="py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">
+                                                    {user.country || 'Global'}
+                                                </td>
+
+                                                {/* Status */}
+                                                <td className="py-3 px-4">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                                        user.status === 'Active' || user.status === 'Verified'
+                                                            ? 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 border border-green-200 dark:border-green-800'
+                                                            : user.status === 'Blocked'
+                                                            ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-800'
+                                                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                                                    }`}>
+                                                        {user.status || 'Active'}
+                                                    </span>
+                                                </td>
+
+                                                {/* Email Marketing Consent */}
+                                                <td className="py-3 px-4">
+                                                    {user.emailMarketingConsent ? (
+                                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                                                            <Check className="w-3 h-3 text-indigo-600" />
+                                                            <span>Opted In</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[11px] text-gray-400 font-medium">
+                                                            No
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* WhatsApp Marketing Consent */}
+                                                <td className="py-3 px-4">
+                                                    {user.whatsappMarketingConsent ? (
+                                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                                            <Check className="w-3 h-3 text-emerald-600" />
+                                                            <span>Opted In</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[11px] text-gray-400 font-medium">
+                                                            No
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Consent Date */}
+                                                <td className="py-3 px-4 text-gray-500 font-mono text-[11px]">
+                                                    {user.consentDate ? new Date(user.consentDate).toLocaleDateString() : (user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—')}
+                                                </td>
+
+                                                {/* Individual Action */}
+                                                <td className="py-3 px-4 text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setActiveTab('manual');
+                                                            setRecipientMode('manual');
+                                                            setManualSelectedUserIds([user._id]);
+                                                        }}
+                                                        className="px-2.5 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors inline-flex items-center gap-1"
+                                                    >
+                                                        <Send className="w-3 h-3" />
+                                                        <span>Send Message</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

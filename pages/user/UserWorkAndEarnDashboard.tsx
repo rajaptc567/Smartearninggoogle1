@@ -1586,78 +1586,101 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             )}
 
             {/* C. Quick Action Row */}
-            {dashboardAdminConfig?.showActionButtons !== false && (
-                <div className="bg-slate-900/90 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-xl space-y-1.5 sm:space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1 sm:gap-1.5">
-                            <ZapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> Quick Actions
-                        </span>
-                        <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Instant Shortcuts</span>
+            {dashboardAdminConfig?.showActionButtons !== false && (() => {
+                const quickActionsConfig = state.settings?.userQuickActionsConfig || {};
+                const isConvertEnabled = state.settings?.campaignConvertEnabled !== false && state.settings?.modulePagesConfig?.workAndEarn?.convert?.isEnabled !== false;
+                const showTasksAction = quickActionsConfig.tasks !== false && state.settings?.modulePagesConfig?.workAndEarn?.tasksBrowse?.isEnabled !== false;
+                const showCampaignAction = quickActionsConfig.campaign !== false && state.settings?.modulePagesConfig?.workAndEarn?.campaignCreate?.isEnabled !== false;
+                const showWithdrawAction = quickActionsConfig.withdraw !== false && state.settings?.modulePagesConfig?.workAndEarn?.withdraw?.isEnabled !== false;
+                const showDepositAction = quickActionsConfig.deposit !== false && state.settings?.modulePagesConfig?.workAndEarn?.deposit?.isEnabled !== false;
+                const showTransferAction = quickActionsConfig.transfer !== false && isConvertEnabled;
+
+                const hasAnyVisibleAction = showTasksAction || showCampaignAction || showWithdrawAction || showDepositAction || showTransferAction;
+                if (!hasAnyVisibleAction) return null;
+
+                return (
+                    <div className="bg-slate-900/90 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-xl space-y-1.5 sm:space-y-2">
+                        <div className="flex items-center justify-between px-1">
+                            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1 sm:gap-1.5">
+                                <ZapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" /> Quick Actions
+                            </span>
+                            <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">Instant Shortcuts</span>
+                        </div>
+
+                        <div className="flex flex-wrap sm:grid sm:grid-flow-col sm:auto-cols-fr gap-1.5 sm:gap-3">
+                            {/* 1. Tasks */}
+                            {showTasksAction && (
+                                <button
+                                    onClick={() => navigate('/member/available-tasks')}
+                                    className="flex-1 min-w-[65px] bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                                >
+                                    <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
+                                        <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Tasks</span>
+                                    <span className="text-[9px] text-slate-400 hidden lg:inline">Browse & do jobs</span>
+                                </button>
+                            )}
+
+                            {/* 2. Campaign */}
+                            {showCampaignAction && (
+                                <button
+                                    onClick={() => navigate('/member/create-campaign')}
+                                    className="flex-1 min-w-[65px] bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                                >
+                                    <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-all">
+                                        <MegaphoneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Campaign</span>
+                                    <span className="text-[9px] text-slate-400 hidden lg:inline">Create promotion</span>
+                                </button>
+                            )}
+
+                            {/* 3. Withdraw */}
+                            {showWithdrawAction && (
+                                <button
+                                    onClick={() => navigate('/member/withdraw')}
+                                    className="flex-1 min-w-[65px] bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-teal-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                                >
+                                    <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-teal-500/10 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-950 transition-all">
+                                        <WithdrawalIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Withdraw</span>
+                                    <span className="text-[9px] text-slate-400 hidden lg:inline">Cashout funds</span>
+                                </button>
+                            )}
+
+                            {/* 4. Deposit */}
+                            {showDepositAction && (
+                                <button
+                                    onClick={() => navigate('/member/deposit')}
+                                    className="flex-1 min-w-[65px] bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-indigo-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                                >
+                                    <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                                        <DepositIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Deposit</span>
+                                    <span className="text-[9px] text-slate-400 hidden lg:inline">Add campaign funds</span>
+                                </button>
+                            )}
+
+                            {/* 5. Convert / Transfer */}
+                            {showTransferAction && (
+                                <button
+                                    onClick={() => setIsConvertModalOpen(true)}
+                                    className="flex-1 min-w-[65px] bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-purple-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
+                                >
+                                    <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                                        <ConvertIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </div>
+                                    <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Transfer</span>
+                                    <span className="text-[9px] text-slate-400 hidden lg:inline">To campaign wallet</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
-
-                    <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
-                        {/* 1. Tasks */}
-                        <button
-                            onClick={() => navigate('/member/available-tasks')}
-                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                        >
-                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
-                                <TaskIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Tasks</span>
-                            <span className="text-[9px] text-slate-400 hidden lg:inline">Browse & do jobs</span>
-                        </button>
-
-                        {/* 2. Campaign */}
-                        <button
-                            onClick={() => navigate('/member/create-campaign')}
-                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                        >
-                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-all">
-                                <MegaphoneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Campaign</span>
-                            <span className="text-[9px] text-slate-400 hidden lg:inline">Create promotion</span>
-                        </button>
-
-                        {/* 3. Withdraw */}
-                        <button
-                            onClick={() => navigate('/member/withdraw')}
-                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-teal-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                        >
-                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-teal-500/10 text-teal-400 group-hover:bg-teal-500 group-hover:text-slate-950 transition-all">
-                                <WithdrawalIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Withdraw</span>
-                            <span className="text-[9px] text-slate-400 hidden lg:inline">Cashout funds</span>
-                        </button>
-
-                        {/* 4. Deposit */}
-                        <button
-                            onClick={() => navigate('/member/deposit')}
-                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-indigo-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                        >
-                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                                <DepositIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Deposit</span>
-                            <span className="text-[9px] text-slate-400 hidden lg:inline">Add campaign funds</span>
-                        </button>
-
-                        {/* 5. Convert / Transfer */}
-                        <button
-                            onClick={() => setIsConvertModalOpen(true)}
-                            className="bg-slate-800/90 hover:bg-slate-800 text-slate-100 hover:text-white p-2 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-700 hover:border-purple-500/50 transition-all flex flex-col items-center justify-center text-center gap-1 sm:gap-1.5 group min-h-[48px] sm:min-h-[52px]"
-                        >
-                            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
-                                <ConvertIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <span className="text-[9px] sm:text-xs font-bold uppercase tracking-tight truncate w-full">Transfer</span>
-                            <span className="text-[9px] text-slate-400 hidden lg:inline">To campaign wallet</span>
-                        </button>
-                    </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* D. Bento Performance Summary */}
             {dashboardAdminConfig?.showStatsCards !== false && (
