@@ -278,7 +278,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     const customDashboardTabs = useMemo(() => {
         const pages = state.settings?.modulePagesConfig?.workAndEarn || {};
         return (Object.values(pages) as any[]).filter(
-            (p: any) => p && p.isCustom && p.isEnabled && !p.isHiddenInNav && (p.menuLocation === 'Dashboard Tabs' || p.menuLocation?.includes('Dashboard'))
+            (p: any) => p && p.isCustom === true && p.isEnabled !== false && p.isHiddenInNav !== true && (p.menuLocation === 'Dashboard Tabs' || p.menuLocation?.includes('Dashboard'))
         );
     }, [state.settings?.modulePagesConfig]);
 

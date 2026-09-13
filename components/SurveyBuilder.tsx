@@ -388,18 +388,18 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-3.5 sm:p-5 space-y-3.5 sm:space-y-5">
             {/* Header controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-200 dark:border-gray-700 pb-4">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <span className="p-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-lg">
-                            <Layers className="w-5 h-5" />
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-gray-200 dark:border-gray-700 pb-3 sm:pb-4">
+                <div className="min-w-0 w-full lg:w-auto">
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <span className="p-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-lg shrink-0">
+                            <Layers className="w-4 h-4 sm:w-5 sm:h-5" />
                         </span>
-                        <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                        <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white truncate">
                             Interactive Survey & Logic Builder
                         </h3>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                        <span className={`text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 ${
                             saveStatus === 'saved'
                                 ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200'
                                 : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200'
@@ -408,100 +408,112 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                             {saveStatus === 'saved' ? 'Autosaved' : 'Saving...'}
                         </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
                         Questions: <span className="font-bold text-gray-800 dark:text-gray-200">{value.questions.length}</span> • Estimated Duration: <span className="font-bold text-blue-600">{value.estimatedTimeMinutes} mins</span>
                         {sections.length > 0 && <span> • Sections: <span className="font-bold text-purple-600">{sections.length}</span></span>}
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-                    {/* Draft recovery indicator */}
-                    {hasDraft && (
-                        <button
-                            type="button"
-                            onClick={recoverDraft}
-                            className="px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-100 flex items-center gap-1"
-                            title="Recover unsaved local draft"
-                        >
-                            <RotateCcw className="w-3 h-3" /> Recover Draft
-                        </button>
-                    )}
-
-                    {/* Template Picker */}
-                    {systemTemplates.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setShowTemplateModal(true)}
-                            className="px-3 py-1.5 text-xs font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg flex items-center gap-1 border border-purple-200 dark:border-purple-800"
-                        >
-                            <Sparkles className="w-3.5 h-3.5" /> Template
-                        </button>
-                    )}
-
-                    {/* Question Bank */}
-                    {systemQuestionBank.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setShowBankModal(true)}
-                            className="px-3 py-1.5 text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg flex items-center gap-1 border border-indigo-200 dark:border-indigo-800"
-                        >
-                            <HelpCircle className="w-3.5 h-3.5" /> Bank
-                        </button>
-                    )}
-
-                    {/* Navigation Tabs */}
-                    <div className="flex bg-gray-100 dark:bg-gray-700 p-0.5 rounded-lg text-xs font-semibold">
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('editor')}
-                            className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition ${
-                                activeTab === 'editor' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            <Edit3 className="w-3.5 h-3.5" /> Editor
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('flow')}
-                            className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition ${
-                                activeTab === 'flow' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            <Workflow className="w-3.5 h-3.5" /> Flow Map
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('validator')}
-                            className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition ${
-                                activeTab === 'validator' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            <ShieldCheck className="w-3.5 h-3.5" /> Validation
-                            {!validationResult.valid && (
-                                <span className="w-2 h-2 rounded-full bg-red-500 inline-block ml-0.5 animate-pulse" />
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto justify-end">
+                    {/* Utility actions (Draft recovery, Templates, Question Bank) */}
+                    {(hasDraft || systemTemplates.length > 0 || systemQuestionBank.length > 0) && (
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
+                            {hasDraft && (
+                                <button
+                                    type="button"
+                                    onClick={recoverDraft}
+                                    className="px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded-lg hover:bg-amber-100 flex items-center gap-1"
+                                    title="Recover unsaved local draft"
+                                >
+                                    <RotateCcw className="w-3 h-3" /> Recover
+                                </button>
                             )}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setActiveTab('simulator');
-                                startSimulator();
-                            }}
-                            className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition ${
-                                activeTab === 'simulator' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            <Play className="w-3.5 h-3.5" /> Test Flow
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('preview')}
-                            className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition ${
-                                activeTab === 'preview' ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm' : 'text-gray-600 dark:text-gray-400'
-                            }`}
-                        >
-                            <Eye className="w-3.5 h-3.5" /> Preview
-                        </button>
+                            {systemTemplates.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTemplateModal(true)}
+                                    className="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg flex items-center gap-1 border border-purple-200 dark:border-purple-800"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" /> Template
+                                </button>
+                            )}
+                            {systemQuestionBank.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBankModal(true)}
+                                    className="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg flex items-center gap-1 border border-indigo-200 dark:border-indigo-800"
+                                >
+                                    <HelpCircle className="w-3.5 h-3.5" /> Bank
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Navigation Tabs - Responsive Scroll Container */}
+                    <div className="w-full sm:w-auto max-w-full overflow-x-auto custom-scrollbar py-0.5">
+                        <div className="inline-flex min-w-full sm:min-w-0 bg-gray-100 dark:bg-gray-700/80 p-1 rounded-xl text-xs font-semibold gap-0.5 sm:gap-1">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('editor')}
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition whitespace-nowrap font-bold ${
+                                    activeTab === 'editor' 
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200/60 dark:border-gray-600' 
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                <Edit3 className="w-3.5 h-3.5 shrink-0" /> <span>Editor</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('flow')}
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition whitespace-nowrap font-bold ${
+                                    activeTab === 'flow' 
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200/60 dark:border-gray-600' 
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                <Workflow className="w-3.5 h-3.5 shrink-0" /> <span>Flow Map</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('validator')}
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition whitespace-nowrap font-bold ${
+                                    activeTab === 'validator' 
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200/60 dark:border-gray-600' 
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> <span>Validation</span>
+                                {!validationResult.valid && (
+                                    <span className="w-2 h-2 rounded-full bg-red-500 inline-block ml-0.5 shrink-0 animate-pulse" />
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setActiveTab('simulator');
+                                    startSimulator();
+                                }}
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition whitespace-nowrap font-bold ${
+                                    activeTab === 'simulator' 
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200/60 dark:border-gray-600' 
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                <Play className="w-3.5 h-3.5 shrink-0" /> <span>Test Flow</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('preview')}
+                                className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center justify-center gap-1 transition whitespace-nowrap font-bold ${
+                                    activeTab === 'preview' 
+                                        ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200/60 dark:border-gray-600' 
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                            >
+                                <Eye className="w-3.5 h-3.5 shrink-0" /> <span>Preview</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

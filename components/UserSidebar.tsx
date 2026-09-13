@@ -130,7 +130,12 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
     const currentCategoryKey = dashboardMode === 'work_and_earn' ? 'workAndEarn' : 'investment';
     const activeCustomTabs = useMemo(() => {
         const pages = settings?.modulePagesConfig?.[currentCategoryKey] || {};
-        return (Object.values(pages) as any[]).filter((p: any) => p && p.isCustom);
+        return (Object.values(pages) as any[]).filter((p: any) => 
+            p && 
+            p.isCustom === true && 
+            p.isEnabled !== false && 
+            p.isHiddenInNav !== true
+        );
     }, [settings?.modulePagesConfig, currentCategoryKey]);
 
     const customNavLinks = useMemo(() => {
@@ -148,7 +153,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
         { to: '/member', label: 'Dashboard Hub', icon: <HomeIcon />, pageId: 'dashboard', condition: null },
         { to: '/member/offerwalls', label: 'Offerwalls & Surveys', icon: <TaskIcon />, pageId: 'offerwalls', condition: null },
         { to: '/member/deposit', label: 'Deposit Hub Funds', icon: <DepositIcon />, pageId: 'deposit', condition: null },
-        { to: '/member/withdraw', label: 'Withdraw Hub Funds', icon: <WithdrawalIcon />, pageId: 'withdraw', condition: null, isInsufficient: isHubWithdrawalInsufficient, insufficientMsg: 'Not sufficient balance for withdrawal' },
+        { to: '/member/withdraw', label: 'Withdraw Hub Funds', icon: <WithdrawalIcon />, pageId: 'withdraw', condition: null },
         { to: '/member/work-history', label: 'Work & Earn History', icon: <HistoryNavIcon />, pageId: 'workHistory', condition: null },
         { to: '/member/user-tasks', label: 'Earn Cash & Gigs Hub', icon: <TaskIcon />, pageId: 'userTasks', condition: 'isUserTaskEnabled' },
         { isTasksDropdown: true, condition: 'isUserTaskEnabled' },

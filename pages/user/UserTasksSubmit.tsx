@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../../hooks/useData';
 import { formatCurrency, UserTask } from '../../types';
 import Button from '../../components/ui/Button';
@@ -491,8 +491,26 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     }, [campaignNotice]);
 
     // Create Campaign Form State
-    const [category, setCategory] = useState<string>('YouTube');
+    const [category, setCategory] = useState<string>(() => {
+        const catParam = searchParams.get('category') || searchParams.get('cat');
+        if (catParam) {
+            if (catParam.toLowerCase().includes('survey')) return 'Surveys & Feedback';
+            return catParam;
+        }
+        return 'YouTube';
+    });
     const [subType, setSubType] = useState<string>('Subscribe');
+
+    useEffect(() => {
+        const catParam = searchParams.get('category') || searchParams.get('cat');
+        if (catParam) {
+            if (catParam.toLowerCase().includes('survey')) {
+                setCategory('Surveys & Feedback');
+            } else {
+                setCategory(catParam);
+            }
+        }
+    }, [searchParams]);
     const [watchTimeTierIndex, setWatchTimeTierIndex] = useState<number>(0);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -1330,6 +1348,40 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     if (!availableSubTypes.some(s => s.key === 'other')) {
         availableSubTypes.push({ key: 'other', displayName: 'Other' });
     }
+
+    // Fallback if currently selected category is not in available categories
+    useEffect(() => {
+        if (availableCategories.length > 0) {
+            const isCurrentCategoryAvailable = availableCategories.some(
+                c => c.displayName.toLowerCase() === category.toLowerCase() || c.key.toLowerCase() === category.toLowerCase()
+            );
+            if (!isCurrentCategoryAvailable) {
+                setCategory(availableCategories[0].displayName);
+            }
+        }
+    }, [availableCategories, category]);
+
+    // Synchronize subType whenever category or availableSubTypes change:
+    // 1. On initial render, if the selected category has a valid preset, automatically select its first valid subtype.
+    // 2. Whenever category changes, reset subtype to the first valid subtype belonging to that category.
+    // 3. Switching another category -> Survey must never leave "Subscribe".
+    // 4. Survey must only use Survey subtypes from existing "taskCategoryPresets".
+    const prevCategoryRef = useRef<string>(category);
+    useEffect(() => {
+        const categoryChanged = prevCategoryRef.current !== category;
+        prevCategoryRef.current = category;
+
+        if (availableSubTypes.length > 0) {
+            const isCurrentSubTypeValid = availableSubTypes.some(
+                s => s.displayName.toLowerCase() === subType.toLowerCase() || s.key.toLowerCase() === subType.toLowerCase()
+            );
+
+            if (categoryChanged || !isCurrentSubTypeValid) {
+                const firstValidSub = availableSubTypes[0]?.displayName || 'Other';
+                setSubType(firstValidSub);
+            }
+        }
+    }, [category, availableSubTypes, subType]);
 
     const getSelectionLimits = () => {
         let minPayout = config.minRewardAmount;
