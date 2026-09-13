@@ -127,7 +127,24 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
         return control.isEnabled && !control.isHiddenInNav;
     };
 
-    const userNavLinks = dashboardMode === 'work_and_earn' ? [
+    const currentCategoryKey = dashboardMode === 'work_and_earn' ? 'workAndEarn' : 'investment';
+    const activeCustomTabs = useMemo(() => {
+        const pages = settings?.modulePagesConfig?.[currentCategoryKey] || {};
+        return (Object.values(pages) as any[]).filter((p: any) => p && p.isCustom);
+    }, [settings?.modulePagesConfig, currentCategoryKey]);
+
+    const customNavLinks = useMemo(() => {
+        return activeCustomTabs.map((ct: any) => ({
+            to: ct.route,
+            label: ct.name,
+            icon: <span className="text-base">{ct.icon || '✨'}</span>,
+            pageId: ct.id,
+            condition: null,
+            isCustom: true
+        }));
+    }, [activeCustomTabs]);
+
+    const baseNavLinks = dashboardMode === 'work_and_earn' ? [
         { to: '/member', label: 'Dashboard Hub', icon: <HomeIcon />, pageId: 'dashboard', condition: null },
         { to: '/member/offerwalls', label: 'Offerwalls & Surveys', icon: <TaskIcon />, pageId: 'offerwalls', condition: null },
         { to: '/member/deposit', label: 'Deposit Hub Funds', icon: <DepositIcon />, pageId: 'deposit', condition: null },
@@ -156,6 +173,8 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
         { to: '/member/disputes?module=Investment', label: 'Disputes & Support', icon: <DisputeIcon />, pageId: 'disputes', condition: null },
         { to: '/member/profile', label: 'Profile Settings', icon: <SettingsIcon />, pageId: 'profile', condition: null },
     ];
+
+    const userNavLinks = [...baseNavLinks, ...customNavLinks];
 
     const baseLinkClass = "flex items-center px-4 py-3 rounded-xl transition-all duration-200 mx-2 mb-1";
     const inactiveLinkClass = "text-gray-400 hover:bg-gray-700/50 hover:text-white";

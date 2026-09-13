@@ -345,6 +345,17 @@ export const defaultWorkAndEarnPages: Record<string, ModulePageControl> = {
         isHiddenInNav: false,
         disabledNotice: 'Hub legal information is temporarily undergoing updates.'
     },
+    otherTasks: {
+        id: 'otherTasks',
+        name: 'Other Tasks',
+        route: '/member',
+        icon: '📋',
+        category: 'work_and_earn',
+        menuLocation: 'Dashboard Tabs',
+        isEnabled: true,
+        isHiddenInNav: false,
+        disabledNotice: 'Other tasks category is currently paused by administrator.'
+    },
     profile: {
         id: 'profile',
         name: 'Profile Settings',
@@ -387,6 +398,22 @@ export const getEffectiveModulePageControl = (
     }
 
     const saved = (modulePagesConfig[category] as any)[pageId];
+
+    if (saved.isCustom) {
+        return {
+            ...defaultPage,
+            ...saved,
+            name: saved.name || defaultPage.name,
+            menuLocation: saved.menuLocation || defaultPage.menuLocation,
+            route: saved.route || defaultPage.route,
+            icon: saved.icon || defaultPage.icon,
+            isEnabled: saved.isEnabled !== undefined ? saved.isEnabled : true,
+            isHiddenInNav: saved.isHiddenInNav !== undefined ? saved.isHiddenInNav : false,
+            disabledNotice: saved.disabledNotice || defaultPage.disabledNotice,
+            isCustom: true
+        };
+    }
+
     return {
         ...defaultPage,
         ...saved,

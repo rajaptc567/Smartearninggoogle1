@@ -866,6 +866,15 @@ SettingSchema.statics.getSettings = async function() {
         };
         needsSave = true;
     }
+    if (!settings.myCampaignActionsConfig) {
+        settings.myCampaignActionsConfig = {
+            deposit: true,
+            transfer: true,
+            analytics: true,
+            convert: true
+        };
+        needsSave = true;
+    }
     if (!settings.surveyConfig) {
         settings.surveyConfig = {};
         needsSave = true;

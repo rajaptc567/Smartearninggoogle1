@@ -56,6 +56,7 @@ import {
 } from 'lucide-react';
 import { useWorkAndEarnConfig } from '../../hooks/useWorkAndEarnConfig';
 import OtherTasksCard from '../../components/OtherTasksCard';
+import { getEffectiveModulePageControl } from '../../data/modulePagesDefaults';
 import { formatCurrency, currencySymbols, UserTask, UserTaskSubmission } from '../../types';
 import { 
     convertUserCurrency, 
@@ -270,6 +271,22 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
     // Primary Tabs
     const [dashboardTab, setDashboardTab] = useState<'available_jobs' | 'other_tasks'>('available_jobs');
+
+    const otherTasksControl = getEffectiveModulePageControl(state.settings?.modulePagesConfig, 'workAndEarn', 'otherTasks');
+    const showOtherTasks = otherTasksControl.isEnabled && !otherTasksControl.isHiddenInNav;
+
+    const customDashboardTabs = useMemo(() => {
+        const pages = state.settings?.modulePagesConfig?.workAndEarn || {};
+        return (Object.values(pages) as any[]).filter(
+            (p: any) => p && p.isCustom && p.isEnabled && !p.isHiddenInNav && (p.menuLocation === 'Dashboard Tabs' || p.menuLocation?.includes('Dashboard'))
+        );
+    }, [state.settings?.modulePagesConfig]);
+
+    useEffect(() => {
+        if (!showOtherTasks && dashboardTab === 'other_tasks') {
+            setDashboardTab('available_jobs');
+        }
+    }, [showOtherTasks, dashboardTab]);
 
     // Sub-tab for "Other Tasks"
     const [activeSubTab, setActiveSubTab] = useState<string>('cpalead');
@@ -2285,17 +2302,30 @@ const UserWorkAndEarnDashboard: React.FC = () => {
                         </span>
                     </button>
 
-                    <button
-                        onClick={() => setDashboardTab('other_tasks')}
-                        className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
-                            dashboardTab === 'other_tasks'
-                                ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
-                                : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                        }`}
-                    >
-                        <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        <span>Other Tasks</span>
-                    </button>
+                    {showOtherTasks && (
+                        <button
+                            onClick={() => setDashboardTab('other_tasks')}
+                            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                                dashboardTab === 'other_tasks'
+                                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 font-extrabold'
+                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                            }`}
+                        >
+                            <GlobeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span>Other Tasks</span>
+                        </button>
+                    )}
+
+                    {customDashboardTabs.map((ct: any) => (
+                        <button
+                            key={ct.id}
+                            onClick={() => navigate(ct.route)}
+                            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap bg-purple-950/40 text-purple-300 border border-purple-500/30 hover:bg-purple-900/50"
+                        >
+                            <span>{ct.icon || '✨'}</span>
+                            <span>{ct.name}</span>
+                        </button>
+                    ))}
                 </div>
             </div>
 

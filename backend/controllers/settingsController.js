@@ -180,6 +180,9 @@ export const getPublicSettings = async (req, res) => {
             hubDepositMethods: settings.hubDepositMethods || [],
             modulePagesConfig: settings.modulePagesConfig || null,
             workAndEarnConfig: settings.workAndEarnConfig || null,
+            userQuickActionsConfig: settings.userQuickActionsConfig || null,
+            myCampaignActionsConfig: settings.myCampaignActionsConfig || { deposit: true, transfer: true, analytics: true, convert: true },
+            campaignConvertEnabled: settings.campaignConvertEnabled !== false,
             featuredPlanIds: settings.featuredPlanIds || [],
             faqs: homepageFaqs,
             privacyPolicyTitle: settings.privacyPolicyTitle,
@@ -285,6 +288,29 @@ export const updateSettings = async (req, res) => {
             };
         } else if (req.body.taskCategoryPresets?.survey?.enabled !== undefined) {
             req.body.surveyCampaignsEnabled = req.body.taskCategoryPresets.survey.enabled;
+        }
+
+        // Ensure myCampaignActionsConfig is properly handled and persisted (deposit, transfer, analytics, convert)
+        if (req.body.myCampaignActionsConfig && typeof req.body.myCampaignActionsConfig === 'object') {
+            const prevActions = prevSettings?.myCampaignActionsConfig || {};
+            req.body.myCampaignActionsConfig = {
+                deposit: req.body.myCampaignActionsConfig.deposit !== undefined 
+                    ? Boolean(req.body.myCampaignActionsConfig.deposit) 
+                    : (prevActions.deposit !== false),
+                transfer: req.body.myCampaignActionsConfig.transfer !== undefined 
+                    ? Boolean(req.body.myCampaignActionsConfig.transfer) 
+                    : (prevActions.transfer !== false),
+                analytics: req.body.myCampaignActionsConfig.analytics !== undefined 
+                    ? Boolean(req.body.myCampaignActionsConfig.analytics) 
+                    : (prevActions.analytics !== false),
+                convert: req.body.myCampaignActionsConfig.convert !== undefined 
+                    ? Boolean(req.body.myCampaignActionsConfig.convert) 
+                    : (prevActions.convert !== false)
+            };
+        }
+
+        if (req.body.campaignConvertEnabled !== undefined) {
+            req.body.campaignConvertEnabled = Boolean(req.body.campaignConvertEnabled);
         }
 
         // Sanitize homepage payment logos to remove empty/invalid items
