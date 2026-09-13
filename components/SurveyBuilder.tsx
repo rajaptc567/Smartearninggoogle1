@@ -388,7 +388,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-3.5 sm:p-5 space-y-3.5 sm:space-y-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-3.5 sm:p-5 space-y-3.5 sm:space-y-5 max-w-full overflow-hidden">
             {/* Header controls */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-gray-200 dark:border-gray-700 pb-3 sm:pb-4">
                 <div className="min-w-0 w-full lg:w-auto">
@@ -450,8 +450,8 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                     )}
 
                     {/* Navigation Tabs - Responsive Scroll Container */}
-                    <div className="w-full sm:w-auto max-w-full overflow-x-auto custom-scrollbar py-0.5">
-                        <div className="inline-flex min-w-full sm:min-w-0 bg-gray-100 dark:bg-gray-700/80 p-1 rounded-xl text-xs font-semibold gap-0.5 sm:gap-1">
+                    <div className="w-full sm:w-auto max-w-full overflow-x-auto custom-scrollbar py-0.5 overscroll-x-contain">
+                        <div className="inline-flex min-w-max sm:min-w-0 bg-gray-100 dark:bg-gray-700/80 p-1 rounded-xl text-xs font-semibold gap-0.5 sm:gap-1">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab('editor')}

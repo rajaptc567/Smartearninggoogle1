@@ -499,7 +499,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         }
         return 'YouTube';
     });
-    const [subType, setSubType] = useState<string>('Subscribe');
+    const [subType, setSubType] = useState<string>(() => {
+        const catParam = searchParams.get('category') || searchParams.get('cat');
+        if (catParam && catParam.toLowerCase().includes('survey')) {
+            return 'General Opinion Poll';
+        }
+        return 'Subscribe';
+    });
 
     useEffect(() => {
         const catParam = searchParams.get('category') || searchParams.get('cat');
@@ -1361,23 +1367,30 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         }
     }, [availableCategories, category]);
 
-    // Synchronize subType whenever category or availableSubTypes change:
-    // 1. On initial render, if the selected category has a valid preset, automatically select its first valid subtype.
-    // 2. Whenever category changes, reset subtype to the first valid subtype belonging to that category.
-    // 3. Switching another category -> Survey must never leave "Subscribe".
-    // 4. Survey must only use Survey subtypes from existing "taskCategoryPresets".
+    // Synchronize subType on initial load or category change:
+    // - determine the currently selected category
+    // - find its existing preset
+    // - select the first valid subtype from that category
+    // - if category is Survey, never use "Subscribe"
+    // - Survey must use an existing Survey subtype
+    // - switching category still uses the existing onChange logic
+    const initialSyncRef = useRef<boolean>(false);
     const prevCategoryRef = useRef<string>(category);
+
     useEffect(() => {
+        if (!availableSubTypes || availableSubTypes.length === 0) return;
+
         const categoryChanged = prevCategoryRef.current !== category;
         prevCategoryRef.current = category;
 
-        if (availableSubTypes.length > 0) {
-            const isCurrentSubTypeValid = availableSubTypes.some(
-                s => s.displayName.toLowerCase() === subType.toLowerCase() || s.key.toLowerCase() === subType.toLowerCase()
-            );
+        const isCurrentSubTypeValid = availableSubTypes.some(
+            s => s.displayName.toLowerCase() === subType.toLowerCase() || s.key.toLowerCase() === subType.toLowerCase()
+        );
 
-            if (categoryChanged || !isCurrentSubTypeValid) {
-                const firstValidSub = availableSubTypes[0]?.displayName || 'Other';
+        if (!initialSyncRef.current || categoryChanged || !isCurrentSubTypeValid) {
+            initialSyncRef.current = true;
+            const firstValidSub = availableSubTypes[0]?.displayName || 'Other';
+            if (subType !== firstValidSub) {
                 setSubType(firstValidSub);
             }
         }

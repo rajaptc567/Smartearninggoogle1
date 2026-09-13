@@ -101,27 +101,6 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
 
     const unreadMessagesCount = notifications.filter(n => String(n.userId) === String(currentUser?._id) && !n.read).length;
 
-    const exchangeRate = settings?.exchangeRates?.[currentUser?.currency || 'USD'] || 1;
-    const taskEarningsUSD = currentUser?.taskEarningsBalance ?? 0;
-    const userHubBalance = taskEarningsUSD * exchangeRate;
-
-    const hubMinWithdrawalLimit = useMemo(() => {
-        const availableMethods = (state.paymentMethods || []).filter(m => 
-            m.type === 'Withdrawal' && 
-            m.status === 'Enabled' && 
-            m.currency === currentUser?.currency
-        );
-        if (availableMethods.length > 0) {
-            return Math.min(...availableMethods.map(m => m.minAmount || 0));
-        }
-        return (settings?.hubMinWithdrawal || 1) * exchangeRate;
-    }, [state.paymentMethods, currentUser?.currency, settings?.hubMinWithdrawal, exchangeRate]);
-
-    const isHubWithdrawalInsufficient = useMemo(() => {
-        if (!currentUser) return false;
-        return userHubBalance < hubMinWithdrawalLimit || userHubBalance <= 0;
-    }, [currentUser, userHubBalance, hubMinWithdrawalLimit]);
-
     const isItemVisible = (category: 'investment' | 'workAndEarn', pageId: string) => {
         const control = getEffectiveModulePageControl(settings?.modulePagesConfig, category, pageId);
         return control.isEnabled && !control.isHiddenInNav;
@@ -457,14 +436,13 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                                 );
                             }
 
-                            const { to, label, icon, badge, isInsufficient, insufficientMsg } = item as any;
+                            const { to, label, icon, badge } = item as any;
                             return (
                               <NavLink
                                   key={label}
                                   to={to!}
                                   end={to === '/member'}
                                   onClick={() => setSidebarOpen(false)}
-                                  title={isInsufficient ? (insufficientMsg || 'Not sufficient balance for withdrawal') : undefined}
                                   className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass} group`}
                               >
                                   <div className="shrink-0">{icon}</div>
@@ -477,17 +455,7 @@ const UserSidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, dash
                                             </span>
                                           )}
                                       </div>
-                                      {isInsufficient && (
-                                          <span className="text-[10px] font-bold text-amber-400 leading-tight truncate flex items-center gap-1 mt-0.5" title={insufficientMsg}>
-                                              <span>⚠️</span> Not sufficient balance
-                                          </span>
-                                      )}
                                   </div>
-                                  {isInsufficient && (
-                                      <span className="ml-1.5 shrink-0 px-1.5 py-0.5 text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md">
-                                          Low
-                                      </span>
-                                  )}
                               </NavLink>
                             )
                         })}
