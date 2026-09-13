@@ -410,7 +410,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                     </div>
                     <p className="text-[11px] sm:text-xs text-gray-500 mt-1">
                         Questions: <span className="font-bold text-gray-800 dark:text-gray-200">{value.questions.length}</span> • Estimated Duration: <span className="font-bold text-blue-600">{value.estimatedTimeMinutes} mins</span>
-                        {sections.length > 0 && <span> • Sections: <span className="font-bold text-purple-600">{sections.length}</span></span>}
+                        {sections.length > 0 && <span> • Sections: <span className="font-bold text-amber-500">{sections.length}</span></span>}
                     </p>
                 </div>
 
@@ -432,7 +432,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setShowTemplateModal(true)}
-                                    className="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg flex items-center gap-1 border border-purple-200 dark:border-purple-800"
+                                    className="px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg flex items-center gap-1 border border-amber-500/30"
                                 >
                                     <Sparkles className="w-3.5 h-3.5" /> Template
                                 </button>
@@ -585,16 +585,16 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                             const hasRules = q.logicRules && q.logicRules.length > 0;
                             return (
                                 <div key={q.id} className="space-y-2">
-                                    <div className={`p-4 rounded-xl border bg-white dark:bg-gray-800 shadow-sm space-y-2 ${
+                                    <div className={`p-4 rounded-xl border shadow-sm space-y-2 ${
                                         q.isCheckQuestion
                                             ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/20'
                                             : q.isAttentionCheck
                                             ? 'border-amber-300 dark:border-amber-700 bg-amber-50/20'
-                                            : 'border-gray-200 dark:border-gray-700'
+                                            : 'border-slate-800 bg-slate-950/60 text-slate-200'
                                     }`}>
                                         <div className="flex items-center justify-between text-xs">
                                             <div className="flex items-center gap-2">
-                                                <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px]">
+                                                <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-[10px]">
                                                     Q{idx + 1}
                                                 </span>
                                                 <span className="font-bold text-gray-900 dark:text-white truncate max-w-xs">
@@ -898,9 +898,9 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
                     <div className="space-y-4 max-w-xl mx-auto">
                         {value.questions.map((q, idx) => (
-                            <div key={q.id} className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-3">
+                            <div key={q.id} className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 shadow-sm space-y-3">
                                 <div className="flex items-start gap-2">
-                                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded">
+                                    <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">
                                         Q{idx + 1}
                                     </span>
                                     <div className="flex-1">
@@ -925,20 +925,20 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
             {activeTab === 'editor' && (
                 <div className="space-y-5">
                     {/* Section Management Ribbon */}
-                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl text-xs">
+                    <div className="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-200">
                         <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-800 dark:text-gray-200">Survey Sections:</span>
+                            <span className="font-bold text-slate-300">Survey Sections:</span>
                             {sections.length === 0 ? (
-                                <span className="text-gray-400">Single Linear Survey (No Sections)</span>
+                                <span className="text-slate-500">Single Linear Survey (No Sections)</span>
                             ) : (
                                 <div className="flex gap-1.5 flex-wrap">
                                     {sections.map((s, si) => (
-                                        <span key={s.id} className="px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 rounded font-bold flex items-center gap-1">
+                                        <span key={s.id} className="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded font-bold flex items-center gap-1">
                                             {si + 1}. {s.title}
                                             <button
                                                 type="button"
                                                 onClick={() => removeSection(s.id)}
-                                                className="hover:text-red-600 font-bold ml-1"
+                                                className="hover:text-red-500 font-bold ml-1"
                                                 title="Delete Section"
                                             >
                                                 ✕
@@ -952,7 +952,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                         <button
                             type="button"
                             onClick={() => addSection(`Section ${sections.length + 1}`)}
-                            className="text-xs font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1"
+                            className="text-xs font-semibold text-amber-500 hover:text-amber-400 flex items-center gap-1"
                         >
                             <FolderPlus className="w-3.5 h-3.5" /> + Add Section
                         </button>
@@ -968,13 +968,13 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                         ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50/20 dark:bg-indigo-950/20'
                                         : q.isAttentionCheck
                                         ? 'border-amber-300 dark:border-amber-700 bg-amber-50/30 dark:bg-amber-950/20'
-                                        : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-850'
+                                        : 'border-slate-800 bg-slate-950/60 text-slate-200'
                                 }`}
                             >
                                 {/* Question Top Row */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                                        <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs">
                                             {idx + 1}
                                         </span>
 
@@ -999,7 +999,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                             <select
                                                 value={q.sectionId || ''}
                                                 onChange={e => updateQuestionField(idx, 'sectionId', e.target.value || undefined)}
-                                                className="text-xs border rounded-lg px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-purple-700 dark:text-purple-300 font-semibold"
+                                                className="text-xs border rounded-lg px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-amber-500 dark:text-amber-400 font-semibold"
                                             >
                                                 <option value="">-- No Section --</option>
                                                 {sections.map(s => (
@@ -1305,7 +1305,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                             className="border rounded p-1 dark:bg-gray-700 dark:text-white w-28"
                                                         />
 
-                                                        <span className="font-bold text-purple-600">THEN</span>
+                                                        <span className="font-bold text-amber-500">THEN</span>
                                                         <select
                                                             value={rule.action}
                                                             onChange={e => {
@@ -1456,7 +1456,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                     <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl">
                         <div className="flex justify-between items-center border-b pb-3">
                             <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-purple-600" /> Choose Survey Template
+                                <Sparkles className="w-4 h-4 text-amber-500" /> Choose Survey Template
                             </h4>
                             <button onClick={() => setShowTemplateModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
@@ -1475,7 +1475,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                         });
                                         setShowTemplateModal(false);
                                     }}
-                                    className="p-3.5 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-purple-500 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 cursor-pointer transition"
+                                    className="p-3.5 border border-gray-200 dark:border-slate-800 rounded-xl hover:border-amber-500 hover:bg-amber-500/10 cursor-pointer transition"
                                 >
                                     <div className="flex justify-between items-start">
                                         <h5 className="font-bold text-xs text-gray-900 dark:text-white">{tmpl.name}</h5>
