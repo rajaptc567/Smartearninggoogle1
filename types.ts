@@ -650,6 +650,108 @@ export interface Task {
     status: 'Active' | 'Disabled' | 'Draft' | 'Archived';
     rewardAmount?: number;
     createdAt: string;
+    isSurvey?: boolean;
+    surveyEstimatedMinutes?: number;
+    surveyQuestionsCount?: number;
+    surveyApprovalMode?: string;
+    surveyConfig?: SurveyConfig;
+}
+
+export interface SurveyOption {
+    id: string;
+    text: string;
+    value?: string;
+    isOther?: boolean;
+}
+
+export interface SurveyCondition {
+    questionId: string;
+    operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'greater_equal' | 'less_equal' | 'answered' | 'not_answered' | string;
+    value?: any;
+    value2?: any;
+}
+
+export interface SurveyValidation {
+    required?: boolean;
+    minSelections?: number;
+    maxSelections?: number;
+    topN?: number;
+    minLength?: number;
+    maxLength?: number;
+    minRating?: number;
+    maxRating?: number;
+    customPattern?: string;
+}
+
+export interface SurveyQualityRule {
+    minCompletionTimeSeconds?: number;
+    maxCompletionTimeSeconds?: number;
+    flagFastCompletion?: boolean;
+    flagContradictoryResponses?: boolean;
+    flagGibberish?: boolean;
+    attentionCheckRequired?: boolean;
+    maxAttentionCheckFails?: number;
+    autoRejectOnFail?: boolean;
+}
+
+export interface SurveyQuestion {
+    id: string;
+    type: 'single_choice' | 'multiple_choice' | 'top_n' | 'short_text' | 'long_text' | 'dropdown' | 'yes_no' | 'rating' | 'opinion_scale' | 'number' | string;
+    title: string;
+    description?: string;
+    required: boolean;
+    options?: Array<string | SurveyOption>;
+    allowOther?: boolean;
+    otherPlaceholder?: string;
+    validation?: SurveyValidation;
+    showIf?: SurveyCondition | SurveyCondition[];
+    isAttentionCheck?: boolean;
+    expectedAnswer?: string;
+    isCheckQuestion?: boolean;
+    sourceQuestionId?: string;
+    checkComparisonMethod?: string;
+    checkFailureAction?: string;
+    maxCheckAttempts?: number;
+    checkRetryMessage?: string;
+    sectionId?: string;
+    secondsLimit?: number;
+    minRating?: number;
+    maxRating?: number;
+    logicRules?: any[];
+}
+
+export interface SurveyConfig {
+    category?: string;
+    title?: string;
+    description?: string;
+    version?: number;
+    estimatedTimeMinutes: number;
+    questions: SurveyQuestion[];
+    sections?: Array<{ id: string; title: string; description?: string }>;
+    consentRequired?: boolean;
+    consentText?: string;
+    consentVersion?: string;
+    privacyNotice?: string;
+    qualityRules?: SurveyQualityRule;
+    approvalMode?: 'auto' | 'creator' | 'admin' | string;
+    globalLogicRules?: any[];
+    templates?: any[];
+    questionBank?: any[];
+    [key: string]: any;
+}
+
+export interface SurveyAnswer {
+    questionId: string;
+    questionTitle?: string;
+    questionType?: string;
+    value: any;
+    otherValue?: string;
+    selectedOptions?: string[];
+    textValue?: string;
+    ratingValue?: number;
+    timeSpentSeconds?: number;
+    isAttentionCheck?: boolean;
+    passedCheck?: boolean;
 }
 
 export interface UserTask {
@@ -697,7 +799,7 @@ export interface UserTask {
     surveyEstimatedMinutes?: number;
     surveyQuestionsCount?: number;
     surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
-    surveyConfig?: any;
+    surveyConfig?: SurveyConfig;
 }
 
 export interface UserTaskSubmission {
@@ -713,7 +815,7 @@ export interface UserTaskSubmission {
     proofEmail?: string;
     proofImage?: string;
     submittedProofs?: Array<{ id: string; type: 'text' | 'username' | 'userId' | 'email' | 'screenshot' | 'manual'; label: string; value: string }>;
-    surveyResponses?: any[];
+    surveyResponses?: SurveyAnswer[];
     surveyCompletionTimeSeconds?: number;
     surveyQualificationStatus?: 'Qualified' | 'Disqualified' | 'Screenout' | 'Completed' | string;
     attentionCheckPassed?: boolean;

@@ -13,6 +13,7 @@ import OtherTasksCard from '../../components/OtherTasksCard';
 import { Layers as TaskIcon, Globe as GlobeIcon, FileQuestion, HelpCircle, CheckSquare } from 'lucide-react';
 import { SurveyBuilder, SurveyConfigData } from '../../components/SurveyBuilder';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
+import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../../components/surveys';
 
 export interface UserTasksSubmitProps {
     initialTab?: 'submit' | 'browse' | 'my-tasks' | 'pending-payment' | 'completed-tasks' | 'converter' | 'review-proofs';
@@ -701,6 +702,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const [amountTrailCategory, setAmountTrailCategory] = useState<string>('All');
     const [amountTrailDateRange, setAmountTrailDateRange] = useState<'All' | '30Days' | 'ThisMonth' | 'ThisYear'>('All');
     const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+    const [surveyAnalyticsTaskId, setSurveyAnalyticsTaskId] = useState<string | null>(null);
 
     // Pending Payments Search & Pagination State
     const [pendingSearch, setPendingSearch] = useState('');
@@ -3382,6 +3384,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <p className="text-xs text-gray-500 font-medium">Manage submissions, review proofs, reward workers, or delete this campaign.</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    {/* Survey Analytics & Results */}
+                                    {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
+                                        <button
+                                            onClick={() => setSurveyAnalyticsTaskId(task._id)}
+                                            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
+                                        >
+                                            📊 Survey Analytics & Results
+                                        </button>
+                                    )}
                                     {/* Pause/Play */}
                                     {(task.status === 'Approved' || task.status === 'Active' || task.status === 'On Hold') && (
                                         <button
@@ -4417,6 +4428,15 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         👁 Details
                                                     </button>
 
+                                                    {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
+                                                        <button
+                                                            onClick={() => setSurveyAnalyticsTaskId(task._id)}
+                                                            className="px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40 dark:text-amber-400 text-[9px] font-black uppercase tracking-wider"
+                                                        >
+                                                            📊 Results
+                                                        </button>
+                                                    )}
+
                                                     <button
                                                         onClick={() => handleDeleteCampaign(task._id)}
                                                         className="px-2 py-0.5 rounded-md bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 dark:bg-red-950/20 dark:border-red-900/40 dark:text-red-400 text-[9px] font-black uppercase tracking-wider"
@@ -4568,6 +4588,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 >
                                                                     👁 Detail
                                                                 </button>
+
+                                                                {/* Survey Analytics Button */}
+                                                                {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
+                                                                    <button
+                                                                        onClick={() => setSurveyAnalyticsTaskId(task._id)}
+                                                                        title="Survey Responses & Analytics"
+                                                                        className="p-1.5 md:p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 dark:border-amber-900/40 dark:text-amber-400 transition-all text-xs font-bold uppercase tracking-wider flex items-center gap-1"
+                                                                    >
+                                                                        📊 Results
+                                                                    </button>
+                                                                )}
 
                                                                 {/* Delete Button */}
                                                                 <button
@@ -5141,15 +5172,32 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
             {/* INTERACTIVE SURVEY RUNNER MODAL */}
             {selectedTaskForProof && (selectedTaskForProof.isSurvey || selectedTaskForProof.category?.toLowerCase() === 'survey' || selectedTaskForProof.category?.toLowerCase() === 'surveys & feedback' || selectedTaskForProof.surveyConfig) ? (
-                <SurveyRunnerModal
-                    task={selectedTaskForProof}
-                    currentUserId={currentUser?._id || ''}
-                    onClose={() => setSelectedTaskForProof(null)}
-                    onCompleted={() => {
-                        setSelectedTaskForProof(null);
-                        setActiveTab('browse');
-                    }}
-                />
+                !isSurveyGloballyEnabled ? (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-2xl">
+                                ⚠️
+                            </div>
+                            <h3 className="text-lg font-bold text-white">Surveys Temporarily Unavailable</h3>
+                            <p className="text-sm text-slate-400">
+                                Surveys and feedback campaigns are currently disabled by platform administration. Please check back later.
+                            </p>
+                            <Button variant="secondary" onClick={() => setSelectedTaskForProof(null)} className="w-full">
+                                Close
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <SurveyRunnerModal
+                        task={selectedTaskForProof}
+                        currentUserId={currentUser?._id || ''}
+                        onClose={() => setSelectedTaskForProof(null)}
+                        onCompleted={() => {
+                            setSelectedTaskForProof(null);
+                            setActiveTab('browse');
+                        }}
+                    />
+                )
             ) : selectedTaskForProof ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
                     <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border dark:border-gray-700 space-y-6 my-8">
@@ -6332,6 +6380,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         );
                                     })()}
 
+                                    {/* Survey Questionnaire Responses Breakdown */}
+                                    {((sub.surveyResponses && sub.surveyResponses.length > 0) || sub.surveyQualificationStatus || task?.isSurvey || task?.surveyConfig) && (
+                                        <div className="space-y-2 mb-4">
+                                            <SurveySubmissionViewer submission={sub} surveyConfig={task?.surveyConfig} />
+                                        </div>
+                                    )}
+
                                     {/* Evidence inputs */}
                                     <div className="space-y-3.5 pt-1">
                                         <span className="text-[10px] text-gray-400 font-bold uppercase block">Submitted Proof Values</span>
@@ -7243,6 +7298,16 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* CREATOR SURVEY ANALYTICS & RESULTS MODAL */}
+            {surveyAnalyticsTaskId && (
+                <SurveyAnalyticsModal
+                    taskId={surveyAnalyticsTaskId}
+                    isOpen={Boolean(surveyAnalyticsTaskId)}
+                    onClose={() => setSurveyAnalyticsTaskId(null)}
+                    campaignTitle={mySubmittedTasks.find(t => t._id === surveyAnalyticsTaskId)?.title}
+                />
             )}
         </div>
     );

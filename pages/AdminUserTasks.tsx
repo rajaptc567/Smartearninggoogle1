@@ -6,12 +6,13 @@ import Badge from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import { updateUserTaskStatus, deleteUserTask, updateSettings, updateSubmissionStatus, deleteSubmission, resolveDispute, adminResetWorkAndEarnData } from '../services/api';
 import { DisputeTimeline } from '../components/DisputeTimeline';
+import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../components/surveys';
 
 const AdminUserTasks: React.FC = () => {
     const { state, dispatch } = useData();
     const { userTasks, userTaskSubmissions, settings, users, investmentPlans } = state;
 
-    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'reset-data'>('campaigns');
+    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data'>('campaigns');
 
     // Settings State
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -77,6 +78,47 @@ const AdminUserTasks: React.FC = () => {
             alert('Failed to update duplicate proof limits');
         } finally {
             setIsSavingProofLimits(false);
+        }
+    };
+
+    // Survey System Settings State
+    const [surveyCampaignsEnabled, setSurveyCampaignsEnabled] = useState<boolean>(settings.surveyCampaignsEnabled ?? true);
+    const [surveyBaseFeeUSD, setSurveyBaseFeeUSD] = useState<number>(settings.surveyConfig?.baseFeeUSD ?? 0.50);
+    const [surveyCommissionPercent, setSurveyCommissionPercent] = useState<number>(settings.surveyConfig?.commissionPercent ?? 10);
+    const [surveyMinRewardPerTask, setSurveyMinRewardPerTask] = useState<number>(settings.surveyConfig?.minRewardPerTask ?? 0.05);
+    const [surveyMaxQuestions, setSurveyMaxQuestions] = useState<number>(settings.surveyConfig?.maxQuestions ?? 30);
+    const [surveyMinSecondsPerQuestion, setSurveyMinSecondsPerQuestion] = useState<number>(settings.surveyConfig?.minSecondsPerQuestion ?? 6);
+    const [surveyDefaultApprovalMode, setSurveyDefaultApprovalMode] = useState<string>(settings.surveyConfig?.defaultApprovalMode || 'auto');
+    const [surveyAttentionCheckPassThreshold, setSurveyAttentionCheckPassThreshold] = useState<number>(settings.surveyConfig?.attentionCheckPassThreshold ?? 100);
+    const [isSavingSurveySettings, setIsSavingSurveySettings] = useState<boolean>(false);
+    const [analyticsTaskId, setAnalyticsTaskId] = useState<string | null>(null);
+
+    const handleSaveSurveySettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSavingSurveySettings(true);
+        try {
+            const updatedSettings = {
+                ...settings,
+                surveyCampaignsEnabled: Boolean(surveyCampaignsEnabled),
+                surveyConfig: {
+                    ...settings.surveyConfig,
+                    surveyCampaignsEnabled: Boolean(surveyCampaignsEnabled),
+                    baseFeeUSD: Number(surveyBaseFeeUSD),
+                    commissionPercent: Number(surveyCommissionPercent),
+                    minRewardPerTask: Number(surveyMinRewardPerTask),
+                    maxQuestions: Number(surveyMaxQuestions),
+                    minSecondsPerQuestion: Number(surveyMinSecondsPerQuestion),
+                    defaultApprovalMode: surveyDefaultApprovalMode,
+                    attentionCheckPassThreshold: Number(surveyAttentionCheckPassThreshold)
+                }
+            };
+            const result = await updateSettings(updatedSettings);
+            dispatch({ type: 'UPDATE_SETTINGS', payload: result });
+            alert('Survey system rules & settings updated successfully!');
+        } catch (error: any) {
+            alert('Failed to update survey settings: ' + (error.message || 'Unknown error'));
+        } finally {
+            setIsSavingSurveySettings(false);
         }
     };
 
@@ -261,6 +303,9 @@ const AdminUserTasks: React.FC = () => {
                                     </Button>
                                     <Button variant={activeTab === 'proof-limits' ? 'primary' : 'secondary'} onClick={() => setActiveTab('proof-limits')}>
                                         Proof Limits
+                                    </Button>
+                                    <Button variant={activeTab === 'survey-settings' ? 'primary' : 'secondary'} onClick={() => setActiveTab('survey-settings')}>
+                                        Survey Rules 📋
                                     </Button>
                                     <Button variant={activeTab === 'reset-data' ? 'danger' : 'secondary'} onClick={() => setActiveTab('reset-data')}>
                                         Reset & Erase Data 🔄
@@ -573,6 +618,11 @@ const AdminUserTasks: React.FC = () => {
                                                     <Button variant="secondary" onClick={() => setSelectedCampaign(task)} className="text-xs py-1 px-3">
                                                         Details
                                                     </Button>
+                                                    {(task.isSurvey || task.category?.toLowerCase() === 'survey' || task.category?.toLowerCase() === 'surveys & feedback' || task.surveyConfig) && (
+                                                        <Button variant="secondary" onClick={() => setAnalyticsTaskId(task._id)} className="text-xs py-1 px-3 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/25">
+                                                            📊 Analytics
+                                                        </Button>
+                                                    )}
                                                     {task.status === 'Pending' && (
                                                         <Button variant="primary" onClick={() => handleTaskAction(task._id, 'Approved')} className="text-xs py-1 px-3">
                                                             Approve
@@ -1075,6 +1125,160 @@ const AdminUserTasks: React.FC = () => {
                 </div>
             )}
 
+            {/* TAB 5: SURVEY SYSTEM RULES & KILL SWITCH */}
+            {activeTab === 'survey-settings' && (
+                <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border dark:border-gray-700 max-w-4xl mx-auto space-y-6">
+                    <div>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-500 block">Governance & Quality Engine</span>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Survey & Feedback System Rules</h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Configure global kill switch, platform fee, anti-speeding limits, question caps, and approval policies for survey campaigns.
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSaveSurveySettings} className="space-y-6">
+                        {/* Master Kill Switch */}
+                        <div className="p-5 rounded-2xl border transition-all flex items-center justify-between gap-4 bg-amber-500/10 border-amber-500/30">
+                            <div>
+                                <span className="text-xs font-black uppercase text-amber-400 block">
+                                    Master Survey System Switch (Kill Switch)
+                                </span>
+                                <p className="text-xs text-gray-600 dark:text-slate-300 mt-0.5">
+                                    When disabled, users cannot create survey campaigns and workers cannot access or submit surveys.
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={surveyCampaignsEnabled} 
+                                    onChange={(e) => setSurveyCampaignsEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-500"></div>
+                            </label>
+                        </div>
+
+                        {/* Fees & Platform Economics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Survey Base Campaign Fee (USD)
+                                </label>
+                                <p className="text-[11px] text-gray-400">Fixed creation fee applied when publishing a survey.</p>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    min="0"
+                                    value={surveyBaseFeeUSD} 
+                                    onChange={(e) => setSurveyBaseFeeUSD(parseFloat(e.target.value) || 0)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Survey Platform Commission (%)
+                                </label>
+                                <p className="text-[11px] text-gray-400">Commission retained by the platform from survey budget.</p>
+                                <input 
+                                    type="number" 
+                                    step="1" 
+                                    min="0"
+                                    max="100"
+                                    value={surveyCommissionPercent} 
+                                    onChange={(e) => setSurveyCommissionPercent(parseFloat(e.target.value) || 0)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Quality & Anti-Speeding Rules */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Min Reward Per Survey (USD)
+                                </label>
+                                <input 
+                                    type="number" 
+                                    step="0.001" 
+                                    min="0.001"
+                                    value={surveyMinRewardPerTask} 
+                                    onChange={(e) => setSurveyMinRewardPerTask(parseFloat(e.target.value) || 0.05)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Max Questions Per Survey
+                                </label>
+                                <input 
+                                    type="number" 
+                                    step="1" 
+                                    min="1"
+                                    max="100"
+                                    value={surveyMaxQuestions} 
+                                    onChange={(e) => setSurveyMaxQuestions(parseInt(e.target.value) || 30)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Min Seconds Per Question
+                                </label>
+                                <input 
+                                    type="number" 
+                                    step="1" 
+                                    min="1"
+                                    max="60"
+                                    value={surveyMinSecondsPerQuestion} 
+                                    onChange={(e) => setSurveyMinSecondsPerQuestion(parseInt(e.target.value) || 6)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Approval Modes & Threshold */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Default Survey Approval Mode
+                                </label>
+                                <select 
+                                    value={surveyDefaultApprovalMode} 
+                                    onChange={(e) => setSurveyDefaultApprovalMode(e.target.value)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-medium text-xs text-gray-900 dark:text-white"
+                                >
+                                    <option value="auto">Auto-Approve (Speed & attention passed)</option>
+                                    <option value="manual">Manual Review (Creator checks proofs)</option>
+                                    <option value="hybrid">Hybrid (Auto-approve high quality score)</option>
+                                </select>
+                            </div>
+
+                            <div className="p-5 bg-gray-50 dark:bg-gray-900/40 rounded-2xl border dark:border-gray-700 space-y-2">
+                                <label className="block text-xs font-black uppercase text-gray-500">
+                                    Attention Check Pass Threshold (%)
+                                </label>
+                                <input 
+                                    type="number" 
+                                    step="5" 
+                                    min="50" 
+                                    max="100"
+                                    value={surveyAttentionCheckPassThreshold} 
+                                    onChange={(e) => setSurveyAttentionCheckPassThreshold(parseInt(e.target.value) || 100)}
+                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
+                        <Button type="submit" variant="primary" isLoading={isSavingSurveySettings} className="w-full py-4 text-base font-black uppercase tracking-wider">
+                            Save Survey System Rules
+                        </Button>
+                    </form>
+                </div>
+            )}
+
             {/* TAB 5: ERASE / RESET WORK & EARN DATA */}
             {activeTab === 'reset-data' && (
                 <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border border-red-200 dark:border-red-900/40 space-y-8">
@@ -1308,6 +1512,16 @@ const AdminUserTasks: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Survey Questionnaire Responses Breakdown */}
+                        {((selectedSubmissionForDetails.surveyResponses && selectedSubmissionForDetails.surveyResponses.length > 0) || selectedSubmissionForDetails.surveyQualificationStatus || selectedSubmissionForDetails.taskCategory?.toLowerCase().includes('survey')) && (
+                            <div className="space-y-2">
+                                <SurveySubmissionViewer 
+                                    submission={selectedSubmissionForDetails} 
+                                    surveyConfig={userTasks.find(t => t._id === selectedSubmissionForDetails.taskId)?.surveyConfig} 
+                                />
+                            </div>
+                        )}
+
                         {/* Submitted Proofs Breakdown */}
                         <div className="space-y-3">
                             <h5 className="text-xs uppercase font-black tracking-wider text-gray-400">Worker Submitted Proofs</h5>
@@ -1459,6 +1673,16 @@ const AdminUserTasks: React.FC = () => {
                         </div>
                     </div>
                 </Modal>
+            )}
+
+            {/* SURVEY ANALYTICS MODAL */}
+            {analyticsTaskId && (
+                <SurveyAnalyticsModal
+                    taskId={analyticsTaskId}
+                    isOpen={Boolean(analyticsTaskId)}
+                    onClose={() => setAnalyticsTaskId(null)}
+                    campaignTitle={userTasks.find(t => t._id === analyticsTaskId)?.title}
+                />
             )}
         </div>
     );
