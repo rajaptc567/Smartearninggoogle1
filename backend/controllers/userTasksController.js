@@ -1582,6 +1582,12 @@ export const submitUserTaskProof = async (req, res) => {
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: submission });
     } catch (err) {
+        if (err.code === 11000 || (err.name === 'MongoServerError' && err.code === 11000)) {
+            return res.status(400).json({
+                success: false,
+                error: 'You have already submitted proof for this task.'
+            });
+        }
         res.status(400).json({ success: false, error: err.message });
     }
 };

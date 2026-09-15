@@ -133,7 +133,7 @@ const UserTaskSubmissionSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-UserTaskSubmissionSchema.index({ taskId: 1, workerId: 1 });
+UserTaskSubmissionSchema.index({ taskId: 1, workerId: 1 }, { unique: true });
 UserTaskSubmissionSchema.index({ workerId: 1, status: 1 });
 UserTaskSubmissionSchema.index({ taskId: 1, status: 1 });
 UserTaskSubmissionSchema.index({ status: 1 });
