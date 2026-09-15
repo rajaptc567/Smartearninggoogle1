@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import { useWorkAndEarnConfig } from '../hooks/useWorkAndEarnConfig';
 import { formatCurrency } from '../types';
@@ -247,25 +247,24 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
             { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall' }
         ];
 
-        if (otherTasksTabConfig && otherTasksTabConfig.subTabs && otherTasksTabConfig.subTabs.length > 0) {
-            const adminTabs = otherTasksTabConfig.subTabs.map(st => ({
+        if (otherTasksTabConfig && Array.isArray(otherTasksTabConfig.subTabs)) {
+            return otherTasksTabConfig.subTabs.map(st => ({
                 id: st.id,
                 name: st.name,
                 providerKey: st.providerKey || st.id,
-                badge: st.badge || st.name
+                badge: st.badge || st.name,
+                description: st.description || ''
             }));
-
-            const merged = [...defaultSubTabs];
-            adminTabs.forEach(at => {
-                if (!merged.some(m => m.id === at.id || m.name.toLowerCase() === at.name.toLowerCase())) {
-                    merged.push(at);
-                }
-            });
-            return merged;
         }
 
         return defaultSubTabs;
     }, [otherTasksTabConfig]);
+
+    useEffect(() => {
+        if (subTabs.length > 0 && (!activeSubTab || !subTabs.some(s => s.id === activeSubTab))) {
+            setActiveSubTab(subTabs[0].id);
+        }
+    }, [subTabs, activeSubTab]);
 
     // Filter Offerwall Gigs according to Tab, Search, and Difficulty
     const filteredOfferwallGigs = useMemo(() => {

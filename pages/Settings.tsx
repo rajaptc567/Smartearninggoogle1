@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/ui/Button';
 import { useData } from '../hooks/useData';
-import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo } from '../types';
+import { Settings as SettingsType, TransferFeeTier, Currency, currencySymbols, InvestmentPlan, formatCurrency, FaqItem, HomepagePaymentLogo, CustomEarnTab, CustomEarnSubTab } from '../types';
 import { updateSettings, sendAdminTestEmail } from '../services/api';
 import { AdminModulePagesManager } from '../components/AdminModulePagesManager';
 import { AdminInvestmentWhitelistManager } from '../components/AdminInvestmentWhitelistManager';
@@ -88,6 +88,13 @@ const Settings: React.FC = () => {
   const [newEarnSubTabProviderKey, setNewEarnSubTabProviderKey] = useState('');
   const [newEarnSubTabBadge, setNewEarnSubTabBadge] = useState('');
   const [newEarnSubTabDesc, setNewEarnSubTabDesc] = useState('');
+
+  // Editing state for existing Subtabs
+  const [editingSubTabId, setEditingSubTabId] = useState<string | null>(null);
+  const [editEarnSubTabName, setEditEarnSubTabName] = useState('');
+  const [editEarnSubTabProviderKey, setEditEarnSubTabProviderKey] = useState('');
+  const [editEarnSubTabBadge, setEditEarnSubTabBadge] = useState('');
+  const [editEarnSubTabDesc, setEditEarnSubTabDesc] = useState('');
 
   // Legal Policies admin state
   const [adminLegalTarget, setAdminLegalTarget] = useState<'global' | 'hub'>('global');
@@ -314,6 +321,20 @@ const Settings: React.FC = () => {
         hubDmcaPolicyTitle: settings.hubDmcaPolicyTitle || 'Hub DMCA & Copyright Policy',
         hubDmcaPolicyUpdated: settings.hubDmcaPolicyUpdated || 'Last updated: July 21, 2026',
         hubDmcaPolicyContent: settings.hubDmcaPolicyContent || "We respect the intellectual property of creators. If you find any tasks, campaigns, social profiles, or images hosted in our hub that infringe upon your copyrighted material, please send a DMCA notice.",
+        customEarnTabs: settings.customEarnTabs !== undefined ? settings.customEarnTabs : [
+            {
+                id: 'other_tasks',
+                title: 'Other Tasks',
+                enabled: true,
+                subTabs: [
+                    { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                    { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                    { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                    { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                    { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                ]
+            }
+        ],
     }));
     setIsDirty(false);
   }, [settings]);
@@ -786,42 +807,56 @@ const Settings: React.FC = () => {
   };
 
   const handleAddEarnSubTab = () => {
-      if (!newEarnSubTabName.trim()) return;
-      const newSub = {
-          id: 'sub_' + Math.random().toString(36).substr(2, 7),
-          name: newEarnSubTabName.trim(),
-          providerKey: newEarnSubTabProviderKey.trim() || newEarnSubTabName.trim().toLowerCase(),
-          badge: newEarnSubTabBadge.trim() || 'New',
+      const name = newEarnSubTabName.trim();
+      if (!name) return;
+
+      const currentTabs = localSettings.customEarnTabs || [
+          {
+              id: 'other_tasks',
+              title: 'Other Tasks',
+              enabled: true,
+              subTabs: [
+                  { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                  { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                  { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                  { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                  { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+              ]
+          }
+      ];
+
+      const otherTab = currentTabs.find(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'));
+      const existingSubTabs = otherTab?.subTabs || [];
+
+      // Generate clean unique ID / slug
+      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '') || 'tab';
+      let uniqueId = baseSlug;
+      let counter = 1;
+      while (existingSubTabs.some(st => st.id === uniqueId)) {
+          uniqueId = `${baseSlug}_${counter}`;
+          counter++;
+      }
+
+      const newSub: CustomEarnSubTab = {
+          id: uniqueId,
+          name: name,
+          providerKey: newEarnSubTabProviderKey.trim() || uniqueId,
+          badge: newEarnSubTabBadge.trim() || 'Active',
           description: newEarnSubTabDesc.trim() || 'Partner integration task'
       };
 
       setLocalSettings(prev => {
-          const currentTabs = prev.customEarnTabs || [
-              {
-                  id: 'other_tasks',
-                  title: 'Other Tasks',
-                  enabled: true,
-                  subTabs: [
-                      { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead' },
-                      { id: '2row', name: '2row', providerKey: '2row', badge: '2row' },
-                      { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)' },
-                      { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls' },
-                      { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall' }
-                  ]
-              }
-          ];
-
-          const otherTabIdx = currentTabs.findIndex(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'));
-          let updatedTabs = [...currentTabs];
+          const tabs = prev.customEarnTabs ? [...prev.customEarnTabs] : [...currentTabs];
+          const otherTabIdx = tabs.findIndex(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'));
 
           if (otherTabIdx >= 0) {
-              const targetTab = updatedTabs[otherTabIdx];
-              updatedTabs[otherTabIdx] = {
+              const targetTab = tabs[otherTabIdx];
+              tabs[otherTabIdx] = {
                   ...targetTab,
                   subTabs: [...(targetTab.subTabs || []), newSub]
               };
           } else {
-              updatedTabs.push({
+              tabs.push({
                   id: 'other_tasks',
                   title: 'Other Tasks',
                   enabled: true,
@@ -831,7 +866,7 @@ const Settings: React.FC = () => {
 
           return {
               ...prev,
-              customEarnTabs: updatedTabs
+              customEarnTabs: tabs
           };
       });
 
@@ -842,10 +877,69 @@ const Settings: React.FC = () => {
       setIsDirty(true);
   };
 
-  const handleRemoveEarnSubTab = (subId: string) => {
+  const handleStartEditEarnSubTab = (sub: CustomEarnSubTab) => {
+      setEditingSubTabId(sub.id);
+      setEditEarnSubTabName(sub.name);
+      setEditEarnSubTabProviderKey(sub.providerKey || sub.id);
+      setEditEarnSubTabBadge(sub.badge || '');
+      setEditEarnSubTabDesc(sub.description || '');
+  };
+
+  const handleCancelEditEarnSubTab = () => {
+      setEditingSubTabId(null);
+      setEditEarnSubTabName('');
+      setEditEarnSubTabProviderKey('');
+      setEditEarnSubTabBadge('');
+      setEditEarnSubTabDesc('');
+  };
+
+  const handleSaveEditEarnSubTab = () => {
+      if (!editingSubTabId || !editEarnSubTabName.trim()) return;
+
       setLocalSettings(prev => {
           if (!prev.customEarnTabs) return prev;
           const updatedTabs = prev.customEarnTabs.map(t => {
+              if (t.id === 'other_tasks' || t.title.toLowerCase().includes('other')) {
+                  const updatedSubTabs = (t.subTabs || []).map(st => {
+                      if (st.id === editingSubTabId) {
+                          return {
+                              ...st,
+                              name: editEarnSubTabName.trim(),
+                              providerKey: editEarnSubTabProviderKey.trim() || st.providerKey || st.id,
+                              badge: editEarnSubTabBadge.trim(),
+                              description: editEarnSubTabDesc.trim()
+                          };
+                      }
+                      return st;
+                  });
+                  return { ...t, subTabs: updatedSubTabs };
+              }
+              return t;
+          });
+          return { ...prev, customEarnTabs: updatedTabs };
+      });
+
+      handleCancelEditEarnSubTab();
+      setIsDirty(true);
+  };
+
+  const handleRemoveEarnSubTab = (subId: string) => {
+      setLocalSettings(prev => {
+          const currentTabs = prev.customEarnTabs || [
+              {
+                  id: 'other_tasks',
+                  title: 'Other Tasks',
+                  enabled: true,
+                  subTabs: [
+                      { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                      { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                      { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                      { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                      { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                  ]
+              }
+          ];
+          const updatedTabs = currentTabs.map(t => {
               if (t.id === 'other_tasks' || t.title.toLowerCase().includes('other')) {
                   return {
                       ...t,
@@ -856,6 +950,9 @@ const Settings: React.FC = () => {
           });
           return { ...prev, customEarnTabs: updatedTabs };
       });
+      if (editingSubTabId === subId) {
+          handleCancelEditEarnSubTab();
+      }
       setIsDirty(true);
   };
 
@@ -5242,50 +5339,156 @@ const Settings: React.FC = () => {
 
                 {/* WORK AND EARN MODULE CUSTOM TABS & SUB-TABS MANAGER */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
-                    <div className="border-b dark:border-gray-700 pb-3">
-                        <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-2">
-                            <span>🗂️ Work & Earn Dashboard Custom Tabs & Sub-Tabs</span>
-                        </h4>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Configure the dynamic sub-tabs under "Other Tasks" (e.g. CP lead, 2row, X, etc.) or add new integration tabs for user earnings.
-                        </p>
+                    <div className="border-b dark:border-gray-700 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <h4 className="font-bold text-sm text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-2">
+                                <span>🗂️ Work & Earn "Other Tasks" Sub-Tabs Manager</span>
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Configure, edit, or remove the dynamic sub-tabs under "Other Tasks" (e.g. CP lead, 2row, X, Pollfish, AdGate, CPX, etc.).
+                            </p>
+                        </div>
                     </div>
 
                     {/* Current Subtabs List */}
                     <div className="space-y-3">
-                        <h5 className="font-bold text-xs uppercase text-gray-400 tracking-wider">Active Sub-Tabs under "Other Tasks"</h5>
+                        <div className="flex items-center justify-between">
+                            <h5 className="font-bold text-xs uppercase text-gray-400 tracking-wider">Active Sub-Tabs under "Other Tasks"</h5>
+                            <span className="text-[11px] text-gray-400 font-mono">
+                                {((localSettings.customEarnTabs?.find(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'))?.subTabs) || []).length} active
+                            </span>
+                        </div>
                         
                         {(() => {
-                            const currentSubTabs = (localSettings.customEarnTabs?.find(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'))?.subTabs) || [
-                                { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead' },
-                                { id: '2row', name: '2row', providerKey: '2row', badge: '2row' },
-                                { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)' },
-                                { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls' },
-                                { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall' }
-                            ];
+                            const otherTab = localSettings.customEarnTabs?.find(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'));
+                            const currentSubTabs = otherTab?.subTabs || [];
+
+                            if (currentSubTabs.length === 0) {
+                                return (
+                                    <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-dashed dark:border-gray-700 text-center space-y-1">
+                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">No sub-tabs currently configured under "Other Tasks".</p>
+                                        <p className="text-[11px] text-gray-400">Use the form below to add a new network or partner sub-tab.</p>
+                                    </div>
+                                );
+                            }
 
                             return (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                    {currentSubTabs.map(st => (
-                                        <div key={st.id} className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-700 flex items-center justify-between text-xs">
-                                            <div className="space-y-0.5">
-                                                <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                                                    <span>{st.name}</span>
-                                                    <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-[10px] px-1.5 py-0.2 rounded font-mono">
-                                                        {st.badge || 'Active'}
-                                                    </span>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {currentSubTabs.map(st => {
+                                        const isEditing = editingSubTabId === st.id;
+
+                                        if (isEditing) {
+                                            return (
+                                                <div key={st.id} className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border-2 border-blue-500/60 space-y-3 md:col-span-2">
+                                                    <div className="flex items-center justify-between border-b border-blue-200 dark:border-blue-800/60 pb-2">
+                                                        <span className="text-xs font-bold text-blue-800 dark:text-blue-300">
+                                                            ✏️ Edit Sub-Tab: <span className="font-mono text-blue-900 dark:text-white">{st.name}</span>
+                                                        </span>
+                                                        <span className="text-[10px] font-mono text-gray-500">ID: {st.id}</span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">Display Name *</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editEarnSubTabName}
+                                                                onChange={(e) => setEditEarnSubTabName(e.target.value)}
+                                                                placeholder="e.g. CP lead, CPX Research..."
+                                                                className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">Badge / Tag</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editEarnSubTabBadge}
+                                                                onChange={(e) => setEditEarnSubTabBadge(e.target.value)}
+                                                                placeholder="e.g. CP Lead, Top..."
+                                                                className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">Provider Key</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editEarnSubTabProviderKey}
+                                                                onChange={(e) => setEditEarnSubTabProviderKey(e.target.value)}
+                                                                placeholder="e.g. cpalead, cpx..."
+                                                                className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white font-mono"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1">Description (Optional)</label>
+                                                        <input
+                                                            type="text"
+                                                            value={editEarnSubTabDesc}
+                                                            onChange={(e) => setEditEarnSubTabDesc(e.target.value)}
+                                                            placeholder="Short description of this earning opportunity..."
+                                                            className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-end gap-2 pt-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleCancelEditEarnSubTab}
+                                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 transition"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSaveEditEarnSubTab}
+                                                            disabled={!editEarnSubTabName.trim()}
+                                                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow transition"
+                                                        >
+                                                            Apply Edit
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="text-[10px] text-gray-400 font-mono">Key: {st.providerKey || st.id}</div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div key={st.id} className="p-3.5 bg-gray-50 dark:bg-gray-900 rounded-xl border dark:border-gray-700 flex flex-col justify-between gap-3 text-xs">
+                                                <div className="space-y-1">
+                                                    <div className="font-bold text-gray-900 dark:text-white flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-sm font-extrabold">{st.name}</span>
+                                                            <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] px-2 py-0.5 rounded-md font-mono font-bold">
+                                                                {st.badge || 'Active'}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-[10px] text-gray-400 font-mono">id: {st.id}</span>
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-400 font-mono">Provider Key: {st.providerKey || st.id}</div>
+                                                    {st.description && (
+                                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1">{st.description}</p>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center justify-end gap-2 pt-1 border-t dark:border-gray-800">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStartEditEarnSubTab(st)}
+                                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-bold px-2.5 py-1 rounded text-[11px] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveEarnSubTab(st.id)}
+                                                        className="text-red-500 hover:text-red-700 font-bold px-2.5 py-1 rounded text-[11px] hover:bg-red-50 dark:hover:bg-red-900/30 transition"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveEarnSubTab(st.id)}
-                                                className="text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded text-[11px]"
-                                            >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             );
                         })()}
@@ -5301,7 +5504,7 @@ const Settings: React.FC = () => {
                                     type="text"
                                     value={newEarnSubTabName}
                                     onChange={(e) => setNewEarnSubTabName(e.target.value)}
-                                    placeholder="e.g. CP lead, 2row, X, BitLabs..."
+                                    placeholder="e.g. CP lead, 2row, CPX Research..."
                                     className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700"
                                 />
                             </div>
@@ -5325,6 +5528,17 @@ const Settings: React.FC = () => {
                                     className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700 font-mono"
                                 />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-500 mb-1">Description (Optional)</label>
+                            <input
+                                type="text"
+                                value={newEarnSubTabDesc}
+                                onChange={(e) => setNewEarnSubTabDesc(e.target.value)}
+                                placeholder="Short description of this partner task/offerwall..."
+                                className="w-full text-xs p-2.5 rounded-lg border dark:bg-gray-800 dark:border-gray-700"
+                            />
                         </div>
 
                         <div className="flex justify-end pt-1">

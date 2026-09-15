@@ -627,6 +627,47 @@ const SettingSchema = new mongoose.Schema({
     hubDmcaPolicyTitle: { type: String, default: "Hub DMCA & Copyright Policy" },
     hubDmcaPolicyUpdated: { type: String, default: "Last updated: July 21, 2026" },
     hubDmcaPolicyContent: { type: String, default: "We respect the intellectual property of creators. If you find any tasks, campaigns, social profiles, or images hosted in our hub that infringe upon your copyrighted material, please send a DMCA Takedown Notice containing registration proofs to our support team for prompt review and deletion." },
+    customEarnTabs: {
+        type: [
+            {
+                id: { type: String, required: true },
+                title: { type: String, required: true },
+                enabled: { type: Boolean, default: true },
+                subTabs: {
+                    type: [
+                        {
+                            id: { type: String, required: true },
+                            name: { type: String, required: true },
+                            providerKey: { type: String, default: '' },
+                            badge: { type: String, default: '' },
+                            description: { type: String, default: '' }
+                        }
+                    ],
+                    default: () => [
+                        { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                        { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                        { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                        { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                        { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                    ]
+                }
+            }
+        ],
+        default: () => [
+            {
+                id: 'other_tasks',
+                title: 'Other Tasks',
+                enabled: true,
+                subTabs: [
+                    { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                    { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                    { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                    { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                    { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                ]
+            }
+        ]
+    },
     emailAutomationEnabled: { type: Boolean, default: false },
     emailProvider: { type: String, enum: ['existing', 'resend'], default: 'existing' },
     emailSenders: {
@@ -1907,6 +1948,23 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.surveyConfig.defaultConsentText) {
         settings.surveyConfig.defaultConsentText = 'I agree to participate in this survey and confirm that my answers will be accurate, honest, and complete.';
+        needsSave = true;
+    }
+    if (settings.customEarnTabs === undefined) {
+        settings.customEarnTabs = [
+            {
+                id: 'other_tasks',
+                title: 'Other Tasks',
+                enabled: true,
+                subTabs: [
+                    { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+                    { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+                    { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+                    { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+                    { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                ]
+            }
+        ];
         needsSave = true;
     }
     if (needsSave) {

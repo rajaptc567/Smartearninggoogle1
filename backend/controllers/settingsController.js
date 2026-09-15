@@ -324,6 +324,26 @@ export const updateSettings = async (req, res) => {
                 .filter(item => item.name || item.logoUrl);
         }
 
+        // Sanitize and preserve customEarnTabs (Work & Earn Other Sub-Tabs)
+        if (req.body.customEarnTabs !== undefined && Array.isArray(req.body.customEarnTabs)) {
+            req.body.customEarnTabs = req.body.customEarnTabs.map(tab => {
+                const cleanSubTabs = Array.isArray(tab.subTabs) ? tab.subTabs.map(st => ({
+                    id: String(st.id || '').trim() || ('sub_' + Math.random().toString(36).substring(2, 8)),
+                    name: String(st.name || '').trim(),
+                    providerKey: String(st.providerKey || st.id || '').trim(),
+                    badge: String(st.badge || '').trim(),
+                    description: String(st.description || '').trim()
+                })).filter(st => st.name) : [];
+
+                return {
+                    id: String(tab.id || 'other_tasks').trim(),
+                    title: String(tab.title || 'Other Tasks').trim(),
+                    enabled: tab.enabled !== false,
+                    subTabs: cleanSubTabs
+                };
+            });
+        }
+
         // Admin-Editable Email Senders Management (Preserve all 6 roles: info, support, notifications, legal, security, finance)
         const VALID_ROLES = ['info', 'support', 'notifications', 'legal', 'security', 'finance'];
         const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
