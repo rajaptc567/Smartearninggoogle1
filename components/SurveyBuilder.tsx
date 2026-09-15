@@ -41,6 +41,7 @@ import {
     evaluateRule,
     pipeAnswersIntoText
 } from '../lib/surveyLogicEngine';
+import { SMARTEXN_SURVEY_TEMPLATES } from '../lib/surveyTemplates';
 
 export type { SurveyQuestion, SurveyConfigData, SurveyLogicRule, SurveyLogicCondition, SurveySection };
 
@@ -1462,7 +1463,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                         </div>
 
                         <div className="space-y-3">
-                            {systemTemplates.map((tmpl: any, i: number) => (
+                            {(systemTemplates && systemTemplates.length > 0 ? systemTemplates : SMARTEXN_SURVEY_TEMPLATES).map((tmpl: any, i: number) => (
                                 <div
                                     key={tmpl.id || i}
                                     onClick={() => {
@@ -1470,15 +1471,17 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                         onChange({
                                             ...value,
                                             category: tmpl.category || value.category,
+                                            description: tmpl.description || value.description,
                                             estimatedTimeMinutes: tmpl.estimatedTimeMinutes || calculateEstimatedMinutes(tmpl.questions),
-                                            questions: JSON.parse(JSON.stringify(tmpl.questions))
+                                            questions: JSON.parse(JSON.stringify(tmpl.questions)),
+                                            approvalMode: tmpl.approvalMode || value.approvalMode
                                         });
                                         setShowTemplateModal(false);
                                     }}
                                     className="p-3.5 border border-gray-200 dark:border-slate-800 rounded-xl hover:border-amber-500 hover:bg-amber-500/10 cursor-pointer transition"
                                 >
                                     <div className="flex justify-between items-start">
-                                        <h5 className="font-bold text-xs text-gray-900 dark:text-white">{tmpl.name}</h5>
+                                        <h5 className="font-bold text-xs text-gray-900 dark:text-white">{tmpl.title || tmpl.name}</h5>
                                         <span className="text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
                                             {tmpl.questions?.length || 0} questions
                                         </span>

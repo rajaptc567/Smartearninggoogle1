@@ -1532,10 +1532,25 @@ SettingSchema.statics.getSettings = async function() {
             estimatedTimeMinutes: 4,
             questions: [
                 {
+                    id: 'bug_q0_encountered',
+                    type: 'single_choice',
+                    title: 'Did you encounter a technical bug, layout glitch, or unexpected error during your platform testing?',
+                    required: true,
+                    options: [
+                        'Yes, I found a reproducible issue to report',
+                        'No, everything tested operated normally without errors'
+                    ]
+                },
+                {
                     id: 'bug_q1_page',
                     type: 'single_choice',
                     title: 'Which feature area or page did you experience the issue on?',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     options: [
                         'Deposit / Withdrawal Flow',
                         'User Task Hub & Proof Submission',
@@ -1550,8 +1565,13 @@ SettingSchema.statics.getSettings = async function() {
                 {
                     id: 'bug_q2_url',
                     type: 'short_text',
-                    title: 'What is the exact URL or page path where the bug occurred? (e.g., /tasks, /deposit, /campaigns)',
+                    title: 'What is the exact URL or page route where the issue occurred? (e.g., /tasks, /deposit, /campaigns)',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 1, maxLength: 200 }
                 },
                 {
@@ -1559,34 +1579,71 @@ SettingSchema.statics.getSettings = async function() {
                     type: 'short_text',
                     title: 'Issue Title: Brief summary of the bug (e.g., Submit button unresponsive on mobile)',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 5, maxLength: 120 }
                 },
                 {
-                    id: 'bug_q4_steps',
+                    id: 'bug_q4_desc',
                     type: 'long_text',
-                    title: 'Reproduction Steps: Step-by-step instructions to reproduce the issue (1. Go to page, 2. Click button, 3. Observe error)',
+                    title: 'Issue Description: Detailed explanation of what happened and where it occurred',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 10, maxLength: 1000 }
                 },
                 {
-                    id: 'bug_q5_expected',
+                    id: 'bug_q5_steps',
+                    type: 'long_text',
+                    title: 'Reproduction Steps: Step-by-step instructions to reproduce the issue (1. Go to page, 2. Click button, 3. Observe error)',
+                    required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
+                    validation: { minLength: 10, maxLength: 1000 }
+                },
+                {
+                    id: 'bug_q6_expected',
                     type: 'long_text',
                     title: 'Expected Result: What should have happened normally?',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 5, maxLength: 500 }
                 },
                 {
-                    id: 'bug_q6_actual',
+                    id: 'bug_q7_actual',
                     type: 'long_text',
                     title: 'Actual Result: What actually happened (error message, crash, blank screen)?',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 5, maxLength: 500 }
                 },
                 {
-                    id: 'bug_q7_severity',
+                    id: 'bug_q8_severity',
                     type: 'single_choice',
                     title: 'Bug Severity Level:',
                     required: true,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     options: [
                         'Critical (Blocks usage, cannot deposit/withdraw/submit)',
                         'Major (Key feature broken but workarounds exist)',
@@ -1595,11 +1652,28 @@ SettingSchema.statics.getSettings = async function() {
                     ]
                 },
                 {
-                    id: 'bug_q8_proof',
+                    id: 'bug_q9_proof',
                     type: 'short_text',
                     title: 'Screenshot / Proof URL or image hosting link (optional but recommended for verification)',
                     required: false,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'Yes'
+                    },
                     validation: { minLength: 0, maxLength: 300 }
+                },
+                {
+                    id: 'bug_q10_general',
+                    type: 'long_text',
+                    title: 'General Observations: Please share any general impressions about site performance, responsiveness, and stability',
+                    required: false,
+                    showIf: {
+                        questionId: 'bug_q0_encountered',
+                        operator: 'equals',
+                        value: 'No'
+                    },
+                    validation: { minLength: 0, maxLength: 500 }
                 }
             ]
         },

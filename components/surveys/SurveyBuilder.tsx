@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SurveyConfig, SurveyQuestion } from '../../types';
+import { SMARTEXN_SURVEY_TEMPLATES } from '../../lib/surveyTemplates';
 import { QuestionEditor } from './QuestionEditor';
 import { SurveyPreview } from './SurveyPreview';
 import {
@@ -109,7 +110,8 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
     };
 
     const handleLoadTemplate = (templateId: string) => {
-        const tmpl = systemTemplates.find(t => t.id === templateId || t._id === templateId);
+        const availableTemplates = systemTemplates && systemTemplates.length > 0 ? systemTemplates : SMARTEXN_SURVEY_TEMPLATES;
+        const tmpl = availableTemplates.find(t => t.id === templateId || (t as any)._id === templateId);
         if (!tmpl) return;
 
         const mappedQuestions = (tmpl.questions || []).map((q: any, idx: number) => ({
@@ -255,7 +257,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {systemTemplates && systemTemplates.length > 0 && (
+                    {((systemTemplates && systemTemplates.length > 0) || SMARTEXN_SURVEY_TEMPLATES.length > 0) && (
                         <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1">
                             <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <select
@@ -269,11 +271,11 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                 className="bg-transparent text-xs text-amber-300 font-bold focus:outline-none cursor-pointer py-1"
                             >
                                 <option value="" disabled className="bg-slate-900 text-slate-400">
-                                    Load Template ({systemTemplates.length})...
+                                    Load Template ({(systemTemplates && systemTemplates.length > 0 ? systemTemplates : SMARTEXN_SURVEY_TEMPLATES).length})...
                                 </option>
-                                {systemTemplates.map((t: any) => (
+                                {(systemTemplates && systemTemplates.length > 0 ? systemTemplates : SMARTEXN_SURVEY_TEMPLATES).map((t: any) => (
                                     <option key={t.id || t._id} value={t.id || t._id} className="bg-slate-900 text-white">
-                                        {t.name || t.title}
+                                        {t.title || t.name}
                                     </option>
                                 ))}
                             </select>

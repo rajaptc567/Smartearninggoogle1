@@ -12,6 +12,7 @@ import { seoAnalytics } from '../../services/seoAnalytics';
 import OtherTasksCard from '../../components/OtherTasksCard';
 import { Layers as TaskIcon, Globe as GlobeIcon, FileQuestion, HelpCircle, CheckSquare } from 'lucide-react';
 import { SurveyBuilder, SurveyConfigData } from '../../components/SurveyBuilder';
+import { SMARTEXN_SURVEY_TEMPLATES } from '../../lib/surveyTemplates';
 import { SurveyRunnerModal } from '../../components/SurveyRunnerModal';
 import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../../components/surveys';
 
@@ -2684,7 +2685,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 setRewardPerTask(prev => Math.max(Number(prev) || 0, 0.10));
                                             }
                                         }}
-                                        systemTemplates={settings?.surveyConfig?.templates || []}
+                                        systemTemplates={settings?.surveyConfig?.templates?.length ? settings.surveyConfig.templates : SMARTEXN_SURVEY_TEMPLATES}
                                         systemQuestionBank={settings?.surveyConfig?.questionBank || []}
                                     />
                                 </div>
