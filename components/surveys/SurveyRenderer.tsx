@@ -57,6 +57,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submissionAttempted, setSubmissionAttempted] = useState<boolean>(false);
     const [checkAttempts, setCheckAttempts] = useState<Record<string, number>>({});
+    const [checkDisqualification, setCheckDisqualification] = useState<{ isDisqualified: boolean; reason: string } | null>(null);
 
     // Start timer on mount
     useEffect(() => {
@@ -73,8 +74,11 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
     // Single source of truth logic evaluation via surveyLogicEngine
     const flowResult = useMemo(() => {
-        return evaluateSurveyFlow(questions, config.sections || [], answers);
-    }, [questions, config.sections, answers]);
+        return evaluateSurveyFlow(questions, config.sections || [], answers, config.globalLogicRules || []);
+    }, [questions, config.sections, answers, config.globalLogicRules]);
+
+    const isDisqualified = flowResult.status === 'disqualified' || Boolean(checkDisqualification?.isDisqualified);
+    const disqualificationReason = flowResult.disqualificationReason || checkDisqualification?.reason || 'Responses did not meet the screening rules for this survey.';
 
     const visibleQuestions = flowResult.visibleQuestions;
 
@@ -146,16 +150,23 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
     // Validation
     const validateAll = (): boolean => {
-        const newErrors: Record<string, string> = {};
+        if (isDisqualified) {
+            return true;
+        }
 
-        visibleQuestions.forEach(q => {
+        const newErrors: Record<string, string> = {};
+        let triggeredDisqualification = false;
+
+        for (const q of visibleQuestions) {
+            if (triggeredDisqualification) break;
+
             const ans = answers[q.id];
             const isAnswered = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
             const isRequired = flowResult.requiredMap[q.id] !== undefined ? flowResult.requiredMap[q.id] : !!q.required;
 
             if (isRequired && !isAnswered) {
                 newErrors[q.id] = 'This question is required.';
-                return;
+                continue;
             }
 
             if (isAnswered) {
@@ -166,13 +177,17 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                         const currentAttempts = (checkAttempts[q.id] || 0) + 1;
                         const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
                         if (!checkRes.passed) {
+                            setCheckAttempts(prev => ({ ...prev, [q.id]: currentAttempts }));
                             if (checkRes.action === 'retry') {
                                 newErrors[q.id] = checkRes.message || 'Verification check failed. Please verify your answer.';
-                                setCheckAttempts(prev => ({ ...prev, [q.id]: currentAttempts }));
-                                return;
+                                continue;
                             } else if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
-                                newErrors[q.id] = checkRes.message || 'Verification check failed. Inconsistent response.';
-                                return;
+                                triggeredDisqualification = true;
+                                setCheckDisqualification({
+                                    isDisqualified: true,
+                                    reason: checkRes.message || 'Verification check failed: Inconsistent response detected across verification check questions.'
+                                });
+                                break;
                             }
                         }
                     }
@@ -224,7 +239,12 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                     }
                 }
             }
-        });
+        }
+
+        if (triggeredDisqualification) {
+            setErrors({});
+            return true;
+        }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -238,7 +258,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
         // Check Attention Check and Check questions
         let attentionCheckPassed = true;
-        let qualificationStatus: string = flowResult.status === 'disqualified'
+        let qualificationStatus: string = isDisqualified
             ? 'Disqualified'
             : (flowResult.qualificationStatus === 'Qualified' ? 'Qualified' : 'Completed');
 
@@ -254,7 +274,8 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
             if (q.isCheckQuestion && q.sourceQuestionId) {
                 const sourceVal = answers[q.sourceQuestionId];
                 if (sourceVal !== undefined) {
-                    const checkRes = evaluateCheckQuestion(q, sourceVal, val, 1);
+                    const attempts = checkAttempts[q.id] || 1;
+                    const checkRes = evaluateCheckQuestion(q, sourceVal, val, attempts);
                     if (!checkRes.passed && (checkRes.action === 'disqualify' || checkRes.action === 'reject')) {
                         qualificationStatus = 'Disqualified';
                     }
@@ -400,12 +421,12 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                     </div>
                 </div>
 
-                {flowResult.status === 'disqualified' && (
+                {isDisqualified && (
                     <div className="mt-3 p-3.5 rounded-xl bg-red-950/40 border border-red-900/60 text-red-300 text-xs flex items-center gap-2.5">
                         <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                         <div>
                             <span className="font-bold">Disqualification Criteria Triggered: </span>
-                            <span>{flowResult.disqualificationReason || 'Responses did not meet the screening rules for this survey.'}</span>
+                            <span>{disqualificationReason}</span>
                         </div>
                     </div>
                 )}
@@ -822,10 +843,18 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                     type="button"
                     onClick={handleSubmit}
                     disabled={isSubmitting}
-                    className="flex-1 md:flex-initial px-8 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                    className={`flex-1 md:flex-initial px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 ${
+                        isDisqualified
+                            ? 'bg-red-600 hover:bg-red-500 text-white'
+                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                    }`}
                 >
                     {isSubmitting ? (
                         <span>Submitting Survey Responses...</span>
+                    ) : isDisqualified ? (
+                        <>
+                            <AlertTriangle className="w-4 h-4" /> Submit Responses (Disqualified)
+                        </>
                     ) : (
                         <>
                             <Send className="w-4 h-4" /> Complete & Submit Survey

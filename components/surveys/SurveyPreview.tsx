@@ -26,8 +26,8 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
 
     // Single source of truth logic evaluation via surveyLogicEngine
     const flowResult = useMemo(() => {
-        return evaluateSurveyFlow(questions, config.sections || [], responses);
-    }, [questions, config.sections, responses]);
+        return evaluateSurveyFlow(questions, config.sections || [], responses, config.globalLogicRules || []);
+    }, [questions, config.sections, responses, config.globalLogicRules]);
 
     const visibleQuestions = flowResult.visibleQuestions;
 

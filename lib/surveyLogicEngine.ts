@@ -380,9 +380,60 @@ export function evaluateAttentionCheck(
     answer: any
 ): { passed: boolean; message?: string } {
     if (!q.isAttentionCheck || !q.expectedAnswer) return { passed: true };
-    const expected = String(q.expectedAnswer).trim().toLowerCase();
-    const actual = String(answer || '').trim().toLowerCase();
-    const passed = expected === actual;
+
+    const parseArrayValues = (val: any): string[] => {
+        if (Array.isArray(val)) {
+            return val.map(x => String(x).trim().toLowerCase()).filter(Boolean);
+        }
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        return parsed.map(x => String(x).trim().toLowerCase()).filter(Boolean);
+                    }
+                } catch {
+                    // fall through
+                }
+            }
+            if (trimmed.includes(',') || trimmed.includes(';') || trimmed.includes('|')) {
+                return trimmed.split(/[,;|]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+            }
+            if (trimmed) {
+                return [trimmed.toLowerCase()];
+            }
+        }
+        return [];
+    };
+
+    let passed = false;
+
+    if (q.type === 'top_n') {
+        // Order-aware deterministic comparison
+        const expectedArr = parseArrayValues(q.expectedAnswer);
+        const actualArr = parseArrayValues(answer);
+        passed = expectedArr.length > 0 &&
+            actualArr.length === expectedArr.length &&
+            actualArr.every((v, i) => v === expectedArr[i]);
+    } else if (q.type === 'multiple_choice' || Array.isArray(answer)) {
+        // Set / order-agnostic comparison for normalized selected values
+        const expectedArr = parseArrayValues(q.expectedAnswer);
+        const actualArr = parseArrayValues(answer);
+        if (expectedArr.length > 0 && actualArr.length === expectedArr.length) {
+            const sortedExpected = [...expectedArr].sort();
+            const sortedActual = [...actualArr].sort();
+            passed = sortedExpected.every((v, i) => v === sortedActual[i]);
+        } else {
+            passed = false;
+        }
+    } else {
+        // Keep current behavior for string / number / single-choice
+        const expected = String(q.expectedAnswer).trim().toLowerCase();
+        const actual = String(answer !== undefined && answer !== null ? answer : '').trim().toLowerCase();
+        passed = expected === actual;
+    }
+
     return {
         passed,
         message: passed ? undefined : 'Attention trap check failed. Inattentive response detected.'
@@ -682,12 +733,23 @@ export function validateSurveyLogic(
                 }
             }
 
-            // Check ELSE target
-            if (rule.elseAction === 'goto_question') {
-                if (rule.elseTargetQuestionId && !questionIds.has(rule.elseTargetQuestionId)) {
+            // Check ELSE target questions
+            if (rule.elseAction === 'goto_question' || rule.elseAction === 'skip_question') {
+                if (!rule.elseTargetQuestionId) {
+                    errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: ELSE action is "${rule.elseAction}" but no target question is selected.`);
+                } else if (!questionIds.has(rule.elseTargetQuestionId)) {
                     errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: ELSE target question no longer exists.`);
-                } else if (rule.elseTargetQuestionId) {
+                } else {
                     adjacencyList.get(q.id)?.push(rule.elseTargetQuestionId);
+                }
+            }
+
+            // Check ELSE target sections
+            if (rule.elseAction === 'goto_section' || rule.elseAction === 'skip_section') {
+                if (!rule.elseTargetSectionId) {
+                    errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: ELSE action is "${rule.elseAction}" but no target section is selected.`);
+                } else if (!sectionIds.has(rule.elseTargetSectionId)) {
+                    errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: ELSE target section no longer exists.`);
                 }
             }
         });
