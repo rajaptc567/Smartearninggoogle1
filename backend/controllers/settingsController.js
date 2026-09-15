@@ -333,7 +333,8 @@ export const updateSettings = async (req, res) => {
                     name: String(st.name || '').trim(),
                     providerKey: String(st.providerKey || st.id || '').trim(),
                     badge: String(st.badge || '').trim(),
-                    description: String(st.description || '').trim()
+                    description: String(st.description || '').trim(),
+                    icon: String(st.icon || '').trim()
                 })).filter(st => st.name) : [];
 
                 return {

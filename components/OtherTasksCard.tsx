@@ -428,29 +428,31 @@ export const OtherTasksCard: React.FC<OtherTasksCardProps> = ({ className = '', 
                 </div>
 
                 {/* Sub-Tabs for "Other Tasks" */}
-                <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-0.5 sm:pt-1">
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Networks:</span>
-                    {subTabs.map(sub => (
-                        <button
-                            key={sub.id}
-                            onClick={() => setActiveSubTab(sub.id)}
-                            className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
-                                activeSubTab === sub.id
-                                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
-                                    : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                            }`}
-                        >
-                            <span>{sub.name}</span>
-                            {sub.badge && (
-                                <span className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded-md font-mono ${
-                                    activeSubTab === sub.id ? 'bg-slate-950/80 text-amber-300 font-bold' : 'bg-slate-950/60 text-slate-400'
-                                }`}>
-                                    {sub.badge}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                {subTabs.length > 0 && (
+                    <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pt-0.5 sm:pt-1">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mr-1 sm:mr-2 shrink-0">Networks:</span>
+                        {subTabs.map(sub => (
+                            <button
+                                key={sub.id}
+                                onClick={() => setActiveSubTab(sub.id)}
+                                className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 shrink-0 ${
+                                    activeSubTab === sub.id
+                                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
+                                        : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                }`}
+                            >
+                                <span>{sub.name}</span>
+                                {sub.badge && (
+                                    <span className={`text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded-md font-mono ${
+                                        activeSubTab === sub.id ? 'bg-slate-950/80 text-amber-300 font-bold' : 'bg-slate-950/60 text-slate-400'
+                                    }`}>
+                                        {sub.badge}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* TAB CONTENT CARD: OTHER TASKS GRID */}
