@@ -803,19 +803,123 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                             <div className="space-y-2">
                                                 {['single_choice', 'dropdown'].includes(currentQ.type) && (
                                                     <div className="space-y-1.5">
-                                                        {(currentQ.options || []).map((opt, oi) => (
-                                                            <div
-                                                                key={oi}
-                                                                onClick={() => handleSimulatorAnswer(currentQ.id, opt)}
-                                                                className={`p-2.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
-                                                                    currentVal === opt
-                                                                        ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                                                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50'
-                                                                }`}
-                                                            >
-                                                                {opt}
-                                                            </div>
-                                                        ))}
+                                                        {(currentQ.options || []).map((opt, oi) => {
+                                                            const optVal = typeof opt === 'string' ? opt : opt.value || opt.text || '';
+                                                            const optText = typeof opt === 'string' ? opt : opt.text || opt.value || '';
+                                                            return (
+                                                                <div
+                                                                    key={oi}
+                                                                    onClick={() => handleSimulatorAnswer(currentQ.id, optVal)}
+                                                                    className={`p-2.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                                                                        currentVal === optVal
+                                                                            ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                            : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                                                                    }`}
+                                                                >
+                                                                    {optText}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {currentQ.type === 'multiple_choice' && (
+                                                    <div className="space-y-1.5">
+                                                        {(() => {
+                                                            const selectedList: string[] = Array.isArray(currentVal) ? currentVal : [];
+                                                            const opts = (currentQ.options || []).map(o => typeof o === 'string' ? o : o.value || o.text || '');
+                                                            if (currentQ.allowOther && !opts.includes('Other')) {
+                                                                opts.push('Other');
+                                                            }
+
+                                                            return opts.map((optText, oi) => {
+                                                                const isChecked = selectedList.includes(optText);
+                                                                return (
+                                                                    <label
+                                                                        key={oi}
+                                                                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                                                                            isChecked
+                                                                                ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                                                                        }`}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isChecked}
+                                                                            onChange={() => {
+                                                                                if (isChecked) {
+                                                                                    handleSimulatorAnswer(currentQ.id, selectedList.filter(item => item !== optText));
+                                                                                } else {
+                                                                                    if (currentQ.validation?.maxSelections && selectedList.length >= currentQ.validation.maxSelections) {
+                                                                                        return;
+                                                                                    }
+                                                                                    handleSimulatorAnswer(currentQ.id, [...selectedList, optText]);
+                                                                                }
+                                                                            }}
+                                                                            className="rounded text-blue-600 focus:ring-0"
+                                                                        />
+                                                                        <span>{optText}</span>
+                                                                    </label>
+                                                                );
+                                                            });
+                                                        })()}
+                                                        {(currentQ.validation?.minSelections || currentQ.validation?.maxSelections) && (
+                                                            <p className="text-[11px] text-gray-500 font-medium">
+                                                                {currentQ.validation.minSelections ? `Min: ${currentQ.validation.minSelections} choices` : ''}
+                                                                {currentQ.validation.minSelections && currentQ.validation.maxSelections ? ' • ' : ''}
+                                                                {currentQ.validation.maxSelections ? `Max: ${currentQ.validation.maxSelections} choices` : ''}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {currentQ.type === 'top_n' && (
+                                                    <div className="space-y-1.5">
+                                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                                                            Click items to rank top {currentQ.validation?.topN || 3}:
+                                                        </p>
+                                                        {(() => {
+                                                            const topNLimit = currentQ.validation?.topN || 3;
+                                                            const selectedList: string[] = Array.isArray(currentVal) ? currentVal : [];
+                                                            const opts = (currentQ.options || []).map(o => typeof o === 'string' ? o : o.value || o.text || '');
+
+                                                            return opts.map((optText, oi) => {
+                                                                const rankIdx = selectedList.indexOf(optText);
+                                                                const isRanked = rankIdx >= 0;
+
+                                                                return (
+                                                                    <div
+                                                                        key={oi}
+                                                                        onClick={() => {
+                                                                            if (isRanked) {
+                                                                                handleSimulatorAnswer(currentQ.id, selectedList.filter(item => item !== optText));
+                                                                            } else {
+                                                                                if (selectedList.length >= topNLimit) {
+                                                                                    return;
+                                                                                }
+                                                                                handleSimulatorAnswer(currentQ.id, [...selectedList, optText]);
+                                                                            }
+                                                                        }}
+                                                                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+                                                                            isRanked
+                                                                                ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
+                                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                                                                        }`}
+                                                                    >
+                                                                        <span>{optText}</span>
+                                                                        {isRanked ? (
+                                                                            <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 font-black text-[11px] flex items-center justify-center">
+                                                                                #{rankIdx + 1}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[10px] text-gray-400 uppercase font-mono">
+                                                                                Tap to rank
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            });
+                                                        })()}
                                                     </div>
                                                 )}
 
@@ -853,7 +957,57 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                     </div>
                                                 )}
 
-                                                {['short_text', 'long_text', 'number'].includes(currentQ.type) && (
+                                                {currentQ.type === 'opinion_scale' && (
+                                                    <div className="space-y-2 pt-1">
+                                                        <div className="grid grid-cols-6 sm:grid-cols-11 gap-1.5">
+                                                            {Array.from({ length: 11 }).map((_, scaleVal) => {
+                                                                const isSelected = currentVal !== undefined && currentVal !== '' && Number(currentVal) === scaleVal;
+                                                                return (
+                                                                    <button
+                                                                        key={scaleVal}
+                                                                        type="button"
+                                                                        onClick={() => handleSimulatorAnswer(currentQ.id, scaleVal)}
+                                                                        className={`py-2 rounded-lg border text-xs font-bold transition-all ${
+                                                                            isSelected
+                                                                                ? 'bg-blue-600 text-white border-blue-600 shadow font-black'
+                                                                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                                        }`}
+                                                                    >
+                                                                        {scaleVal}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 font-semibold px-0.5">
+                                                            <span>0 - Not at all likely</span>
+                                                            <span>10 - Extremely likely</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {currentQ.type === 'number' && (
+                                                    <div className="space-y-1">
+                                                        <input
+                                                            type="number"
+                                                            value={currentVal !== undefined && currentVal !== null ? currentVal : ''}
+                                                            min={currentQ.validation?.minValue}
+                                                            max={currentQ.validation?.maxValue}
+                                                            onChange={e => {
+                                                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                                handleSimulatorAnswer(currentQ.id, val);
+                                                            }}
+                                                            placeholder="Enter numeric value..."
+                                                            className="w-full text-xs border rounded-lg p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
+                                                        />
+                                                        {(currentQ.validation?.minValue !== undefined || currentQ.validation?.maxValue !== undefined) && (
+                                                            <div className="text-[10px] text-gray-500 font-mono">
+                                                                Allowed range: {currentQ.validation.minValue !== undefined ? currentQ.validation.minValue : '-∞'} to {currentQ.validation.maxValue !== undefined ? currentQ.validation.maxValue : '+∞'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {['short_text', 'long_text'].includes(currentQ.type) && (
                                                     <input
                                                         type="text"
                                                         value={currentVal || ''}
@@ -868,7 +1022,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                 <Button
                                                     variant="primary"
                                                     size="sm"
-                                                    disabled={currentVal === undefined || currentVal === ''}
+                                                    disabled={currentVal === undefined || currentVal === '' || (Array.isArray(currentVal) && currentVal.length === 0)}
                                                     onClick={handleSimulatorNext}
                                                     className="rounded-lg text-xs"
                                                 >
@@ -974,6 +1128,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                             <option value="long_text">📝 Long Text / Feedback</option>
                                             <option value="dropdown">🔽 Dropdown Selection</option>
                                             <option value="number">🔢 Number</option>
+                                            <option value="top_n">🔢 Top-N / Ranking</option>
                                         </select>
 
                                         {/* Section tag */}
