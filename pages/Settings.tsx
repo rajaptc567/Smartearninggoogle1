@@ -1043,7 +1043,19 @@ const Settings: React.FC = () => {
               },
               homepagePaymentLogos: (localSettings.homepagePaymentLogos || [])
                   .filter(l => l && (l.name || l.logoUrl))
-                  .map(l => ({ name: String(l.name || '').trim(), logoUrl: String(l.logoUrl || '').trim() }))
+                  .map(l => ({ name: String(l.name || '').trim(), logoUrl: String(l.logoUrl || '').trim() })),
+              customEarnTabs: (localSettings.customEarnTabs || []).map(t => ({
+                  id: String(t.id || 'other_tasks').trim(),
+                  title: String(t.title || 'Other Tasks').trim(),
+                  enabled: t.enabled !== false,
+                  subTabs: (t.subTabs || []).map(st => ({
+                      id: String(st.id || '').trim(),
+                      name: String(st.name || '').trim(),
+                      providerKey: String(st.providerKey || st.id || '').trim(),
+                      badge: String(st.badge || '').trim(),
+                      description: String(st.description || '').trim()
+                  })).filter(st => st.name)
+              }))
           };
           const updatedSettings = await updateSettings(sanitizedPayload);
           dispatch({ type: 'UPDATE_SETTINGS', payload: updatedSettings });

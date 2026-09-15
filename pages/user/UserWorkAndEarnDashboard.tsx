@@ -361,31 +361,38 @@ const UserWorkAndEarnDashboard: React.FC = () => {
     const exchangeRate = state.settings?.exchangeRates?.[currentUser.currency] || 1;
 
     // Custom Tabs from Admin Settings
-    const customEarnTabs = state.settings?.customEarnTabs || [];
-    const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title.toLowerCase().includes('other'));
+    const customEarnTabs = state.settings?.customEarnTabs;
 
     // Dynamic Sub-Tabs for "Other Tasks"
     const subTabs = useMemo(() => {
         const defaultSubTabs = [
-            { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead' },
-            { id: '2row', name: '2row', providerKey: '2row', badge: '2row' },
-            { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)' },
-            { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls' },
-            { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall' }
+            { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
+            { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
+            { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
+            { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
+            { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
         ];
 
-        if (otherTasksTabConfig && Array.isArray(otherTasksTabConfig.subTabs)) {
-            return otherTasksTabConfig.subTabs.map(st => ({
-                id: st.id,
-                name: st.name,
-                providerKey: st.providerKey || st.id,
-                badge: st.badge || st.name,
-                description: st.description || ''
-            }));
+        // If customEarnTabs is explicitly defined (even if [] or subTabs: []), use the saved configuration and NEVER fall back to defaults
+        if (customEarnTabs !== undefined && customEarnTabs !== null) {
+            if (!Array.isArray(customEarnTabs) || customEarnTabs.length === 0) {
+                return [];
+            }
+            const otherTasksTabConfig = customEarnTabs.find(t => t.id === 'other_tasks' || t.title?.toLowerCase().includes('other'));
+            if (otherTasksTabConfig && Array.isArray(otherTasksTabConfig.subTabs)) {
+                return otherTasksTabConfig.subTabs.map(st => ({
+                    id: st.id,
+                    name: st.name,
+                    providerKey: st.providerKey || st.id,
+                    badge: st.badge || st.name,
+                    description: st.description || ''
+                }));
+            }
+            return [];
         }
 
         return defaultSubTabs;
-    }, [otherTasksTabConfig]);
+    }, [customEarnTabs]);
 
     // Comprehensive Work & Earn Financial Calculations
     const userIdStr = currentUser._id?.toString();

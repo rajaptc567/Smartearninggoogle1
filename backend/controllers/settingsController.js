@@ -180,6 +180,7 @@ export const getPublicSettings = async (req, res) => {
             hubDepositMethods: settings.hubDepositMethods || [],
             modulePagesConfig: settings.modulePagesConfig || null,
             workAndEarnConfig: settings.workAndEarnConfig || null,
+            customEarnTabs: settings.customEarnTabs !== undefined ? settings.customEarnTabs : [],
             userQuickActionsConfig: settings.userQuickActionsConfig || null,
             myCampaignActionsConfig: settings.myCampaignActionsConfig || { deposit: true, transfer: true, analytics: true, convert: true },
             campaignConvertEnabled: settings.campaignConvertEnabled !== false,

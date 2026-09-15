@@ -633,24 +633,16 @@ const SettingSchema = new mongoose.Schema({
                 id: { type: String, required: true },
                 title: { type: String, required: true },
                 enabled: { type: Boolean, default: true },
-                subTabs: {
-                    type: [
-                        {
-                            id: { type: String, required: true },
-                            name: { type: String, required: true },
-                            providerKey: { type: String, default: '' },
-                            badge: { type: String, default: '' },
-                            description: { type: String, default: '' }
-                        }
-                    ],
-                    default: () => [
-                        { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
-                        { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
-                        { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
-                        { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
-                        { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
-                    ]
-                }
+                subTabs: [
+                    {
+                        id: { type: String, required: true },
+                        name: { type: String, required: true },
+                        providerKey: { type: String, default: '' },
+                        badge: { type: String, default: '' },
+                        description: { type: String, default: '' },
+                        icon: { type: String, default: '' }
+                    }
+                ]
             }
         ],
         default: () => [
@@ -1969,9 +1961,9 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (needsSave) {
         settings.markModified('surveyConfig');
+        settings.markModified('customEarnTabs');
         await settings.save();
     }
-    if (needsSave) { await settings.save(); }
     return settings;
 };
 
