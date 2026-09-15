@@ -501,8 +501,9 @@ export interface SurveyFlowResult {
 
 /**
  * Helper to apply an evaluated rule action to survey flow state
+ * Shared unified execution path for global rules, question rules, and their ELSE actions.
  */
-function applyRuleAction(
+export function applyRuleAction(
     res: { action: string; targetQuestionId?: string; targetSectionId?: string; message?: string },
     questions: SurveyQuestion[],
     fromIndex: number,
@@ -618,19 +619,28 @@ export function evaluateSurveyFlow(
             if (state.status === 'disqualified' || state.status === 'completed') {
                 break;
             }
-            const res = evaluateRule(rule, responses);
-            if (res.action) {
-                let fromIndex = -1;
-                let sourceQuestionId: string | undefined = undefined;
-                if (rule.conditions && rule.conditions.length > 0) {
-                    sourceQuestionId = rule.conditions[0]?.questionId;
-                    const indices = rule.conditions
-                        .map(c => questions.findIndex(q => q.id === c.questionId))
-                        .filter(idx => idx !== -1);
-                    if (indices.length > 0) {
-                        fromIndex = Math.max(...indices);
-                    }
+
+            let fromIndex = -1;
+            let sourceQuestionId: string | undefined = undefined;
+            if (rule.conditions && rule.conditions.length > 0) {
+                sourceQuestionId = rule.conditions[0]?.questionId;
+                const indices = rule.conditions
+                    .map(c => questions.findIndex(q => q.id === c.questionId))
+                    .filter(idx => idx !== -1);
+                if (indices.length > 0) {
+                    fromIndex = Math.max(...indices);
                 }
+            }
+
+            const res = evaluateRule(rule, responses);
+            if (res.matched && res.action) {
+                // 1. Global Logic rules (THEN action)
+                const shouldBreak = applyRuleAction(res, questions, fromIndex, state, sourceQuestionId, true);
+                if (shouldBreak) {
+                    break;
+                }
+            } else if (!res.matched && res.action) {
+                // 2. Global Logic ELSE actions
                 const shouldBreak = applyRuleAction(res, questions, fromIndex, state, sourceQuestionId, true);
                 if (shouldBreak) {
                     break;
@@ -706,7 +716,14 @@ export function evaluateSurveyFlow(
         const rulesToEval = [...(q.logicRules || [])];
         for (const rule of rulesToEval) {
             const res = evaluateRule(rule, responses);
-            if (res.action) {
+            if (res.matched && res.action) {
+                // 3. Question-level logic rules (THEN action)
+                const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
+                if (shouldBreak) {
+                    break;
+                }
+            } else if (!res.matched && res.action) {
+                // 4. Question-level ELSE actions
                 const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
                 if (shouldBreak) {
                     break;
