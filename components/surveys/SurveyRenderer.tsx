@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SurveyConfig, SurveyQuestion, SurveyAnswer, SurveyOption } from '../../types';
 import {
     CheckCircle2,
@@ -11,8 +11,11 @@ import {
     Check,
     X,
     Send,
-    FileText
+    FileText,
+    AlertTriangle,
+    Info
 } from 'lucide-react';
+import { evaluateSurveyFlow, evaluateCheckQuestion, evaluateAttentionCheck } from '../../lib/surveyLogicEngine';
 
 interface SurveyRendererProps {
     config: SurveyConfig;
@@ -53,6 +56,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
     const [otherAnswers, setOtherAnswers] = useState<Record<string, string>>({});
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submissionAttempted, setSubmissionAttempted] = useState<boolean>(false);
+    const [checkAttempts, setCheckAttempts] = useState<Record<string, number>>({});
 
     // Start timer on mount
     useEffect(() => {
@@ -67,43 +71,12 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
     const questions: SurveyQuestion[] = config.questions || [];
 
-    // Evaluate conditional visibility for question
-    const isQuestionVisible = (q: SurveyQuestion): boolean => {
-        if (!q.showIf) return true;
-        const condition = Array.isArray(q.showIf) ? q.showIf[0] : q.showIf;
-        if (!condition || !condition.questionId) return true;
+    // Single source of truth logic evaluation via surveyLogicEngine
+    const flowResult = useMemo(() => {
+        return evaluateSurveyFlow(questions, config.sections || [], answers);
+    }, [questions, config.sections, answers]);
 
-        const sourceAns = answers[condition.questionId];
-        const targetVal = String(condition.value || '').trim().toLowerCase();
-
-        if (condition.operator === 'answered') {
-            return sourceAns !== undefined && sourceAns !== null && sourceAns !== '';
-        }
-
-        if (Array.isArray(sourceAns)) {
-            if (condition.operator === 'contains') {
-                return sourceAns.some(item => String(item).toLowerCase().includes(targetVal));
-            }
-            if (condition.operator === 'not_contains') {
-                return !sourceAns.some(item => String(item).toLowerCase().includes(targetVal));
-            }
-            return sourceAns.map(s => String(s).toLowerCase()).includes(targetVal);
-        }
-
-        const sourceStr = String(sourceAns || '').trim().toLowerCase();
-        if (condition.operator === 'equals') {
-            return sourceStr === targetVal;
-        }
-        if (condition.operator === 'not_equals') {
-            return sourceStr !== targetVal;
-        }
-        if (condition.operator === 'contains') {
-            return sourceStr.includes(targetVal);
-        }
-        return true;
-    };
-
-    const visibleQuestions = questions.filter(isQuestionVisible);
+    const visibleQuestions = flowResult.visibleQuestions;
 
     // Calculate progress
     const answeredCount = visibleQuestions.filter(q => {
@@ -178,13 +151,33 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
         visibleQuestions.forEach(q => {
             const ans = answers[q.id];
             const isAnswered = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
+            const isRequired = flowResult.requiredMap[q.id] !== undefined ? flowResult.requiredMap[q.id] : !!q.required;
 
-            if (q.required && !isAnswered) {
+            if (isRequired && !isAnswered) {
                 newErrors[q.id] = 'This question is required.';
                 return;
             }
 
             if (isAnswered) {
+                // Check Verification Question consistency
+                if (q.isCheckQuestion && q.sourceQuestionId) {
+                    const sourceAns = answers[q.sourceQuestionId];
+                    if (sourceAns !== undefined && sourceAns !== null && sourceAns !== '') {
+                        const currentAttempts = (checkAttempts[q.id] || 0) + 1;
+                        const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
+                        if (!checkRes.passed) {
+                            if (checkRes.action === 'retry') {
+                                newErrors[q.id] = checkRes.message || 'Verification check failed. Please verify your answer.';
+                                setCheckAttempts(prev => ({ ...prev, [q.id]: currentAttempts }));
+                                return;
+                            } else if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
+                                newErrors[q.id] = checkRes.message || 'Verification check failed. Inconsistent response.';
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // Multiple choice min/max
                 if (q.type === 'multiple_choice' && Array.isArray(ans)) {
                     if (q.validation?.minSelections && ans.length < q.validation.minSelections) {
@@ -197,7 +190,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                 // Top N
                 if (q.type === 'top_n' && Array.isArray(ans)) {
                     const reqTopN = q.validation?.topN || 3;
-                    if (q.required && ans.length < reqTopN && (q.options || []).length >= reqTopN) {
+                    if (isRequired && ans.length < reqTopN && (q.options || []).length >= reqTopN) {
                         newErrors[q.id] = `Please rank your top ${reqTopN} choices.`;
                     }
                 }
@@ -243,9 +236,31 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
             return;
         }
 
-        // Check Attention Check questions
+        // Check Attention Check and Check questions
         let attentionCheckPassed = true;
-        let qualificationStatus = 'Completed';
+        let qualificationStatus: string = flowResult.status === 'disqualified'
+            ? 'Disqualified'
+            : (flowResult.qualificationStatus === 'Qualified' ? 'Qualified' : 'Completed');
+
+        visibleQuestions.forEach(q => {
+            const val = answers[q.id];
+            if (q.isAttentionCheck && q.expectedAnswer) {
+                const att = evaluateAttentionCheck(q, val);
+                if (!att.passed) {
+                    attentionCheckPassed = false;
+                    qualificationStatus = 'Disqualified';
+                }
+            }
+            if (q.isCheckQuestion && q.sourceQuestionId) {
+                const sourceVal = answers[q.sourceQuestionId];
+                if (sourceVal !== undefined) {
+                    const checkRes = evaluateCheckQuestion(q, sourceVal, val, 1);
+                    if (!checkRes.passed && (checkRes.action === 'disqualify' || checkRes.action === 'reject')) {
+                        qualificationStatus = 'Disqualified';
+                    }
+                }
+            }
+        });
 
         const responsesList: SurveyAnswer[] = visibleQuestions.map(q => {
             const val = answers[q.id];
@@ -254,13 +269,8 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
             let checkPassed: boolean | undefined = undefined;
 
             if (isCheck && q.expectedAnswer) {
-                const expected = q.expectedAnswer.trim().toLowerCase();
-                const actual = String(val || '').trim().toLowerCase();
-                checkPassed = actual === expected;
-                if (!checkPassed) {
-                    attentionCheckPassed = false;
-                    qualificationStatus = 'Disqualified';
-                }
+                const att = evaluateAttentionCheck(q, val);
+                checkPassed = att.passed;
             }
 
             return {
@@ -280,7 +290,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
         const answeredPath = visibleQuestions.map(q => q.id);
         const skippedQuestions = questions
-            .filter(q => !visibleQuestions.some(vq => vq.id === q.id))
+            .filter(q => !visibleQuestions.some(vq => vq.id === q.id) || flowResult.skippedQuestionIds.has(q.id))
             .map(q => q.id);
 
         await onSubmit({
@@ -389,6 +399,26 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                         />
                     </div>
                 </div>
+
+                {flowResult.status === 'disqualified' && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-red-950/40 border border-red-900/60 text-red-300 text-xs flex items-center gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <div>
+                            <span className="font-bold">Disqualification Criteria Triggered: </span>
+                            <span>{flowResult.disqualificationReason || 'Responses did not meet the screening rules for this survey.'}</span>
+                        </div>
+                    </div>
+                )}
+
+                {flowResult.status === 'completed' && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-900/60 text-emerald-300 text-xs flex items-center gap-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div>
+                            <span className="font-bold">Survey Path Completed: </span>
+                            <span>Based on your answers, subsequent questions were concluded. You may now complete and submit your responses below.</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Questions List */}
@@ -396,6 +426,8 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                 {visibleQuestions.map((q, idx) => {
                     const currentAnswer = answers[q.id];
                     const error = errors[q.id];
+                    const isRequired = flowResult.requiredMap[q.id] !== undefined ? flowResult.requiredMap[q.id] : !!q.required;
+                    const questionMessages = flowResult.messages.filter(m => m.questionId === q.id);
                     const opts: SurveyOption[] = (q.options || []).map(opt =>
                         typeof opt === 'string' ? { id: opt, text: opt, value: opt } : opt
                     );
@@ -419,7 +451,7 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                                     </span>
                                     <h3 className="text-sm md:text-base font-bold text-white leading-snug">
                                         {q.title}
-                                        {q.required && <span className="text-amber-500 ml-1">*</span>}
+                                        {isRequired && <span className="text-amber-500 ml-1">*</span>}
                                     </h3>
                                     {q.description && (
                                         <p className="text-xs text-slate-400 mt-1">{q.description}</p>
@@ -431,6 +463,20 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
                                     </span>
                                 )}
                             </div>
+
+                            {/* Dynamic Question Notices from Logic Engine */}
+                            {questionMessages.map((msg, mIdx) => (
+                                <div
+                                    key={mIdx}
+                                    className={`mb-3 px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 ${
+                                        msg.type === 'warning'
+                                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                                            : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-300'
+                                    }`}
+                                >
+                                    <Info className="w-3.5 h-3.5 shrink-0" /> {msg.text}
+                                </div>
+                            ))}
 
                             {/* Error Message */}
                             {error && (

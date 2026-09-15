@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { SurveyConfig, SurveyQuestion } from '../../types';
 import {
     CheckCircle2,
@@ -7,8 +7,10 @@ import {
     ChevronLeft,
     AlertCircle,
     Star,
-    Sparkles
+    Sparkles,
+    Info
 } from 'lucide-react';
+import { evaluateSurveyFlow } from '../../lib/surveyLogicEngine';
 
 interface SurveyPreviewProps {
     config: SurveyConfig;
@@ -22,43 +24,12 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
 
     const questions: SurveyQuestion[] = config.questions || [];
 
-    // Evaluate conditional visibility for question
-    const isQuestionVisible = (q: SurveyQuestion): boolean => {
-        if (!q.showIf) return true;
-        const condition = Array.isArray(q.showIf) ? q.showIf[0] : q.showIf;
-        if (!condition || !condition.questionId) return true;
+    // Single source of truth logic evaluation via surveyLogicEngine
+    const flowResult = useMemo(() => {
+        return evaluateSurveyFlow(questions, config.sections || [], responses);
+    }, [questions, config.sections, responses]);
 
-        const sourceAns = responses[condition.questionId];
-        const targetVal = String(condition.value || '').trim().toLowerCase();
-
-        if (condition.operator === 'answered') {
-            return sourceAns !== undefined && sourceAns !== null && sourceAns !== '';
-        }
-
-        if (Array.isArray(sourceAns)) {
-            if (condition.operator === 'contains') {
-                return sourceAns.some(item => String(item).toLowerCase().includes(targetVal));
-            }
-            if (condition.operator === 'not_contains') {
-                return !sourceAns.some(item => String(item).toLowerCase().includes(targetVal));
-            }
-            return sourceAns.map(s => String(s).toLowerCase()).includes(targetVal);
-        }
-
-        const sourceStr = String(sourceAns || '').trim().toLowerCase();
-        if (condition.operator === 'equals') {
-            return sourceStr === targetVal;
-        }
-        if (condition.operator === 'not_equals') {
-            return sourceStr !== targetVal;
-        }
-        if (condition.operator === 'contains') {
-            return sourceStr.includes(targetVal);
-        }
-        return true;
-    };
-
-    const visibleQuestions = questions.filter(isQuestionVisible);
+    const visibleQuestions = flowResult.visibleQuestions;
 
     const handleSingleChoice = (qId: string, val: string) => {
         setResponses(prev => ({ ...prev, [qId]: val }));
@@ -126,6 +97,26 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                 </button>
             </div>
 
+            {flowResult.status === 'disqualified' && (
+                <div className="p-4 rounded-2xl bg-red-950/40 border border-red-900/60 text-red-300 text-xs flex items-center gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <div>
+                        <span className="font-bold">Logic Disqualification: </span>
+                        <span>{flowResult.disqualificationReason || 'Respondent screened out by branch logic rule.'}</span>
+                    </div>
+                </div>
+            )}
+
+            {flowResult.status === 'completed' && (
+                <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-900/60 text-emerald-300 text-xs flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div>
+                        <span className="font-bold">End Survey Reached: </span>
+                        <span>Flow reached end_survey condition; subsequent questions skipped.</span>
+                    </div>
+                </div>
+            )}
+
             {config.description && (
                 <p className="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 leading-relaxed">
                     {config.description}
@@ -141,6 +132,8 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                 ) : (
                     visibleQuestions.map((q, idx) => {
                         const currentAnswer = responses[q.id];
+                        const isRequired = flowResult.requiredMap[q.id] !== undefined ? flowResult.requiredMap[q.id] : !!q.required;
+                        const questionMessages = flowResult.messages.filter(m => m.questionId === q.id);
                         const opts = (q.options || []).map(opt => typeof opt === 'string' ? { id: opt, text: opt, value: opt } : opt);
 
                         return (
@@ -155,7 +148,7 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                         </span>
                                         <h4 className="text-sm font-bold text-white leading-snug">
                                             {q.title || `Question ${idx + 1}`}
-                                            {q.required && <span className="text-amber-500 ml-1">*</span>}
+                                            {isRequired && <span className="text-amber-500 ml-1">*</span>}
                                         </h4>
                                         {q.description && (
                                             <p className="text-xs text-slate-400 mt-1">{q.description}</p>
@@ -167,6 +160,19 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                         </span>
                                     )}
                                 </div>
+
+                                {questionMessages.map((msg, mIdx) => (
+                                    <div
+                                        key={mIdx}
+                                        className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 ${
+                                            msg.type === 'warning'
+                                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                                                : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-300'
+                                        }`}
+                                    >
+                                        <Info className="w-3.5 h-3.5 shrink-0" /> {msg.text}
+                                    </div>
+                                ))}
 
                                 {/* Single Choice */}
                                 {q.type === 'single_choice' && (
@@ -471,13 +477,23 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
             </div>
 
             {/* Answered State Summary */}
-            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 text-xs flex justify-between items-center text-slate-400 font-mono">
+            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 text-xs flex flex-wrap justify-between items-center gap-2 text-slate-400 font-mono">
                 <span>
                     Answered: <strong className="text-white">{Object.keys(responses).length}</strong> / {visibleQuestions.length} visible questions
                 </span>
-                <span className="text-emerald-400 font-bold">
-                    ✓ Simulator Active
-                </span>
+                {flowResult.status === 'disqualified' ? (
+                    <span className="text-red-400 font-bold">
+                        ✕ Disqualified ({flowResult.disqualificationReason || 'Screened Out'})
+                    </span>
+                ) : flowResult.status === 'completed' ? (
+                    <span className="text-emerald-400 font-bold">
+                        ✓ Flow Complete
+                    </span>
+                ) : (
+                    <span className="text-emerald-400 font-bold">
+                        ✓ Simulator Active
+                    </span>
+                )}
             </div>
         </div>
     );

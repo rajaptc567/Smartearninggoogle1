@@ -39,6 +39,8 @@ import {
     SurveySection,
     validateSurveyLogic,
     verifyCheckQuestion,
+    evaluateCheckQuestion,
+    evaluateAttentionCheck,
     evaluateRule,
     pipeAnswersIntoText
 } from '../lib/surveyLogicEngine';
@@ -84,6 +86,12 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
     const [simulatorLog, setSimulatorLog] = useState<string[]>([]);
     const [simulatorDisqualified, setSimulatorDisqualified] = useState(false);
     const [simulatorCompleted, setSimulatorCompleted] = useState(false);
+    const [simulatorAttempts, setSimulatorAttempts] = useState<Record<string, number>>({});
+    const [simulatorNotice, setSimulatorNotice] = useState<{ type: 'info' | 'warning' | 'error'; message: string } | null>(null);
+    const [simulatorSkippedIds, setSimulatorSkippedIds] = useState<string[]>([]);
+    const [simulatorHiddenIds, setSimulatorHiddenIds] = useState<string[]>([]);
+    const [simulatorRequiredMap, setSimulatorRequiredMap] = useState<Record<string, boolean>>({});
+    const [simulatorQualified, setSimulatorQualified] = useState(false);
 
     // Dismiss check question recommendation
     const [dismissedRecommendation, setDismissedRecommendation] = useState(false);
@@ -319,30 +327,107 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
         setSimulatorLog([`Started test simulator with ${value.questions.length} questions.`]);
         setSimulatorDisqualified(false);
         setSimulatorCompleted(false);
+        setSimulatorAttempts({});
+        setSimulatorNotice(null);
+        setSimulatorSkippedIds([]);
+        setSimulatorHiddenIds([]);
+        setSimulatorRequiredMap({});
+        setSimulatorQualified(false);
     };
 
     const handleSimulatorAnswer = (qId: string, answer: any) => {
         const updated = { ...simulatorResponses, [qId]: answer };
         setSimulatorResponses(updated);
-        setSimulatorLog(prev => [...prev, `Answered Question ${simulatorActiveQIndex + 1}: "${answer}"`]);
+        setSimulatorLog(prev => [...prev, `Answered Question ${simulatorActiveQIndex + 1}: ${JSON.stringify(answer)}`]);
     };
 
     const handleSimulatorNext = () => {
         const currentQ = value.questions[simulatorActiveQIndex];
         if (!currentQ) return;
 
-        // Check if question has rules
+        setSimulatorNotice(null);
+
+        // 1. Validate required constraint (taking into account any rule-based require_answer / make_optional)
+        const isRequired = simulatorRequiredMap[currentQ.id] !== undefined
+            ? simulatorRequiredMap[currentQ.id]
+            : currentQ.required;
+
+        const ans = simulatorResponses[currentQ.id];
+        const hasAns = ans !== undefined && ans !== null && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
+
+        if (isRequired && !hasAns) {
+            setSimulatorNotice({
+                type: 'warning',
+                message: 'This question is required. Please provide an answer before proceeding.'
+            });
+            setSimulatorLog(prev => [...prev, `[Validation] Question ${simulatorActiveQIndex + 1} is required.`]);
+            return;
+        }
+
+        // 2. Check Question Verification
+        if (currentQ.isCheckQuestion && currentQ.sourceQuestionId) {
+            const sourceAns = simulatorResponses[currentQ.sourceQuestionId];
+            const currentAttempts = (simulatorAttempts[currentQ.id] || 0) + 1;
+            setSimulatorAttempts(prev => ({ ...prev, [currentQ.id]: currentAttempts }));
+
+            const checkResult = evaluateCheckQuestion(currentQ, sourceAns, ans, currentAttempts);
+
+            if (checkResult.passed) {
+                setSimulatorLog(prev => [...prev, `Check Question PASSED! Matches source answer.`]);
+            } else {
+                setSimulatorLog(prev => [
+                    ...prev,
+                    `Check Question FAILED! (Action: [${checkResult.action}], Attempt: ${currentAttempts}/${currentQ.maxCheckAttempts || 1})`
+                ]);
+
+                if (checkResult.action === 'retry') {
+                    setSimulatorNotice({
+                        type: 'warning',
+                        message: checkResult.message || `Answers do not match. Please verify and retry (${checkResult.attemptsLeft} attempts left).`
+                    });
+                    return; // Stop and allow respondent to retry
+                } else if (checkResult.action === 'disqualify' || checkResult.action === 'reject') {
+                    setSimulatorDisqualified(true);
+                    setSimulatorLog(prev => [...prev, `Participant disqualified via verification check failure.`]);
+                    return;
+                } else if (checkResult.action === 'flag' || checkResult.action === 'review') {
+                    setSimulatorNotice({
+                        type: 'info',
+                        message: checkResult.message || `Response marked for ${checkResult.action}.`
+                    });
+                    setSimulatorLog(prev => [...prev, `Response marked as [${checkResult.action}]. Continuing test...`]);
+                }
+            }
+        }
+
+        // 3. Attention Trap Check
+        if (currentQ.isAttentionCheck && currentQ.expectedAnswer) {
+            const attCheck = evaluateAttentionCheck(currentQ, ans);
+            if (!attCheck.passed) {
+                setSimulatorDisqualified(true);
+                setSimulatorLog(prev => [
+                    ...prev,
+                    `Attention Trap FAILED! Expected: "${currentQ.expectedAnswer}", Received: "${ans}". Disqualified.`
+                ]);
+                return;
+            } else {
+                setSimulatorLog(prev => [...prev, `Attention Trap PASSED! Answer matched expected trap token.`]);
+            }
+        }
+
+        // 4. Evaluate Logic Rules (including ELSE actions)
         let nextIndex = simulatorActiveQIndex + 1;
-        let triggeredAction = '';
+        const nextSkipped = new Set(simulatorSkippedIds);
+        const nextHidden = new Set(simulatorHiddenIds);
+        const nextRequired = { ...simulatorRequiredMap };
 
         if (currentQ.logicRules && currentQ.logicRules.length > 0) {
             for (const rule of currentQ.logicRules) {
                 const evalResult = evaluateRule(rule, simulatorResponses);
                 if (evalResult.action) {
-                    triggeredAction = evalResult.action;
                     setSimulatorLog(prev => [
                         ...prev,
-                        `Triggered Rule [${evalResult.action}] (matched: ${evalResult.matched})`
+                        `Triggered Rule [${evalResult.action}] (matched: ${evalResult.matched}${evalResult.message ? ` - "${evalResult.message}"` : ''})`
                     ]);
 
                     if (evalResult.action === 'goto_question' && evalResult.targetQuestionId) {
@@ -350,38 +435,78 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                         if (targetIdx !== -1) {
                             nextIndex = targetIdx;
                             setSimulatorLog(prev => [...prev, `Jumped to Question ${targetIdx + 1}`]);
-                            break;
                         }
+                    } else if (evalResult.action === 'goto_section' && evalResult.targetSectionId) {
+                        const targetIdx = value.questions.findIndex(q => q.sectionId === evalResult.targetSectionId);
+                        if (targetIdx !== -1) {
+                            nextIndex = targetIdx;
+                            setSimulatorLog(prev => [...prev, `Jumped to Section (Question ${targetIdx + 1})`]);
+                        }
+                    } else if (evalResult.action === 'skip_question') {
+                        if (evalResult.targetQuestionId) {
+                            nextSkipped.add(evalResult.targetQuestionId);
+                            setSimulatorLog(prev => [...prev, `Rule skipped Question ID ${evalResult.targetQuestionId}`]);
+                        } else {
+                            const skipIdx = simulatorActiveQIndex + 1;
+                            if (value.questions[skipIdx]) {
+                                nextSkipped.add(value.questions[skipIdx].id);
+                                setSimulatorLog(prev => [...prev, `Rule skipped Question ${skipIdx + 1}`]);
+                            }
+                        }
+                    } else if (evalResult.action === 'skip_section' && evalResult.targetSectionId) {
+                        value.questions.forEach(tq => {
+                            if (tq.sectionId === evalResult.targetSectionId) {
+                                nextSkipped.add(tq.id);
+                            }
+                        });
+                        setSimulatorLog(prev => [...prev, `Rule skipped Section ${evalResult.targetSectionId}`]);
+                    } else if (evalResult.action === 'show_question' && evalResult.targetQuestionId) {
+                        nextHidden.delete(evalResult.targetQuestionId);
+                        nextSkipped.delete(evalResult.targetQuestionId);
+                        setSimulatorLog(prev => [...prev, `Rule showed Question ID ${evalResult.targetQuestionId}`]);
+                    } else if (evalResult.action === 'hide_question' && evalResult.targetQuestionId) {
+                        nextHidden.add(evalResult.targetQuestionId);
+                        setSimulatorLog(prev => [...prev, `Rule hid Question ID ${evalResult.targetQuestionId}`]);
+                    } else if (evalResult.action === 'require_answer' && evalResult.targetQuestionId) {
+                        nextRequired[evalResult.targetQuestionId] = true;
+                        setSimulatorLog(prev => [...prev, `Rule made Question ID ${evalResult.targetQuestionId} REQUIRED`]);
+                    } else if (evalResult.action === 'make_optional' && evalResult.targetQuestionId) {
+                        nextRequired[evalResult.targetQuestionId] = false;
+                        setSimulatorLog(prev => [...prev, `Rule made Question ID ${evalResult.targetQuestionId} OPTIONAL`]);
                     } else if (evalResult.action === 'end_survey') {
                         setSimulatorCompleted(true);
                         setSimulatorLog(prev => [...prev, `Survey completed early via rule.`]);
                         return;
                     } else if (evalResult.action === 'disqualify') {
                         setSimulatorDisqualified(true);
-                        setSimulatorLog(prev => [...prev, `Participant disqualified via survey logic rule!`]);
+                        setSimulatorLog(prev => [...prev, `Participant disqualified via rule.`]);
                         return;
+                    } else if (evalResult.action === 'qualify') {
+                        setSimulatorQualified(true);
+                        setSimulatorLog(prev => [...prev, `Participant status set to QUALIFIED.`]);
+                    } else if (evalResult.action === 'show_message' || evalResult.action === 'warning') {
+                        if (evalResult.message) {
+                            setSimulatorNotice({
+                                type: evalResult.action === 'warning' ? 'warning' : 'info',
+                                message: evalResult.message
+                            });
+                        }
                     }
                 }
             }
         }
 
-        // Check question verification check
-        if (currentQ.isCheckQuestion && currentQ.sourceQuestionId) {
-            const sourceAns = simulatorResponses[currentQ.sourceQuestionId];
-            const checkAns = simulatorResponses[currentQ.id];
-            const checkRes = verifyCheckQuestion(sourceAns, checkAns, currentQ.checkComparisonMethod);
-            if (checkRes.passed) {
-                setSimulatorLog(prev => [...prev, `Check Question PASSED! Matches source answer.`]);
-            } else {
-                setSimulatorLog(prev => [
-                    ...prev,
-                    `Check Question FAILED! (Method: ${currentQ.checkComparisonMethod}, Action: ${currentQ.checkFailureAction})`
-                ]);
-                if (currentQ.checkFailureAction === 'disqualify') {
-                    setSimulatorDisqualified(true);
-                    return;
-                }
-            }
+        setSimulatorSkippedIds(Array.from(nextSkipped));
+        setSimulatorHiddenIds(Array.from(nextHidden));
+        setSimulatorRequiredMap(nextRequired);
+
+        // Advance to next unskipped & unhidden question
+        while (
+            nextIndex < value.questions.length &&
+            (nextSkipped.has(value.questions[nextIndex].id) || nextHidden.has(value.questions[nextIndex].id))
+        ) {
+            setSimulatorLog(prev => [...prev, `Skipping Question ${nextIndex + 1} due to logic rule/branch.`]);
+            nextIndex++;
         }
 
         if (nextIndex >= value.questions.length) {
@@ -783,10 +908,38 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                     const currentVal = simulatorResponses[currentQ.id];
                                     const pipedTitle = pipeAnswersIntoText(currentQ.title, simulatorResponses, value.questions);
 
+                                    const isRequired = simulatorRequiredMap[currentQ.id] !== undefined
+                                        ? simulatorRequiredMap[currentQ.id]
+                                        : currentQ.required;
+                                    const hasAnswer = currentVal !== undefined && currentVal !== '' && (!Array.isArray(currentVal) || currentVal.length > 0);
+
                                     return (
                                         <div className="space-y-4">
+                                            {simulatorQualified && (
+                                                <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                                                    <Check className="w-4 h-4 text-emerald-600" /> Participant Status: Qualified
+                                                </div>
+                                            )}
+
+                                            {simulatorNotice && (
+                                                <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                                                    simulatorNotice.type === 'warning'
+                                                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800'
+                                                        : simulatorNotice.type === 'error'
+                                                        ? 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+                                                        : 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
+                                                }`}>
+                                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                                    <span>{simulatorNotice.message}</span>
+                                                </div>
+                                            )}
+
                                             <div className="flex justify-between items-center text-xs text-gray-500">
-                                                <span>Question {simulatorActiveQIndex + 1} of {value.questions.length}</span>
+                                                <span>
+                                                    Question {simulatorActiveQIndex + 1} of {value.questions.length}
+                                                    {isRequired && <span className="text-red-500 ml-1 font-bold">*</span>}
+                                                    {!isRequired && <span className="text-gray-400 ml-1 italic font-normal">(Optional)</span>}
+                                                </span>
                                                 <span className="font-bold text-blue-600">{currentQ.type}</span>
                                             </div>
 
@@ -1022,11 +1175,11 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                 <Button
                                                     variant="primary"
                                                     size="sm"
-                                                    disabled={currentVal === undefined || currentVal === '' || (Array.isArray(currentVal) && currentVal.length === 0)}
+                                                    disabled={isRequired && !hasAnswer}
                                                     onClick={handleSimulatorNext}
                                                     className="rounded-lg text-xs"
                                                 >
-                                                    Next Question <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                                                    {hasAnswer ? 'Next Question' : isRequired ? 'Answer Required' : 'Skip / Next'} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                                                 </Button>
                                             </div>
                                         </div>
@@ -1471,13 +1624,57 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                     sourceOptions.push('Other');
                                                 }
 
+                                                const conditions = rule.conditions && rule.conditions.length > 0
+                                                    ? rule.conditions
+                                                    : [{ questionId: q.id, operator: 'equals', value: '' }];
+
                                                 return (
-                                                    <div key={rule.id || rIdx} className="p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-2.5 shadow-sm">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="font-bold text-[11px] text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                                                                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                                                                Rule {rIdx + 1}
-                                                            </span>
+                                                    <div key={rule.id || rIdx} className="p-3.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3 shadow-sm">
+                                                        {/* Rule Header */}
+                                                        <div className="flex items-center justify-between border-b dark:border-gray-700 pb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-xs text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                                                                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
+                                                                    Rule {rIdx + 1}
+                                                                </span>
+
+                                                                {/* Match ALL vs ANY toggle when multiple conditions */}
+                                                                {conditions.length > 1 && (
+                                                                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 p-0.5 rounded-md text-[10px]">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const copyRules = [...(q.logicRules || [])];
+                                                                                copyRules[rIdx].matchType = 'ALL';
+                                                                                updateQuestionField(idx, 'logicRules', copyRules);
+                                                                            }}
+                                                                            className={`px-1.5 py-0.5 rounded font-bold transition ${
+                                                                                (rule.matchType || 'ALL') === 'ALL'
+                                                                                    ? 'bg-blue-600 text-white shadow-xs'
+                                                                                    : 'text-gray-600 dark:text-gray-300'
+                                                                            }`}
+                                                                        >
+                                                                            Match ALL (AND)
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const copyRules = [...(q.logicRules || [])];
+                                                                                copyRules[rIdx].matchType = 'ANY';
+                                                                                updateQuestionField(idx, 'logicRules', copyRules);
+                                                                            }}
+                                                                            className={`px-1.5 py-0.5 rounded font-bold transition ${
+                                                                                rule.matchType === 'ANY'
+                                                                                    ? 'bg-blue-600 text-white shadow-xs'
+                                                                                    : 'text-gray-600 dark:text-gray-300'
+                                                                            }`}
+                                                                        >
+                                                                            Match ANY (OR)
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
@@ -1486,178 +1683,265 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                                 }}
                                                                 className="text-red-500 hover:text-red-700 text-xs font-semibold"
                                                             >
-                                                                Remove
+                                                                Remove Rule
                                                             </button>
                                                         </div>
 
-                                                        {/* Condition Row */}
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="font-bold text-blue-600">IF Question</span>
-                                                            <select
-                                                                value={condQId}
-                                                                onChange={e => {
-                                                                    const newQId = e.target.value;
-                                                                    const copyRules = [...(q.logicRules || [])];
-                                                                    if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                        copyRules[rIdx].conditions = [{ questionId: newQId, operator: 'equals', value: '' }];
-                                                                    } else {
-                                                                        copyRules[rIdx].conditions[0].questionId = newQId;
-                                                                        copyRules[rIdx].conditions[0].value = '';
-                                                                    }
-                                                                    updateQuestionField(idx, 'logicRules', copyRules);
-                                                                }}
-                                                                className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white font-medium text-xs max-w-[190px]"
-                                                            >
-                                                                {value.questions.map((itemQ, itemIdx) => (
-                                                                    <option key={itemQ.id} value={itemQ.id}>
-                                                                        {itemQ.id === q.id ? `Current (Q${idx + 1})` : `Q${itemIdx + 1}: ${itemQ.title ? itemQ.title.slice(0, 20) : 'Untitled'}`}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
+                                                        {/* Conditions Stack */}
+                                                        <div className="space-y-2">
+                                                            {conditions.map((cond, cIdx) => {
+                                                                const condQId = cond.questionId || q.id;
+                                                                const sourceQ = value.questions.find(sq => sq.id === condQId) || q;
+                                                                const operator = cond.operator || 'equals';
+                                                                const condVal = cond.value !== undefined ? cond.value : '';
+                                                                const condVal2 = cond.value2 !== undefined ? cond.value2 : '';
 
-                                                            <select
-                                                                value={operator}
-                                                                onChange={e => {
-                                                                    const copyRules = [...(q.logicRules || [])];
-                                                                    if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                        copyRules[rIdx].conditions = [{ questionId: condQId, operator: e.target.value as any, value: '' }];
-                                                                    } else {
-                                                                        copyRules[rIdx].conditions[0].operator = e.target.value as any;
-                                                                    }
-                                                                    updateQuestionField(idx, 'logicRules', copyRules);
-                                                                }}
-                                                                className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white text-xs"
-                                                            >
-                                                                <option value="equals">Equals</option>
-                                                                <option value="not_equals">Does Not Equal</option>
-                                                                <option value="contains">Contains</option>
-                                                                <option value="not_contains">Does Not Contain</option>
-                                                                <option value="greater_than">Greater Than (&gt;)</option>
-                                                                <option value="less_than">Less Than (&lt;)</option>
-                                                                <option value="answered">Is Answered</option>
-                                                            </select>
+                                                                const isChoiceType = ['single_choice', 'multiple_choice', 'dropdown', 'top_n'].includes(sourceQ.type);
+                                                                const sourceOptions: string[] = (sourceQ.options || []).map(o => (typeof o === 'string' ? o : o.text || o.value || ''));
+                                                                if (sourceQ.allowOther && !sourceOptions.includes('Other')) {
+                                                                    sourceOptions.push('Other');
+                                                                }
 
-                                                            {operator === 'answered' ? (
-                                                                <span className="text-[11px] text-gray-500 italic bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                                                    (Any answer)
-                                                                </span>
-                                                            ) : isChoiceType ? (
-                                                                <select
-                                                                    value={condVal}
-                                                                    onChange={e => {
+                                                                return (
+                                                                    <div key={cIdx} className="flex items-center gap-2 flex-wrap text-xs bg-gray-50/80 dark:bg-gray-750 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                                                                        <span className="font-bold text-blue-600 w-12 shrink-0">
+                                                                            {cIdx === 0 ? 'IF' : (rule.matchType === 'ANY' ? 'OR' : 'AND')}
+                                                                        </span>
+
+                                                                        {/* Question Selector */}
+                                                                        <select
+                                                                            value={condQId}
+                                                                            onChange={e => {
+                                                                                const newQId = e.target.value;
+                                                                                const copyRules = [...(q.logicRules || [])];
+                                                                                if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                copyRules[rIdx].conditions[cIdx] = {
+                                                                                    ...cond,
+                                                                                    questionId: newQId,
+                                                                                    value: '',
+                                                                                    value2: undefined
+                                                                                };
+                                                                                updateQuestionField(idx, 'logicRules', copyRules);
+                                                                            }}
+                                                                            className="border rounded-md p-1 dark:bg-gray-700 dark:text-white font-medium text-xs max-w-[180px]"
+                                                                        >
+                                                                            {value.questions.map((itemQ, itemIdx) => (
+                                                                                <option key={itemQ.id} value={itemQ.id}>
+                                                                                    {itemQ.id === q.id ? `Current (Q${idx + 1})` : `Q${itemIdx + 1}: ${itemQ.title ? itemQ.title.slice(0, 20) : 'Untitled'}`}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+
+                                                                        {/* Operator Selector with ALL operators */}
+                                                                        <select
+                                                                            value={operator}
+                                                                            onChange={e => {
+                                                                                const copyRules = [...(q.logicRules || [])];
+                                                                                if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                copyRules[rIdx].conditions[cIdx] = {
+                                                                                    ...cond,
+                                                                                    operator: e.target.value as any
+                                                                                };
+                                                                                updateQuestionField(idx, 'logicRules', copyRules);
+                                                                            }}
+                                                                            className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs font-semibold"
+                                                                        >
+                                                                            <option value="equals">Equals</option>
+                                                                            <option value="not_equals">Does Not Equal</option>
+                                                                            <option value="contains">Contains</option>
+                                                                            <option value="not_contains">Does Not Contain</option>
+                                                                            <option value="greater_than">Greater Than (&gt;)</option>
+                                                                            <option value="less_than">Less Than (&lt;)</option>
+                                                                            <option value="greater_equal">Greater or Equal (&gt;=)</option>
+                                                                            <option value="less_equal">Less or Equal (&lt;=)</option>
+                                                                            <option value="between">Between (Range)</option>
+                                                                            <option value="answered">Is Answered</option>
+                                                                            <option value="not_answered">Not Answered / Blank</option>
+                                                                        </select>
+
+                                                                        {/* Value Inputs based on Operator */}
+                                                                        {operator === 'answered' ? (
+                                                                            <span className="text-[11px] text-gray-500 italic bg-gray-200 dark:bg-gray-600 px-2 py-0.5 rounded">
+                                                                                (Any answer provided)
+                                                                            </span>
+                                                                        ) : operator === 'not_answered' ? (
+                                                                            <span className="text-[11px] text-gray-500 italic bg-gray-200 dark:bg-gray-600 px-2 py-0.5 rounded">
+                                                                                (Blank / Unanswered)
+                                                                            </span>
+                                                                        ) : operator === 'between' ? (
+                                                                            <div className="flex items-center gap-1">
+                                                                                <input
+                                                                                    type={['rating', 'opinion_scale', 'number'].includes(sourceQ.type) ? 'number' : 'text'}
+                                                                                    placeholder="Min"
+                                                                                    value={condVal}
+                                                                                    onChange={e => {
+                                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                                        if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                        const val = ['rating', 'opinion_scale', 'number'].includes(sourceQ.type) && e.target.value !== ''
+                                                                                            ? Number(e.target.value)
+                                                                                            : e.target.value;
+                                                                                        copyRules[rIdx].conditions[cIdx] = { ...cond, value: val };
+                                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                    }}
+                                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-20 text-xs font-mono"
+                                                                                />
+                                                                                <span className="text-gray-400 font-bold">to</span>
+                                                                                <input
+                                                                                    type={['rating', 'opinion_scale', 'number'].includes(sourceQ.type) ? 'number' : 'text'}
+                                                                                    placeholder="Max"
+                                                                                    value={condVal2}
+                                                                                    onChange={e => {
+                                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                                        if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                        const val2 = ['rating', 'opinion_scale', 'number'].includes(sourceQ.type) && e.target.value !== ''
+                                                                                            ? Number(e.target.value)
+                                                                                            : e.target.value;
+                                                                                        copyRules[rIdx].conditions[cIdx] = { ...cond, value2: val2 };
+                                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                    }}
+                                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-20 text-xs font-mono"
+                                                                                />
+                                                                            </div>
+                                                                        ) : isChoiceType ? (
+                                                                            <select
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: e.target.value };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white max-w-[170px] text-xs font-semibold"
+                                                                            >
+                                                                                <option value="">-- Choose Option --</option>
+                                                                                {sourceOptions.map((optVal, optI) => (
+                                                                                    <option key={optI} value={optVal}>
+                                                                                        {optVal}
+                                                                                    </option>
+                                                                                ))}
+                                                                                {condVal && !sourceOptions.includes(condVal) && (
+                                                                                    <option value={condVal}>{condVal} (Custom)</option>
+                                                                                )}
+                                                                            </select>
+                                                                        ) : sourceQ.type === 'yes_no' ? (
+                                                                            <select
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: e.target.value };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs font-semibold"
+                                                                            >
+                                                                                <option value="">-- Select Yes / No --</option>
+                                                                                <option value="Yes">Yes</option>
+                                                                                <option value="No">No</option>
+                                                                            </select>
+                                                                        ) : sourceQ.type === 'rating' ? (
+                                                                            <input
+                                                                                type="number"
+                                                                                min="1"
+                                                                                max={sourceQ.maxRating || 5}
+                                                                                step="1"
+                                                                                placeholder="Rating (1-5)"
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: val };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-24 text-xs font-mono"
+                                                                            />
+                                                                        ) : sourceQ.type === 'opinion_scale' ? (
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                max="10"
+                                                                                step="1"
+                                                                                placeholder="Scale (0-10)"
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: val };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-24 text-xs font-mono"
+                                                                            />
+                                                                        ) : sourceQ.type === 'number' ? (
+                                                                            <input
+                                                                                type="number"
+                                                                                min={sourceQ.validation?.minValue}
+                                                                                max={sourceQ.validation?.maxValue}
+                                                                                placeholder="Number..."
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: val };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-28 text-xs font-mono"
+                                                                            />
+                                                                        ) : (
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Value..."
+                                                                                value={condVal}
+                                                                                onChange={e => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                                    copyRules[rIdx].conditions[cIdx] = { ...cond, value: e.target.value };
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white w-28 text-xs"
+                                                                            />
+                                                                        )}
+
+                                                                        {/* Remove condition if more than 1 */}
+                                                                        {conditions.length > 1 && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                                    copyRules[rIdx].conditions = conditions.filter((_, i) => i !== cIdx);
+                                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                                }}
+                                                                                className="text-gray-400 hover:text-red-500 text-xs ml-auto"
+                                                                                title="Remove this condition"
+                                                                            >
+                                                                                ✕
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+
+                                                            {/* Add Condition Link */}
+                                                            <div className="pt-0.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
                                                                         const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
+                                                                        if (!copyRules[rIdx].conditions) copyRules[rIdx].conditions = [];
+                                                                        copyRules[rIdx].conditions.push({ questionId: q.id, operator: 'equals', value: '' });
                                                                         updateQuestionField(idx, 'logicRules', copyRules);
                                                                     }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white max-w-[170px] text-xs font-semibold"
+                                                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
                                                                 >
-                                                                    <option value="">-- Choose Option --</option>
-                                                                    {sourceOptions.map((optVal, optI) => (
-                                                                        <option key={optI} value={optVal}>
-                                                                            {optVal}
-                                                                        </option>
-                                                                    ))}
-                                                                    {condVal && !sourceOptions.includes(condVal) && (
-                                                                        <option value={condVal}>{condVal} (Custom)</option>
-                                                                    )}
-                                                                </select>
-                                                            ) : sourceQ.type === 'yes_no' ? (
-                                                                <select
-                                                                    value={condVal}
-                                                                    onChange={e => {
-                                                                        const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
-                                                                        updateQuestionField(idx, 'logicRules', copyRules);
-                                                                    }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white text-xs font-semibold"
-                                                                >
-                                                                    <option value="">-- Select Yes / No --</option>
-                                                                    <option value="Yes">Yes</option>
-                                                                    <option value="No">No</option>
-                                                                </select>
-                                                            ) : sourceQ.type === 'rating' ? (
-                                                                <input
-                                                                    type="number"
-                                                                    min="1"
-                                                                    max={sourceQ.maxRating || 5}
-                                                                    step="1"
-                                                                    placeholder="Rating (1-5)"
-                                                                    value={condVal}
-                                                                    onChange={e => {
-                                                                        const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
-                                                                        updateQuestionField(idx, 'logicRules', copyRules);
-                                                                    }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white w-24 text-xs font-mono"
-                                                                />
-                                                            ) : sourceQ.type === 'opinion_scale' ? (
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max="10"
-                                                                    step="1"
-                                                                    placeholder="Scale (0-10)"
-                                                                    value={condVal}
-                                                                    onChange={e => {
-                                                                        const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
-                                                                        updateQuestionField(idx, 'logicRules', copyRules);
-                                                                    }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white w-24 text-xs font-mono"
-                                                                />
-                                                            ) : sourceQ.type === 'number' ? (
-                                                                <input
-                                                                    type="number"
-                                                                    min={sourceQ.validation?.minValue}
-                                                                    max={sourceQ.validation?.maxValue}
-                                                                    placeholder="Number..."
-                                                                    value={condVal}
-                                                                    onChange={e => {
-                                                                        const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
-                                                                        updateQuestionField(idx, 'logicRules', copyRules);
-                                                                    }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white w-28 text-xs font-mono"
-                                                                />
-                                                            ) : (
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Value..."
-                                                                    value={condVal}
-                                                                    onChange={e => {
-                                                                        const copyRules = [...(q.logicRules || [])];
-                                                                        if (!copyRules[rIdx].conditions || !copyRules[rIdx].conditions[0]) {
-                                                                            copyRules[rIdx].conditions = [{ questionId: condQId, operator: operator, value: e.target.value }];
-                                                                        } else {
-                                                                            copyRules[rIdx].conditions[0].value = e.target.value;
-                                                                        }
-                                                                        updateQuestionField(idx, 'logicRules', copyRules);
-                                                                    }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white w-28 text-xs"
-                                                                />
-                                                            )}
+                                                                    + Add Another Condition ({rule.matchType === 'ANY' ? 'OR' : 'AND'})
+                                                                </button>
+                                                            </div>
+                                                        </div>
 
-                                                            <span className="font-bold text-amber-500">THEN</span>
+                                                        {/* THEN Action Row */}
+                                                        <div className="flex items-center gap-2 flex-wrap pt-2 border-t dark:border-gray-750">
+                                                            <span className="font-bold text-amber-500 w-12 shrink-0">THEN</span>
                                                             <select
                                                                 value={rule.action}
                                                                 onChange={e => {
@@ -1665,16 +1949,24 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                                     copyRules[rIdx].action = e.target.value as any;
                                                                     updateQuestionField(idx, 'logicRules', copyRules);
                                                                 }}
-                                                                className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white font-semibold text-xs"
+                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white font-semibold text-xs"
                                                             >
                                                                 <option value="goto_question">Jump to Question</option>
-                                                                <option value="skip_question">Skip Next Question</option>
+                                                                <option value="skip_question">Skip Question</option>
+                                                                <option value="goto_section">Jump to Section</option>
+                                                                <option value="skip_section">Skip Section</option>
                                                                 <option value="end_survey">End Survey Early</option>
                                                                 <option value="disqualify">Disqualify Respondent</option>
-                                                                <option value="goto_section">Jump to Section</option>
+                                                                <option value="qualify">Qualify Respondent</option>
+                                                                <option value="show_question">Show Question</option>
+                                                                <option value="hide_question">Hide Question</option>
+                                                                <option value="require_answer">Make Required</option>
+                                                                <option value="make_optional">Make Optional</option>
+                                                                <option value="show_message">Show Message</option>
+                                                                <option value="warning">Show Warning</option>
                                                             </select>
 
-                                                            {rule.action === 'goto_question' && (
+                                                            {['goto_question', 'skip_question', 'show_question', 'hide_question', 'require_answer', 'make_optional'].includes(rule.action) && (
                                                                 <select
                                                                     value={rule.targetQuestionId || ''}
                                                                     onChange={e => {
@@ -1682,7 +1974,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                                         copyRules[rIdx].targetQuestionId = e.target.value;
                                                                         updateQuestionField(idx, 'logicRules', copyRules);
                                                                     }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white text-xs"
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs max-w-[200px]"
                                                                 >
                                                                     <option value="">-- Target Question --</option>
                                                                     {value.questions
@@ -1695,7 +1987,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                                 </select>
                                                             )}
 
-                                                            {rule.action === 'goto_section' && (
+                                                            {['goto_section', 'skip_section'].includes(rule.action) && (
                                                                 <select
                                                                     value={rule.targetSectionId || ''}
                                                                     onChange={e => {
@@ -1703,13 +1995,108 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                                                                         copyRules[rIdx].targetSectionId = e.target.value;
                                                                         updateQuestionField(idx, 'logicRules', copyRules);
                                                                     }}
-                                                                    className="border rounded-lg p-1.5 dark:bg-gray-700 dark:text-white text-xs"
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs max-w-[180px]"
                                                                 >
                                                                     <option value="">-- Target Section --</option>
                                                                     {sections.map(s => (
                                                                         <option key={s.id} value={s.id}>{s.title}</option>
                                                                     ))}
                                                                 </select>
+                                                            )}
+
+                                                            {['show_message', 'warning'].includes(rule.action) && (
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Message to display..."
+                                                                    value={rule.message || ''}
+                                                                    onChange={e => {
+                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                        copyRules[rIdx].message = e.target.value;
+                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                    }}
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs flex-1 min-w-[160px]"
+                                                                />
+                                                            )}
+                                                        </div>
+
+                                                        {/* ELSE Action Row */}
+                                                        <div className="flex items-center gap-2 flex-wrap pt-1.5 border-t border-dashed dark:border-gray-750">
+                                                            <span className="font-bold text-gray-500 dark:text-gray-400 w-12 shrink-0">ELSE</span>
+                                                            <select
+                                                                value={rule.elseAction || ''}
+                                                                onChange={e => {
+                                                                    const copyRules = [...(q.logicRules || [])];
+                                                                    copyRules[rIdx].elseAction = (e.target.value || undefined) as any;
+                                                                    updateQuestionField(idx, 'logicRules', copyRules);
+                                                                }}
+                                                                className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs"
+                                                            >
+                                                                <option value="">-- (Continue Normal Flow) --</option>
+                                                                <option value="goto_question">Jump to Question</option>
+                                                                <option value="skip_question">Skip Question</option>
+                                                                <option value="goto_section">Jump to Section</option>
+                                                                <option value="skip_section">Skip Section</option>
+                                                                <option value="end_survey">End Survey Early</option>
+                                                                <option value="disqualify">Disqualify Respondent</option>
+                                                                <option value="qualify">Qualify Respondent</option>
+                                                                <option value="show_question">Show Question</option>
+                                                                <option value="hide_question">Hide Question</option>
+                                                                <option value="require_answer">Make Required</option>
+                                                                <option value="make_optional">Make Optional</option>
+                                                                <option value="show_message">Show Message</option>
+                                                                <option value="warning">Show Warning</option>
+                                                            </select>
+
+                                                            {rule.elseAction && ['goto_question', 'skip_question', 'show_question', 'hide_question', 'require_answer', 'make_optional'].includes(rule.elseAction) && (
+                                                                <select
+                                                                    value={rule.elseTargetQuestionId || ''}
+                                                                    onChange={e => {
+                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                        copyRules[rIdx].elseTargetQuestionId = e.target.value;
+                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                    }}
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs max-w-[200px]"
+                                                                >
+                                                                    <option value="">-- Else Target Question --</option>
+                                                                    {value.questions
+                                                                        .filter(tq => tq.id !== q.id)
+                                                                        .map((tq, ti) => (
+                                                                            <option key={tq.id} value={tq.id}>
+                                                                                Q{ti + 1}: {tq.title ? tq.title.slice(0, 30) : 'Untitled'}
+                                                                            </option>
+                                                                        ))}
+                                                                </select>
+                                                            )}
+
+                                                            {rule.elseAction && ['goto_section', 'skip_section'].includes(rule.elseAction) && (
+                                                                <select
+                                                                    value={rule.elseTargetSectionId || ''}
+                                                                    onChange={e => {
+                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                        copyRules[rIdx].elseTargetSectionId = e.target.value;
+                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                    }}
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs max-w-[180px]"
+                                                                >
+                                                                    <option value="">-- Else Target Section --</option>
+                                                                    {sections.map(s => (
+                                                                        <option key={s.id} value={s.id}>{s.title}</option>
+                                                                    ))}
+                                                                </select>
+                                                            )}
+
+                                                            {rule.elseAction && ['show_message', 'warning'].includes(rule.elseAction) && (
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Else message..."
+                                                                    value={rule.elseMessage || ''}
+                                                                    onChange={e => {
+                                                                        const copyRules = [...(q.logicRules || [])];
+                                                                        copyRules[rIdx].elseMessage = e.target.value;
+                                                                        updateQuestionField(idx, 'logicRules', copyRules);
+                                                                    }}
+                                                                    className="border rounded-md p-1 dark:bg-gray-700 dark:text-white text-xs flex-1 min-w-[160px]"
+                                                                />
                                                             )}
                                                         </div>
                                                     </div>
