@@ -106,6 +106,25 @@ const HomepagePaymentLogoSchema = new mongoose.Schema({
     logoUrl: { type: String, default: '' }
 }, { _id: false });
 
+const CustomEarnSubTabSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    providerKey: { type: String, default: '' },
+    badge: { type: String, default: '' },
+    description: { type: String, default: '' },
+    icon: { type: String, default: '' }
+}, { _id: false });
+
+const CustomEarnTabSchema = new mongoose.Schema({
+    id: { type: String, required: true },
+    title: { type: String, required: true },
+    enabled: { type: Boolean, default: true },
+    subTabs: {
+        type: [CustomEarnSubTabSchema],
+        default: () => []
+    }
+}, { _id: false });
+
 const SmartexnContentSchema = new mongoose.Schema({
     // SEO & Meta
     metaTitle: { type: String, default: "SmartExn | Online Micro-Tasks, Surveys & Global Gigs" },
@@ -628,34 +647,18 @@ const SettingSchema = new mongoose.Schema({
     hubDmcaPolicyUpdated: { type: String, default: "Last updated: July 21, 2026" },
     hubDmcaPolicyContent: { type: String, default: "We respect the intellectual property of creators. If you find any tasks, campaigns, social profiles, or images hosted in our hub that infringe upon your copyrighted material, please send a DMCA Takedown Notice containing registration proofs to our support team for prompt review and deletion." },
     customEarnTabs: {
-        type: [
-            {
-                id: { type: String, required: true },
-                title: { type: String, required: true },
-                enabled: { type: Boolean, default: true },
-                subTabs: [
-                    {
-                        id: { type: String, required: true },
-                        name: { type: String, required: true },
-                        providerKey: { type: String, default: '' },
-                        badge: { type: String, default: '' },
-                        description: { type: String, default: '' },
-                        icon: { type: String, default: '' }
-                    }
-                ]
-            }
-        ],
+        type: [CustomEarnTabSchema],
         default: () => [
             {
                 id: 'other_tasks',
                 title: 'Other Tasks',
                 enabled: true,
                 subTabs: [
-                    { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns' },
-                    { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks' },
-                    { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows' },
-                    { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires' },
-                    { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions' }
+                    { id: 'cpalead', name: 'CP lead', providerKey: 'cpalead', badge: 'CP Lead', description: 'CPA network offers and app install campaigns', icon: '' },
+                    { id: '2row', name: '2row', providerKey: '2row', badge: '2row', description: 'Direct publisher surveys and interactive tasks', icon: '' },
+                    { id: 'x', name: 'X', providerKey: 'x', badge: 'X (Twitter)', description: 'Social engagements, retweets, and profile follows', icon: '' },
+                    { id: 'pollfish', name: 'Pollfish', providerKey: 'pollfish', badge: 'Polls', description: 'Targeted market research questionnaires', icon: '' },
+                    { id: 'adgate', name: 'AdGate Media', providerKey: 'adgate', badge: 'Offerwall', description: 'Offerwall rewards, trials, and quick actions', icon: '' }
                 ]
             }
         ]
