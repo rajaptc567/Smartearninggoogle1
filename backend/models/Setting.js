@@ -926,35 +926,147 @@ SettingSchema.statics.getSettings = async function() {
         };
         needsSave = true;
     }
-    if (!settings.surveyConfig.templates) {
-        settings.surveyConfig.templates = [
-            {
-                id: 'tmpl_csat',
-                name: 'Customer Satisfaction (CSAT) Standard',
-                category: 'Satisfaction Survey',
-                description: 'Measure customer happiness, rating, and feedback recommendations',
-                estimatedTimeMinutes: 4,
-                questions: [
-                    { id: 'q1', type: 'rating', title: 'Overall, how satisfied are you with our service?', required: true, minRating: 1, maxRating: 5, ratingScaleType: 'stars' },
-                    { id: 'q2', type: 'opinion_scale', title: 'How likely are you to recommend us to a friend or colleague?', required: true, minRating: 1, maxRating: 10 },
-                    { id: 'q3', type: 'single_choice', title: 'What is your primary use case for our platform?', required: true, options: ['Personal Use', 'Freelancing / Earning', 'Business / Advertising', 'Other'] },
-                    { id: 'q4', type: 'long_text', title: 'What is one thing we could do better?', required: false }
-                ]
-            },
-            {
-                id: 'tmpl_market',
-                name: 'Consumer Habits & Device Preferences',
-                category: 'Market Research',
-                description: 'Audience hardware, operating system, and digital routine survey',
-                estimatedTimeMinutes: 5,
-                questions: [
-                    { id: 'q1', type: 'single_choice', title: 'Which operating system do you use most often?', required: true, options: ['Android', 'iOS / Apple', 'Windows', 'MacOS', 'Other'] },
-                    { id: 'q2', type: 'multiple_choice', title: 'Which social media platforms do you check daily?', required: true, options: ['YouTube', 'Facebook', 'Instagram', 'TikTok', 'WhatsApp', 'X (Twitter)'] },
-                    { id: 'q3', type: 'yes_no', title: 'Have you made an online purchase in the last 30 days?', required: true },
-                    { id: 'q4', type: 'rating', title: 'Rate your confidence in digital shopping security', required: true, minRating: 1, maxRating: 5 }
-                ]
-            }
-        ];
+    const SMARTEXN_9_TEMPLATES = [
+        {
+            id: 'tmpl_discover',
+            name: '1. How Did You Discover SmartExn',
+            title: 'How Did You Discover SmartExn',
+            category: 'Market Research',
+            description: 'Help us understand how you found SmartExn and how your onboarding experience was.',
+            version: 1,
+            estimatedTimeMinutes: 3,
+            questions: [
+                { id: 'disc_q1', type: 'single_choice', title: 'How did you first hear about SmartExn?', required: true, options: ['YouTube Video / Review', 'Friend or Family Referral', 'Google / Web Search', 'Social Media', 'Online Forum / Telegram Group'], allowOther: true },
+                { id: 'disc_q2_yt', type: 'short_text', title: 'Which YouTube channel or video did you find us through?', required: false, showIf: { questionId: 'disc_q1', operator: 'equals', value: 'YouTube Video / Review' } },
+                { id: 'disc_q2_ref', type: 'yes_no', title: 'Did your referral contact guide you through your first task?', required: true, showIf: { questionId: 'disc_q1', operator: 'equals', value: 'Friend or Family Referral' } },
+                { id: 'disc_q3', type: 'rating', title: 'How seamless was the sign-up and account creation process?', required: true, minRating: 1, maxRating: 5 },
+                { id: 'disc_q4', type: 'long_text', title: 'Any suggestions to improve the first-time user onboarding?', required: false }
+            ]
+        },
+        {
+            id: 'tmpl_rewards_exp',
+            name: '2. Previous Rewards Platform Experience',
+            title: 'Previous Rewards Platform Experience',
+            category: 'Consumer Research',
+            description: 'Share your background with other micro-task and earning websites.',
+            version: 1,
+            estimatedTimeMinutes: 4,
+            questions: [
+                { id: 'rew_q1', type: 'yes_no', title: 'Have you previously worked on online micro-task or reward platforms?', required: true },
+                { id: 'rew_q2', type: 'multiple_choice', title: 'Which platforms have you used in the past?', required: true, showIf: { questionId: 'rew_q1', operator: 'equals', value: 'Yes' }, options: ['SproutGigs', 'Freecash', 'TimeBucks', 'Swagbucks / ySense', 'Remotasks'], allowOther: true },
+                { id: 'rew_q3', type: 'top_n', title: 'What are the Top 3 most important factors for you in an earning platform?', required: true, options: ['Instant Withdrawals', 'High Task Variety', 'Fair Proof Review', 'Low Minimum Threshold', 'Responsive Support', 'Competitive Payout Rates'], validation: { topN: 3, maxSelections: 3 } },
+                { id: 'rew_q4', type: 'long_text', title: 'What was your biggest frustration on previous platforms?', required: false }
+            ]
+        },
+        {
+            id: 'tmpl_feature_priority',
+            name: '3. Product Feature Priority',
+            title: 'Product Feature Priority',
+            category: 'Product Feedback',
+            description: 'Help prioritize new tools and capabilities on SmartExn.',
+            version: 1,
+            estimatedTimeMinutes: 4,
+            questions: [
+                { id: 'feat_q1', type: 'top_n', title: 'Which upcoming features would you like to see prioritized first on SmartExn? (Select Top 3)', required: true, options: ['Mobile App', 'Crypto Micro-Withdrawals', 'Daily Streak Wheel', 'Direct Global Survey Offerwalls', 'Tiered VIP Cashback', 'Buyer-Worker Chat'], validation: { topN: 3, maxSelections: 3 } },
+                { id: 'feat_q2', type: 'single_choice', title: 'How important is automated instant proof approval to you?', required: true, options: ['Extremely Important', 'Moderately Important', 'Neutral', 'Not Important'] },
+                { id: 'feat_q3', type: 'long_text', title: 'Describe one new tool or feature that would double your daily time on SmartExn.', required: true }
+            ]
+        },
+        {
+            id: 'tmpl_earning_pref',
+            name: '4. Earning Opportunity Preferences',
+            title: 'Earning Opportunity Preferences',
+            category: 'General Survey',
+            description: 'Tell us which types of micro-tasks and gigs you enjoy the most.',
+            version: 1,
+            estimatedTimeMinutes: 4,
+            questions: [
+                { id: 'earn_q1', type: 'multiple_choice', title: 'Which types of micro-tasks do you prefer completing?', required: true, options: ['Surveys', 'Social Media', 'Sign-ups', 'Website Testing', 'Video Watching'] },
+                { id: 'earn_q2', type: 'single_choice', title: 'What is your ideal survey length?', required: true, showIf: { questionId: 'earn_q1', operator: 'contains', value: 'Surveys' }, options: ['1-3 Minutes', '5-10 Minutes', '15+ Minutes'] },
+                { id: 'earn_q3', type: 'single_choice', title: 'How many hours per week do you spend on online earning platforms?', required: true, options: ['< 5 hours', '5-15 hours', '15-30 hours', '30+ hours'] },
+                { id: 'earn_q4', type: 'short_text', title: 'What is your monthly earning target on SmartExn in USD?', required: true }
+            ]
+        },
+        {
+            id: 'tmpl_device_habits',
+            name: '5. Device & Digital Habits',
+            title: 'Device & Digital Habits',
+            category: 'Website Feedback',
+            description: 'Technical specs and device preferences for optimizing platform performance.',
+            version: 1,
+            estimatedTimeMinutes: 3,
+            questions: [
+                { id: 'dev_q1', type: 'single_choice', title: 'What is your primary device for completing online tasks?', required: true, options: ['Android', 'iOS', 'Windows PC', 'MacOS'] },
+                { id: 'dev_q2', type: 'single_choice', title: 'What type of internet connection do you primarily use?', required: true, options: ['WiFi', 'Mobile Data', 'Public WiFi'] },
+                { id: 'dev_q3_trap', type: 'single_choice', title: 'Quality Verification: Please select "Strongly Agree" below to confirm active reading.', required: true, isAttentionCheck: true, expectedAnswer: 'Strongly Agree', options: ['Strongly Disagree', 'Neutral', 'Strongly Agree', 'Disagree'] },
+                { id: 'dev_q4', type: 'rating', title: 'Rate the speed and responsiveness of SmartExn on your device.', required: true, minRating: 1, maxRating: 5 },
+                { id: 'dev_q5', type: 'long_text', title: 'Have you experienced any lag or display issues on any specific page?', required: false }
+            ]
+        },
+        {
+            id: 'tmpl_user_profile',
+            name: '6. User Profile & Preferences',
+            title: 'User Profile & Preferences',
+            category: 'Demographic Survey',
+            description: 'Privacy-safe demographic background to help match relevant campaigns (No sensitive ID/bank info).',
+            version: 1,
+            estimatedTimeMinutes: 3,
+            questions: [
+                { id: 'prof_q1', type: 'single_choice', title: 'What is your age range?', required: true, options: ['18-24', '25-34', '35-44', '45-54', '55+'] },
+                { id: 'prof_q2', type: 'single_choice', title: 'What is your current occupational status?', required: true, options: ['Student', 'Employed', 'Freelancer', 'Homemaker', 'Looking for Opportunities'] },
+                { id: 'prof_q3', type: 'single_choice', title: 'What is your preferred payout method for receiving rewards?', required: true, options: ['Binance Pay / USDT', 'Local Mobile Wallet', 'Bank Transfer', 'PayPal / Payoneer'] },
+                { id: 'prof_q4', type: 'multiple_choice', title: 'What are your primary fields of interest? (Select up to 3)', required: true, options: ['Gaming', 'Finance & Crypto', 'Technology', 'Online Shopping', 'Entertainment'], validation: { minSelections: 1, maxSelections: 3 } }
+            ]
+        },
+        {
+            id: 'tmpl_bug_hunter',
+            name: '7. Bug Hunter — QA',
+            title: 'Bug Hunter — QA',
+            category: 'Website Feedback',
+            description: 'Report technical errors, glitches, or styling problems you noticed.',
+            version: 1,
+            estimatedTimeMinutes: 4,
+            questions: [
+                { id: 'bug_q1', type: 'single_choice', title: 'Have you encountered any bug or unexpected error on SmartExn recently?', required: true, options: ['Yes', 'No'] },
+                { id: 'bug_q2', type: 'single_choice', title: 'Which section of the platform did the issue occur in?', required: true, showIf: { questionId: 'bug_q1', operator: 'equals', value: 'Yes' }, options: ['Deposit or Withdrawal', 'Task / Survey Submission', 'Login / Security', 'Navigation', 'Dashboard Balances'], allowOther: true },
+                { id: 'bug_q3', type: 'long_text', title: 'Describe what happened and steps to reproduce the issue.', required: true, showIf: { questionId: 'bug_q1', operator: 'equals', value: 'Yes' } },
+                { id: 'bug_q4', type: 'rating', title: 'Overall rating of platform stability and reliability.', required: true, minRating: 1, maxRating: 5 }
+            ]
+        },
+        {
+            id: 'tmpl_clarity',
+            name: '8. New User Understanding / Clarity',
+            title: 'New User Understanding / Clarity',
+            category: 'General Survey',
+            description: 'Evaluate how clear the earning rules, wallets, and guidelines are.',
+            version: 1,
+            estimatedTimeMinutes: 3,
+            questions: [
+                { id: 'clar_q1', type: 'rating', title: 'How clear is the explanation of how to complete tasks and earn on SmartExn?', required: true, minRating: 1, maxRating: 5 },
+                { id: 'clar_q2', type: 'single_choice', title: 'Do you clearly understand the separation between Investment, Task Earnings, and Campaign Wallets?', required: true, options: ['Very Clear', 'Somewhat Clear', 'Confusing'] },
+                { id: 'clar_q3', type: 'single_choice', title: 'Which guide or learning resource would be most useful to you?', required: true, options: ['Video Walkthrough', 'Interactive Tutorial', 'FAQ Help Center', 'Community Support'] },
+                { id: 'clar_q4', type: 'long_text', title: 'What part of the rules or instructions could be improved?', required: false }
+            ]
+        },
+        {
+            id: 'tmpl_nav_hunt',
+            name: '9. Navigation & Broken-Link Hunt',
+            title: 'Navigation & Broken-Link Hunt',
+            category: 'Website Feedback',
+            description: 'Verify page responsiveness, links, and layout transitions across SmartExn.',
+            version: 1,
+            estimatedTimeMinutes: 3,
+            questions: [
+                { id: 'nav_q1', type: 'single_choice', title: 'Did all buttons and links you clicked navigate to the correct page?', required: true, options: ['All Worked', 'Found 1-2 Issues', 'Several Issues'] },
+                { id: 'nav_q2', type: 'short_text', title: 'If any button or link failed, which page or button was it?', required: true, showIf: { questionId: 'nav_q1', operator: 'not_equals', value: 'All Worked' } },
+                { id: 'nav_q3', type: 'rating', title: 'How easy is it to navigate between Work & Earn, Gigs Hub, and your Profile?', required: true, minRating: 1, maxRating: 5 },
+                { id: 'nav_q4', type: 'long_text', title: 'Any overall suggestions to make menus and navigation simpler?', required: false }
+            ]
+        }
+    ];
+
+    if (!settings.surveyConfig.templates || settings.surveyConfig.templates.length < 9) {
+        settings.surveyConfig.templates = SMARTEXN_9_TEMPLATES;
         needsSave = true;
     }
     if (!settings.surveyConfig.questionBank) {

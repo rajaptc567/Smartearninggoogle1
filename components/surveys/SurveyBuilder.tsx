@@ -16,10 +16,13 @@ import {
     AlertCircle
 } from 'lucide-react';
 
-interface SurveyBuilderProps {
+export interface SurveyBuilderProps {
     value?: SurveyConfig;
     onChange: (config: SurveyConfig) => void;
     onSave?: (config: SurveyConfig) => void;
+    systemTemplates?: any[];
+    systemQuestionBank?: any[];
+    campaignId?: string;
 }
 
 const DEFAULT_SURVEY_CONFIG: SurveyConfig = {
@@ -90,7 +93,10 @@ const DEFAULT_SURVEY_CONFIG: SurveyConfig = {
 export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
     value,
     onChange,
-    onSave
+    onSave,
+    systemTemplates = [],
+    systemQuestionBank = [],
+    campaignId = 'default'
 }) => {
     const config: SurveyConfig = value || DEFAULT_SURVEY_CONFIG;
     const [activeTab, setActiveTab] = useState<'builder' | 'preview' | 'settings'>('builder');
@@ -100,6 +106,43 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
     const updateConfig = (updated: SurveyConfig) => {
         onChange(updated);
+    };
+
+    const handleLoadTemplate = (templateId: string) => {
+        const tmpl = systemTemplates.find(t => t.id === templateId || t._id === templateId);
+        if (!tmpl) return;
+
+        const mappedQuestions = (tmpl.questions || []).map((q: any, idx: number) => ({
+            id: q.id || `q_${Date.now()}_${idx}`,
+            type: q.type || 'single_choice',
+            title: q.title || `Question ${idx + 1}`,
+            description: q.description || '',
+            required: q.required !== false,
+            options: Array.isArray(q.options)
+                ? q.options.map((opt: any, optIdx: number) =>
+                    typeof opt === 'object' && opt !== null
+                        ? { id: opt.id || `opt_${optIdx}`, text: opt.text || opt.value || '', value: opt.value || opt.text || '' }
+                        : { id: `opt_${optIdx}`, text: String(opt), value: String(opt) }
+                  )
+                : [],
+            allowOther: Boolean(q.allowOther),
+            isAttentionCheck: Boolean(q.isAttentionCheck),
+            expectedAnswer: q.expectedAnswer || '',
+            minRating: q.minRating,
+            maxRating: q.maxRating || 5,
+            validation: q.validation || (q.type === 'top_n' ? { topN: 3, maxSelections: 3 } : undefined)
+        }));
+
+        const updated: SurveyConfig = {
+            ...config,
+            title: tmpl.name || tmpl.title || config.title,
+            description: tmpl.description || config.description,
+            estimatedTimeMinutes: tmpl.estimatedTimeMinutes || config.estimatedTimeMinutes || 5,
+            questions: mappedQuestions
+        };
+        updateConfig(updated);
+        setStatusMessage(`Loaded template: ${tmpl.name || tmpl.title}`);
+        setTimeout(() => setStatusMessage(null), 3000);
     };
 
     // Question Operations
@@ -211,7 +254,31 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    {systemTemplates && systemTemplates.length > 0 && (
+                        <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <select
+                                defaultValue=""
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        handleLoadTemplate(e.target.value);
+                                        e.target.value = '';
+                                    }
+                                }}
+                                className="bg-transparent text-xs text-amber-300 font-bold focus:outline-none cursor-pointer py-1"
+                            >
+                                <option value="" disabled className="bg-slate-900 text-slate-400">
+                                    Load Template ({systemTemplates.length})...
+                                </option>
+                                {systemTemplates.map((t: any) => (
+                                    <option key={t.id || t._id} value={t.id || t._id} className="bg-slate-900 text-white">
+                                        {t.name || t.title}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     {statusMessage && (
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 animate-pulse">
                             <CheckCircle2 className="w-3.5 h-3.5" /> {statusMessage}

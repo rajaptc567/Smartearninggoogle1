@@ -42,7 +42,7 @@ export const createUserTask = async (req, res) => {
             return res.status(400).json({ success: false, error: 'User ID is required.' });
         }
 
-        const isSurveyTask = String(category || '').trim().toLowerCase() === 'survey';
+        const isSurveyTask = String(category || '').trim().toLowerCase() === 'survey' || Boolean(req.body.isSurvey);
         const effectiveLink = isSurveyTask ? (link || 'https://internal.survey') : link;
 
         if (effectiveLink) {
@@ -84,12 +84,13 @@ export const createUserTask = async (req, res) => {
                     return res.status(400).json({ success: false, error: `Survey question at position ${i + 1} must have an id and title.` });
                 }
 
-                // Enforce maximum 4 answer options
+                // Enforce maximum answer options (default 10)
+                const maxOptionsAllowed = settings.surveyConfig?.maxOptionsPerQuestion || 10;
                 if (['single_choice', 'multiple_choice', 'dropdown'].includes(q.type)) {
-                    if (Array.isArray(q.options) && q.options.length > 4) {
+                    if (Array.isArray(q.options) && q.options.length > maxOptionsAllowed) {
                         return res.status(400).json({ 
                             success: false, 
-                            error: `Question "${q.title}" exceeds the maximum limit of 4 answer options (maximum 4 allowed).` 
+                            error: `Question "${q.title}" exceeds the maximum limit of ${maxOptionsAllowed} answer options.` 
                         });
                     }
                 }
@@ -292,8 +293,8 @@ export const createUserTask = async (req, res) => {
             screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
             requiredProofs: requiredProofs || [],
             isSurvey: isSurveyTask,
-            surveyEstimatedMinutes: isSurveyTask ? (Number(surveyConfig?.estimatedTimeMinutes) || 5) : 5,
-            surveyQuestionsCount: isSurveyTask && Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : 0,
+            surveyEstimatedMinutes: isSurveyTask ? (Number(req.body.surveyEstimatedMinutes || surveyConfig?.estimatedTimeMinutes) || 5) : 5,
+            surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
             surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
             surveyConfig: isSurveyTask ? surveyConfig : null,
             status: 'Pending'
@@ -1056,8 +1057,41 @@ const autoApproveStaleSubmissions = async () => {
 export const getUserTaskSubmissions = async (req, res) => {
     try {
         await autoApproveStaleSubmissions();
-        const submissions = await UserTaskSubmission.find().sort({ createdAt: -1 });
-        res.status(200).json({ success: true, count: submissions.length, data: submissions });
+        const isAdmin = isUserAdmin(req.user);
+        let query = {};
+
+        if (isAdmin) {
+            if (req.query.taskId) query.taskId = req.query.taskId;
+            const submissions = await UserTaskSubmission.find(query).sort({ createdAt: -1 });
+            return res.status(200).json({ success: true, count: submissions.length, data: submissions });
+        }
+
+        if (req.user && req.user.id) {
+            const userId = req.user.id;
+            const myTasks = await UserTask.find({ userId }).select('_id');
+            const myTaskIds = myTasks.map(t => t._id);
+
+            if (req.query.taskId) {
+                const isTaskCreator = myTaskIds.some(id => String(id) === String(req.query.taskId));
+                if (isTaskCreator) {
+                    query.taskId = req.query.taskId;
+                } else {
+                    query.taskId = req.query.taskId;
+                    query.workerId = userId;
+                }
+            } else {
+                query.$or = [
+                    { workerId: userId },
+                    { taskId: { $in: myTaskIds } }
+                ];
+            }
+
+            const submissions = await UserTaskSubmission.find(query).sort({ createdAt: -1 });
+            return res.status(200).json({ success: true, count: submissions.length, data: submissions });
+        }
+
+        // Unauthenticated users receive empty array
+        return res.status(200).json({ success: true, count: 0, data: [] });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -1095,17 +1129,24 @@ export const submitUserTaskProof = async (req, res) => {
         const worker = await User.findById(workerId);
         if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
 
-        const existing = await UserTaskSubmission.findOne({ taskId, workerId });
+        // Prevent duplicate submission by same worker for same task/survey
+        const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
         if (existing) {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
         }
 
         const settings = await Setting.getSettings();
         const isSurveyTask = Boolean(task.isSurvey) || String(task.category || '').toLowerCase().includes('survey');
+
+        // Killswitch: Reject survey submission if survey campaigns are disabled
+        if (isSurveyTask && (settings.surveyCampaignsEnabled === false || settings.taskCategoryPresets?.survey?.enabled === false)) {
+            return res.status(400).json({ success: false, error: 'Survey campaigns are currently disabled by platform administration.' });
+        }
+
         const surveyResponses = req.body.surveyResponses || [];
         const surveyCompletionTimeSeconds = Number(req.body.surveyCompletionTimeSeconds) || 0;
         let surveyQualificationStatus = req.body.surveyQualificationStatus || 'Completed';
-        const consentAgreed = req.body.consentAgreed !== false;
+        const consentAgreed = req.body.consentAgreed !== false && req.body.consentAgreed !== 'false';
         const answeredPath = req.body.answeredPath || [];
         const skippedQuestions = req.body.skippedQuestions || [];
         let attentionCheckPassed = req.body.attentionCheckPassed !== false && req.body.attentionCheckPassed !== 'false';
@@ -1117,11 +1158,135 @@ export const submitUserTaskProof = async (req, res) => {
             qualityScore = Math.max(0, qualityScore - 40);
         }
 
-        if (isSurveyTask && task.surveyConfig && Array.isArray(task.surveyConfig.questions)) {
-            // 1. Attention Checks Validation
-            for (const q of task.surveyConfig.questions) {
+        // Authoritative validation: NEVER trust frontend surveyConfig; load strictly from DB task
+        if (isSurveyTask) {
+            const surveyConfig = task.surveyConfig || {};
+            const questions = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
+
+            // Consent validation when required
+            if (surveyConfig.consentRequired || surveyConfig.voluntaryConsentRequired) {
+                if (!consentAgreed) {
+                    return res.status(400).json({ success: false, error: 'Informed consent is required before submitting survey responses.' });
+                }
+            }
+
+            if (questions.length > 0 && (!Array.isArray(surveyResponses) || surveyResponses.length === 0)) {
+                return res.status(400).json({ success: false, error: 'Survey responses cannot be empty.' });
+            }
+
+            // Build response lookup map
+            const responseMap = new Map();
+            for (const r of surveyResponses) {
+                if (r && r.questionId) {
+                    responseMap.set(String(r.questionId), r);
+                }
+            }
+
+            // Question-by-question authoritative validation
+            for (const q of questions) {
+                // Evaluate conditional showIf
+                let isVisible = true;
+                if (q.showIf && q.showIf.questionId) {
+                    const parentAns = responseMap.get(String(q.showIf.questionId));
+                    const parentVal = parentAns ? parentAns.value : undefined;
+                    const expected = q.showIf.value;
+                    const op = q.showIf.operator || 'equals';
+
+                    if (op === 'equals') {
+                        isVisible = String(parentVal ?? '').trim().toLowerCase() === String(expected ?? '').trim().toLowerCase();
+                    } else if (op === 'not_equals') {
+                        isVisible = String(parentVal ?? '').trim().toLowerCase() !== String(expected ?? '').trim().toLowerCase();
+                    } else if (op === 'contains') {
+                        if (Array.isArray(parentVal)) {
+                            isVisible = parentVal.some(v => String(v).trim().toLowerCase() === String(expected).trim().toLowerCase());
+                        } else {
+                            isVisible = String(parentVal ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
+                        }
+                    } else if (op === 'not_contains') {
+                        if (Array.isArray(parentVal)) {
+                            isVisible = !parentVal.some(v => String(v).trim().toLowerCase() === String(expected).trim().toLowerCase());
+                        } else {
+                            isVisible = !String(parentVal ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
+                        }
+                    } else if (op === 'answered') {
+                        isVisible = parentVal !== undefined && parentVal !== null && parentVal !== '';
+                    } else if (op === 'not_answered') {
+                        isVisible = parentVal === undefined || parentVal === null || parentVal === '';
+                    }
+                }
+
+                const userAns = responseMap.get(String(q.id));
+                const val = userAns ? userAns.value : undefined;
+                const isRequired = Boolean(q.required || q.validation?.required);
+
+                if (isVisible && isRequired) {
+                    const isEmpty = val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0);
+                    if (isEmpty && surveyQualificationStatus !== 'Disqualified') {
+                        return res.status(400).json({ success: false, error: `Question "${q.title}" is required.` });
+                    }
+                }
+
+                if (val !== undefined && val !== null && val !== '') {
+                    const allowedOpts = (q.options || []).map(o => typeof o === 'object' && o !== null ? (o.value || o.text || '') : String(o));
+
+                    if (q.type === 'single_choice' || q.type === 'dropdown') {
+                        const strVal = String(val).trim();
+                        const isOther = q.allowOther && (strVal.toLowerCase().startsWith('other') || strVal.toLowerCase() === 'other');
+                        const optionMatched = allowedOpts.some(opt => String(opt).trim().toLowerCase() === strVal.toLowerCase());
+                        if (!optionMatched && !isOther && allowedOpts.length > 0) {
+                            return res.status(400).json({ success: false, error: `Invalid option selected for question "${q.title}".` });
+                        }
+                        if (userAns.otherValue && typeof userAns.otherValue === 'string' && userAns.otherValue.length > 255) {
+                            return res.status(400).json({ success: false, error: `Other text for question "${q.title}" cannot exceed 255 characters.` });
+                        }
+                    } else if (q.type === 'multiple_choice') {
+                        if (!Array.isArray(val)) {
+                            return res.status(400).json({ success: false, error: `Answer for question "${q.title}" must be an array of selections.` });
+                        }
+                        const minSel = q.validation?.minSelections || (isRequired ? 1 : 0);
+                        const maxSel = q.validation?.maxSelections || (allowedOpts.length > 0 ? allowedOpts.length : 20);
+                        if (val.length < minSel && surveyQualificationStatus !== 'Disqualified') {
+                            return res.status(400).json({ success: false, error: `Question "${q.title}" requires at least ${minSel} selection(s).` });
+                        }
+                        if (val.length > maxSel) {
+                            return res.status(400).json({ success: false, error: `Question "${q.title}" allows at most ${maxSel} selection(s).` });
+                        }
+                    } else if (q.type === 'top_n') {
+                        if (!Array.isArray(val)) {
+                            return res.status(400).json({ success: false, error: `Top-N ranking for question "${q.title}" must be an array.` });
+                        }
+                        const topLimit = q.validation?.topN || q.validation?.maxSelections || 3;
+                        if (val.length > topLimit) {
+                            return res.status(400).json({ success: false, error: `Question "${q.title}" allows at most ${topLimit} selections.` });
+                        }
+                        if (isRequired && val.length === 0 && surveyQualificationStatus !== 'Disqualified') {
+                            return res.status(400).json({ success: false, error: `Question "${q.title}" requires at least 1 selection.` });
+                        }
+                    } else if (q.type === 'rating' || q.type === 'opinion_scale') {
+                        const minR = q.validation?.minRating ?? q.minRating ?? 1;
+                        const maxR = q.validation?.maxRating ?? q.maxRating ?? (q.type === 'opinion_scale' ? 10 : 5);
+                        const numVal = Number(val);
+                        if (isNaN(numVal) || numVal < minR || numVal > maxR) {
+                            return res.status(400).json({ success: false, error: `Rating for "${q.title}" must be a number between ${minR} and ${maxR}.` });
+                        }
+                    } else if (q.type === 'short_text' || q.type === 'long_text') {
+                        const strVal = String(val).trim();
+                        const minLen = q.validation?.minLength ?? (isRequired ? 1 : 0);
+                        const maxLen = q.validation?.maxLength ?? (q.type === 'long_text' ? 2000 : 255);
+                        if (strVal.length < minLen && surveyQualificationStatus !== 'Disqualified') {
+                            return res.status(400).json({ success: false, error: `Text answer for "${q.title}" must be at least ${minLen} characters.` });
+                        }
+                        if (strVal.length > maxLen) {
+                            return res.status(400).json({ success: false, error: `Text answer for "${q.title}" exceeds maximum allowed length of ${maxLen} characters.` });
+                        }
+                    }
+                }
+            }
+
+            // Attention Checks Validation
+            for (const q of questions) {
                 if (q.isAttentionCheck && q.expectedAnswer) {
-                    const ans = surveyResponses.find(r => r.questionId === q.id);
+                    const ans = surveyResponses.find(r => String(r.questionId) === String(q.id));
                     if (!ans || String(ans.value || '').trim().toLowerCase() !== String(q.expectedAnswer).trim().toLowerCase()) {
                         attentionCheckPassed = false;
                         qualityFlags.push(`Failed Attention Check on Question: "${q.title}"`);
@@ -1130,11 +1295,11 @@ export const submitUserTaskProof = async (req, res) => {
                 }
             }
 
-            // 2. Answer Consistency / Check Questions Verification
-            for (const q of task.surveyConfig.questions) {
+            // Check Questions Verification
+            for (const q of questions) {
                 if (q.isCheckQuestion && q.sourceQuestionId) {
-                    const sourceAnsObj = surveyResponses.find(r => r.questionId === q.sourceQuestionId);
-                    const checkAnsObj = surveyResponses.find(r => r.questionId === q.id);
+                    const sourceAnsObj = surveyResponses.find(r => String(r.questionId) === String(q.sourceQuestionId));
+                    const checkAnsObj = surveyResponses.find(r => String(r.questionId) === String(q.id));
                     const sourceVal = sourceAnsObj ? sourceAnsObj.value : undefined;
                     const checkVal = checkAnsObj ? checkAnsObj.value : undefined;
 
@@ -1157,7 +1322,6 @@ export const submitUserTaskProof = async (req, res) => {
                             const norm2 = String(checkVal).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
                             passed = norm1 === norm2;
                         } else {
-                            // case_insensitive default
                             passed = String(sourceVal).trim().toLowerCase() === String(checkVal).trim().toLowerCase();
                         }
                     }
@@ -1185,7 +1349,7 @@ export const submitUserTaskProof = async (req, res) => {
                 }
             }
 
-            // 3. Anti-Speeding Verification
+            // Anti-Speeding Verification
             const minTimeRatio = (settings.surveyConfig?.securityRules?.minCompletionTimeRatio) || 0.25;
             const estimatedSec = (task.surveyEstimatedMinutes || 5) * 60;
             const minAllowedSec = Math.floor(estimatedSec * minTimeRatio);
@@ -1222,6 +1386,7 @@ export const submitUserTaskProof = async (req, res) => {
             surveyQualificationStatus: isSurveyTask ? surveyQualificationStatus : 'Completed',
             attentionCheckPassed: isSurveyTask ? attentionCheckPassed : true,
             consentAgreed: isSurveyTask ? consentAgreed : true,
+            surveyVersion: isSurveyTask ? (task.surveyConfig?.version || task.surveyVersion || 1) : 1,
             checkQuestionResults: isSurveyTask ? checkQuestionResults : [],
             qualityFlags: isSurveyTask ? qualityFlags : [],
             qualityScore: isSurveyTask ? qualityScore : 100,

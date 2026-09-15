@@ -1689,6 +1689,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 isSurvey: isSurveyCampaign,
                 surveyCategory: isSurveyCampaign ? (subType || surveyConfigData.category) : undefined,
                 surveyEstimatedMinutes: isSurveyCampaign ? (surveyConfigData.estimatedTimeMinutes || 3) : undefined,
+                surveyQuestionsCount: isSurveyCampaign ? (surveyConfigData.questions?.length || 0) : undefined,
+                surveyApprovalMode: isSurveyCampaign ? ((surveyConfigData as any).approvalMode || 'auto') : undefined,
                 surveyConfig: isSurveyCampaign ? surveyConfigData : undefined
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
