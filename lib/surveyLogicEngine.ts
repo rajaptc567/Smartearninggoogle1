@@ -67,11 +67,25 @@ export interface SurveySection {
 
 export interface SurveyQuestion {
     id: string;
-    type: 'single_choice' | 'multiple_choice' | 'yes_no' | 'rating' | 'opinion_scale' | 'short_text' | 'long_text' | 'dropdown' | 'number';
+    type: 'single_choice' | 'multiple_choice' | 'yes_no' | 'rating' | 'opinion_scale' | 'short_text' | 'long_text' | 'dropdown' | 'number' | 'top_n' | string;
     title: string;
     description?: string;
     required: boolean;
-    options?: string[];
+    options?: any[];
+    allowOther?: boolean;
+    validation?: {
+        required?: boolean;
+        minSelections?: number;
+        maxSelections?: number;
+        topN?: number;
+        minLength?: number;
+        maxLength?: number;
+        minValue?: number;
+        maxValue?: number;
+        minRating?: number;
+        maxRating?: number;
+        customPattern?: string;
+    };
     isAttentionCheck?: boolean;
     expectedAnswer?: string;
     minRating?: number;

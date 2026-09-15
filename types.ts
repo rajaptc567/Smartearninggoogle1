@@ -678,6 +678,8 @@ export interface SurveyValidation {
     topN?: number;
     minLength?: number;
     maxLength?: number;
+    minValue?: number;
+    maxValue?: number;
     minRating?: number;
     maxRating?: number;
     customPattern?: string;

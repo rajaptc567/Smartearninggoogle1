@@ -412,6 +412,58 @@ export const SurveyPreview: React.FC<SurveyPreviewProps> = ({ config }) => {
                                         )}
                                     </div>
                                 )}
+
+                                {/* Opinion Scale (0-10 NPS) */}
+                                {q.type === 'opinion_scale' && (
+                                    <div className="space-y-2.5 pt-1">
+                                        <div className="grid grid-cols-6 sm:grid-cols-11 gap-1.5 max-w-full">
+                                            {Array.from({ length: 11 }).map((_, scaleVal) => {
+                                                const isSelected = currentAnswer !== undefined && currentAnswer !== '' && Number(currentAnswer) === scaleVal;
+                                                return (
+                                                    <button
+                                                        key={scaleVal}
+                                                        type="button"
+                                                        onClick={() => setResponses(prev => ({ ...prev, [q.id]: scaleVal }))}
+                                                        className={`py-2.5 rounded-xl border text-xs sm:text-sm font-bold flex items-center justify-center transition-all ${
+                                                            isSelected
+                                                                ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-lg scale-105'
+                                                                : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        {scaleVal}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="flex justify-between text-[11px] text-slate-400 px-1 font-semibold">
+                                            <span>0 - Not at all likely</span>
+                                            <span>10 - Extremely likely</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Number */}
+                                {q.type === 'number' && (
+                                    <div className="space-y-1 pt-1">
+                                        <input
+                                            type="number"
+                                            value={currentAnswer !== undefined ? currentAnswer : ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                                setResponses(prev => ({ ...prev, [q.id]: val }));
+                                            }}
+                                            min={q.validation?.minValue}
+                                            max={q.validation?.maxValue}
+                                            placeholder="Enter number..."
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 font-mono"
+                                        />
+                                        {(q.validation?.minValue !== undefined || q.validation?.maxValue !== undefined) && (
+                                            <div className="text-[10px] text-slate-500 font-mono">
+                                                Allowed range: {q.validation.minValue !== undefined ? q.validation.minValue : '-∞'} to {q.validation.maxValue !== undefined ? q.validation.maxValue : '+∞'}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         );
                     })
