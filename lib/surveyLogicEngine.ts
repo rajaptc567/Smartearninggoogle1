@@ -500,6 +500,93 @@ export interface SurveyFlowResult {
 }
 
 /**
+ * Helper to apply an evaluated rule action to survey flow state
+ */
+function applyRuleAction(
+    res: { action: string; targetQuestionId?: string; targetSectionId?: string; message?: string },
+    questions: SurveyQuestion[],
+    fromIndex: number,
+    state: {
+        skipped: Set<string>;
+        hidden: Set<string>;
+        explicitShown: Set<string>;
+        requiredMap: Record<string, boolean>;
+        messages: { type: 'info' | 'warning'; text: string; questionId?: string }[];
+        status: 'in_progress' | 'completed' | 'disqualified';
+        disqualificationReason: string;
+        qualificationStatus: 'Completed' | 'Qualified' | 'Disqualified' | 'Standard';
+    },
+    defaultSourceQuestionId?: string,
+    isGlobal: boolean = false
+): boolean {
+    if (!res.action) return false;
+
+    if (res.action === 'disqualify') {
+        state.status = 'disqualified';
+        state.qualificationStatus = 'Disqualified';
+        state.disqualificationReason = res.message || (isGlobal ? 'Screened out by global criteria.' : 'Disqualified based on logic screening criteria.');
+        const startSkip = fromIndex >= 0 ? fromIndex + 1 : 0;
+        for (let j = startSkip; j < questions.length; j++) {
+            state.skipped.add(questions[j].id);
+        }
+        return true;
+    } else if (res.action === 'qualify') {
+        state.qualificationStatus = 'Qualified';
+    } else if (res.action === 'end_survey') {
+        state.status = 'completed';
+        const startSkip = fromIndex >= 0 ? fromIndex + 1 : 0;
+        for (let j = startSkip; j < questions.length; j++) {
+            state.skipped.add(questions[j].id);
+        }
+        return true;
+    } else if (res.action === 'goto_question' && res.targetQuestionId) {
+        const targetIdx = questions.findIndex(tq => tq.id === res.targetQuestionId);
+        if (targetIdx > fromIndex) {
+            const startSkip = fromIndex >= 0 ? fromIndex + 1 : 0;
+            for (let j = startSkip; j < targetIdx; j++) {
+                state.skipped.add(questions[j].id);
+            }
+        }
+    } else if (res.action === 'goto_section' && res.targetSectionId) {
+        const targetIdx = questions.findIndex(tq => tq.sectionId === res.targetSectionId);
+        if (targetIdx > fromIndex) {
+            const startSkip = fromIndex >= 0 ? fromIndex + 1 : 0;
+            for (let j = startSkip; j < targetIdx; j++) {
+                state.skipped.add(questions[j].id);
+            }
+        }
+    } else if (res.action === 'skip_question') {
+        if (res.targetQuestionId) {
+            state.skipped.add(res.targetQuestionId);
+        } else if (fromIndex + 1 < questions.length && fromIndex >= 0) {
+            state.skipped.add(questions[fromIndex + 1].id);
+        }
+    } else if (res.action === 'skip_section' && res.targetSectionId) {
+        questions.forEach(tq => {
+            if (tq.sectionId === res.targetSectionId) {
+                state.skipped.add(tq.id);
+            }
+        });
+    } else if (res.action === 'show_question' && res.targetQuestionId) {
+        state.explicitShown.add(res.targetQuestionId);
+        state.hidden.delete(res.targetQuestionId);
+        state.skipped.delete(res.targetQuestionId);
+    } else if (res.action === 'hide_question' && res.targetQuestionId) {
+        state.hidden.add(res.targetQuestionId);
+    } else if (res.action === 'require_answer' && res.targetQuestionId) {
+        state.requiredMap[res.targetQuestionId] = true;
+    } else if (res.action === 'make_optional' && res.targetQuestionId) {
+        state.requiredMap[res.targetQuestionId] = false;
+    } else if (res.action === 'show_message' && res.message) {
+        state.messages.push({ type: 'info', text: res.message, questionId: defaultSourceQuestionId });
+    } else if (res.action === 'warning' && res.message) {
+        state.messages.push({ type: 'warning', text: res.message, questionId: defaultSourceQuestionId });
+    }
+
+    return false;
+}
+
+/**
  * Single source of truth for full survey flow evaluation
  */
 export function evaluateSurveyFlow(
@@ -509,30 +596,45 @@ export function evaluateSurveyFlow(
     globalRules: SurveyLogicRule[] = [],
     checkAttempts: Record<string, number> = {}
 ): SurveyFlowResult {
-    const skipped = new Set<string>();
-    const hidden = new Set<string>();
-    const explicitShown = new Set<string>();
-    const requiredMap: Record<string, boolean> = {};
-    const messages: { type: 'info' | 'warning'; text: string; questionId?: string }[] = [];
-    let status: 'in_progress' | 'completed' | 'disqualified' = 'in_progress';
-    let disqualificationReason = '';
-    let qualificationStatus: 'Completed' | 'Qualified' | 'Disqualified' | 'Standard' = 'Standard';
+    const state = {
+        skipped: new Set<string>(),
+        hidden: new Set<string>(),
+        explicitShown: new Set<string>(),
+        requiredMap: {} as Record<string, boolean>,
+        messages: [] as { type: 'info' | 'warning'; text: string; questionId?: string }[],
+        status: 'in_progress' as 'in_progress' | 'completed' | 'disqualified',
+        disqualificationReason: '',
+        qualificationStatus: 'Standard' as 'Completed' | 'Qualified' | 'Disqualified' | 'Standard'
+    };
 
     // Initialize requiredMap from questions
     questions.forEach(q => {
-        requiredMap[q.id] = !!q.required;
+        state.requiredMap[q.id] = !!q.required;
     });
 
     // Evaluate global rules first if any
     if (globalRules && globalRules.length > 0) {
         for (const rule of globalRules) {
+            if (state.status === 'disqualified' || state.status === 'completed') {
+                break;
+            }
             const res = evaluateRule(rule, responses);
-            if (res.action === 'disqualify') {
-                status = 'disqualified';
-                qualificationStatus = 'Disqualified';
-                disqualificationReason = res.message || 'Screened out by global criteria.';
-            } else if (res.action === 'qualify') {
-                qualificationStatus = 'Qualified';
+            if (res.action) {
+                let fromIndex = -1;
+                let sourceQuestionId: string | undefined = undefined;
+                if (rule.conditions && rule.conditions.length > 0) {
+                    sourceQuestionId = rule.conditions[0]?.questionId;
+                    const indices = rule.conditions
+                        .map(c => questions.findIndex(q => q.id === c.questionId))
+                        .filter(idx => idx !== -1);
+                    if (indices.length > 0) {
+                        fromIndex = Math.max(...indices);
+                    }
+                }
+                const shouldBreak = applyRuleAction(res, questions, fromIndex, state, sourceQuestionId, true);
+                if (shouldBreak) {
+                    break;
+                }
             }
         }
     }
@@ -541,9 +643,8 @@ export function evaluateSurveyFlow(
     for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
 
-        if (status === 'disqualified' || status === 'completed') {
-            skipped.add(q.id);
-            continue;
+        if (state.status === 'disqualified' || state.status === 'completed') {
+            break;
         }
 
         // Backward compatibility for showIf
@@ -552,9 +653,9 @@ export function evaluateSurveyFlow(
             if (cond && cond.questionId) {
                 const isVisible = evaluateCondition(cond, responses);
                 if (!isVisible) {
-                    hidden.add(q.id);
+                    state.hidden.add(q.id);
                 } else {
-                    explicitShown.add(q.id);
+                    state.explicitShown.add(q.id);
                 }
             }
         }
@@ -571,10 +672,10 @@ export function evaluateSurveyFlow(
         if (q.isAttentionCheck && q.expectedAnswer) {
             const att = evaluateAttentionCheck(q, ans);
             if (!att.passed) {
-                qualificationStatus = 'Disqualified';
-                status = 'disqualified';
-                disqualificationReason = att.message || 'Attention trap failed.';
-                for (let j = i + 1; j < questions.length; j++) skipped.add(questions[j].id);
+                state.qualificationStatus = 'Disqualified';
+                state.status = 'disqualified';
+                state.disqualificationReason = att.message || 'Attention trap failed.';
+                for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
                 break;
             }
         }
@@ -589,13 +690,13 @@ export function evaluateSurveyFlow(
                 const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
                 if (!checkRes.passed) {
                     if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
-                        qualificationStatus = 'Disqualified';
-                        status = 'disqualified';
-                        disqualificationReason = checkRes.message || 'Verification check failed.';
-                        for (let j = i + 1; j < questions.length; j++) skipped.add(questions[j].id);
+                        state.qualificationStatus = 'Disqualified';
+                        state.status = 'disqualified';
+                        state.disqualificationReason = checkRes.message || 'Verification check failed.';
+                        for (let j = i + 1; j < questions.length; j++) state.skipped.add(questions[j].id);
                         break;
                     } else if (checkRes.action === 'flag' || checkRes.action === 'review') {
-                        messages.push({ type: 'warning', text: checkRes.message || 'Check flagged for review.', questionId: q.id });
+                        state.messages.push({ type: 'warning', text: checkRes.message || 'Check flagged for review.', questionId: q.id });
                     }
                 }
             }
@@ -606,78 +707,29 @@ export function evaluateSurveyFlow(
         for (const rule of rulesToEval) {
             const res = evaluateRule(rule, responses);
             if (res.action) {
-                if (res.action === 'disqualify') {
-                    status = 'disqualified';
-                    qualificationStatus = 'Disqualified';
-                    disqualificationReason = res.message || 'Disqualified based on logic screening criteria.';
-                    for (let j = i + 1; j < questions.length; j++) skipped.add(questions[j].id);
+                const shouldBreak = applyRuleAction(res, questions, i, state, q.id, false);
+                if (shouldBreak) {
                     break;
-                } else if (res.action === 'qualify') {
-                    qualificationStatus = 'Qualified';
-                } else if (res.action === 'end_survey') {
-                    status = 'completed';
-                    for (let j = i + 1; j < questions.length; j++) skipped.add(questions[j].id);
-                    break;
-                } else if (res.action === 'goto_question' && res.targetQuestionId) {
-                    const targetIdx = questions.findIndex(tq => tq.id === res.targetQuestionId);
-                    if (targetIdx > i) {
-                        for (let j = i + 1; j < targetIdx; j++) {
-                            skipped.add(questions[j].id);
-                        }
-                    }
-                } else if (res.action === 'goto_section' && res.targetSectionId) {
-                    const targetIdx = questions.findIndex(tq => tq.sectionId === res.targetSectionId);
-                    if (targetIdx > i) {
-                        for (let j = i + 1; j < targetIdx; j++) {
-                            skipped.add(questions[j].id);
-                        }
-                    }
-                } else if (res.action === 'skip_question') {
-                    if (res.targetQuestionId) {
-                        skipped.add(res.targetQuestionId);
-                    } else if (i + 1 < questions.length) {
-                        skipped.add(questions[i + 1].id);
-                    }
-                } else if (res.action === 'skip_section' && res.targetSectionId) {
-                    questions.forEach(tq => {
-                        if (tq.sectionId === res.targetSectionId) {
-                            skipped.add(tq.id);
-                        }
-                    });
-                } else if (res.action === 'show_question' && res.targetQuestionId) {
-                    explicitShown.add(res.targetQuestionId);
-                    hidden.delete(res.targetQuestionId);
-                    skipped.delete(res.targetQuestionId);
-                } else if (res.action === 'hide_question' && res.targetQuestionId) {
-                    hidden.add(res.targetQuestionId);
-                } else if (res.action === 'require_answer' && res.targetQuestionId) {
-                    requiredMap[res.targetQuestionId] = true;
-                } else if (res.action === 'make_optional' && res.targetQuestionId) {
-                    requiredMap[res.targetQuestionId] = false;
-                } else if (res.action === 'show_message' && res.message) {
-                    messages.push({ type: 'info', text: res.message, questionId: q.id });
-                } else if (res.action === 'warning' && res.message) {
-                    messages.push({ type: 'warning', text: res.message, questionId: q.id });
                 }
             }
         }
     }
 
     const visibleQuestions = questions.filter(q => {
-        if (skipped.has(q.id)) return false;
-        if (hidden.has(q.id) && !explicitShown.has(q.id)) return false;
+        if (state.skipped.has(q.id)) return false;
+        if (state.hidden.has(q.id) && !state.explicitShown.has(q.id)) return false;
         return true;
     });
 
     return {
         visibleQuestions,
-        hiddenQuestionIds: hidden,
-        skippedQuestionIds: skipped,
-        requiredMap,
-        status,
-        disqualificationReason,
-        qualificationStatus,
-        messages
+        hiddenQuestionIds: state.hidden,
+        skippedQuestionIds: state.skipped,
+        requiredMap: state.requiredMap,
+        status: state.status,
+        disqualificationReason: state.disqualificationReason,
+        qualificationStatus: state.qualificationStatus,
+        messages: state.messages
     };
 }
 
