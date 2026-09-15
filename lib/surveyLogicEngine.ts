@@ -218,12 +218,60 @@ export function evaluateCondition(condition: SurveyLogicCondition, responses: Re
 
     // Array / Multiple choice / Top-N response handling
     if (Array.isArray(rawVal)) {
-        const targetStr = String(condition.value !== undefined ? condition.value : '').toLowerCase().trim();
-        if (condition.operator === 'contains' || condition.operator === 'equals') {
-            return rawVal.some(item => String(item).toLowerCase().trim() === targetStr);
+        const normalizeItem = (v: any) => String(v !== undefined && v !== null ? v : '').trim().toLowerCase();
+        const selectedSet = Array.from(new Set(rawVal.map(normalizeItem).filter(s => s.length > 0))).sort();
+        const targetStr = normalizeItem(condition.value);
+
+        // Helper to parse target into normalized array
+        const parseTargetSet = (val: any): string[] => {
+            if (Array.isArray(val)) {
+                return Array.from(new Set(val.map(normalizeItem).filter(s => s.length > 0))).sort();
+            }
+            if (typeof val === 'string') {
+                const trimmed = val.trim();
+                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            return Array.from(new Set(parsed.map(normalizeItem).filter(s => s.length > 0))).sort();
+                        }
+                    } catch {
+                        // ignore JSON parse error
+                    }
+                }
+                if (trimmed.includes(',') || trimmed.includes(';') || trimmed.includes('|')) {
+                    return Array.from(new Set(trimmed.split(/[,;|]+/).map(normalizeItem).filter(s => s.length > 0))).sort();
+                }
+                if (trimmed) {
+                    return [normalizeItem(trimmed)];
+                }
+                return [];
+            }
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+                return [normalizeItem(val)];
+            }
+            return [];
+        };
+
+        const targetSet = parseTargetSet(condition.value);
+
+        if (condition.operator === 'contains') {
+            if (targetSet.length > 1) {
+                return targetSet.every(t => selectedSet.includes(t));
+            }
+            return selectedSet.includes(targetStr);
         }
-        if (condition.operator === 'not_contains' || condition.operator === 'not_equals') {
-            return !rawVal.some(item => String(item).toLowerCase().trim() === targetStr);
+        if (condition.operator === 'not_contains') {
+            if (targetSet.length > 1) {
+                return !targetSet.some(t => selectedSet.includes(t));
+            }
+            return !selectedSet.includes(targetStr);
+        }
+        if (condition.operator === 'equals') {
+            return selectedSet.length === targetSet.length && selectedSet.every((item, i) => item === targetSet[i]);
+        }
+        if (condition.operator === 'not_equals') {
+            return !(selectedSet.length === targetSet.length && selectedSet.every((item, i) => item === targetSet[i]));
         }
     }
 
@@ -256,9 +304,9 @@ export function evaluateCondition(condition: SurveyLogicCondition, responses: Re
             const condStr2 = String(condition.value2 !== undefined ? condition.value2 : '').toLowerCase().trim();
             const numCond2 = parseFloat(condStr2);
             if (!hasNumeric || isNaN(numCond2)) return false;
-            const min = Math.min(numCond, numCond2);
-            const max = Math.max(numCond, numCond2);
-            return numAns >= min && numAns <= max;
+            // Do not silently swap min/max
+            if (numCond > numCond2) return false;
+            return numAns >= numCond && numAns <= numCond2;
         }
         default:
             return false;
@@ -458,7 +506,8 @@ export function evaluateSurveyFlow(
     questions: SurveyQuestion[],
     sections: SurveySection[] = [],
     responses: Record<string, any> = {},
-    globalRules: SurveyLogicRule[] = []
+    globalRules: SurveyLogicRule[] = [],
+    checkAttempts: Record<string, number> = {}
 ): SurveyFlowResult {
     const skipped = new Set<string>();
     const hidden = new Set<string>();
@@ -534,7 +583,10 @@ export function evaluateSurveyFlow(
         if (q.isCheckQuestion && q.sourceQuestionId) {
             const sourceAns = responses[q.sourceQuestionId];
             if (sourceAns !== undefined && sourceAns !== null && sourceAns !== '') {
-                const checkRes = evaluateCheckQuestion(q, sourceAns, ans, 1);
+                const currentAttempts = (checkAttempts && checkAttempts[q.id] !== undefined)
+                    ? checkAttempts[q.id]
+                    : 1;
+                const checkRes = evaluateCheckQuestion(q, sourceAns, ans, currentAttempts);
                 if (!checkRes.passed) {
                     if (checkRes.action === 'disqualify' || checkRes.action === 'reject') {
                         qualificationStatus = 'Disqualified';
@@ -676,7 +728,8 @@ export function pipeAnswersIntoText(
  */
 export function validateSurveyLogic(
     questions: SurveyQuestion[],
-    sections: SurveySection[] = []
+    sections: SurveySection[] = [],
+    globalLogicRules: SurveyLogicRule[] = []
 ): { valid: boolean; errors: string[]; warnings: string[] } {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -706,10 +759,17 @@ export function validateSurveyLogic(
     questions.forEach((q, idx) => {
         const rules = q.logicRules || [];
         rules.forEach((rule, rIdx) => {
-            // Check condition question existence
+            // Check condition question existence & between operator
             rule.conditions.forEach(cond => {
                 if (!questionIds.has(cond.questionId)) {
                     errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: Refers to deleted question ID "${cond.questionId}".`);
+                }
+                if (cond.operator === 'between') {
+                    const min = parseFloat(String(cond.value !== undefined ? cond.value : ''));
+                    const max = parseFloat(String(cond.value2 !== undefined ? cond.value2 : ''));
+                    if (!isNaN(min) && !isNaN(max) && min > max) {
+                        errors.push(`Question ${idx + 1}, Rule ${rIdx + 1}: "Between" operator minimum (${cond.value}) cannot be greater than maximum (${cond.value2}).`);
+                    }
                 }
             });
 
@@ -760,6 +820,83 @@ export function validateSurveyLogic(
         }
     });
 
+    // 2.5. Validate Global Logic Rules
+    if (globalLogicRules && globalLogicRules.length > 0) {
+        globalLogicRules.forEach((rule, rIdx) => {
+            const ruleLabel = rule.description ? `Global Rule ${rIdx + 1} ("${rule.description}")` : `Global Rule ${rIdx + 1}`;
+
+            // Check condition question IDs and between operator
+            if (!rule.conditions || rule.conditions.length === 0) {
+                warnings.push(`${ruleLabel}: Has no conditions defined.`);
+            } else {
+                rule.conditions.forEach(cond => {
+                    if (!cond.questionId) {
+                        errors.push(`${ruleLabel}: Condition has no question selected.`);
+                    } else if (!questionIds.has(cond.questionId)) {
+                        errors.push(`${ruleLabel}: Refers to deleted question ID "${cond.questionId}".`);
+                    }
+
+                    if (cond.operator === 'between') {
+                        const min = parseFloat(String(cond.value !== undefined ? cond.value : ''));
+                        const max = parseFloat(String(cond.value2 !== undefined ? cond.value2 : ''));
+                        if (!isNaN(min) && !isNaN(max) && min > max) {
+                            errors.push(`${ruleLabel}: "Between" operator minimum (${cond.value}) cannot be greater than maximum (${cond.value2}).`);
+                        }
+                    }
+                });
+            }
+
+            // Check target question existence
+            if (rule.action === 'goto_question' || rule.action === 'skip_question' || rule.action === 'show_question' || rule.action === 'hide_question' || rule.action === 'require_answer' || rule.action === 'make_optional') {
+                if (!rule.targetQuestionId) {
+                    errors.push(`${ruleLabel}: Action is "${rule.action}" but no target question is selected.`);
+                } else if (!questionIds.has(rule.targetQuestionId)) {
+                    errors.push(`${ruleLabel}: Target question no longer exists.`);
+                } else if (rule.action === 'goto_question' || rule.action === 'skip_question') {
+                    // Add cycle edges from condition question IDs to target question ID
+                    rule.conditions.forEach(cond => {
+                        if (cond.questionId && questionIds.has(cond.questionId)) {
+                            adjacencyList.get(cond.questionId)?.push(rule.targetQuestionId!);
+                        }
+                    });
+                }
+            }
+
+            // Check target section existence
+            if (rule.action === 'goto_section' || rule.action === 'skip_section') {
+                if (!rule.targetSectionId) {
+                    errors.push(`${ruleLabel}: Action is "${rule.action}" but no target section is selected.`);
+                } else if (!sectionIds.has(rule.targetSectionId)) {
+                    errors.push(`${ruleLabel}: Target section no longer exists.`);
+                }
+            }
+
+            // Check ELSE target questions
+            if (rule.elseAction && (rule.elseAction === 'goto_question' || rule.elseAction === 'skip_question' || rule.elseAction === 'show_question' || rule.elseAction === 'hide_question' || rule.elseAction === 'require_answer' || rule.elseAction === 'make_optional')) {
+                if (!rule.elseTargetQuestionId) {
+                    errors.push(`${ruleLabel}: ELSE action is "${rule.elseAction}" but no target question is selected.`);
+                } else if (!questionIds.has(rule.elseTargetQuestionId)) {
+                    errors.push(`${ruleLabel}: ELSE target question no longer exists.`);
+                } else if (rule.elseAction === 'goto_question' || rule.elseAction === 'skip_question') {
+                    rule.conditions.forEach(cond => {
+                        if (cond.questionId && questionIds.has(cond.questionId)) {
+                            adjacencyList.get(cond.questionId)?.push(rule.elseTargetQuestionId!);
+                        }
+                    });
+                }
+            }
+
+            // Check ELSE target sections
+            if (rule.elseAction && (rule.elseAction === 'goto_section' || rule.elseAction === 'skip_section')) {
+                if (!rule.elseTargetSectionId) {
+                    errors.push(`${ruleLabel}: ELSE action is "${rule.elseAction}" but no target section is selected.`);
+                } else if (!sectionIds.has(rule.elseTargetSectionId)) {
+                    errors.push(`${ruleLabel}: ELSE target section no longer exists.`);
+                }
+            }
+        });
+    }
+
     // 3. Circular Loop Detection (Cycle Detection using DFS)
     const visited = new Map<string, 'WHITE' | 'GRAY' | 'BLACK'>();
     questions.forEach(q => visited.set(q.id, 'WHITE'));
@@ -788,8 +925,10 @@ export function validateSurveyLogic(
         visited.set(nodeId, 'BLACK');
     }
 
-    if (questions.length > 0) {
-        dfs(questions[0].id, []);
+    for (const q of questions) {
+        if (visited.get(q.id) === 'WHITE') {
+            dfs(q.id, []);
+        }
     }
 
     // 4. Check Question Recommendation Check

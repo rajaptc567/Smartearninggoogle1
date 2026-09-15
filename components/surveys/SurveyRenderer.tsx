@@ -74,8 +74,8 @@ export const SurveyRenderer: React.FC<SurveyRendererProps> = ({
 
     // Single source of truth logic evaluation via surveyLogicEngine
     const flowResult = useMemo(() => {
-        return evaluateSurveyFlow(questions, config.sections || [], answers, config.globalLogicRules || []);
-    }, [questions, config.sections, answers, config.globalLogicRules]);
+        return evaluateSurveyFlow(questions, config.sections || [], answers, config.globalLogicRules || [], checkAttempts);
+    }, [questions, config.sections, answers, config.globalLogicRules, checkAttempts]);
 
     const isDisqualified = flowResult.status === 'disqualified' || Boolean(checkDisqualification?.isDisqualified);
     const disqualificationReason = flowResult.disqualificationReason || checkDisqualification?.reason || 'Responses did not meet the screening rules for this survey.';
