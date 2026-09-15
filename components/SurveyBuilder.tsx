@@ -44,6 +44,7 @@ import {
 } from '../lib/surveyLogicEngine';
 import { SMARTEXN_SURVEY_TEMPLATES } from '../lib/surveyTemplates';
 import { SurveyHelpModal } from './surveys/SurveyHelpModal';
+import { SurveyPreview } from './surveys/SurveyPreview';
 
 export type { SurveyQuestion, SurveyConfigData, SurveyLogicRule, SurveyLogicCondition, SurveySection };
 
@@ -897,37 +898,8 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
             {/* TAB 4: PREVIEW MODE */}
             {activeTab === 'preview' && (
-                <div className="p-5 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-200 dark:border-gray-700 space-y-6">
-                    <div className="text-center max-w-lg mx-auto pb-4 border-b dark:border-gray-700">
-                        <span className="text-xs uppercase font-bold text-blue-600 tracking-wider">Worker Survey Experience Preview</span>
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white mt-1">Participant Questionnaire</h4>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Participants will answer each question below within ~{value.estimatedTimeMinutes} minutes.
-                        </p>
-                    </div>
-
-                    <div className="space-y-4 max-w-xl mx-auto">
-                        {value.questions.map((q, idx) => (
-                            <div key={q.id} className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 shadow-sm space-y-3">
-                                <div className="flex items-start gap-2">
-                                    <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">
-                                        Q{idx + 1}
-                                    </span>
-                                    <div className="flex-1">
-                                        <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
-                                            {q.title || 'Untitled Question'}
-                                            {q.required && <span className="text-red-500 ml-1">*</span>}
-                                        </h5>
-                                        {q.description && <p className="text-xs text-gray-500 mt-0.5">{q.description}</p>}
-                                    </div>
-                                </div>
-
-                                <div className="pt-2 text-xs text-gray-400">
-                                    [Interactive field rendered for {q.type}]
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                <div className="py-2 max-w-4xl mx-auto">
+                    <SurveyPreview config={value as any} />
                 </div>
             )}
 
