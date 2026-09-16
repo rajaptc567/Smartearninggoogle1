@@ -2541,8 +2541,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             {/* TAB 1: CREATE CAMPAIGN */}
             {activeTab === 'submit' && isEnabled && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 md:p-10 shadow-xl border dark:border-gray-700">
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Create USD Task Campaign</h3>
+                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl p-6 md:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Create USD Task Campaign</h3>
                         
                         <form onSubmit={handleCreateCampaign} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2578,7 +2578,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 setSubType('Other');
                                             }
                                         }}
-                                        className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {availableCategories.map(cat => (
                                             <option key={cat.key} value={cat.displayName}>{cat.displayName}</option>
@@ -2591,7 +2591,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <select 
                                         value={subType} 
                                         onChange={(e) => setSubType(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {availableSubTypes.map(sub => (
                                             <option key={sub.key} value={sub.displayName}>{sub.displayName}</option>
@@ -2601,12 +2601,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
 
                             {subType === 'Watch Time' && activeWatchTimeTiers.length > 0 && (
-                                <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 rounded-2xl border border-blue-100 dark:border-gray-700 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                <div className="p-4 bg-blue-50/60 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/50 space-y-3 animate-in fade-in slide-in-from-top-2">
                                     <label className="block text-xs font-black uppercase text-blue-600 dark:text-blue-400">Select Watch Time Duration Tier</label>
                                     <select
                                         value={watchTimeTierIndex}
                                         onChange={(e) => setWatchTimeTierIndex(Number(e.target.value))}
-                                        className="w-full px-4 py-3 rounded-xl bg-white dark:bg-gray-950 border border-blue-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold text-sm"
+                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {activeWatchTimeTiers.map((tier: any, idx: number) => {
                                             const originalIdx = (activeCategoryConfig?.watchTimeTiers || []).findIndex((t: any) => t.duration === tier.duration);
@@ -2630,10 +2630,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         if (fieldErrors.title) setFieldErrors(prev => ({ ...prev, title: undefined }));
                                     }}
                                     placeholder="e.g. Website Sign-up & Verify Email"
-                                    className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
+                                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border text-gray-900 dark:text-white font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                                         fieldErrors.title 
                                             ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20' 
-                                            : 'dark:border-gray-700'
+                                            : 'border-gray-300 dark:border-gray-600'
                                     }`}
                                 />
                                 {fieldErrors.title && (
@@ -2656,10 +2656,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             if (fieldErrors.link) setFieldErrors(prev => ({ ...prev, link: undefined }));
                                         }}
                                         placeholder="https://example.com/signup"
-                                        className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
+                                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border text-gray-900 dark:text-white font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                                             fieldErrors.link 
                                                 ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20' 
-                                                : 'dark:border-gray-700'
+                                                : 'border-gray-300 dark:border-gray-600'
                                         }`}
                                     />
                                     {fieldErrors.link && (
@@ -2698,7 +2698,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
                                     placeholder="Provide clear instructions for workers (e.g. Sign up with email, submit your username and screenshot)"
-                                    className="w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border dark:border-gray-700 text-gray-900 dark:text-white font-medium"
+                                    className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 ></textarea>
                             </div>
 
@@ -2728,10 +2728,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     if (fieldErrors.targetQuantity) setFieldErrors(prev => ({ ...prev, targetQuantity: undefined }));
                                                 }}
                                                 placeholder={`Min ${limits.minSlots} slots`}
-                                                className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
+                                                className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border text-gray-900 dark:text-white font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                                                     qtyErrText 
                                                         ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-200' 
-                                                        : 'dark:border-gray-700'
+                                                        : 'border-gray-300 dark:border-gray-600'
                                                 }`}
                                             />
                                             {qtyErrText && (
@@ -2760,10 +2760,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                     if (fieldErrors.rewardPerTask) setFieldErrors(prev => ({ ...prev, rewardPerTask: undefined }));
                                                 }}
                                                 placeholder={`Min $${limits.minPayout.toFixed(3)}`}
-                                                className={`w-full px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border text-gray-900 dark:text-white font-medium transition-all ${
+                                                className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-gray-900 border text-gray-900 dark:text-white font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                                                     rewardErrText 
                                                         ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-200' 
-                                                        : 'dark:border-gray-700'
+                                                        : 'border-gray-300 dark:border-gray-600'
                                                 }`}
                                             />
                                             {rewardErrText && (
@@ -2782,17 +2782,17 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                             {/* Module A: Dynamic Proof Requirements Form Builder (Standard Campaigns Only) */}
                             {!isSurveyCampaign ? (
-                                <div id="campaign-proofs-container" className={`space-y-4 pt-6 border-t rounded-2xl p-3 transition-all ${
+                                <div id="campaign-proofs-container" className={`space-y-4 pt-6 border-t rounded-xl p-3 transition-all ${
                                     fieldErrors.proofs ? 'border-2 border-red-500 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-100 dark:border-gray-700'
                                 }`}>
                                     <h4 className="text-xs font-black uppercase tracking-wider text-gray-500">Configure Required Proofs (Module A)</h4>
                                     {fieldErrors.proofs && (
-                                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
+                                        <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 flex items-center gap-2 animate-in fade-in">
                                             <span>⚠️</span> {fieldErrors.proofs}
                                         </div>
                                     )}
                                     
-                                    <div className="bg-gray-50 dark:bg-gray-900 p-5 rounded-[2rem] border border-gray-100 dark:border-gray-800 space-y-4">
+                                    <div className="bg-gray-50 dark:bg-gray-900 p-4 sm:p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
                                         <div className="flex flex-col gap-2">
                                             <span className="text-xs font-black uppercase text-gray-400">Add Required Proof Type:</span>
                                             <div className="flex flex-wrap gap-2">
@@ -2802,9 +2802,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         addProofType('screenshot', 'Screenshot / Image');
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
                                                     }}
-                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    <span className="text-sm font-black text-blue-600 dark:text-blue-400">+</span> 📸 Screenshot / Image
+                                                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">+</span> 📸 Screenshot / Image
                                                 </button>
                                                 <button
                                                     type="button"
@@ -2812,9 +2812,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         addProofType('text', 'Text Proof');
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
                                                     }}
-                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">+</span> 📝 Text Proof
+                                                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400">+</span> 📝 Text Proof
                                                 </button>
                                                 <button
                                                     type="button"
@@ -2822,9 +2822,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         addProofType('username', 'Username');
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
                                                     }}
-                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    <span className="text-sm font-black text-purple-600 dark:text-purple-400">+</span> 👤 Username
+                                                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400">+</span> 👤 Username
                                                 </button>
                                                 <button
                                                     type="button"
@@ -2832,9 +2832,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         addProofType('userId', 'User ID');
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
                                                     }}
-                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    <span className="text-sm font-black text-amber-600 dark:text-amber-400">+</span> 🆔 User ID
+                                                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400">+</span> 🆔 User ID
                                                 </button>
                                                 <button
                                                     type="button"
@@ -2842,14 +2842,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         addProofType('email', 'Email');
                                                         if (fieldErrors.proofs) setFieldErrors(prev => ({ ...prev, proofs: undefined }));
                                                     }}
-                                                    className="px-3.5 py-2 text-xs font-black rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 hover:scale-105 transition-transform flex items-center gap-1.5 shadow-sm"
+                                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-sm"
                                                 >
-                                                    <span className="text-sm font-black text-rose-600 dark:text-rose-400">+</span> 📧 Email
+                                                    <span className="text-sm font-bold text-slate-600 dark:text-slate-400">+</span> 📧 Email
                                                 </button>
                                             </div>
                                         </div>
 
-                                        <div className="flex gap-2 bg-white dark:bg-gray-800 p-2.5 rounded-2xl border dark:border-gray-700 shadow-inner">
+                                        <div className="flex gap-2 bg-white dark:bg-gray-800 p-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-inner">
                                             <input
                                                 type="text"
                                                 id="custom-proof-manual-input"
@@ -2880,7 +2880,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                         alert("Please enter a label for manual entry proof.");
                                                     }
                                                 }}
-                                                className="px-4 py-2 text-xs font-black rounded-xl bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 hover:scale-105 transition-all flex items-center gap-1 shrink-0"
+                                                className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 transition-colors flex items-center gap-1 shrink-0"
                                             >
                                                 <span className="font-bold">+</span> Add Manual Entry
                                             </button>
@@ -2890,12 +2890,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <div className="space-y-3 pt-2">
                                             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Proof Requirements list:</span>
                                             {requiredProofsList.length === 0 ? (
-                                                <p className="text-xs text-gray-400 italic text-center py-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed dark:border-gray-700">
+                                                <p className="text-xs text-gray-400 italic text-center py-4 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
                                                     No proofs configured yet. Please add at least one required proof above.
                                                 </p>
                                             ) : (
                                                 requiredProofsList.map((proof, index) => (
-                                                    <div key={proof.id} id={`proof-instruction-${proof.id}`} className="p-4 bg-white dark:bg-gray-800 rounded-2xl border dark:border-gray-700 shadow-sm space-y-2.5 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
+                                                    <div key={proof.id} id={`proof-instruction-${proof.id}`} className="p-3.5 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-2.5 transition-all duration-300 animate-in fade-in slide-in-from-top-2">
                                                         <div className="flex justify-between items-center">
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-xs font-black px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
@@ -2931,10 +2931,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                                 }
                                                             }}
                                                             placeholder={`Instruction for worker (e.g. Enter your ${proof.label.toLowerCase()})`}
-                                                            className={`w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 border text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
+                                                            className={`w-full px-3.5 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all ${
                                                                 fieldErrors.proofInstructions?.[proof.id]
                                                                     ? 'border-2 border-red-500 ring-2 ring-red-500/30 bg-red-50/50 dark:bg-red-950/20'
-                                                                    : 'dark:border-gray-700'
+                                                                    : 'border-gray-200 dark:border-gray-700'
                                                             }`}
                                                         />
                                                         {fieldErrors.proofInstructions?.[proof.id] && (
@@ -2949,7 +2949,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-3">
+                                <div className="p-4 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-center gap-3">
                                     <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 shrink-0 text-lg">
                                         📋
                                     </div>
@@ -2963,7 +2963,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             )}
 
                             {/* Base Creation Fee Notice Banner above launch campaign button */}
-                            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs space-y-1.5">
+                            <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-1.5">
                                 <div className="flex justify-between items-center font-black text-amber-900 dark:text-amber-300">
                                     <span className="flex items-center gap-1.5">
                                         <span>🏷️</span> Base Campaign Creation Fee:
@@ -2977,14 +2977,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </p>
                             </div>
 
-                            <Button type="submit" variant="primary" isLoading={isSubmitting} className="w-full py-4 text-base md:text-lg font-black shadow-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white">
+                            <Button type="submit" variant="primary" isLoading={isSubmitting} className="w-full py-3.5 text-sm md:text-base font-bold shadow-md bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors">
                                 🚀 Launch Campaign — Total: ${grandTotalUSD.toFixed(2)} USD
                             </Button>
                         </form>
                     </div>
 
                     {/* Summary Card */}
-                    <div className="bg-[#0f172a] text-white rounded-[2.5rem] p-8 md:p-10 shadow-xl flex flex-col justify-between">
+                    <div className="bg-[#0f172a] text-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-800 flex flex-col justify-between">
                         <div>
                             <h3 className="text-xl font-bold uppercase tracking-tight text-blue-400 mb-6">Campaign Summary (USD)</h3>
                             <div className="space-y-4 text-sm">
@@ -3016,7 +3016,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <span>${grandTotalUSD.toFixed(2)} USD</span>
                                 </div>
                                 {getSelectionLimits().isPresetFound && (
-                                    <div className="mt-4 p-4 rounded-2xl bg-blue-950/40 border border-blue-900 text-xs space-y-2">
+                                    <div className="mt-4 p-4 rounded-xl bg-blue-950/40 border border-blue-900 text-xs space-y-2">
                                         <p className="font-bold text-blue-400 uppercase tracking-wider">🔒 Admin Verified Preset</p>
                                         <p className="text-gray-300">This task type is configured platform-wide:</p>
                                         <ul className="list-disc pl-4 text-gray-400 space-y-1">
@@ -3028,7 +3028,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
                         </div>
 
-                        <div className="mt-8 p-6 bg-gray-900/60 rounded-3xl border border-gray-800">
+                        <div className="mt-8 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
                             <p className="text-xs text-gray-400 leading-relaxed">
                                 Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!
                             </p>
