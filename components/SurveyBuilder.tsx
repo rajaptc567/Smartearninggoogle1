@@ -2046,9 +2046,9 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
                                 {/* Opinion Scale Configuration */}
                                 {q.type === 'opinion_scale' && (
-                                    <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                                    <div className="mt-3 p-3 bg-gray-50/80 dark:bg-gray-700/40 rounded-xl border border-gray-200 dark:border-gray-600 text-xs text-gray-700 dark:text-gray-300 flex items-center justify-between">
                                         <span>Standard Net Promoter Score (NPS) Scale: <strong>0 (Not at all likely)</strong> to <strong>10 (Extremely likely)</strong></span>
-                                        <span className="text-[10px] font-mono font-bold bg-slate-200/70 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-800 dark:text-slate-200">11 Buttons (0-10)</span>
+                                        <span className="text-[10px] font-mono font-bold bg-gray-200/70 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-800 dark:text-gray-200">11 Buttons (0-10)</span>
                                     </div>
                                 )}
 
