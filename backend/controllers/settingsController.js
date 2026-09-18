@@ -61,13 +61,19 @@ export const getPublicSettings = async (req, res) => {
             'faqEyebrow', 'faqTitle', 'faqSubtitle',
             'faq1Q', 'faq1A', 'faq2Q', 'faq2A', 'faq3Q', 'faq3A', 'faq4Q', 'faq4A', 'faq5Q', 'faq5A', 'faq6Q', 'faq6A', 'faqKnowledgeBtn',
             'finalCtaEyebrow', 'finalCtaTitle', 'finalCtaSubtitle', 'finalCtaStartBtn', 'finalCtaPublishBtn',
-            'footerTagline', 'footerCol1Title', 'footerCol2Title', 'footerCol3Title', 'footerCol4Title', 'footerCopyright', 'footerEscrowBadge'
+            'footerTagline', 'footerCol1Title', 'footerCol2Title', 'footerCol3Title', 'footerCol4Title', 'footerCopyright', 'footerEscrowBadge', 'footerSecurityText'
         ];
 
         for (const key of allowedSmartexnKeys) {
             if (typeof rawSmartexn[key] === 'string' && rawSmartexn[key].trim()) {
                 cleanSmartexn[key] = rawSmartexn[key].trim();
             }
+        }
+
+        if (!cleanSmartexn.footerEscrowBadge && cleanSmartexn.footerSecurityText) {
+            cleanSmartexn.footerEscrowBadge = cleanSmartexn.footerSecurityText;
+        } else if (!cleanSmartexn.footerSecurityText && cleanSmartexn.footerEscrowBadge) {
+            cleanSmartexn.footerSecurityText = cleanSmartexn.footerEscrowBadge;
         }
 
         // Clean and sanitize homepage payment logos - keep admin uploaded logo data and apply fallbacks when empty

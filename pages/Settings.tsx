@@ -343,16 +343,25 @@ const Settings: React.FC = () => {
     const { name, value } = e.target;
     if (name.startsWith('homepageContent.smartexnContent.')) {
         const field = name.split('.')[2];
-        setLocalSettings(prev => ({
-            ...prev,
-            homepageContent: {
-                ...prev.homepageContent,
-                smartexnContent: {
-                    ...(prev.homepageContent?.smartexnContent || {}),
-                    [field]: value
-                }
-            } as any
-        }));
+        setLocalSettings(prev => {
+            const currentSmartexn = prev.homepageContent?.smartexnContent || {};
+            const updatedSmartexn: Record<string, any> = {
+                ...currentSmartexn,
+                [field]: value
+            };
+            if (field === 'footerEscrowBadge') {
+                updatedSmartexn.footerSecurityText = value;
+            } else if (field === 'footerSecurityText') {
+                updatedSmartexn.footerEscrowBadge = value;
+            }
+            return {
+                ...prev,
+                homepageContent: {
+                    ...prev.homepageContent,
+                    smartexnContent: updatedSmartexn
+                } as any
+            };
+        });
     } else if (name.startsWith('homepageContent.')) {
         const field = name.split('.')[1];
         setLocalSettings(prev => ({ ...prev, homepageContent: { ...prev.homepageContent, [field]: value } as any}));
@@ -2486,14 +2495,18 @@ const Settings: React.FC = () => {
                                 />
                             </div>
                             <div className="md:col-span-2">
-                                <label className="text-xs text-slate-300 font-semibold">Footer Security & Verification Badge Text</label>
+                                <label className="text-xs text-slate-300 font-semibold flex items-center justify-between">
+                                    <span>Footer Escrow Protection Badge Text</span>
+                                    <span className="text-[10px] text-sky-400 font-normal">Displayed in Bottom Footer</span>
+                                </label>
                                 <input 
-                                    name="homepageContent.smartexnContent.footerSecurityText"
-                                    value={localSettings.homepageContent?.smartexnContent?.footerSecurityText || ''}
+                                    name="homepageContent.smartexnContent.footerEscrowBadge"
+                                    value={localSettings.homepageContent?.smartexnContent?.footerEscrowBadge ?? localSettings.homepageContent?.smartexnContent?.footerSecurityText ?? ''}
                                     onChange={handleTextChange}
-                                    placeholder="Protected by Escrow Vaults & 256-bit SSL encryption. All payments verified."
-                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white"
+                                    placeholder="Escrow-Based Payment Protection"
+                                    className="w-full mt-1 text-xs p-2 rounded bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:border-sky-500 focus:outline-none"
                                 />
+                                <span className="text-[10px] text-slate-400 mt-1 block">Controls the payment protection / escrow badge in the footer (defaults to &quot;Escrow-Based Payment Protection&quot;)</span>
                             </div>
                         </div>
                     </div>

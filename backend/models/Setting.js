@@ -237,7 +237,8 @@ const SmartexnContentSchema = new mongoose.Schema({
     // Footer
     footerTagline: { type: String, default: "SmartExn connects international task earners with businesses and creators. Complete verified micro-tasks, surveys, and digital gigs through an escrow-based campaign protection system" },
     footerCopyright: { type: String, default: "© 2026 SmartExn.com. All rights reserved." },
-    footerEscrowBadge: { type: String, default: "Escrow-Based Payment Protection" }
+    footerEscrowBadge: { type: String, default: "Escrow-Based Payment Protection" },
+    footerSecurityText: { type: String, default: "Escrow-Based Payment Protection" }
 }, { _id: false });
 
 const HomepageContentSchema = new mongoose.Schema({

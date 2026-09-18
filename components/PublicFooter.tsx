@@ -36,7 +36,7 @@ export const PublicFooter: React.FC = () => {
               <div className="pt-2 space-y-3">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-950/60 border border-sky-800/40 text-xs text-sky-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Escrow Protected & Dispute Supported</span>
+                  <span>{settings?.homepageContent?.smartexnContent?.footerEscrowBadge || settings?.homepageContent?.smartexnContent?.footerSecurityText || "Escrow-Based Payment Protection"}</span>
                 </div>
 
                 {/* UK Customer Support Office */}

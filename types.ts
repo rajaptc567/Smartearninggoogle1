@@ -1168,6 +1168,7 @@ export interface SmartexnContent {
     footerCol4Title?: string;
     footerCopyright?: string;
     footerEscrowBadge?: string;
+    footerSecurityText?: string;
     showUkSupportOffice?: boolean;
     showUkSupportOfficeInFooter?: boolean;
 }

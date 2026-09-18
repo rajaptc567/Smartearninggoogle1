@@ -1301,7 +1301,7 @@ export const SmartexnLandingPage: React.FC<SmartexnLandingPageProps> = ({ onOpen
                   <span>•</span>
                 </>
               )}
-              <span>{sc.footerEscrowBadge || "Escrow-Based Payment Protection"}</span>
+              <span>{sc.footerEscrowBadge || sc.footerSecurityText || "Escrow-Based Payment Protection"}</span>
             </div>
           </div>
 
