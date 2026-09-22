@@ -21,7 +21,8 @@ const TransactionSchema = new mongoose.Schema({
             'Task Wallet Transfer', 'Campaign Creation', 'Task Reward Transfer', 
             'Main To Campaign Wallet Transfer', 'Campaign Wallet To Main Transfer',
             'Task Wallet Conversion', 'Task Earnings Conversion', 'Task Earnings Transfer',
-            'Offerwall Reward', 'Offerwall Reversal', 'Offerwall Deduct'
+            'Offerwall Reward', 'Offerwall Reversal', 'Offerwall Deduct',
+            'Platform Campaign Funding', 'Platform Campaign Refund'
         ],
         required: true,
     },
@@ -90,12 +91,12 @@ const TransactionSchema = new mongoose.Schema({
     // Source of funds and Wallet attribution
     sourceWallet: {
         type: String,
-        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System'],
+        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System', 'PlatformCampaignBudget'],
         default: 'System'
     },
     destinationWallet: {
         type: String,
-        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System'],
+        enum: ['Investment', 'TaskEarnings', 'CampaignFunds', 'CampaignEscrow', 'External', 'MLMCommission', 'HeldUpgrade', 'System', 'PlatformCampaignBudget'],
         default: 'System'
     },
     sourceBreakdown: {
