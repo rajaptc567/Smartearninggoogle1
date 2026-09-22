@@ -607,11 +607,6 @@ const SettingSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {}
     },
-    platformCampaignConfig: {
-        totalAllocatedBudgetUSD: { type: Number, default: 50000 },
-        totalSpentUSD: { type: Number, default: 0 },
-        allowUnlimitedAdminBudget: { type: Boolean, default: true }
-    },
     hubEnabled: { type: Boolean, default: true },
     hubMinDeposit: { type: Number, default: 5 },
     hubMaxDeposit: { type: Number, default: 1000 },

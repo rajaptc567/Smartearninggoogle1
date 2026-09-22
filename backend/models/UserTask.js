@@ -77,44 +77,8 @@ const UserTaskSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected', 'On Hold', 'Paid', 'Completed', 'Draft', 'Archived'],
+        enum: ['Pending', 'Approved', 'Rejected', 'On Hold', 'Paid', 'Completed'],
         default: 'Pending'
-    },
-    creatorType: {
-        type: String,
-        enum: ['user', 'admin', 'platform'],
-        default: 'user'
-    },
-    createdByAdmin: {
-        type: Boolean,
-        default: false
-    },
-    createdByAdminId: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'User'
-    },
-    creatorUserId: {
-        type: mongoose.Schema.ObjectId,
-        ref: 'User'
-    },
-    fundingSourceType: {
-        type: String,
-        enum: ['user_wallet', 'platform_budget'],
-        default: 'user_wallet'
-    },
-    targetAudience: {
-        educationLevels: [{ type: String }],
-        employmentStatuses: [{ type: String }],
-        professions: [{ type: String }],
-        countries: [{ type: String }],
-        minQualityScore: { type: Number, default: 0 },
-        gender: { type: String, default: 'All' },
-        verifiedOnly: { type: Boolean, default: false }
-    },
-    surveyApprovalMode: {
-        type: String,
-        enum: ['auto', 'creator', 'admin'],
-        default: 'auto'
     },
     history: [{
         action: { type: String, required: true },

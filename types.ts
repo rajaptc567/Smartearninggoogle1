@@ -802,22 +802,6 @@ export interface UserTask {
     surveyQuestionsCount?: number;
     surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
     surveyConfig?: SurveyConfig;
-    creatorType?: 'user' | 'admin' | 'platform' | string;
-    createdByAdmin?: boolean;
-    createdByAdminId?: string;
-    creatorUserId?: string;
-    fundingSourceType?: 'user_wallet' | 'platform_budget' | string;
-    targetAudience?: {
-        countries?: string[];
-        minAge?: number;
-        maxAge?: number;
-        gender?: 'all' | 'male' | 'female' | 'other' | string;
-        languages?: string[];
-        educationLevels?: string[];
-        employmentStatuses?: string[];
-        professions?: string[];
-        minQualityScore?: number;
-    };
 }
 
 export interface UserTaskSubmission {
