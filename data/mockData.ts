@@ -163,7 +163,11 @@ export const mockSettings: Settings = {
         paymentMethodsDesc: "We support multiple gateways.",
         paymentMethodsDisplayType: 'static',
         paymentMethodsColorStyle: 'color',
-        ctaTitle: "Join Now", ctaDesc: "Start earning."
+        ctaTitle: "Join Now", ctaDesc: "Start earning.",
+        smartexnContent: {
+            footerEscrowBadge: "Escrow-Based Payment Protection",
+            footerSecurityText: "Escrow-Based Payment Protection"
+        }
     }
 };
 

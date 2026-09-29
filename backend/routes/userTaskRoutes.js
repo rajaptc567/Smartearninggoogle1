@@ -3,6 +3,11 @@ import multer from 'multer';
 import { authorize } from '../middleware/authMiddleware.js';
 import { taskActionLimiter } from '../middleware/rateLimiter.js';
 import {
+    getPlatformSummary,
+    getPlatformLedger,
+    topUpPlatformTreasury
+} from '../controllers/platformFinanceController.js';
+import {
     getUserTasks,
     createUserTask,
     updateUserTaskStatus,
@@ -69,6 +74,15 @@ router.route('/admin-reset-data')
 
 router.route('/simulate-reward')
     .post(authorize(['admin', 'super_admin']), simulateTaskReward);
+
+router.route('/platform-finance/summary')
+    .get(authorize(['admin', 'super_admin']), getPlatformSummary);
+
+router.route('/platform-finance/ledger')
+    .get(authorize(['admin', 'super_admin']), getPlatformLedger);
+
+router.route('/platform-finance/top-up')
+    .post(authorize(['admin', 'super_admin']), topUpPlatformTreasury);
 
 router.route('/:id/survey-analytics')
     .get(authorize(['user', 'admin']), getSurveyCampaignAnalytics);

@@ -7,12 +7,13 @@ import Modal from '../components/ui/Modal';
 import { updateUserTaskStatus, deleteUserTask, updateSettings, updateSubmissionStatus, deleteSubmission, resolveDispute, adminResetWorkAndEarnData } from '../services/api';
 import { DisputeTimeline } from '../components/DisputeTimeline';
 import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../components/surveys';
+import UserTasksSubmit from './user/UserTasksSubmit';
 
 const AdminUserTasks: React.FC = () => {
     const { state, dispatch } = useData();
     const { userTasks, userTaskSubmissions, settings, users, investmentPlans } = state;
 
-    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data'>('campaigns');
+    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data' | 'create-campaign'>('campaigns');
 
     // Settings State
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -127,13 +128,14 @@ const AdminUserTasks: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [selectedCampaign, setSelectedCampaign] = useState<UserTask | null>(null);
     const [selectedSubmissionForDetails, setSelectedSubmissionForDetails] = useState<UserTaskSubmission | null>(null);
-    const [campaignFilter, setCampaignFilter] = useState<'pending' | 'approved' | 'completed' | 'all'>('pending');
+    const [campaignFilter, setCampaignFilter] = useState<'pending' | 'approved' | 'completed' | 'platform' | 'all'>('pending');
     const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
 
     const filteredUserTasks = userTasks.filter(task => {
         if (campaignFilter === 'pending') return task.status === 'Pending';
         if (campaignFilter === 'approved') return task.status === 'Approved';
         if (campaignFilter === 'completed') return task.status === 'Completed' || task.currentCompletions >= task.targetQuantity;
+        if (campaignFilter === 'platform') return task.creatorType === 'admin' || task.createdByAdmin || task.fundingSourceType === 'platform_budget';
         return true;
     });
 
@@ -282,6 +284,13 @@ const AdminUserTasks: React.FC = () => {
                             const pendingProofs = userTaskSubmissions.filter(s => s.status === 'Pending' || s.status === 'Submitted' || s.status === 'In Review').length;
                             return (
                                 <>
+                                    <Button 
+                                        variant={activeTab === 'create-campaign' ? 'primary' : 'secondary'} 
+                                        onClick={() => setActiveTab('create-campaign')}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                                    >
+                                        <span>➕ Create Platform Campaign</span>
+                                    </Button>
                                     <Button variant={activeTab === 'campaigns' ? 'primary' : 'secondary'} onClick={() => setActiveTab('campaigns')} className="relative">
                                         <span>Campaigns ({userTasks.length})</span>
                                         {pendingCampaigns > 0 && (
@@ -517,7 +526,18 @@ const AdminUserTasks: React.FC = () => {
                     {/* Submitted Tasks Table */}
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border dark:border-gray-700">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Submitted Member Task Campaigns ({filteredUserTasks.length})</h3>
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Task Campaigns ({filteredUserTasks.length})</h3>
+                                <p className="text-xs text-gray-500 mt-1">Review member-created campaigns and platform-funded admin campaigns.</p>
+                            </div>
+                            <Button 
+                                variant="primary"
+                                onClick={() => setActiveTab('create-campaign')}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5"
+                            >
+                                <span>➕</span>
+                                <span>Create Platform Campaign</span>
+                            </Button>
                         </div>
 
                         {/* Admin Review Queue Sub-Tabs */}
@@ -553,6 +573,16 @@ const AdminUserTasks: React.FC = () => {
                                 🏆 Completed Tasks ({userTasks.filter(t => t.status === 'Completed' || t.currentCompletions >= t.targetQuantity).length})
                             </button>
                             <button
+                                onClick={() => setCampaignFilter('platform')}
+                                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                                    campaignFilter === 'platform'
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                                        : 'bg-gray-100 dark:bg-gray-900 text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                🛡️ Platform Campaigns ({userTasks.filter(t => t.creatorType === 'admin' || t.createdByAdmin || t.fundingSourceType === 'platform_budget').length})
+                            </button>
+                            <button
                                 onClick={() => setCampaignFilter('all')}
                                 className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
                                     campaignFilter === 'all'
@@ -571,7 +601,7 @@ const AdminUserTasks: React.FC = () => {
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 dark:bg-gray-900/50 text-gray-400 uppercase text-xs tracking-wider">
-                                            <th className="p-4">Member</th>
+                                            <th className="p-4">Member / Origin</th>
                                             <th className="p-4">Title & Link</th>
                                             <th className="p-4">Category</th>
                                             <th className="p-4">Budget</th>
@@ -583,7 +613,21 @@ const AdminUserTasks: React.FC = () => {
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium text-sm">
                                         {filteredUserTasks.map((task) => (
                                             <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                <td className="p-4 font-bold text-gray-900 dark:text-white">{task.userName}</td>
+                                                <td className="p-4">
+                                                    <div className="font-bold text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                                        <span>{task.userName}</span>
+                                                        {(task.creatorType === 'admin' || task.createdByAdmin) && (
+                                                            <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700">
+                                                                🛡️ Platform
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {task.fundingSourceType === 'platform_budget' && (
+                                                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">
+                                                            Platform Budget ($0 User Deduct)
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="p-4">
                                                     <div className="font-bold text-gray-900 dark:text-white">{task.title}</div>
                                                     <a href={task.link} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block max-w-xs">{task.link}</a>
@@ -648,6 +692,43 @@ const AdminUserTasks: React.FC = () => {
                             </div>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* TAB: CREATE PLATFORM / ADMIN CAMPAIGN */}
+            {activeTab === 'create-campaign' && (
+                <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                                <span>🛡️</span>
+                                <span>Create Platform / Admin Campaign</span>
+                            </h2>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Launch platform-funded tasks, surveys, app testing, and gigs using the standard campaign engine. Escrow rewards are funded directly by the Platform Budget ($0.00 personal wallet deduction).
+                            </p>
+                        </div>
+                        <Button 
+                            variant="secondary" 
+                            onClick={() => setActiveTab('campaigns')} 
+                            className="text-xs self-start sm:self-auto font-bold"
+                        >
+                            ← Back to Campaigns List
+                        </Button>
+                    </div>
+
+                    <UserTasksSubmit 
+                        initialTab="submit"
+                        hideHeaderAndTabs={true}
+                        hideHeroBanner={true}
+                        hideSubTabs={true}
+                        isAdminMode={true}
+                        adminFundingSource="platform_budget"
+                        onCampaignCreated={() => {
+                            setActiveTab('campaigns');
+                            setCampaignFilter('platform');
+                        }}
+                    />
                 </div>
             )}
 

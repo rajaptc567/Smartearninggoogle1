@@ -21,6 +21,9 @@ export interface UserTasksSubmitProps {
     hideHeaderAndTabs?: boolean;
     hideHeroBanner?: boolean;
     hideSubTabs?: boolean;
+    isAdminMode?: boolean;
+    adminFundingSource?: 'platform_budget';
+    onCampaignCreated?: (task: UserTask) => void;
 }
 
 export const getRemainingTimeString = (targetDate?: string | Date) => {
@@ -194,7 +197,15 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
     return null;
 };
 
-const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false }) => {
+const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ 
+    initialTab = 'browse', 
+    hideHeaderAndTabs = false, 
+    hideHeroBanner = false, 
+    hideSubTabs = false,
+    isAdminMode = false,
+    adminFundingSource = 'platform_budget',
+    onCampaignCreated
+}) => {
     const { state, dispatch } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -1603,6 +1614,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         const legacyRequireScreenshot = requiredProofsList.some(p => p.type === 'screenshot');
         const legacyScreenshotInstruction = requiredProofsList.filter(p => p.type === 'screenshot').map(p => p.instruction).join(' | ') || '';
 
+        // If in Admin Mode, funding is 100% covered by Platform Budget - bypass user wallet balance check completely
+        if (isAdminMode || adminFundingSource === 'platform_budget') {
+            await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction);
+            return;
+        }
+
         // Check if Task Wallet has sufficient funds in USD
         const userCurr = currentUser.currency || 'USD';
         const rate = rates[userCurr] || 1;
@@ -1692,46 +1709,64 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 surveyEstimatedMinutes: isSurveyCampaign ? (surveyConfigData.estimatedTimeMinutes || 3) : undefined,
                 surveyQuestionsCount: isSurveyCampaign ? (surveyConfigData.questions?.length || 0) : undefined,
                 surveyApprovalMode: isSurveyCampaign ? ((surveyConfigData as any).approvalMode || 'auto') : undefined,
-                surveyConfig: isSurveyCampaign ? surveyConfigData : undefined
+                surveyConfig: isSurveyCampaign ? surveyConfigData : undefined,
+                creatorType: (isAdminMode || adminFundingSource === 'platform_budget') ? 'admin' : 'user',
+                fundingSourceType: (isAdminMode || adminFundingSource === 'platform_budget') ? 'platform_budget' : 'user_wallet',
+                targetAudience: isSurveyCampaign && surveyConfigData.targetAudience ? surveyConfigData.targetAudience : undefined
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
-            dispatch({ type: 'UPDATE_USER', payload: result.user });
 
-            // Trigger non-financial GA4 campaign_created event (Phase P20-A)
-            seoAnalytics.trackCampaignCreated(result.task?.category || category);
-
-            // Dispatch transaction so history tracks campaign creation immediately
-            const userCurr = currentUser.currency || 'USD';
-            const rate = rates[userCurr] || 1;
-            dispatch({
-                type: 'ADD_TRANSACTION',
-                payload: {
-                    _id: 'trx_camp_' + Date.now(),
-                    userId: currentUser._id,
-                    userName: currentUser.username || currentUser.fullName,
-                    currency: 'USD',
-                    type: 'Campaign Creation',
-                    amount: -(result.task.totalBudget || grandTotalUSD),
-                    exchangeRate: rate,
-                    description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)}/task)`,
-                    status: 'Approved',
-                    date: new Date().toISOString()
+            // If not in Admin Mode, update user wallet state & track user wallet transaction
+            if (!isAdminMode && adminFundingSource !== 'platform_budget') {
+                if (result.user) {
+                    dispatch({ type: 'UPDATE_USER', payload: result.user });
                 }
-            });
 
-            // Clear form
-            setTitle('');
-            setDescription('');
-            setLink('');
+                // Trigger non-financial GA4 campaign_created event (Phase P20-A)
+                seoAnalytics.trackCampaignCreated(result.task?.category || category);
 
-            // Show success modal with OK button
-            setFundingSuccessModal({
-                isOpen: true,
-                transferredUserCurr: transferredUserCurrArg || 0,
-                transferredUSD: transferredUSDArg || 0,
-                userCurrency: userCurr,
-                newTaskWalletUSD: result.user.taskWalletBalance || 0
-            });
+                // Dispatch transaction so history tracks campaign creation immediately
+                const userCurr = currentUser.currency || 'USD';
+                const rate = rates[userCurr] || 1;
+                dispatch({
+                    type: 'ADD_TRANSACTION',
+                    payload: {
+                        _id: 'trx_camp_' + Date.now(),
+                        userId: currentUser._id,
+                        userName: currentUser.username || currentUser.fullName,
+                        currency: 'USD',
+                        type: 'Campaign Creation',
+                        amount: -(result.task.totalBudget || grandTotalUSD),
+                        exchangeRate: rate,
+                        description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)}/task)`,
+                        status: 'Approved',
+                        date: new Date().toISOString()
+                    }
+                });
+
+                // Clear form
+                setTitle('');
+                setDescription('');
+                setLink('');
+
+                // Show success modal with OK button
+                setFundingSuccessModal({
+                    isOpen: true,
+                    transferredUserCurr: transferredUserCurrArg || 0,
+                    transferredUSD: transferredUSDArg || 0,
+                    userCurrency: userCurr,
+                    newTaskWalletUSD: result.user?.taskWalletBalance || 0
+                });
+            } else {
+                // Admin Mode: zero wallet deduction, platform budget funded
+                setTitle('');
+                setDescription('');
+                setLink('');
+                alert(`Platform Campaign "${result.task.title}" created successfully and funded 100% by the Platform Budget ($0.00 wallet deduction)!`);
+                if (onCampaignCreated) {
+                    onCampaignCreated(result.task);
+                }
+            }
         } catch (error) {
             alert(`Failed to launch campaign: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
@@ -2542,7 +2577,27 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             {activeTab === 'submit' && isEnabled && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl p-6 md:p-8 shadow-sm border border-gray-200 dark:border-gray-700">
-                        <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Create USD Task Campaign</h3>
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                            <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">
+                                {isAdminMode ? 'Create Platform / Admin Campaign' : 'Create USD Task Campaign'}
+                            </h3>
+                            {isAdminMode && (
+                                <span className="px-3 py-1 text-xs font-black uppercase rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1.5">
+                                    <span>🛡️</span> Platform Budget ($0 Wallet Deduction)
+                                </span>
+                            )}
+                        </div>
+
+                        {isAdminMode && (
+                            <div className="mb-6 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-300 space-y-1">
+                                <p className="font-bold flex items-center gap-1.5">
+                                    <span>🏛️</span> Official Admin Campaign Workflow
+                                </p>
+                                <p className="leading-relaxed">
+                                    This campaign will be published as an official platform campaign. It utilizes the standard member campaign engine (categories, presets, surveys, targeting, and proof requirements). All reward escrow funds are allocated directly from the <strong>Platform Campaign Budget</strong> without deducting any money from your personal wallet, investment balance, or user accounts.
+                                </p>
+                            </div>
+                        )}
                         
                         <form onSubmit={handleCreateCampaign} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2978,7 +3033,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             </div>
 
                             <Button type="submit" variant="primary" isLoading={isSubmitting} className="w-full py-3.5 text-sm md:text-base font-bold shadow-md bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors">
-                                🚀 Launch Campaign — Total: ${grandTotalUSD.toFixed(2)} USD
+                                {isAdminMode 
+                                    ? `🚀 Launch Admin Platform Campaign — Total: $${grandTotalUSD.toFixed(2)} USD (Platform Budget)` 
+                                    : `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`}
                             </Button>
                         </form>
                     </div>
@@ -2986,7 +3043,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                     {/* Summary Card */}
                     <div className="bg-[#0f172a] text-white rounded-2xl p-6 md:p-8 shadow-sm border border-slate-800 flex flex-col justify-between">
                         <div>
-                            <h3 className="text-xl font-bold uppercase tracking-tight text-blue-400 mb-6">Campaign Summary (USD)</h3>
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold uppercase tracking-tight text-blue-400">Campaign Summary (USD)</h3>
+                                {isAdminMode && (
+                                    <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-950 text-emerald-300 border border-emerald-700">
+                                        Platform Budget
+                                    </span>
+                                )}
+                            </div>
                             <div className="space-y-4 text-sm">
                                 <div className="flex justify-between py-2 border-b border-gray-800">
                                     <span className="text-gray-400">Target Completions</span>
@@ -3015,6 +3079,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     <span>Total Launch Amount</span>
                                     <span>${grandTotalUSD.toFixed(2)} USD</span>
                                 </div>
+                                {isAdminMode && (
+                                    <div className="flex justify-between py-2 px-3 rounded-lg bg-emerald-950/60 border border-emerald-800/80 text-xs text-emerald-300 font-bold">
+                                        <span>Wallet Deduction</span>
+                                        <span>$0.00 USD (Covered by Platform)</span>
+                                    </div>
+                                )}
                                 {getSelectionLimits().isPresetFound && (
                                     <div className="mt-4 p-4 rounded-xl bg-blue-950/40 border border-blue-900 text-xs space-y-2">
                                         <p className="font-bold text-blue-400 uppercase tracking-wider">🔒 Admin Verified Preset</p>
@@ -3030,7 +3100,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                         <div className="mt-8 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!
+                                {isAdminMode 
+                                    ? "Platform campaigns are 100% funded by the Platform Budget. Zero money ($0.00) is deducted from your personal or investment wallet. When workers submit proofs or surveys, you can review and approve them in the Admin Tasks panel." 
+                                    : "Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!"}
                             </p>
                         </div>
                     </div>

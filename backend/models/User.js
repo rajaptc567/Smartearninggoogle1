@@ -141,6 +141,17 @@ const UserSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {},
     },
+    researchProfile: {
+        educationLevel: { type: String, default: '' },
+        employmentStatus: { type: String, default: '' },
+        profession: { type: String, default: '' },
+        experienceLevel: { type: String, default: '' },
+        skills: [{ type: String }],
+        interests: [{ type: String }],
+        demographicConsent: { type: Boolean, default: false },
+        demographicConsentAt: { type: Date },
+        updatedAt: { type: Date }
+    },
     emailVerified: {
         type: Boolean,
         default: false,

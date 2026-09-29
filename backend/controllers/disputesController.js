@@ -8,6 +8,7 @@ import Setting from '../models/Setting.js';
 import Transaction from '../models/Transaction.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 import { sendTemplateNotification } from '../utils/automation.js';
+import { settlePlatformWorkerPayout } from '../services/platformFinanceService.js';
 
 export const getDisputes = async (req, res) => {
     try {
@@ -201,6 +202,18 @@ export const resolveDisputeVerdict = async (req, res) => {
                         }
 
                         if (worker) {
+                            if (task && (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget')) {
+                                await settlePlatformWorkerPayout({
+                                    campaignId: task._id,
+                                    submissionId: submission._id,
+                                    workerId: worker._id,
+                                    rewardUSD: baseRewardUSD,
+                                    performedBy: req.user?._id,
+                                    performedByUsername: req.user?.username || 'Admin',
+                                    description: `Platform campaign dispute resolution worker payout: $${baseRewardUSD.toFixed(2)} USD for "${submission.taskTitle || (task ? task.title : 'Engagement Task')}"`
+                                });
+                            }
+
                             worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + baseRewardUSD).toFixed(2));
                             await worker.save();
 

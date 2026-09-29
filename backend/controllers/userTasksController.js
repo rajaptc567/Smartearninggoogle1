@@ -9,6 +9,12 @@ import Notification from '../models/Notification.js';
 import Withdrawal from '../models/Withdrawal.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
+import {
+    getOrCreatePlatformAccount,
+    reservePlatformBudgetForCampaign,
+    settlePlatformWorkerPayout,
+    releasePlatformCampaignReserve
+} from '../services/platformFinanceService.js';
 
 // Centralized admin & P0-2 email bypass check
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com'));
@@ -181,24 +187,155 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
-        if (targetQuantity < config.minQuantity) {
-            return res.status(400).json({ success: false, error: `Minimum target quantity is ${config.minQuantity}.` });
-        }
-        if (rewardPerTask < config.minRewardAmount) {
-            return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
-        }
-        if (isSurveyTask && rewardPerTask < minSurveyRewardRequired) {
-            return res.status(400).json({ success: false, error: `Minimum reward amount for this survey based on question complexity and duration is ${minSurveyRewardRequired} USD.` });
-        }
-
         const user = await User.findById(effectiveUserId);
         if (!user) {
             return res.status(404).json({ success: false, error: 'User not found.' });
         }
 
+        const isAdmin = req.user ? isUserAdmin(req.user) : false;
+        const requestedAdminOrPlatform = 
+            req.body.creatorType === 'admin' || 
+            req.body.creatorType === 'platform' || 
+            Boolean(req.body.createdByAdmin) || 
+            req.body.fundingSourceType === 'platform_budget';
+
+        if (requestedAdminOrPlatform && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Only authenticated administrators can create or fund platform campaigns.' });
+        }
+
+        const isAdminCampaign = requestedAdminOrPlatform && isAdmin;
+
+        const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
+        
+        // Members must adhere to minimums; admins can customize rewards with basic safety check (> 0)
+        if (!isAdminCampaign) {
+            if (targetQuantity < config.minQuantity) {
+                return res.status(400).json({ success: false, error: `Minimum target quantity is ${config.minQuantity}.` });
+            }
+            if (rewardPerTask < config.minRewardAmount) {
+                return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
+            }
+            if (isSurveyTask && rewardPerTask < minSurveyRewardRequired) {
+                return res.status(400).json({ success: false, error: `Minimum reward amount for this survey based on question complexity and duration is ${minSurveyRewardRequired} USD.` });
+            }
+        }
+
         // Entire setup in USD
-        const subtotal = targetQuantity * rewardPerTask;
+        const subtotal = Number((qtyNum * rewardNum).toFixed(2));
+
+        if (isAdminCampaign) {
+            // ==========================================
+            // ADMIN / PLATFORM CAMPAIGN FUNDING PATH
+            // Authoritative Platform Ledger & Escrow
+            // Does NOT deduct from admin or any user wallet!
+            // ==========================================
+            const totalBudget = subtotal;
+            const adminCommission = 0;
+            const baseFeeCharged = 0;
+            const totalAmountUSD = totalBudget;
+
+            // Status: Can be directly live/Approved or Draft/Pending as requested by Admin
+            const adminStatus = req.body.status && ['Approved', 'Pending', 'Draft'].includes(req.body.status) 
+                ? req.body.status 
+                : 'Approved';
+
+            const requiresImmediateEscrow = adminStatus === 'Approved';
+
+            // Check authoritative Platform Available Balance first
+            if (requiresImmediateEscrow) {
+                const platformAccount = await getOrCreatePlatformAccount();
+                if (platformAccount.availableBalanceUSD < totalBudget) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Insufficient platform available balance. Required: $${totalBudget.toFixed(2)} USD, Available: $${platformAccount.availableBalanceUSD.toFixed(2)} USD. Please top up platform treasury first.`
+                    });
+                }
+            }
+
+            const task = await UserTask.create({
+                userId: user._id,
+                userName: user.username,
+                creatorType: 'admin',
+                createdByAdmin: true,
+                createdByAdminId: req.user?._id || user._id,
+                creatorUserId: user._id,
+                fundingSourceType: 'platform_budget',
+                targetAudience: req.body.targetAudience || null,
+                category,
+                subType: subType || (isSurveyTask ? 'Survey' : 'Custom'),
+                title,
+                description,
+                link: effectiveLink,
+                targetQuantity: qtyNum,
+                rewardPerTask: rewardNum,
+                totalBudget,
+                reservedBudgetUSD: 0,
+                spentBudgetUSD: 0,
+                releasedBudgetUSD: 0,
+                isReserved: false,
+                adminCommission: 0,
+                baseFeeCharged: 0,
+                currency: 'USD',
+                requireTextProof: Boolean(requireTextProof),
+                textProofInstruction: textProofInstruction || '',
+                requireUsername: Boolean(requireUsername),
+                usernameInstruction: usernameInstruction || '',
+                requireUserId: Boolean(requireUserId),
+                userIdInstruction: userIdInstruction || '',
+                requireEmail: Boolean(requireEmail),
+                emailInstruction: emailInstruction || '',
+                requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : !isSurveyTask,
+                screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
+                requiredProofs: requiredProofs || [],
+                isSurvey: isSurveyTask,
+                surveyEstimatedMinutes: isSurveyTask ? (Number(req.body.surveyEstimatedMinutes || surveyConfig?.estimatedTimeMinutes) || 5) : 5,
+                surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
+                surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
+                surveyConfig: isSurveyTask ? surveyConfig : null,
+                status: adminStatus,
+                history: [{
+                    action: 'Campaign Created by Admin',
+                    previousStatus: 'None',
+                    newStatus: adminStatus,
+                    performedBy: req.user?.username || 'Admin',
+                    details: `Platform campaign initialized with budget $${totalBudget} USD. Status: ${adminStatus}`
+                }]
+            });
+
+            // If Approved, reserve funds from Platform Available Balance to Campaign Escrow
+            if (requiresImmediateEscrow) {
+                const reserveResult = await reservePlatformBudgetForCampaign({
+                    campaignId: task._id,
+                    requiredReserveUSD: totalBudget,
+                    performedBy: req.user?._id || user._id,
+                    performedByUsername: req.user?.username || user.username || 'Admin',
+                    description: `Platform campaign escrow reserved: $${totalBudget.toFixed(2)} USD for "${title}" (${qtyNum} slots @ $${rewardNum}/task)`
+                });
+
+                if (!reserveResult.success) {
+                    await UserTask.findByIdAndDelete(task._id);
+                    return res.status(400).json({
+                        success: false,
+                        error: reserveResult.error
+                    });
+                }
+            }
+
+            // Sync settings.platformCampaignConfig counter for legacy reporting
+            if (!settings.platformCampaignConfig) {
+                settings.platformCampaignConfig = { totalAllocatedBudgetUSD: 50000, totalSpentUSD: 0, allowUnlimitedAdminBudget: true };
+            }
+            settings.platformCampaignConfig.totalSpentUSD = Number(((settings.platformCampaignConfig.totalSpentUSD || 0) + totalBudget).toFixed(2));
+            await settings.save();
+
+            global.appDataVersion = Date.now();
+            return res.status(201).json({ success: true, data: { task, user } });
+        }
+
+        // ==========================================
+        // NORMAL MEMBER CAMPAIGN FUNDING PATH
+        // Uses user wallet / task wallet balances
+        // ==========================================
         const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
         const totalBudget = Number((subtotal + adminCommission).toFixed(2));
 
@@ -265,6 +402,9 @@ export const createUserTask = async (req, res) => {
         const task = await UserTask.create({
             userId: user._id,
             userName: user.username,
+            creatorType: 'user',
+            createdByAdmin: false,
+            fundingSourceType: 'user_wallet',
             category,
             subType: subType || 'Like',
             title,
@@ -517,6 +657,25 @@ export const updateUserTaskStatus = async (req, res) => {
             }
         }
 
+        // If approved and is platform campaign that was not yet reserved, reserve now
+        if (requestedStatus === 'Approved' && oldStatus !== 'Approved') {
+            if (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget') {
+                if (!task.isReserved) {
+                    const reserveResult = await reservePlatformBudgetForCampaign({
+                        campaignId: task._id,
+                        requiredReserveUSD: task.totalBudget,
+                        performedBy: req.user?._id || task.userId,
+                        performedByUsername: req.user?.username || 'Admin',
+                        description: `Platform campaign escrow reserved upon approval: $${task.totalBudget.toFixed(2)} USD for "${task.title}"`
+                    });
+
+                    if (!reserveResult.success) {
+                        return res.status(400).json({ success: false, error: reserveResult.error });
+                    }
+                }
+            }
+        }
+
         task.status = requestedStatus;
         if (adminNotes !== undefined) task.adminNotes = adminNotes;
 
@@ -553,53 +712,66 @@ export const updateUserTaskStatus = async (req, res) => {
             details: historyDetails
         });
 
-        // If rejected and was pending/approved (not yet paid/completed refund), refund user to Campaign Wallet (taskWalletBalance)
+        // If rejected and was pending/approved (not yet paid/completed refund)
         if (requestedStatus === 'Rejected' && oldStatus !== 'Rejected' && oldStatus !== 'Paid') {
-            const user = await User.findById(task.userId);
-            if (user) {
-                const settings = await Setting.getSettings();
-                const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278, USDT: 1 };
-                const userCurr = user.currency || 'USDT';
-                
-                const baseFee = task.baseFeeCharged || 0;
-                const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
+            if (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget') {
+                // Platform campaign: release remaining reserved escrow back to Platform Available Balance
+                if (task.isReserved) {
+                    await releasePlatformCampaignReserve({
+                        campaignId: task._id,
+                        performedBy: req.user?._id,
+                        performedByUsername: req.user?.username || 'Admin',
+                        reason: 'Campaign rejected by admin'
+                    });
+                }
+            } else {
+                // Normal user campaign: refund user to Campaign Wallet (taskWalletBalance)
+                const user = await User.findById(task.userId);
+                if (user) {
+                    const settings = await Setting.getSettings();
+                    const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278, USDT: 1 };
+                    const userCurr = user.currency || 'USDT';
+                    
+                    const baseFee = task.baseFeeCharged || 0;
+                    const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
 
-                let refundInUserCurr = totalRefundUSD * (rates[userCurr] || 1);
-                refundInUserCurr = Number(refundInUserCurr.toFixed(2));
+                    let refundInUserCurr = totalRefundUSD * (rates[userCurr] || 1);
+                    refundInUserCurr = Number(refundInUserCurr.toFixed(2));
 
-                // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
-                user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + totalRefundUSD).toFixed(2));
-                const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: totalRefundUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                user.campaignWalletSources = {
-                    fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + (taskFunding.fromInvestmentUSD || 0)).toFixed(2)),
-                    fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0)).toFixed(2)),
-                    fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2))
-                };
-                task.refundedBreakdown = {
-                    fromInvestmentUSD: taskFunding.fromInvestmentUSD || 0,
-                    fromTaskEarningsUSD: taskFunding.fromTaskEarningsUSD || 0,
-                    fromRefundsUSD: taskFunding.fromRefundsUSD || 0
-                };
-                await user.save();
-                await Transaction.create({
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    type: 'Task Refund',
-                    amount: totalRefundUSD,
-                    amountUSD: totalRefundUSD,
-                    campaignId: task._id,
-                    sourceWallet: 'CampaignEscrow',
-                    destinationWallet: 'CampaignFunds',
-                    sourceBreakdown: {
+                    // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
+                    user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + totalRefundUSD).toFixed(2));
+                    const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: totalRefundUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                    const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                    user.campaignWalletSources = {
+                        fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + (taskFunding.fromInvestmentUSD || 0)).toFixed(2)),
+                        fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0)).toFixed(2)),
+                        fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2))
+                    };
+                    task.refundedBreakdown = {
                         fromInvestmentUSD: taskFunding.fromInvestmentUSD || 0,
                         fromTaskEarningsUSD: taskFunding.fromTaskEarningsUSD || 0,
                         fromRefundsUSD: taskFunding.fromRefundsUSD || 0
-                    },
-                    description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${totalRefundUSD.toFixed(2)} USD)`,
-                    status: 'Approved'
-                });
+                    };
+                    await user.save();
+                    await Transaction.create({
+                        userId: user._id,
+                        userName: user.username,
+                        currency: 'USD',
+                        type: 'Task Refund',
+                        amount: totalRefundUSD,
+                        amountUSD: totalRefundUSD,
+                        campaignId: task._id,
+                        sourceWallet: 'CampaignEscrow',
+                        destinationWallet: 'CampaignFunds',
+                        sourceBreakdown: {
+                            fromInvestmentUSD: taskFunding.fromInvestmentUSD || 0,
+                            fromTaskEarningsUSD: taskFunding.fromTaskEarningsUSD || 0,
+                            fromRefundsUSD: taskFunding.fromRefundsUSD || 0
+                        },
+                        description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${totalRefundUSD.toFixed(2)} USD)`,
+                        status: 'Approved'
+                    });
+                }
             }
         }
 
@@ -727,6 +899,41 @@ export const deleteUserTask = async (req, res) => {
             }
         }
 
+        // ==========================================
+        // ADMIN / PLATFORM CAMPAIGN DELETION
+        // Releases unused escrow reserve to Platform Available Balance
+        // Does NOT touch any user wallet
+        // ==========================================
+        if (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget' || task.createdByAdmin) {
+            if (task.isReserved) {
+                await releasePlatformCampaignReserve({
+                    campaignId: task._id,
+                    performedBy: req.user?._id,
+                    performedByUsername: req.user?.username || 'Admin',
+                    reason: 'Campaign deleted by administrator'
+                });
+            }
+
+            // Sync legacy settings counter if present
+            const settings = await Setting.getSettings();
+            const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+            const refundUSD = Number((remainingSlots * task.rewardPerTask).toFixed(2));
+            if (settings.platformCampaignConfig && refundUSD > 0) {
+                settings.platformCampaignConfig.totalSpentUSD = Math.max(0, Number(((settings.platformCampaignConfig.totalSpentUSD || 0) - refundUSD).toFixed(2)));
+                await settings.save();
+            }
+
+            // Clean up pending submissions associated with this deleted campaign
+            await UserTaskSubmission.updateMany(
+                { taskId: req.params.id, status: 'Pending' },
+                { $set: { status: 'Rejected', rejectionReason: 'Campaign was closed by platform administration.' } }
+            );
+
+            await UserTask.findByIdAndDelete(req.params.id);
+            global.appDataVersion = Date.now();
+            return res.status(200).json({ success: true, message: 'Platform campaign deleted and remaining escrow returned to platform available balance.', data: {} });
+        }
+
         const user = await User.findById(task.userId);
         if (user) {
             const settings = await Setting.getSettings();
@@ -843,6 +1050,41 @@ export const renewUserTask = async (req, res) => {
         const user = await User.findById(task.userId);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
+        // ==========================================
+        // ADMIN / PLATFORM CAMPAIGN RENEWAL
+        // Reserves additional slots from Platform Available Balance
+        // Does NOT deduct from any user wallet
+        // ==========================================
+        if (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget' || task.createdByAdmin) {
+            const isAdmin = req.user ? isUserAdmin(req.user) : false;
+            if (!isAdmin) {
+                return res.status(403).json({ success: false, error: 'Only administrators can add slots to a platform campaign.' });
+            }
+
+            const extraCostUSD = Number((extraSlots * task.rewardPerTask).toFixed(2));
+            const reserveResult = await reservePlatformBudgetForCampaign({
+                campaignId: task._id,
+                requiredReserveUSD: extraCostUSD,
+                performedBy: req.user?._id || user._id,
+                performedByUsername: req.user?.username || 'Admin',
+                description: `Added ${extraSlots} slots to platform campaign: "${task.title}" ($${extraCostUSD.toFixed(2)} USD)`
+            });
+
+            if (!reserveResult.success) {
+                return res.status(400).json({ success: false, error: reserveResult.error });
+            }
+
+            task.targetQuantity += Number(extraSlots);
+            task.totalBudget = Number(((task.totalBudget || 0) + extraCostUSD).toFixed(2));
+            if (task.status === 'Completed' || task.status === 'On Hold') {
+                task.status = 'Approved';
+            }
+            await task.save();
+
+            global.appDataVersion = Date.now();
+            return res.status(200).json({ success: true, data: { task, user } });
+        }
+
         const settings = await Setting.getSettings();
         const config = settings.userTaskConfig || { commissionPercent: 10 };
 
@@ -942,6 +1184,19 @@ const autoApproveStaleSubmissions = async () => {
             const worker = await User.findById(updatedSub.workerId);
             if (worker) {
                 let rewardInUSD = updatedSub.rewardAmount;
+
+                if (task && (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget')) {
+                    await settlePlatformWorkerPayout({
+                        campaignId: task._id,
+                        submissionId: updatedSub._id,
+                        workerId: worker._id,
+                        rewardUSD: rewardInUSD,
+                        performedBy: null,
+                        performedByUsername: 'System Auto-Approval',
+                        description: `Platform campaign auto-approved worker payout: $${rewardInUSD.toFixed(2)} USD for "${updatedSub.taskTitle || task.title}"`
+                    });
+                }
+
                 worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
                 await worker.save();
 
@@ -1021,6 +1276,19 @@ const autoApproveStaleSubmissions = async () => {
             const worker = await User.findById(updatedSub.workerId);
             if (worker) {
                 let rewardInUSD = updatedSub.rewardAmount;
+
+                if (task && (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget')) {
+                    await settlePlatformWorkerPayout({
+                        campaignId: task._id,
+                        submissionId: updatedSub._id,
+                        workerId: worker._id,
+                        rewardUSD: rewardInUSD,
+                        performedBy: null,
+                        performedByUsername: 'System Auto-Approval',
+                        description: `Platform campaign dispute timeout worker payout: $${rewardInUSD.toFixed(2)} USD for "${updatedSub.taskTitle || task.title}"`
+                    });
+                }
+
                 worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
                 await worker.save();
 
@@ -1062,7 +1330,9 @@ export const getUserTaskSubmissions = async (req, res) => {
 
         if (isAdmin) {
             if (req.query.taskId) query.taskId = req.query.taskId;
-            const submissions = await UserTaskSubmission.find(query).sort({ createdAt: -1 });
+            const submissions = await UserTaskSubmission.find(query)
+                .populate('workerId', 'username email fullName country city gender trustScore researchProfile customFields registrationDate')
+                .sort({ createdAt: -1 });
             return res.status(200).json({ success: true, count: submissions.length, data: submissions });
         }
 
@@ -1133,6 +1403,39 @@ export const submitUserTaskProof = async (req, res) => {
         const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
         if (existing) {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
+        }
+
+        // Server-side audience targeting check
+        if (task.targetAudience) {
+            const aud = task.targetAudience;
+            if (Array.isArray(aud.countries) && aud.countries.length > 0) {
+                const workerCountry = (worker.country || '').trim().toLowerCase();
+                const allowed = aud.countries.map(c => c.trim().toLowerCase());
+                if (!workerCountry || !allowed.includes(workerCountry)) {
+                    return res.status(403).json({ success: false, error: 'You are not eligible for this campaign based on geographic location criteria.' });
+                }
+            }
+            if (Array.isArray(aud.educationLevels) && aud.educationLevels.length > 0) {
+                const userEdu = worker.researchProfile?.educationLevel || worker.customFields?.educationLevel;
+                if (userEdu && !aud.educationLevels.includes(userEdu)) {
+                    return res.status(403).json({ success: false, error: 'You do not meet the education level criteria for this campaign.' });
+                }
+            }
+            if (Array.isArray(aud.employmentStatuses) && aud.employmentStatuses.length > 0) {
+                const userEmp = worker.researchProfile?.employmentStatus || worker.customFields?.employmentStatus;
+                if (userEmp && !aud.employmentStatuses.includes(userEmp)) {
+                    return res.status(403).json({ success: false, error: 'You do not meet the employment status criteria for this campaign.' });
+                }
+            }
+            if (Array.isArray(aud.professions) && aud.professions.length > 0) {
+                const userProf = worker.researchProfile?.profession || worker.customFields?.profession;
+                if (userProf && !aud.professions.some(p => p.toLowerCase() === (userProf || '').toLowerCase())) {
+                    return res.status(403).json({ success: false, error: 'You do not meet the profession criteria for this campaign.' });
+                }
+            }
+            if (aud.minQualityScore && (worker.trustScore || 100) < aud.minQualityScore) {
+                return res.status(403).json({ success: false, error: `This campaign requires a minimum trust score of ${aud.minQualityScore}%.` });
+            }
         }
 
         const settings = await Setting.getSettings();
@@ -1427,6 +1730,18 @@ export const submitUserTaskProof = async (req, res) => {
                 await task.save();
             }
 
+            if (task && (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget')) {
+                await settlePlatformWorkerPayout({
+                    campaignId: task._id,
+                    submissionId: submission._id,
+                    workerId: worker._id,
+                    rewardUSD: task.rewardPerTask,
+                    performedBy: null,
+                    performedByUsername: 'Survey Engine',
+                    description: `Platform survey auto-approved worker payout: $${task.rewardPerTask.toFixed(2)} USD for "${task.title}"`
+                });
+            }
+
             worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
             await worker.save();
 
@@ -1579,6 +1894,42 @@ export const submitUserTaskProof = async (req, res) => {
             });
         }
 
+        // If survey is configured to enrich worker research/demographic profile upon consented completion
+        if (isSurveyTask && consentAgreed && (task.surveyConfig?.mapToUserProfile || task.surveyConfig?.saveDemographicData)) {
+            try {
+                if (!worker.researchProfile) worker.researchProfile = {};
+                const questions = task.surveyConfig?.questions || [];
+                for (const resp of surveyResponses) {
+                    const q = questions.find(item => String(item.id) === String(resp.questionId));
+                    if (q && resp.value !== undefined && resp.value !== null && resp.value !== '') {
+                        const titleLow = (q.title || '').toLowerCase();
+                        const key = q.profileFieldKey || '';
+                        if (key === 'educationLevel' || titleLow.includes('education') || titleLow.includes('degree')) {
+                            worker.researchProfile.educationLevel = String(resp.value);
+                        } else if (key === 'employmentStatus' || titleLow.includes('employment') || titleLow.includes('job status')) {
+                            worker.researchProfile.employmentStatus = String(resp.value);
+                        } else if (key === 'profession' || titleLow.includes('profession') || titleLow.includes('occupation') || titleLow.includes('job title')) {
+                            worker.researchProfile.profession = String(resp.value);
+                        } else if (key === 'experienceLevel' || titleLow.includes('experience')) {
+                            worker.researchProfile.experienceLevel = String(resp.value);
+                        } else if (key === 'skills' || titleLow.includes('skills')) {
+                            if (Array.isArray(resp.value)) {
+                                worker.researchProfile.skills = resp.value;
+                            } else {
+                                worker.researchProfile.skills = String(resp.value).split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                        }
+                    }
+                }
+                worker.researchProfile.demographicConsent = true;
+                worker.researchProfile.demographicConsentAt = new Date();
+                worker.researchProfile.updatedAt = new Date();
+                await worker.save();
+            } catch (profileErr) {
+                console.error('Error enriching worker researchProfile from survey:', profileErr);
+            }
+        }
+
         global.appDataVersion = Date.now();
         res.status(201).json({ success: true, data: submission });
     } catch (err) {
@@ -1703,6 +2054,20 @@ export const updateSubmissionStatus = async (req, res) => {
             const worker = await User.findById(targetSubmission.workerId);
             if (worker) {
                 let rewardInUSD = targetSubmission.rewardAmount;
+
+                // If platform-funded campaign, settle from Platform Reserved -> Spent
+                if (task && (task.creatorType === 'admin' || task.fundingSourceType === 'platform_budget')) {
+                    await settlePlatformWorkerPayout({
+                        campaignId: task._id,
+                        submissionId: targetSubmission._id,
+                        workerId: worker._id,
+                        rewardUSD: rewardInUSD,
+                        performedBy: req.user?._id,
+                        performedByUsername: req.user?.username || 'Admin',
+                        description: `Platform campaign worker payout: $${rewardInUSD.toFixed(2)} USD for "${targetSubmission.taskTitle || task.title}"`
+                    });
+                }
+
                 worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
                 await worker.save();
 
@@ -2696,7 +3061,9 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
             return res.status(403).json({ success: false, error: 'Unauthorized to view survey analytics' });
         }
 
-        const submissions = await UserTaskSubmission.find({ taskId: task._id }).sort({ createdAt: -1 });
+        const submissions = await UserTaskSubmission.find({ taskId: task._id })
+            .populate('workerId', 'username email country gender trustScore researchProfile customFields')
+            .sort({ createdAt: -1 });
         const totalSubmissions = submissions.length;
         const completed = submissions.filter(s => s.surveyQualificationStatus === 'Completed' || s.status === 'Approved');
         const disqualified = submissions.filter(s => s.surveyQualificationStatus === 'Disqualified');
@@ -2766,6 +3133,9 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
                     category: task.category,
                     subType: task.subType,
                     status: task.status,
+                    creatorType: task.creatorType || 'user',
+                    fundingSourceType: task.fundingSourceType || 'user_wallet',
+                    targetAudience: task.targetAudience || null,
                     targetQuantity: task.targetQuantity,
                     currentCompletions: task.currentCompletions,
                     rewardPerTask: task.rewardPerTask,
@@ -2785,17 +3155,30 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
                     completionRate: task.targetQuantity > 0 ? Math.min(100, Math.round((task.currentCompletions / task.targetQuantity) * 100)) : 0
                 },
                 questions: questionAnalytics,
-                rawSubmissions: submissions.map(s => ({
-                    id: s._id,
-                    workerName: s.workerName,
-                    status: s.status,
-                    rewardAmount: s.rewardAmount,
-                    completionTimeSeconds: s.surveyCompletionTimeSeconds,
-                    qualificationStatus: s.surveyQualificationStatus,
-                    attentionCheckPassed: s.attentionCheckPassed,
-                    responses: s.surveyResponses,
-                    createdAt: s.createdAt
-                }))
+                rawSubmissions: submissions.map(s => {
+                    const wObj = s.workerId && typeof s.workerId === 'object' ? s.workerId : null;
+                    return {
+                        id: s._id,
+                        workerId: wObj?._id || s.workerId,
+                        workerName: s.workerName,
+                        workerProfile: wObj ? {
+                            country: wObj.country,
+                            city: wObj.city,
+                            gender: wObj.gender,
+                            trustScore: wObj.trustScore,
+                            researchProfile: wObj.researchProfile
+                        } : null,
+                        status: s.status,
+                        rewardAmount: s.rewardAmount,
+                        completionTimeSeconds: s.surveyCompletionTimeSeconds,
+                        qualificationStatus: s.surveyQualificationStatus,
+                        attentionCheckPassed: s.attentionCheckPassed,
+                        qualityScore: s.qualityScore,
+                        qualityFlags: s.qualityFlags,
+                        responses: s.surveyResponses,
+                        createdAt: s.createdAt
+                    };
+                })
             }
         });
     } catch (err) {
