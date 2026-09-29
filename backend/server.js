@@ -32,7 +32,6 @@ import disputeRoutes from './routes/disputeRoutes.js';
 import taskRoutes from './routes/taskRoutes.js'; 
 import templateRoutes from './routes/templateRoutes.js';
 import userTaskRoutes from './routes/userTaskRoutes.js';
-import platformFinanceRoutes from './routes/platformFinanceRoutes.js';
 import bulkPopupRoutes from './routes/bulkPopupRoutes.js';
 import postbackRoutes from './routes/postbackRoutes.js';
 import { seedVerifiedNetworks } from './controllers/postbackController.js';
@@ -255,7 +254,6 @@ app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes); 
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/v1/user-tasks', userTaskRoutes);
-app.use('/api/v1/platform-finance', platformFinanceRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
 app.use('/api/v1/postbacks', postbackRoutes);
 

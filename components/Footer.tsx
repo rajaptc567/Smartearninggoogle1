@@ -157,9 +157,7 @@ export const Footer: React.FC<FooterProps> = ({ className = '', isMemberArea = t
           <span>•</span>
           <span className="hover:text-gray-700 dark:hover:text-gray-200 transition cursor-help">PCI DSS Compliant</span>
           <span>•</span>
-          <span className="hover:text-gray-700 dark:hover:text-gray-200 transition cursor-help">
-            {settings?.homepageContent?.smartexnContent?.footerEscrowBadge || settings?.homepageContent?.smartexnContent?.footerSecurityText || 'Escrow-Based Payment Protection'}
-          </span>
+          <span className="hover:text-gray-700 dark:hover:text-gray-200 transition cursor-help">Escrow Secured</span>
         </div>
       </div>
     </footer>
