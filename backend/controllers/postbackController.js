@@ -743,7 +743,10 @@ export const seedVerifiedNetworks = async () => {
             name: 'Torox (formerly OfferToro)',
             category: 'offerwall',
             group: 'Group A: Multi-Task / Offerwall',
-            enabled: true,
+            enabled: false,
+            status: 'NOT_STARTED',
+            approvalStatus: 'Pending',
+            integrationStatus: 'Not Started',
             iframeUrlTemplate: 'https://torox.io/offerwall?pubid={appId}&appid={appId}&uid={userId}',
             signatureType: 'md5',
             technicalReadinessScore: 100,
@@ -1162,6 +1165,23 @@ export const seedVerifiedNetworks = async () => {
             const existing = await OfferwallProvider.findOne({ providerKey: net.providerKey });
             if (!existing) {
                 await OfferwallProvider.create(net);
+            } else if (net.providerKey === 'torox') {
+                // Targeted reconciliation: ensure existing Torox remains safely disabled if unconfigured
+                const hasAppId = Boolean(existing.appId && existing.appId.trim());
+                const hasSecret = Boolean((existing.secretKey && existing.secretKey.trim()) || (existing.postbackKey && existing.postbackKey.trim()));
+                const isConfiguredOrApproved = existing.approvalStatus === 'Approved' ||
+                    ['CONFIGURED', 'TESTED', 'VERIFIED', 'IN PROGRESS'].includes(String(existing.integrationStatus || '').toUpperCase()) ||
+                    ['CREDENTIALS_PENDING', 'SANDBOX', 'TESTING', 'PRODUCTION_READY', 'ACTIVE'].includes(String(existing.status || '').toUpperCase());
+
+                if (!hasAppId && !hasSecret && !isConfiguredOrApproved) {
+                    if (existing.enabled || existing.status !== 'NOT_STARTED' || existing.approvalStatus !== 'Pending' || existing.integrationStatus !== 'Not Started') {
+                        existing.enabled = false;
+                        existing.status = 'NOT_STARTED';
+                        existing.approvalStatus = 'Pending';
+                        existing.integrationStatus = 'Not Started';
+                        await existing.save();
+                    }
+                }
             }
         }
         console.log(`Seeded / verified all ${verifiedNetworks.length} external networks.`);
