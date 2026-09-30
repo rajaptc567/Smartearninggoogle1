@@ -10,6 +10,11 @@ const UserTaskSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    creatorType: {
+        type: String,
+        enum: ['member', 'admin'],
+        default: 'member'
+    },
     category: {
         type: String,
         required: [true, 'Please select a task category']

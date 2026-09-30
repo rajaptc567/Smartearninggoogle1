@@ -262,9 +262,13 @@ export const createUserTask = async (req, res) => {
         // Save user balance updates
         await user.save();
 
+        const isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
+        const creatorType = isCreatedByAdmin ? 'admin' : 'member';
+
         const task = await UserTask.create({
             userId: user._id,
             userName: user.username,
+            creatorType,
             category,
             subType: subType || 'Like',
             title,

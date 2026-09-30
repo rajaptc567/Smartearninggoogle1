@@ -7,12 +7,13 @@ import Modal from '../components/ui/Modal';
 import { updateUserTaskStatus, deleteUserTask, updateSettings, updateSubmissionStatus, deleteSubmission, resolveDispute, adminResetWorkAndEarnData } from '../services/api';
 import { DisputeTimeline } from '../components/DisputeTimeline';
 import { SurveySubmissionViewer, SurveyAnalyticsModal } from '../components/surveys';
+import UserTasksSubmit from './user/UserTasksSubmit';
 
 const AdminUserTasks: React.FC = () => {
     const { state, dispatch } = useData();
     const { userTasks, userTaskSubmissions, settings, users, investmentPlans } = state;
 
-    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data'>('campaigns');
+    const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data' | 'create-campaign'>('campaigns');
 
     // Settings State
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -282,6 +283,13 @@ const AdminUserTasks: React.FC = () => {
                             const pendingProofs = userTaskSubmissions.filter(s => s.status === 'Pending' || s.status === 'Submitted' || s.status === 'In Review').length;
                             return (
                                 <>
+                                    <Button 
+                                        variant={activeTab === 'create-campaign' ? 'primary' : 'secondary'} 
+                                        onClick={() => setActiveTab('create-campaign')}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                                    >
+                                        <span>➕ Create Campaign</span>
+                                    </Button>
                                     <Button variant={activeTab === 'campaigns' ? 'primary' : 'secondary'} onClick={() => setActiveTab('campaigns')} className="relative">
                                         <span>Campaigns ({userTasks.length})</span>
                                         {pendingCampaigns > 0 && (
@@ -517,7 +525,14 @@ const AdminUserTasks: React.FC = () => {
                     {/* Submitted Tasks Table */}
                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl border dark:border-gray-700">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Submitted Member Task Campaigns ({filteredUserTasks.length})</h3>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white uppercase tracking-tight">Campaigns & Tasks ({filteredUserTasks.length})</h3>
+                            <Button 
+                                variant="primary" 
+                                onClick={() => setActiveTab('create-campaign')}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 text-xs py-2 px-4 rounded-xl shadow-md shadow-emerald-600/20"
+                            >
+                                <span>➕ Create Campaign</span>
+                            </Button>
                         </div>
 
                         {/* Admin Review Queue Sub-Tabs */}
@@ -583,7 +598,16 @@ const AdminUserTasks: React.FC = () => {
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-medium text-sm">
                                         {filteredUserTasks.map((task) => (
                                             <tr key={task._id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20">
-                                                <td className="p-4 font-bold text-gray-900 dark:text-white">{task.userName}</td>
+                                                <td className="p-4 font-bold text-gray-900 dark:text-white">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span>{task.userName}</span>
+                                                        {task.creatorType === 'admin' && (
+                                                            <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                                                Admin
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="p-4">
                                                     <div className="font-bold text-gray-900 dark:text-white">{task.title}</div>
                                                     <a href={task.link} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline truncate block max-w-xs">{task.link}</a>
@@ -1300,6 +1324,29 @@ const AdminUserTasks: React.FC = () => {
                         settings={settings}
                         dispatch={dispatch} 
                     />
+                </div>
+            )}
+
+            {/* TAB 7: CREATE CAMPAIGN & SURVEY (ADMIN) */}
+            {activeTab === 'create-campaign' && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-xl border dark:border-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 text-xs font-black uppercase rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                    Admin Creator Mode
+                                </span>
+                                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Create Campaign & Survey</h2>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Configure micro-tasks, video/social engagements, or structured surveys using the universal builder.</p>
+                        </div>
+                        <Button variant="secondary" onClick={() => setActiveTab('campaigns')} className="text-xs font-bold">
+                            &larr; Back to Campaigns
+                        </Button>
+                    </div>
+                    <div className="bg-slate-900/40 rounded-3xl p-2 sm:p-6 border border-slate-800">
+                        <UserTasksSubmit initialTab="submit" hideHeaderAndTabs={true} hideHeroBanner={true} hideSubTabs={true} />
+                    </div>
                 </div>
             )}
 

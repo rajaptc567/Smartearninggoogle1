@@ -760,6 +760,7 @@ export interface UserTask {
     _id: string;
     userId: string;
     userName: string;
+    creatorType?: 'member' | 'admin' | string;
     category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Google' | 'Instagram' | 'Other' | string;
     subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Review' | 'Other' | string;
     title: string;
