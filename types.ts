@@ -188,6 +188,7 @@ export interface Settings {
         enabled?: boolean;
         allocatedBudgetUSD?: number;
         remainingBudgetUSD?: number;
+        processedRefundKeys?: string[];
     };
     investmentModuleEnabled?: boolean;
     isInvestmentModuleEnabled?: boolean;

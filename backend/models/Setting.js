@@ -521,7 +521,8 @@ const SettingSchema = new mongoose.Schema({
     adminCampaignBudget: {
         enabled: { type: Boolean, default: false },
         allocatedBudgetUSD: { type: Number, default: 0 },
-        remainingBudgetUSD: { type: Number, default: 0 }
+        remainingBudgetUSD: { type: Number, default: 0 },
+        processedRefundKeys: { type: [String], default: [] }
     },
     proofControls: {
         screenshotEnabled: { type: Boolean, default: true },
@@ -785,8 +786,12 @@ SettingSchema.statics.getSettings = async function() {
         settings.adminCampaignBudget = {
             enabled: false,
             allocatedBudgetUSD: 0,
-            remainingBudgetUSD: 0
+            remainingBudgetUSD: 0,
+            processedRefundKeys: []
         };
+        needsSave = true;
+    } else if (!settings.adminCampaignBudget.processedRefundKeys) {
+        settings.adminCampaignBudget.processedRefundKeys = [];
         needsSave = true;
     }
     if (!settings.emailSenders || settings.emailSenders.length === 0) {
