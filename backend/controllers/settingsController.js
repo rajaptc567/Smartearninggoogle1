@@ -332,6 +332,7 @@ export const updateSettings = async (req, res) => {
         let newAdminBudgetEnabled = false;
         let newAllocatedBudgetUSD = 0;
         let deltaAllocatedBudgetUSD = 0;
+        let prevAllocatedBudgetUSD = 0;
 
         if (req.body.adminCampaignBudget && typeof req.body.adminCampaignBudget === 'object') {
             const prevBudget = prevSettings?.adminCampaignBudget || { enabled: false, allocatedBudgetUSD: 0, remainingBudgetUSD: 0 };
@@ -358,6 +359,7 @@ export const updateSettings = async (req, res) => {
             hasAdminBudgetChange = true;
             newAdminBudgetEnabled = Boolean(req.body.adminCampaignBudget.enabled);
             newAllocatedBudgetUSD = newAllocated;
+            prevAllocatedBudgetUSD = prevAllocated;
             deltaAllocatedBudgetUSD = Number((newAllocated - prevAllocated).toFixed(2));
 
             // CRITICAL CONCURRENCY FIX:
@@ -480,6 +482,10 @@ export const updateSettings = async (req, res) => {
             updateOps.$set['adminCampaignBudget.allocatedBudgetUSD'] = newAllocatedBudgetUSD;
 
             if (deltaAllocatedBudgetUSD !== 0) {
+                // Optimistic concurrency compare-and-set: ensure allocatedBudgetUSD has not changed
+                // concurrently from another admin settings save while this request was in flight.
+                query['adminCampaignBudget.allocatedBudgetUSD'] = prevAllocatedBudgetUSD;
+
                 updateOps.$inc = {
                     'adminCampaignBudget.remainingBudgetUSD': deltaAllocatedBudgetUSD
                 };
@@ -496,16 +502,24 @@ export const updateSettings = async (req, res) => {
             runValidators: true,
         });
 
-        if (!settings && hasAdminBudgetChange && deltaAllocatedBudgetUSD < 0) {
-            // Atomic update matched 0 documents because remainingBudgetUSD was less than the requested reduction
-            // (e.g. concurrent campaign reservation consumed budget while request was processing).
+        if (!settings && hasAdminBudgetChange && deltaAllocatedBudgetUSD !== 0) {
+            // Atomic update matched 0 documents.
+            // Check whether it was due to insufficient remaining balance or concurrent allocation update.
             const freshSetting = await Setting.findById(settingId);
             const freshAllocated = Math.max(0, Number(freshSetting?.adminCampaignBudget?.allocatedBudgetUSD) || 0);
             const freshRemaining = Math.max(0, Number(freshSetting?.adminCampaignBudget?.remainingBudgetUSD !== undefined ? freshSetting.adminCampaignBudget.remainingBudgetUSD : freshAllocated) || 0);
             const freshConsumed = Math.max(0, Number((freshAllocated - freshRemaining).toFixed(2)));
-            return res.status(400).json({
+
+            if (deltaAllocatedBudgetUSD < 0 && freshRemaining < Math.abs(deltaAllocatedBudgetUSD)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Allocated budget ($${newAllocatedBudgetUSD.toFixed(2)}) cannot be less than already-consumed budget ($${freshConsumed.toFixed(2)}).`
+                });
+            }
+
+            return res.status(409).json({
                 success: false,
-                error: `Allocated budget ($${newAllocatedBudgetUSD.toFixed(2)}) cannot be less than already-consumed budget ($${freshConsumed.toFixed(2)}).`
+                error: 'Admin Campaign Budget was modified concurrently by another request. Please refresh and try again.'
             });
         }
 
