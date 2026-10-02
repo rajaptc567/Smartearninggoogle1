@@ -768,6 +768,9 @@ export interface UserTask {
     creatorType?: 'member' | 'admin' | string;
     fundingSourceType?: 'member_wallet' | 'admin_budget' | string;
     adminBudgetAllocatedUSD?: number;
+    adminBudgetRefundStatus?: 'none' | 'claimed' | 'budget_refunded' | 'settled';
+    adminBudgetRefundClaimedAt?: Date | string | null;
+    adminBudgetRefundAmountUSD?: number;
     category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Google' | 'Instagram' | 'Other' | string;
     subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Review' | 'Other' | string;
     title: string;

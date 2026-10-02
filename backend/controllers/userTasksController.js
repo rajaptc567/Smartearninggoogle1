@@ -654,72 +654,122 @@ export const updateUserTaskStatus = async (req, res) => {
         });
 
         // If rejected and was pending/approved (not yet paid/completed refund), refund user or restore admin budget
-        if (requestedStatus === 'Rejected' && oldStatus !== 'Rejected' && oldStatus !== 'Paid') {
+        if (requestedStatus === 'Rejected') {
             const baseFee = task.baseFeeCharged || 0;
             const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
 
             if (task.fundingSourceType === 'admin_budget') {
-                let adminRefundUSD = 0;
-                if (oldStatus === 'Pending') {
-                    adminRefundUSD = totalRefundUSD;
-                } else {
-                    const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
-                    if (remainingSlots > 0 && task.targetQuantity > 0) {
-                        const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
-                        adminRefundUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
-                    }
-                }
-
-                if (adminRefundUSD > 0) {
-                    // Atomic compare-and-set state transition guard:
-                    // Atomically transitions status to 'Rejected' on the database document.
-                    // Only the single request that successfully transitions the task from a non-Rejected/non-Paid state to 'Rejected'
-                    // is authorized to issue the Admin Campaign Budget refund.
-                    const atomicTaskTransition = await UserTask.findOneAndUpdate(
-                        {
-                            _id: task._id,
-                            status: { $nin: ['Rejected', 'Paid'] }
-                        },
-                        {
-                            $set: { 
-                                status: 'Rejected',
-                                adminNotes: adminNotes || task.adminNotes
-                            }
-                        },
-                        { new: true }
-                    );
-
-                    if (!atomicTaskTransition) {
-                        // Another concurrent request has already transitioned/refunded this campaign!
-                        // Return cleanly without issuing a duplicate refund.
-                        return res.status(200).json({ success: true, data: await UserTask.findById(task._id) || task });
-                    }
-
+                if (task.adminBudgetRefundStatus === 'settled') {
+                    // Already refunded and settled; no duplicate refund
                     task.status = 'Rejected';
-                    const settings = await Setting.getSettings();
-                    await Setting.findOneAndUpdate(
-                        { _id: settings._id },
-                        { 
-                            $inc: { 'adminCampaignBudget.remainingBudgetUSD': adminRefundUSD },
-                            $set: { dataVersion: Date.now() }
+                } else if (oldStatus !== 'Paid') {
+                    let adminRefundUSD = 0;
+                    if (oldStatus === 'Pending') {
+                        adminRefundUSD = totalRefundUSD;
+                    } else {
+                        const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+                        if (remainingSlots > 0 && task.targetQuantity > 0) {
+                            const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
+                            adminRefundUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
                         }
-                    );
-                    const user = await User.findById(task.userId);
-                    await Transaction.create({
-                        userId: user?._id || task.userId,
-                        userName: user?.username || task.userName,
-                        currency: 'USD',
-                        type: 'Task Refund',
-                        amount: adminRefundUSD,
-                        amountUSD: adminRefundUSD,
-                        campaignId: task._id,
-                        sourceWallet: 'CampaignEscrow',
-                        destinationWallet: 'System',
-                        description: `Restored remaining budget for rejected admin campaign to Admin Budget: ${task.title} ($${adminRefundUSD.toFixed(2)} USD)`,
-                        status: 'Approved'
-                    });
+                    }
+
+                    if (adminRefundUSD <= 0) {
+                        await UserTask.updateOne(
+                            { _id: task._id },
+                            { $set: { status: 'Rejected', adminBudgetRefundStatus: 'settled', adminNotes: adminNotes || task.adminNotes } }
+                        );
+                        task.status = 'Rejected';
+                        task.adminBudgetRefundStatus = 'settled';
+                    } else {
+                        let claim = null;
+                        if (task.adminBudgetRefundStatus === 'budget_refunded') {
+                            // Budget was already refunded on a prior attempt, skip Setting refund and proceed to Transaction creation
+                            claim = task;
+                        } else {
+                            // Step 1: Atomically claim rejection refund operation
+                            claim = await UserTask.findOneAndUpdate(
+                                {
+                                    _id: task._id,
+                                    fundingSourceType: 'admin_budget',
+                                    status: { $nin: ['Paid'] },
+                                    $or: [
+                                        { adminBudgetRefundStatus: 'none' },
+                                        { adminBudgetRefundStatus: { $exists: false } },
+                                        { adminBudgetRefundStatus: null },
+                                        { adminBudgetRefundStatus: 'claimed', adminBudgetRefundClaimedAt: { $lt: new Date(Date.now() - 30000) } }
+                                    ]
+                                },
+                                {
+                                    $set: { 
+                                        status: 'Rejected',
+                                        adminBudgetRefundStatus: 'claimed',
+                                        adminBudgetRefundClaimedAt: new Date(),
+                                        adminBudgetRefundAmountUSD: adminRefundUSD,
+                                        adminNotes: adminNotes || task.adminNotes
+                                    }
+                                },
+                                { new: true }
+                            );
+
+                            if (!claim) {
+                                // Another concurrent request claimed or settled this refund
+                                const freshTask = await UserTask.findById(task._id);
+                                return res.status(200).json({ success: true, data: freshTask || task });
+                            }
+
+                            // Step 2: Complete Admin Budget refund in Setting
+                            const settings = await Setting.getSettings();
+                            await Setting.findOneAndUpdate(
+                                { _id: settings._id },
+                                { 
+                                    $inc: { 'adminCampaignBudget.remainingBudgetUSD': adminRefundUSD },
+                                    $set: { dataVersion: Date.now() }
+                                }
+                            );
+
+                            // Durably mark budget_refunded
+                            await UserTask.updateOne(
+                                { _id: task._id },
+                                { $set: { adminBudgetRefundStatus: 'budget_refunded' } }
+                            );
+                        }
+
+                        // Step 3: Create Transaction with deterministic idempotencyKey
+                        const idempotencyKey = `admin_budget_refund:rejection:${task._id}`;
+                        const user = await User.findById(task.userId);
+                        try {
+                            await Transaction.create({
+                                userId: user?._id || task.userId,
+                                userName: user?.username || task.userName,
+                                currency: 'USD',
+                                type: 'Task Refund',
+                                amount: adminRefundUSD,
+                                amountUSD: adminRefundUSD,
+                                campaignId: task._id,
+                                sourceWallet: 'CampaignEscrow',
+                                destinationWallet: 'System',
+                                description: `Restored remaining budget for rejected admin campaign to Admin Budget: ${task.title} ($${adminRefundUSD.toFixed(2)} USD)`,
+                                status: 'Approved',
+                                idempotencyKey
+                            });
+                        } catch (txErr) {
+                            if (txErr.code !== 11000) {
+                                console.error('[AdminBudgetRefund] Transaction creation failed on rejection:', txErr);
+                                throw txErr;
+                            }
+                        }
+
+                        // Step 4: Durably mark settled
+                        await UserTask.updateOne(
+                            { _id: task._id },
+                            { $set: { adminBudgetRefundStatus: 'settled', status: 'Rejected' } }
+                        );
+                        task.status = 'Rejected';
+                        task.adminBudgetRefundStatus = 'settled';
+                    }
                 }
-            } else {
+            } else if (oldStatus !== 'Rejected' && oldStatus !== 'Paid') {
                 const user = await User.findById(task.userId);
                 if (user) {
                     const settings = await Setting.getSettings();
@@ -873,6 +923,12 @@ export const updateUserTaskStatus = async (req, res) => {
 
         return res.status(200).json({ success: true, message: successMsg, data: task });
     } catch (err) {
+        try {
+            await UserTask.updateOne(
+                { _id: req.params.id, adminBudgetRefundStatus: 'claimed' },
+                { $set: { adminBudgetRefundStatus: 'none', adminBudgetRefundClaimedAt: null } }
+            );
+        } catch (_) {}
         return res.status(400).json({ success: false, error: err.message });
     }
 };
@@ -897,50 +953,113 @@ export const deleteUserTask = async (req, res) => {
             const userCurr = user.currency || 'USDT';
 
             if (task.fundingSourceType === 'admin_budget') {
-                // Atomic deletion claim: Only the single request that successfully deletes the task
-                // from the database is authorized to execute the Admin Budget refund.
-                const claimedTask = await UserTask.findOneAndDelete({ _id: task._id });
-                if (!claimedTask) {
-                    // Task was already deleted concurrently by another request
-                    return res.status(200).json({ success: true, data: {} });
-                }
-
-                // If task was already Rejected, the unconsumed budget was already refunded during rejection!
-                // Do NOT refund again if claimedTask.status === 'Rejected'.
-                const baseFee = claimedTask.baseFeeCharged || 0;
                 let refundAmountUSD = 0;
-                if (claimedTask.status === 'Pending') {
-                    refundAmountUSD = Number((claimedTask.totalBudget + baseFee).toFixed(2));
-                } else if (claimedTask.status !== 'Rejected') {
-                    const remainingSlots = Math.max(0, claimedTask.targetQuantity - (claimedTask.currentCompletions || 0));
-                    if (remainingSlots > 0 && claimedTask.targetQuantity > 0) {
-                        const costPerSlotUSD = claimedTask.rewardPerTask + (claimedTask.adminCommission / claimedTask.targetQuantity);
+                if (task.adminBudgetRefundStatus === 'settled' || task.status === 'Rejected') {
+                    refundAmountUSD = 0;
+                } else if (task.status === 'Pending') {
+                    const baseFee = task.baseFeeCharged || 0;
+                    refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
+                } else {
+                    const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+                    if (remainingSlots > 0 && task.targetQuantity > 0) {
+                        const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
                         refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
+                    } else {
+                        refundAmountUSD = 0;
                     }
                 }
 
                 if (refundAmountUSD > 0) {
-                    await Setting.findOneAndUpdate(
-                        { _id: settings._id },
-                        { 
-                            $inc: { 'adminCampaignBudget.remainingBudgetUSD': refundAmountUSD },
-                            $set: { dataVersion: Date.now() }
+                    let claim = null;
+                    if (task.adminBudgetRefundStatus === 'budget_refunded') {
+                        // Budget was already refunded, proceed to transaction completion
+                        claim = task;
+                    } else {
+                        // Step 1: Atomically claim deletion refund operation
+                        claim = await UserTask.findOneAndUpdate(
+                            {
+                                _id: task._id,
+                                fundingSourceType: 'admin_budget',
+                                $or: [
+                                    { adminBudgetRefundStatus: 'none' },
+                                    { adminBudgetRefundStatus: { $exists: false } },
+                                    { adminBudgetRefundStatus: null },
+                                    { adminBudgetRefundStatus: 'claimed', adminBudgetRefundClaimedAt: { $lt: new Date(Date.now() - 30000) } }
+                                ]
+                            },
+                            {
+                                $set: {
+                                    status: 'On Hold',
+                                    adminBudgetRefundStatus: 'claimed',
+                                    adminBudgetRefundClaimedAt: new Date(),
+                                    adminBudgetRefundAmountUSD: refundAmountUSD
+                                }
+                            },
+                            { new: true }
+                        );
+
+                        if (!claim) {
+                            // Another concurrent delete request is already processing
+                            return res.status(200).json({ success: true, data: {} });
                         }
+
+                        // Step 3: Complete Admin Budget refund safely
+                        const settings = await Setting.getSettings();
+                        await Setting.findOneAndUpdate(
+                            { _id: settings._id },
+                            { 
+                                $inc: { 'adminCampaignBudget.remainingBudgetUSD': refundAmountUSD },
+                                $set: { dataVersion: Date.now() }
+                            }
+                        );
+
+                        // Durably mark budget_refunded
+                        await UserTask.updateOne(
+                            { _id: task._id },
+                            { $set: { adminBudgetRefundStatus: 'budget_refunded' } }
+                        );
+                    }
+
+                    // Step 4: Create refund transaction safely and idempotently
+                    const idempotencyKey = `admin_budget_refund:deletion:${task._id}`;
+                    try {
+                        await Transaction.create({
+                            userId: user._id,
+                            userName: user.username,
+                            currency: 'USD',
+                            type: 'Task Refund',
+                            amount: refundAmountUSD,
+                            amountUSD: refundAmountUSD,
+                            campaignId: task._id,
+                            sourceWallet: 'CampaignEscrow',
+                            destinationWallet: 'System',
+                            description: `Restored remaining budget from deleted admin campaign to Admin Budget: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
+                            status: 'Approved',
+                            idempotencyKey
+                        });
+                    } catch (txErr) {
+                        if (txErr.code !== 11000) {
+                            console.error('[AdminBudgetRefund] Transaction creation failed on deletion:', txErr);
+                            throw txErr;
+                        }
+                    }
+
+                    // Durably mark settled
+                    await UserTask.updateOne(
+                        { _id: task._id },
+                        { $set: { adminBudgetRefundStatus: 'settled' } }
                     );
-                    await Transaction.create({
-                        userId: user._id,
-                        userName: user.username,
-                        currency: 'USD',
-                        type: 'Task Refund',
-                        amount: refundAmountUSD,
-                        amountUSD: refundAmountUSD,
-                        campaignId: claimedTask._id,
-                        sourceWallet: 'CampaignEscrow',
-                        destinationWallet: 'System',
-                        description: `Restored remaining budget from deleted admin campaign to Admin Budget: ${claimedTask.title} ($${refundAmountUSD.toFixed(2)} USD)`,
-                        status: 'Approved'
-                    });
                 }
+
+                // Step 5: Only after financial settlement is confirmed, permanently delete the campaign
+                await UserTaskSubmission.updateMany(
+                    { taskId: req.params.id, status: 'Pending' },
+                    { $set: { status: 'Rejected', rejectionReason: 'Campaign was deleted or stopped by the creator.' } }
+                );
+
+                await UserTask.findByIdAndDelete(task._id);
+                global.appDataVersion = Date.now();
+                return res.status(200).json({ success: true, data: {} });
             } else {
                 // If pending, refund the ENTIRE budget to Task Wallet
                 if (task.status === 'Pending') {
@@ -1028,6 +1147,12 @@ export const deleteUserTask = async (req, res) => {
         global.appDataVersion = Date.now();
         res.status(200).json({ success: true, data: {} });
     } catch (err) {
+        try {
+            await UserTask.updateOne(
+                { _id: req.params.id, adminBudgetRefundStatus: 'claimed' },
+                { $set: { adminBudgetRefundStatus: 'none', adminBudgetRefundClaimedAt: null } }
+            );
+        } catch (_) {}
         res.status(400).json({ success: false, error: err.message });
     }
 };

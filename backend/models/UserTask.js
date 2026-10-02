@@ -24,6 +24,19 @@ const UserTaskSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    adminBudgetRefundStatus: {
+        type: String,
+        enum: ['none', 'claimed', 'budget_refunded', 'settled'],
+        default: 'none'
+    },
+    adminBudgetRefundClaimedAt: {
+        type: Date,
+        default: null
+    },
+    adminBudgetRefundAmountUSD: {
+        type: Number,
+        default: 0
+    },
     category: {
         type: String,
         required: [true, 'Please select a task category']
