@@ -15,6 +15,15 @@ const UserTaskSchema = new mongoose.Schema({
         enum: ['member', 'admin'],
         default: 'member'
     },
+    fundingSourceType: {
+        type: String,
+        enum: ['member_wallet', 'admin_budget'],
+        default: 'member_wallet'
+    },
+    adminBudgetAllocatedUSD: {
+        type: Number,
+        default: 0
+    },
     category: {
         type: String,
         required: [true, 'Please select a task category']

@@ -21,6 +21,8 @@ export interface UserTasksSubmitProps {
     hideHeaderAndTabs?: boolean;
     hideHeroBanner?: boolean;
     hideSubTabs?: boolean;
+    isAdminMode?: boolean;
+    onCampaignCreated?: () => void;
 }
 
 export const getRemainingTimeString = (targetDate?: string | Date) => {
@@ -194,7 +196,7 @@ export const renderDisputeTimerBox = (sub: any, settings: any) => {
     return null;
 };
 
-const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false }) => {
+const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse', hideHeaderAndTabs = false, hideHeroBanner = false, hideSubTabs = false, isAdminMode = false, onCampaignCreated }) => {
     const { state, dispatch } = useData();
     const { currentUser, userTasks, userTaskSubmissions, settings } = state;
     const rates = settings?.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -1219,6 +1221,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const campaignFeeUSD = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
     const grandTotalUSD = Number((totalBudgetUSD + campaignFeeUSD).toFixed(2));
 
+    const adminBudgetConfig = settings?.adminCampaignBudget;
+    const isAdminBudgetEnabled = Boolean(adminBudgetConfig?.enabled);
+    const adminRemainingBudgetUSD = Number(adminBudgetConfig?.remainingBudgetUSD || 0);
+    const isInsufficientAdminBudget = Boolean(isAdminMode && (!isAdminBudgetEnabled || adminRemainingBudgetUSD < grandTotalUSD));
+
     const DEFAULT_PRESETS = {
         youtube: {
             subscriber: { minPayout: 0.02, minSlots: 50 },
@@ -1603,6 +1610,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         const legacyRequireScreenshot = requiredProofsList.some(p => p.type === 'screenshot');
         const legacyScreenshotInstruction = requiredProofsList.filter(p => p.type === 'screenshot').map(p => p.instruction).join(' | ') || '';
 
+        // If creating campaign in Admin Mode, validate finite Admin Campaign Budget without touching member wallets
+        if (isAdminMode) {
+            if (!isAdminBudgetEnabled) {
+                alert('Admin Campaign Budget is currently disabled in System Settings. Please enable it under Admin > Work & Earn > Settings to create campaigns.');
+                return;
+            }
+            if (adminRemainingBudgetUSD < grandTotalUSD) {
+                alert(`Insufficient Admin Campaign Budget. Required: $${grandTotalUSD.toFixed(2)} USD, Available in Admin Budget: $${adminRemainingBudgetUSD.toFixed(2)} USD. Please allocate more budget in Settings.`);
+                return;
+            }
+            await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction);
+            return;
+        }
+
         // Check if Task Wallet has sufficient funds in USD
         const userCurr = currentUser.currency || 'USD';
         const rate = rates[userCurr] || 1;
@@ -1696,6 +1717,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
+            if (result.settings) {
+                dispatch({ type: 'UPDATE_SETTINGS', payload: result.settings });
+            }
 
             // Trigger non-financial GA4 campaign_created event (Phase P20-A)
             seoAnalytics.trackCampaignCreated(result.task?.category || category);
@@ -1703,21 +1727,41 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             // Dispatch transaction so history tracks campaign creation immediately
             const userCurr = currentUser.currency || 'USD';
             const rate = rates[userCurr] || 1;
-            dispatch({
-                type: 'ADD_TRANSACTION',
-                payload: {
-                    _id: 'trx_camp_' + Date.now(),
-                    userId: currentUser._id,
-                    userName: currentUser.username || currentUser.fullName,
-                    currency: 'USD',
-                    type: 'Campaign Creation',
-                    amount: -(result.task.totalBudget || grandTotalUSD),
-                    exchangeRate: rate,
-                    description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)}/task)`,
-                    status: 'Approved',
-                    date: new Date().toISOString()
-                }
-            });
+            if (isAdminMode) {
+                dispatch({
+                    type: 'ADD_TRANSACTION',
+                    payload: {
+                        _id: 'trx_admin_camp_' + Date.now(),
+                        userId: currentUser._id,
+                        userName: currentUser.username || currentUser.fullName,
+                        currency: 'USD',
+                        type: 'Task Budget Deduction',
+                        amount: -(result.task.totalBudget || grandTotalUSD),
+                        exchangeRate: 1,
+                        sourceWallet: 'System',
+                        destinationWallet: 'CampaignEscrow',
+                        description: `Admin Campaign: ${result.task.title} (Reserved from Admin Budget)`,
+                        status: 'Approved',
+                        date: new Date().toISOString()
+                    }
+                });
+            } else {
+                dispatch({
+                    type: 'ADD_TRANSACTION',
+                    payload: {
+                        _id: 'trx_camp_' + Date.now(),
+                        userId: currentUser._id,
+                        userName: currentUser.username || currentUser.fullName,
+                        currency: 'USD',
+                        type: 'Campaign Creation',
+                        amount: -(result.task.totalBudget || grandTotalUSD),
+                        exchangeRate: rate,
+                        description: `Created Campaign: ${result.task.title} (${result.task.targetQuantity} slots @ $${(Number(result.task.rewardPerTask) || 0).toFixed(2)}/task)`,
+                        status: 'Approved',
+                        date: new Date().toISOString()
+                    }
+                });
+            }
 
             // Clear form
             setTitle('');
@@ -2545,6 +2589,59 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-6 uppercase tracking-tight">Create USD Task Campaign</h3>
                         
                         <form onSubmit={handleCreateCampaign} className="space-y-6">
+                            {isAdminMode && (
+                                <div className={`p-4 rounded-2xl border ${
+                                    !isAdminBudgetEnabled
+                                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200'
+                                        : isInsufficientAdminBudget
+                                            ? 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-200'
+                                            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                                }`}>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">🏛️</span>
+                                                <h4 className="text-sm font-black uppercase tracking-tight text-gray-900 dark:text-white">
+                                                    Admin Campaign Budget Funding
+                                                </h4>
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                    !isAdminBudgetEnabled 
+                                                        ? 'bg-amber-200 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200' 
+                                                        : isInsufficientAdminBudget
+                                                            ? 'bg-rose-200 text-rose-900 dark:bg-rose-900/80 dark:text-rose-200'
+                                                            : 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900/80 dark:text-emerald-200'
+                                                }`}>
+                                                    {!isAdminBudgetEnabled ? 'Budget Disabled' : isInsufficientAdminBudget ? 'Insufficient Budget' : 'Budget Active'}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300">
+                                                {!isAdminBudgetEnabled 
+                                                    ? 'Admin Campaign Budget is disabled in Settings. Please enable it before creating campaigns.' 
+                                                    : isInsufficientAdminBudget 
+                                                        ? `Estimated campaign cost ($${grandTotalUSD.toFixed(2)} USD) exceeds available remaining budget ($${adminRemainingBudgetUSD.toFixed(2)} USD).`
+                                                        : 'This campaign is funded directly from the finite Admin Campaign Budget into Escrow. No personal wallet deductions occur.'}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-4 shrink-0 bg-white/60 dark:bg-gray-900/60 px-4 py-2 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
+                                            <div className="text-right">
+                                                <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block">Available Budget</span>
+                                                <span className={`font-mono font-black text-sm sm:text-base ${
+                                                    isInsufficientAdminBudget ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                                                }`}>
+                                                    ${adminRemainingBudgetUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                            <div className="text-right border-l dark:border-gray-700 pl-3">
+                                                <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block">Campaign Cost</span>
+                                                <span className="font-mono font-bold text-sm sm:text-base text-gray-900 dark:text-white">
+                                                    ${grandTotalUSD.toFixed(2)} USD
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-xs font-black uppercase text-gray-500 mb-2">Category / Platform</label>
@@ -2977,8 +3074,28 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </p>
                             </div>
 
-                            <Button type="submit" variant="primary" isLoading={isSubmitting} className="w-full py-3.5 text-sm md:text-base font-bold shadow-md bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors">
-                                🚀 Launch Campaign — Total: ${grandTotalUSD.toFixed(2)} USD
+                            <Button 
+                                type="submit" 
+                                variant="primary" 
+                                isLoading={isSubmitting} 
+                                disabled={isSubmitting || (isAdminMode && (!isAdminBudgetEnabled || isInsufficientAdminBudget))}
+                                className={`w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors ${
+                                    isAdminMode 
+                                        ? (!isAdminBudgetEnabled || isInsufficientAdminBudget)
+                                            ? 'bg-gray-400 cursor-not-allowed text-white'
+                                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                }`}
+                            >
+                                {isSubmitting ? 'Launching...' : isAdminMode ? (
+                                    !isAdminBudgetEnabled 
+                                        ? '⚠️ Admin Budget Disabled' 
+                                        : isInsufficientAdminBudget 
+                                            ? `⚠️ Insufficient Admin Budget ($${adminRemainingBudgetUSD.toFixed(2)} vs $${grandTotalUSD.toFixed(2)} Required)`
+                                            : `🚀 Launch Admin Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`
+                                ) : (
+                                    `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`
+                                )}
                             </Button>
                         </form>
                     </div>
@@ -3030,7 +3147,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
                         <div className="mt-8 p-4 bg-slate-900/80 rounded-xl border border-slate-800">
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!
+                                {isAdminMode ? (
+                                    <>Funds will be deducted directly from the finite <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances are unaffected.</>
+                                ) : (
+                                    <>Funds will be deducted from your wallet balance in USD equivalent. When workers submit proof (screenshot, ID, or link), the campaign creator needs to approve the task and its proof. Only then will workers receive their USD rewards instantly!</>
+                                )}
                             </p>
                         </div>
                     </div>
@@ -6828,7 +6949,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         <div>
                             <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Campaign Created Successfully!</h3>
                             <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
-                                {fundingSuccessModal.transferredUserCurr > 0 ? (
+                                {isAdminMode ? (
+                                    <>Your campaign has been successfully created and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
+                                ) : fundingSuccessModal.transferredUserCurr > 0 ? (
                                     <>Successfully transferred <strong className="text-emerald-600 dark:text-emerald-400">{fundingSuccessModal.transferredUserCurr.toFixed(2)} {fundingSuccessModal.userCurrency} (${fundingSuccessModal.transferredUSD.toFixed(2)} USD)</strong> from your Investment Module into your Campaign Wallet, and your campaign has been launched!</>
                                 ) : (
                                     <>Your campaign has been successfully created and submitted for Admin approval. It is now live in your campaigns list.</>
@@ -6837,13 +6960,20 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                         </div>
 
                         <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-900/50">
-                            <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block mb-1">Remaining Campaign Wallet Balance:</span>
+                            <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block mb-1">
+                                {isAdminMode ? 'Remaining Admin Campaign Budget:' : 'Remaining Campaign Wallet Balance:'}
+                            </span>
                             <span className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-300">
-                                ${fundingSuccessModal.newTaskWalletUSD.toFixed(2)} USD
+                                {isAdminMode 
+                                    ? `$${(settings.adminCampaignBudget?.remainingBudgetUSD ?? 0).toFixed(2)} USD`
+                                    : `$${fundingSuccessModal.newTaskWalletUSD.toFixed(2)} USD`
+                                }
                             </span>
                         </div>
 
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Click OK to view your campaign status in My Campaigns.</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {isAdminMode ? 'Click OK to return to the Admin Campaigns list.' : 'Click OK to view your campaign status in My Campaigns.'}
+                        </p>
 
                         <div className="pt-2">
                             <Button
@@ -6851,7 +6981,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 variant="primary"
                                 onClick={() => {
                                     setFundingSuccessModal(null);
-                                    setActiveTab('my-tasks');
+                                    if (isAdminMode && onCampaignCreated) {
+                                        onCampaignCreated();
+                                    } else {
+                                        setActiveTab('my-tasks');
+                                    }
                                 }}
                                 className="w-full py-3.5 text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 shadow-lg"
                             >

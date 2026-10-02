@@ -29,6 +29,19 @@ const AdminUserTasks: React.FC = () => {
     const [userTaskNotificationMessage, setUserTaskNotificationMessage] = useState<string>(settings.userTaskNotificationMessage || 'Want to earn extra rewards? Activate the required investment plan to unlock the Earn Cash & Gigs Hub and start earning today!');
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
+    // Admin Campaign Budget State
+    const [adminBudgetEnabled, setAdminBudgetEnabled] = useState<boolean>(settings.adminCampaignBudget?.enabled ?? false);
+    const [adminAllocatedBudgetUSD, setAdminAllocatedBudgetUSD] = useState<number>(settings.adminCampaignBudget?.allocatedBudgetUSD ?? 0);
+    const [adminRemainingBudgetUSD, setAdminRemainingBudgetUSD] = useState<number>(settings.adminCampaignBudget?.remainingBudgetUSD ?? 0);
+
+    React.useEffect(() => {
+        if (settings.adminCampaignBudget) {
+            setAdminBudgetEnabled(settings.adminCampaignBudget.enabled ?? false);
+            setAdminAllocatedBudgetUSD(settings.adminCampaignBudget.allocatedBudgetUSD ?? 0);
+            setAdminRemainingBudgetUSD(settings.adminCampaignBudget.remainingBudgetUSD ?? 0);
+        }
+    }, [settings.adminCampaignBudget]);
+
     // Exchange Rates State
     const [rates, setRates] = useState(settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 });
     const [isSavingRates, setIsSavingRates] = useState(false);
@@ -162,13 +175,17 @@ const AdminUserTasks: React.FC = () => {
                     commissionPercent: Number(commissionPercent),
                     campaignFeeEnabled: Boolean(campaignFeeEnabled),
                     campaignFeeAmount: Number(campaignFeeAmount)
+                },
+                adminCampaignBudget: {
+                    enabled: Boolean(adminBudgetEnabled),
+                    allocatedBudgetUSD: Number(adminAllocatedBudgetUSD)
                 }
             };
             const result = await updateSettings(updatedSettings);
             dispatch({ type: 'UPDATE_SETTINGS', payload: result });
             alert('User Task configuration and access controls updated successfully!');
-        } catch (error) {
-            alert('Failed to update settings');
+        } catch (error: any) {
+            alert(`Failed to update settings: ${error?.response?.data?.error || error?.message || 'Unknown error'}`);
         } finally {
             setIsSavingSettings(false);
         }
@@ -391,9 +408,72 @@ const AdminUserTasks: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="flex items-end">
-                                <Button id="save_task_rules_btn" type="submit" variant="primary" isLoading={isSavingSettings} className="w-full py-3">
-                                    Save Task Rules
+                            {/* Finite Admin Campaign Budget Configuration */}
+                            <div className="col-span-full border-t border-gray-200 dark:border-gray-700 pt-6 mt-2 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                                            <span>🏛️</span> Admin Campaign Budget (Finite Pool)
+                                        </h4>
+                                        <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                            Enable a finite USD budget for platform/admin-created campaigns. Admin tasks consume from this pool into Escrow without personal wallet deductions.
+                                        </p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                            id="admin_campaign_budget_toggle"
+                                            type="checkbox" 
+                                            checked={adminBudgetEnabled} 
+                                            onChange={(e) => setAdminBudgetEnabled(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                                    </label>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-2xl border dark:border-gray-700">
+                                        <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                            Allocated Budget (USD)
+                                        </label>
+                                        <input 
+                                            id="admin_allocated_budget_input"
+                                            type="number" 
+                                            step="0.01"
+                                            min="0"
+                                            value={adminAllocatedBudgetUSD} 
+                                            onChange={(e) => setAdminAllocatedBudgetUSD(Math.max(0, Number(e.target.value) || 0))}
+                                            disabled={!adminBudgetEnabled}
+                                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-mono font-bold text-sm disabled:opacity-50"
+                                        />
+                                        <span className="text-[10px] text-gray-400 mt-1 block">Total pool configured by Admin</span>
+                                    </div>
+
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-2xl border dark:border-gray-700">
+                                        <span className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                            Consumed / Spent (USD)
+                                        </span>
+                                        <div className="text-sm font-mono font-bold text-amber-600 dark:text-amber-400 py-2">
+                                            ${Math.max(0, adminAllocatedBudgetUSD - adminRemainingBudgetUSD).toFixed(2)} USD
+                                        </div>
+                                        <span className="text-[10px] text-gray-400 block">Consumed by Admin campaigns (Read-only)</span>
+                                    </div>
+
+                                    <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-2xl border dark:border-gray-700">
+                                        <span className="block text-[10px] font-black uppercase text-gray-500 mb-1">
+                                            Remaining Available (USD)
+                                        </span>
+                                        <div className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400 py-2">
+                                            ${adminRemainingBudgetUSD.toFixed(2)} USD
+                                        </div>
+                                        <span className="text-[10px] text-gray-400 block">Available for new Admin campaigns (Read-only)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="col-span-full flex justify-end pt-2">
+                                <Button id="save_task_rules_btn" type="submit" variant="primary" isLoading={isSavingSettings} className="px-8 py-3">
+                                    Save Task Rules & Admin Budget
                                 </Button>
                             </div>
 
@@ -1340,12 +1420,27 @@ const AdminUserTasks: React.FC = () => {
                             </div>
                             <p className="text-xs text-gray-500 mt-1">Configure micro-tasks, video/social engagements, or structured surveys using the universal builder.</p>
                         </div>
-                        <Button variant="secondary" onClick={() => setActiveTab('campaigns')} className="text-xs font-bold">
-                            &larr; Back to Campaigns
-                        </Button>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-right">
+                                <span className="text-[9px] uppercase font-bold text-gray-500 dark:text-gray-400 block leading-tight">Admin Budget Available</span>
+                                <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                    ${(settings.adminCampaignBudget?.remainingBudgetUSD ?? 0).toFixed(2)} USD
+                                </span>
+                            </div>
+                            <Button variant="secondary" onClick={() => setActiveTab('campaigns')} className="text-xs font-bold">
+                                &larr; Back to Campaigns
+                            </Button>
+                        </div>
                     </div>
                     <div className="bg-slate-900/40 rounded-3xl p-2 sm:p-6 border border-slate-800">
-                        <UserTasksSubmit initialTab="submit" hideHeaderAndTabs={true} hideHeroBanner={true} hideSubTabs={true} />
+                        <UserTasksSubmit 
+                            initialTab="submit" 
+                            hideHeaderAndTabs={true} 
+                            hideHeroBanner={true} 
+                            hideSubTabs={true} 
+                            isAdminMode={true} 
+                            onCampaignCreated={() => setActiveTab('campaigns')}
+                        />
                     </div>
                 </div>
             )}

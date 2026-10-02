@@ -518,6 +518,11 @@ const SettingSchema = new mongoose.Schema({
         campaignFeeEnabled: { type: Boolean, default: false },
         campaignFeeAmount: { type: Number, default: 1.00 }
     },
+    adminCampaignBudget: {
+        enabled: { type: Boolean, default: false },
+        allocatedBudgetUSD: { type: Number, default: 0 },
+        remainingBudgetUSD: { type: Number, default: 0 }
+    },
     proofControls: {
         screenshotEnabled: { type: Boolean, default: true },
         textEnabled: { type: Boolean, default: true },
@@ -774,6 +779,14 @@ SettingSchema.statics.getSettings = async function() {
     }
     if (!settings.signUpConsentConfig) {
         settings.signUpConsentConfig = {};
+        needsSave = true;
+    }
+    if (!settings.adminCampaignBudget) {
+        settings.adminCampaignBudget = {
+            enabled: false,
+            allocatedBudgetUSD: 0,
+            remainingBudgetUSD: 0
+        };
         needsSave = true;
     }
     if (!settings.emailSenders || settings.emailSenders.length === 0) {

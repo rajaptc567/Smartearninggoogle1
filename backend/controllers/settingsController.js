@@ -272,7 +272,14 @@ export const getSettings = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
     try {
-        const prevSettings = await Setting.findOne();
+        let prevSettings = await Setting.findOne();
+        if (!prevSettings) {
+            prevSettings = await Setting.getSettings();
+        } else if (!prevSettings.adminCampaignBudget || prevSettings.adminCampaignBudget.remainingBudgetUSD === undefined) {
+            prevSettings.adminCampaignBudget = { enabled: false, allocatedBudgetUSD: 0, remainingBudgetUSD: 0 };
+            await Setting.updateOne({ _id: prevSettings._id }, { $set: { adminCampaignBudget: prevSettings.adminCampaignBudget } });
+        }
+        const settingId = prevSettings._id;
         const emailBecameRequired = req.body.emailVerificationRequired && (!prevSettings || !prevSettings.emailVerificationRequired);
         const whatsappBecameRequired = req.body.whatsappVerificationRequired && (!prevSettings || !prevSettings.whatsappVerificationRequired);
 
@@ -318,6 +325,45 @@ export const updateSettings = async (req, res) => {
 
         if (req.body.campaignConvertEnabled !== undefined) {
             req.body.campaignConvertEnabled = Boolean(req.body.campaignConvertEnabled);
+        }
+
+        // Admin Campaign Budget Accounting Integrity Validation
+        let hasAdminBudgetChange = false;
+        let newAdminBudgetEnabled = false;
+        let newAllocatedBudgetUSD = 0;
+        let deltaAllocatedBudgetUSD = 0;
+
+        if (req.body.adminCampaignBudget && typeof req.body.adminCampaignBudget === 'object') {
+            const prevBudget = prevSettings?.adminCampaignBudget || { enabled: false, allocatedBudgetUSD: 0, remainingBudgetUSD: 0 };
+            const prevAllocated = Math.max(0, Number(prevBudget.allocatedBudgetUSD) || 0);
+            const prevRemaining = Math.max(0, Number(prevBudget.remainingBudgetUSD !== undefined ? prevBudget.remainingBudgetUSD : prevAllocated) || 0);
+            const consumed = Math.max(0, Number((prevAllocated - prevRemaining).toFixed(2)));
+
+            const rawAllocated = Number(req.body.adminCampaignBudget.allocatedBudgetUSD);
+            if (isNaN(rawAllocated) || !isFinite(rawAllocated) || rawAllocated < 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Allocated budget must be a valid non-negative number.'
+                });
+            }
+
+            const newAllocated = Number(rawAllocated.toFixed(2));
+            if (newAllocated < consumed) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Allocated budget ($${newAllocated.toFixed(2)}) cannot be less than already-consumed budget ($${consumed.toFixed(2)}).`
+                });
+            }
+
+            hasAdminBudgetChange = true;
+            newAdminBudgetEnabled = Boolean(req.body.adminCampaignBudget.enabled);
+            newAllocatedBudgetUSD = newAllocated;
+            deltaAllocatedBudgetUSD = Number((newAllocated - prevAllocated).toFixed(2));
+
+            // CRITICAL CONCURRENCY FIX:
+            // Remove adminCampaignBudget from req.body so that a whole-object $set does NOT overwrite
+            // concurrent atomic reservations/refunds on remainingBudgetUSD.
+            delete req.body.adminCampaignBudget;
         }
 
         // Sanitize homepage payment logos to remove empty/invalid items
@@ -421,14 +467,51 @@ export const updateSettings = async (req, res) => {
             }
         }
 
-        const settings = await Setting.findOneAndUpdate({}, { 
-            ...req.body, 
-            dataVersion: Date.now() 
-        }, {
+        const query = { _id: settingId };
+        const updateOps = { 
+            $set: {
+                ...req.body, 
+                dataVersion: Date.now() 
+            }
+        };
+
+        if (hasAdminBudgetChange) {
+            updateOps.$set['adminCampaignBudget.enabled'] = newAdminBudgetEnabled;
+            updateOps.$set['adminCampaignBudget.allocatedBudgetUSD'] = newAllocatedBudgetUSD;
+
+            if (deltaAllocatedBudgetUSD !== 0) {
+                updateOps.$inc = {
+                    'adminCampaignBudget.remainingBudgetUSD': deltaAllocatedBudgetUSD
+                };
+                if (deltaAllocatedBudgetUSD < 0) {
+                    // Atomic guard: ensure remainingBudgetUSD in DB has enough unconsumed funds
+                    // to support the reduction at the exact moment of execution
+                    query['adminCampaignBudget.remainingBudgetUSD'] = { $gte: Math.abs(deltaAllocatedBudgetUSD) };
+                }
+            }
+        }
+
+        let settings = await Setting.findOneAndUpdate(query, updateOps, { 
             new: true,
-            upsert: true,
             runValidators: true,
         });
+
+        if (!settings && hasAdminBudgetChange && deltaAllocatedBudgetUSD < 0) {
+            // Atomic update matched 0 documents because remainingBudgetUSD was less than the requested reduction
+            // (e.g. concurrent campaign reservation consumed budget while request was processing).
+            const freshSetting = await Setting.findById(settingId);
+            const freshAllocated = Math.max(0, Number(freshSetting?.adminCampaignBudget?.allocatedBudgetUSD) || 0);
+            const freshRemaining = Math.max(0, Number(freshSetting?.adminCampaignBudget?.remainingBudgetUSD !== undefined ? freshSetting.adminCampaignBudget.remainingBudgetUSD : freshAllocated) || 0);
+            const freshConsumed = Math.max(0, Number((freshAllocated - freshRemaining).toFixed(2)));
+            return res.status(400).json({
+                success: false,
+                error: `Allocated budget ($${newAllocatedBudgetUSD.toFixed(2)}) cannot be less than already-consumed budget ($${freshConsumed.toFixed(2)}).`
+            });
+        }
+
+        if (!settings) {
+            settings = await Setting.findById(settingId) || await Setting.getSettings();
+        }
 
         // If verification was newly enabled, mark all existing users as verified
         if (emailBecameRequired || whatsappBecameRequired) {

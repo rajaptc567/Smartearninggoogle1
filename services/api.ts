@@ -660,7 +660,7 @@ export const getUserTasks = async (): Promise<UserTask[]> => {
     return result.data;
 };
 
-export const createUserTask = async (taskData: any): Promise<{ task: UserTask; user: User }> => {
+export const createUserTask = async (taskData: any): Promise<{ task: UserTask; user: User; settings?: Settings }> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks`, {
         method: 'POST',
         headers: getHeaders(),

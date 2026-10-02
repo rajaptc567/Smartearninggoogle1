@@ -184,6 +184,11 @@ export interface Settings {
     };
     isUserTransferEnabled: boolean;
     isTasksEnabled: boolean; 
+    adminCampaignBudget?: {
+        enabled?: boolean;
+        allocatedBudgetUSD?: number;
+        remainingBudgetUSD?: number;
+    };
     investmentModuleEnabled?: boolean;
     isInvestmentModuleEnabled?: boolean;
     investmentActivePlanBypassEnabled?: boolean;
@@ -761,6 +766,8 @@ export interface UserTask {
     userId: string;
     userName: string;
     creatorType?: 'member' | 'admin' | string;
+    fundingSourceType?: 'member_wallet' | 'admin_budget' | string;
+    adminBudgetAllocatedUSD?: number;
     category: 'Facebook' | 'YouTube' | 'WhatsApp' | 'Website' | 'Google' | 'Instagram' | 'Other' | string;
     subType: 'Comment' | 'Like' | 'Follow' | 'Subscribe' | 'Watch Time' | 'Sign-up' | 'Share' | 'Review' | 'Other' | string;
     title: string;
