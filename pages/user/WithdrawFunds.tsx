@@ -307,8 +307,15 @@ const WithdrawFunds: React.FC = () => {
     const pendingRequiredTasks = useMemo(() => {
         // If the Task feature is disabled globally, we don't enforce these requirements
         if (!currentUser || !isTasksEnabled) return [];
-        const completedTaskIds = (currentUser.completedTasks || []).map(ct => ct.taskId);
-        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !completedTaskIds.includes(t._id));
+        const approvedTaskIds = new Set(
+            (currentUser.completedTasks || [])
+                .filter(ct => ct && ct.status === 'Approved' && ct.taskId)
+                .map(ct => {
+                    const tid: any = ct.taskId;
+                    return String(tid?._id || tid);
+                })
+        );
+        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !approvedTaskIds.has(String(t._id)));
     }, [tasks, currentUser, isTasksEnabled]);
 
     // --- WORK & EARN CONDITIONAL WITHDRAWAL RULES ENGINE ---
