@@ -1772,12 +1772,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             setLink('');
 
             // Show success modal with OK button
+            const wasPublishedNow = Boolean(isAdminMode && publishNowArg === true);
             setFundingSuccessModal({
                 isOpen: true,
                 transferredUserCurr: transferredUserCurrArg || 0,
                 transferredUSD: transferredUSDArg || 0,
                 userCurrency: userCurr,
-                newTaskWalletUSD: result.user.taskWalletBalance || 0
+                newTaskWalletUSD: result.user.taskWalletBalance || 0,
+                isPublishedNow: wasPublishedNow
             });
         } catch (error) {
             alert(`Failed to launch campaign: ${error instanceof Error ? error.message : 'Unknown error'}`);
