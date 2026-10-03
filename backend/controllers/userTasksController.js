@@ -1099,9 +1099,11 @@ export const updateUserTaskStatus = async (req, res) => {
 };
 
 export const deleteUserTask = async (req, res) => {
+    let originalStatus = null;
     try {
         const task = await UserTask.findById(req.params.id);
         if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+        originalStatus = task.status;
 
         if (req.user) {
             const isOwner = String(task.userId) === String(req.user.id);
@@ -1111,146 +1113,183 @@ export const deleteUserTask = async (req, res) => {
             }
         }
 
+        // Dedicated, concurrent-safe handler for Admin Campaign Budget deletion
+        if (task.fundingSourceType === 'admin_budget') {
+            const refundKey = `admin_budget_refund:deletion:${task._id}`;
+            let refundAmountUSD = 0;
+
+            if (task.adminBudgetRefundStatus === 'settled' || originalStatus === 'Rejected') {
+                refundAmountUSD = 0;
+            } else if (originalStatus === 'Pending') {
+                const baseFee = task.baseFeeCharged || 0;
+                refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
+            } else {
+                const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+                if (remainingSlots > 0 && task.targetQuantity > 0) {
+                    const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
+                    refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
+                } else {
+                    refundAmountUSD = 0;
+                }
+            }
+
+            let deletionClaimWon = false;
+
+            if (refundAmountUSD > 0) {
+                await executeWithOptionalTransaction(async (session) => {
+                    const currentSettings = await Setting.getSettings();
+                    const isAlreadyCreditedInSetting = Array.isArray(currentSettings.adminCampaignBudget?.processedRefundKeys) &&
+                        currentSettings.adminCampaignBudget.processedRefundKeys.includes(refundKey);
+
+                    // Step 1: Atomically claim deletion refund operation on UserTask
+                    if (!isAlreadyCreditedInSetting && task.adminBudgetRefundStatus !== 'budget_refunded') {
+                        const claim = await UserTask.findOneAndUpdate(
+                            {
+                                _id: task._id,
+                                fundingSourceType: 'admin_budget',
+                                $or: [
+                                    { adminBudgetRefundStatus: 'none' },
+                                    { adminBudgetRefundStatus: { $exists: false } },
+                                    { adminBudgetRefundStatus: null },
+                                    { adminBudgetRefundStatus: 'claimed', adminBudgetRefundClaimedAt: { $lt: new Date(Date.now() - 30000) } }
+                                ]
+                            },
+                            {
+                                $set: {
+                                    status: 'On Hold',
+                                    adminBudgetRefundStatus: 'claimed',
+                                    adminBudgetRefundClaimedAt: new Date(),
+                                    adminBudgetRefundAmountUSD: refundAmountUSD
+                                }
+                            },
+                            { new: true, ...(session ? { session } : {}) }
+                        );
+
+                        if (!claim) {
+                            // Another concurrent delete request is already processing
+                            deletionClaimWon = false;
+                            return;
+                        }
+                    }
+
+                    deletionClaimWon = true;
+
+                    // Step 2: Complete Admin Budget refund in Setting safely and idempotently
+                    if (!isAlreadyCreditedInSetting) {
+                        await Setting.findOneAndUpdate(
+                            { 
+                                _id: currentSettings._id,
+                                'adminCampaignBudget.processedRefundKeys': { $ne: refundKey }
+                            },
+                            { 
+                                $inc: { 'adminCampaignBudget.remainingBudgetUSD': refundAmountUSD },
+                                $addToSet: { 'adminCampaignBudget.processedRefundKeys': refundKey },
+                                $set: { dataVersion: Date.now() }
+                            },
+                            { new: true, ...(session ? { session } : {}) }
+                        );
+
+                        // Durably mark budget_refunded
+                        await UserTask.updateOne(
+                            { _id: task._id },
+                            { $set: { adminBudgetRefundStatus: 'budget_refunded' } },
+                            session ? { session } : {}
+                        );
+                    }
+
+                    // Step 3: Create refund transaction safely and idempotently
+                    const existingTx = await Transaction.findOne({ idempotencyKey: refundKey }).session(session || null);
+                    if (existingTx) {
+                        if (Number(existingTx.amountUSD?.toFixed(2)) !== Number(refundAmountUSD.toFixed(2)) || String(existingTx.campaignId) !== String(task._id)) {
+                            throw new Error(`Idempotency key collision detected for ${refundKey}: amount or campaign mismatch.`);
+                        }
+                    } else {
+                        const user = await User.findById(task.userId).session(session || null);
+                        try {
+                            await Transaction.create([
+                                {
+                                    userId: user?._id || task.userId,
+                                    userName: user?.username || task.userName,
+                                    currency: 'USD',
+                                    type: 'Task Refund',
+                                    amount: refundAmountUSD,
+                                    amountUSD: refundAmountUSD,
+                                    campaignId: task._id,
+                                    sourceWallet: 'CampaignEscrow',
+                                    destinationWallet: 'System',
+                                    description: `Restored remaining budget from deleted admin campaign to Admin Budget: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
+                                    status: 'Approved',
+                                    idempotencyKey: refundKey
+                                }
+                            ], session ? { session } : {});
+                        } catch (txErr) {
+                            if (txErr.code === 11000) {
+                                const concurrentTx = await Transaction.findOne({ idempotencyKey: refundKey }).session(session || null);
+                                if (concurrentTx && (Number(concurrentTx.amountUSD?.toFixed(2)) !== Number(refundAmountUSD.toFixed(2)) || String(concurrentTx.campaignId) !== String(task._id))) {
+                                    throw new Error(`Idempotency key collision detected for ${refundKey}: amount or campaign mismatch.`);
+                                }
+                            } else {
+                                throw txErr;
+                            }
+                        }
+                    }
+
+                    // Step 6: Durably mark settled
+                    await UserTask.updateOne(
+                        { _id: task._id },
+                        { $set: { adminBudgetRefundStatus: 'settled' } },
+                        session ? { session } : {}
+                    );
+                });
+
+                if (!deletionClaimWon) {
+                    // Another concurrent request owns the deletion/refund operation.
+                    // Immediately stop all deletion processing:
+                    // DO NOT modify submissions
+                    // DO NOT refund
+                    // DO NOT create a Transaction
+                    // DO NOT call findByIdAndDelete()
+                    // DO NOT send duplicate deletion notifications
+                    const freshTask = await UserTask.findById(task._id);
+                    global.appDataVersion = Date.now();
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Campaign deletion is already being processed by another request.', 
+                        data: freshTask || {} 
+                    });
+                }
+            } else {
+                // When refundAmountUSD === 0, use atomic findOneAndDelete so exactly one request deletes
+                const deleted = await UserTask.findOneAndDelete({ _id: task._id });
+                if (!deleted) {
+                    global.appDataVersion = Date.now();
+                    return res.status(200).json({ success: true, message: 'Campaign was already deleted.', data: {} });
+                }
+                await UserTaskSubmission.updateMany(
+                    { taskId: req.params.id, status: 'Pending' },
+                    { $set: { status: 'Rejected', rejectionReason: 'Campaign was deleted or stopped by the creator.' } }
+                );
+                global.appDataVersion = Date.now();
+                return res.status(200).json({ success: true, data: {} });
+            }
+
+            // Step 7: Clean up pending submissions associated with this deleted campaign (only winner reaches here!)
+            await UserTaskSubmission.updateMany(
+                { taskId: req.params.id, status: 'Pending' },
+                { $set: { status: 'Rejected', rejectionReason: 'Campaign was deleted or stopped by the creator.' } }
+            );
+
+            // Step 8: Permanent UserTask deletion (only winner reaches here!)
+            await UserTask.findByIdAndDelete(task._id);
+            global.appDataVersion = Date.now();
+            return res.status(200).json({ success: true, data: {} });
+        }
+
         const user = await User.findById(task.userId);
         if (user) {
             const settings = await Setting.getSettings();
             const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278, USDT: 1 };
             const userCurr = user.currency || 'USDT';
-
-            const originalStatus = task.status;
-            const refundKey = `admin_budget_refund:deletion:${task._id}`;
-
-            if (task.fundingSourceType === 'admin_budget') {
-                let refundAmountUSD = 0;
-                if (task.adminBudgetRefundStatus === 'settled' || task.status === 'Rejected') {
-                    refundAmountUSD = 0;
-                } else if (task.status === 'Pending') {
-                    const baseFee = task.baseFeeCharged || 0;
-                    refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
-                } else {
-                    const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
-                    if (remainingSlots > 0 && task.targetQuantity > 0) {
-                        const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
-                        refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
-                    } else {
-                        refundAmountUSD = 0;
-                    }
-                }
-
-                if (refundAmountUSD > 0) {
-                    await executeWithOptionalTransaction(async (session) => {
-                        const currentSettings = await Setting.getSettings();
-                        const isAlreadyCreditedInSetting = Array.isArray(currentSettings.adminCampaignBudget?.processedRefundKeys) &&
-                            currentSettings.adminCampaignBudget.processedRefundKeys.includes(refundKey);
-
-                        // Step 1: Atomically claim deletion refund operation on UserTask
-                        if (!isAlreadyCreditedInSetting && task.adminBudgetRefundStatus !== 'budget_refunded') {
-                            const claim = await UserTask.findOneAndUpdate(
-                                {
-                                    _id: task._id,
-                                    fundingSourceType: 'admin_budget',
-                                    $or: [
-                                        { adminBudgetRefundStatus: 'none' },
-                                        { adminBudgetRefundStatus: { $exists: false } },
-                                        { adminBudgetRefundStatus: null },
-                                        { adminBudgetRefundStatus: 'claimed', adminBudgetRefundClaimedAt: { $lt: new Date(Date.now() - 30000) } }
-                                    ]
-                                },
-                                {
-                                    $set: {
-                                        status: 'On Hold',
-                                        adminBudgetRefundStatus: 'claimed',
-                                        adminBudgetRefundClaimedAt: new Date(),
-                                        adminBudgetRefundAmountUSD: refundAmountUSD
-                                    }
-                                },
-                                { new: true, ...(session ? { session } : {}) }
-                            );
-
-                            if (!claim) {
-                                // Another concurrent delete request is already processing
-                                return;
-                            }
-                        }
-
-                        // Step 2: Complete Admin Budget refund in Setting safely and idempotently
-                        if (!isAlreadyCreditedInSetting) {
-                            await Setting.findOneAndUpdate(
-                                { 
-                                    _id: currentSettings._id,
-                                    'adminCampaignBudget.processedRefundKeys': { $ne: refundKey }
-                                },
-                                { 
-                                    $inc: { 'adminCampaignBudget.remainingBudgetUSD': refundAmountUSD },
-                                    $addToSet: { 'adminCampaignBudget.processedRefundKeys': refundKey },
-                                    $set: { dataVersion: Date.now() }
-                                },
-                                { new: true, ...(session ? { session } : {}) }
-                            );
-
-                            // Durably mark budget_refunded
-                            await UserTask.updateOne(
-                                { _id: task._id },
-                                { $set: { adminBudgetRefundStatus: 'budget_refunded' } },
-                                session ? { session } : {}
-                            );
-                        }
-
-                        // Step 3: Create refund transaction safely and idempotently
-                        const existingTx = await Transaction.findOne({ idempotencyKey: refundKey }).session(session || null);
-                        if (existingTx) {
-                            if (Number(existingTx.amountUSD?.toFixed(2)) !== Number(refundAmountUSD.toFixed(2)) || String(existingTx.campaignId) !== String(task._id)) {
-                                throw new Error(`Idempotency key collision detected for ${refundKey}: amount or campaign mismatch.`);
-                            }
-                        } else {
-                            try {
-                                await Transaction.create([
-                                    {
-                                        userId: user._id,
-                                        userName: user.username,
-                                        currency: 'USD',
-                                        type: 'Task Refund',
-                                        amount: refundAmountUSD,
-                                        amountUSD: refundAmountUSD,
-                                        campaignId: task._id,
-                                        sourceWallet: 'CampaignEscrow',
-                                        destinationWallet: 'System',
-                                        description: `Restored remaining budget from deleted admin campaign to Admin Budget: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
-                                        status: 'Approved',
-                                        idempotencyKey: refundKey
-                                    }
-                                ], session ? { session } : {});
-                            } catch (txErr) {
-                                if (txErr.code === 11000) {
-                                    const concurrentTx = await Transaction.findOne({ idempotencyKey: refundKey }).session(session || null);
-                                    if (concurrentTx && (Number(concurrentTx.amountUSD?.toFixed(2)) !== Number(refundAmountUSD.toFixed(2)) || String(concurrentTx.campaignId) !== String(task._id))) {
-                                        throw new Error(`Idempotency key collision detected for ${refundKey}: amount or campaign mismatch.`);
-                                    }
-                                } else {
-                                    throw txErr;
-                                }
-                            }
-                        }
-
-                        // Durably mark settled
-                        await UserTask.updateOne(
-                            { _id: task._id },
-                            { $set: { adminBudgetRefundStatus: 'settled' } },
-                            session ? { session } : {}
-                        );
-                    });
-                }
-
-                // Step 4: Only after financial settlement is confirmed, permanently delete the campaign
-                await UserTaskSubmission.updateMany(
-                    { taskId: req.params.id, status: 'Pending' },
-                    { $set: { status: 'Rejected', rejectionReason: 'Campaign was deleted or stopped by the creator.' } }
-                );
-
-                await UserTask.findByIdAndDelete(task._id);
-                global.appDataVersion = Date.now();
-                return res.status(200).json({ success: true, data: {} });
-            } else {
                 // If pending, refund the ENTIRE budget to Task Wallet
                 if (task.status === 'Pending') {
                     const baseFee = task.baseFeeCharged || 0;
@@ -1324,7 +1363,6 @@ export const deleteUserTask = async (req, res) => {
                         });
                     }
                 }
-            }
         }
 
         // Clean up pending submissions associated with this deleted campaign
@@ -1348,7 +1386,7 @@ export const deleteUserTask = async (req, res) => {
                     { _id: req.params.id, adminBudgetRefundStatus: 'claimed' },
                     { 
                         $set: { 
-                            status: originalStatus,
+                            status: originalStatus || 'Pending',
                             adminBudgetRefundStatus: 'none', 
                             adminBudgetRefundClaimedAt: null 
                         } 
