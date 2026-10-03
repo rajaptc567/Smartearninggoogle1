@@ -677,7 +677,10 @@ export const updateUserTaskStatus = async (req, res) => {
             const baseFee = task.baseFeeCharged || 0;
             const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
             let adminRefundUSD = 0;
-            if (oldStatus === 'Pending') {
+            if (task.adminBudgetRefundStatus === 'claimed' || task.adminBudgetRefundStatus === 'budget_refunded') {
+                // Authoritative persisted refund amount: once claimed, NEVER recalculate
+                adminRefundUSD = Number((task.adminBudgetRefundAmountUSD || 0).toFixed(2));
+            } else if (oldStatus === 'Pending') {
                 adminRefundUSD = totalRefundUSD;
             } else {
                 const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
@@ -1120,6 +1123,9 @@ export const deleteUserTask = async (req, res) => {
 
             if (task.adminBudgetRefundStatus === 'settled' || originalStatus === 'Rejected') {
                 refundAmountUSD = 0;
+            } else if (task.adminBudgetRefundStatus === 'claimed' || task.adminBudgetRefundStatus === 'budget_refunded') {
+                // Authoritative persisted refund amount: once claimed, NEVER recalculate from status or slots on retry
+                refundAmountUSD = Number((task.adminBudgetRefundAmountUSD || 0).toFixed(2));
             } else if (originalStatus === 'Pending') {
                 const baseFee = task.baseFeeCharged || 0;
                 refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
@@ -1141,8 +1147,22 @@ export const deleteUserTask = async (req, res) => {
                     const isAlreadyCreditedInSetting = Array.isArray(currentSettings.adminCampaignBudget?.processedRefundKeys) &&
                         currentSettings.adminCampaignBudget.processedRefundKeys.includes(refundKey);
 
+                    // Re-read latest UserTask inside transaction to ensure authoritative state
+                    const freshTask = await UserTask.findById(task._id).session(session || null);
+                    if (!freshTask) {
+                        deletionClaimWon = false;
+                        return;
+                    }
+
+                    // Authoritative persisted amount rule: if previously claimed/budget_refunded, use persisted amount
+                    if (freshTask.adminBudgetRefundStatus === 'settled') {
+                        refundAmountUSD = 0;
+                    } else if (freshTask.adminBudgetRefundStatus === 'claimed' || freshTask.adminBudgetRefundStatus === 'budget_refunded') {
+                        refundAmountUSD = Number((freshTask.adminBudgetRefundAmountUSD || refundAmountUSD).toFixed(2));
+                    }
+
                     // Step 1: Atomically claim deletion refund operation on UserTask
-                    if (!isAlreadyCreditedInSetting && task.adminBudgetRefundStatus !== 'budget_refunded') {
+                    if (!isAlreadyCreditedInSetting && freshTask.adminBudgetRefundStatus !== 'budget_refunded') {
                         const claim = await UserTask.findOneAndUpdate(
                             {
                                 _id: task._id,
@@ -1167,6 +1187,32 @@ export const deleteUserTask = async (req, res) => {
 
                         if (!claim) {
                             // Another concurrent delete request is already processing
+                            deletionClaimWon = false;
+                            return;
+                        }
+                    } else if (freshTask.adminBudgetRefundStatus === 'budget_refunded' || isAlreadyCreditedInSetting) {
+                        // Atomic claim for retry/recovery phase: ensure only ONE retry process proceeds with completion
+                        const claimRecovery = await UserTask.findOneAndUpdate(
+                            {
+                                _id: task._id,
+                                fundingSourceType: 'admin_budget',
+                                $or: [
+                                    { adminBudgetRefundClaimedAt: null },
+                                    { adminBudgetRefundClaimedAt: { $lt: new Date(Date.now() - 30000) } },
+                                    { adminBudgetRefundClaimedAt: { $exists: false } }
+                                ]
+                            },
+                            {
+                                $set: {
+                                    status: 'On Hold',
+                                    adminBudgetRefundClaimedAt: new Date(),
+                                    adminBudgetRefundAmountUSD: refundAmountUSD
+                                }
+                            },
+                            { new: true, ...(session ? { session } : {}) }
+                        );
+
+                        if (!claimRecovery) {
                             deletionClaimWon = false;
                             return;
                         }
@@ -1386,7 +1432,7 @@ export const deleteUserTask = async (req, res) => {
                     { _id: req.params.id, adminBudgetRefundStatus: 'claimed' },
                     { 
                         $set: { 
-                            status: originalStatus || 'Pending',
+                            status: (!originalStatus || originalStatus === 'On Hold') ? 'Pending' : originalStatus,
                             adminBudgetRefundStatus: 'none', 
                             adminBudgetRefundClaimedAt: null 
                         } 
