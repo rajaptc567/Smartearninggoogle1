@@ -1,6 +1,7 @@
 
 import Withdrawal from '../models/Withdrawal.js';
 import User from '../models/User.js';
+import Task from '../models/Task.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
@@ -125,6 +126,38 @@ export const createWithdrawal = async (req, res) => {
                     error: 'The Investment Module is currently disabled. Investment withdrawals are unavailable.',
                     code: 'INVESTMENT_MODULE_DISABLED'
                 });
+            }
+        }
+
+        // Prerequisite check: Required Work & Earn engagement tasks for Hub withdrawals
+        if (isHub && settings?.isTasksEnabled !== false) {
+            const requiredTasks = await Task.find({
+                status: 'Active',
+                isRequiredForWithdrawal: true
+            }).select('_id title').lean();
+
+            if (requiredTasks.length > 0) {
+                const approvedTaskIds = new Set(
+                    (user.completedTasks || [])
+                        .filter(ct => ct && ct.status === 'Approved' && ct.taskId)
+                        .map(ct => (ct.taskId?._id ? ct.taskId._id.toString() : ct.taskId.toString()))
+                );
+
+                const incompleteTasks = requiredTasks.filter(
+                    task => !approvedTaskIds.has(task._id.toString())
+                );
+
+                if (incompleteTasks.length > 0) {
+                    return res.status(403).json({
+                        success: false,
+                        error: `Platform security policy requires you to complete all mandatory engagement tasks before withdrawing Work & Earn earnings. Incomplete tasks: ${incompleteTasks.map(t => t.title || 'Untitled Task').join(', ')}.`,
+                        code: 'WITHDRAWAL_TASK_REQUIREMENT',
+                        incompleteTasks: incompleteTasks.map(t => ({
+                            id: t._id,
+                            title: t.title || 'Untitled Task'
+                        }))
+                    });
+                }
             }
         }
 
