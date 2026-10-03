@@ -307,6 +307,7 @@ const WithdrawFunds: React.FC = () => {
     const pendingRequiredTasks = useMemo(() => {
         // If the Task feature is disabled globally, we don't enforce these requirements
         if (!currentUser || !isTasksEnabled) return [];
+
         const approvedTaskIds = new Set(
             (currentUser.completedTasks || [])
                 .filter(ct => ct && ct.status === 'Approved' && ct.taskId)
@@ -315,7 +316,42 @@ const WithdrawFunds: React.FC = () => {
                     return String(tid?._id || tid);
                 })
         );
-        return tasks.filter(t => t.status === 'Active' && t.isRequiredForWithdrawal && !approvedTaskIds.has(String(t._id)));
+
+        const now = new Date();
+        const userCountry = (currentUser.country || '').trim().toLowerCase();
+        const userCurrency = (currentUser.currency || '').trim().toUpperCase();
+
+        return tasks.filter(t => {
+            if (t.status !== 'Active' || !t.isRequiredForWithdrawal) return false;
+
+            // 1. Temporal availability
+            if (t.activeFrom && now < new Date(t.activeFrom)) return false;
+            if (t.activeTo && now > new Date(t.activeTo)) return false;
+
+            // 2. Global completion capacity
+            if (t.maxGlobalCompletions > 0 && (t.currentGlobalCompletions || 0) >= t.maxGlobalCompletions) return false;
+
+            // 3. Country targeting
+            if (Array.isArray(t.targetCountries) && t.targetCountries.length > 0) {
+                if (!userCountry) return false;
+                const matchesCountry = t.targetCountries.some(
+                    c => typeof c === 'string' && c.trim().toLowerCase() === userCountry
+                );
+                if (!matchesCountry) return false;
+            }
+
+            // 4. Currency targeting
+            if (Array.isArray(t.targetCurrencies) && t.targetCurrencies.length > 0) {
+                if (!userCurrency) return false;
+                const matchesCurrency = t.targetCurrencies.some(
+                    c => typeof c === 'string' && c.trim().toUpperCase() === userCurrency
+                );
+                if (!matchesCurrency) return false;
+            }
+
+            // 5. Must NOT be approved yet
+            return !approvedTaskIds.has(String(t._id));
+        });
     }, [tasks, currentUser, isTasksEnabled]);
 
     // --- WORK & EARN CONDITIONAL WITHDRAWAL RULES ENGINE ---

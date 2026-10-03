@@ -134,29 +134,64 @@ export const createWithdrawal = async (req, res) => {
             const requiredTasks = await Task.find({
                 status: 'Active',
                 isRequiredForWithdrawal: true
-            }).select('_id title').lean();
+            }).select('_id title targetCountries targetCurrencies activeFrom activeTo maxGlobalCompletions currentGlobalCompletions').lean();
 
             if (requiredTasks.length > 0) {
-                const approvedTaskIds = new Set(
-                    (user.completedTasks || [])
-                        .filter(ct => ct && ct.status === 'Approved' && ct.taskId)
-                        .map(ct => (ct.taskId?._id ? ct.taskId._id.toString() : ct.taskId.toString()))
-                );
+                const now = new Date();
+                const userCountry = (user.country || '').trim().toLowerCase();
+                const userCurrency = (user.currency || '').trim().toUpperCase();
 
-                const incompleteTasks = requiredTasks.filter(
-                    task => !approvedTaskIds.has(task._id.toString())
-                );
+                const applicableRequiredTasks = requiredTasks.filter(task => {
+                    // 1. Temporal availability
+                    if (task.activeFrom && now < new Date(task.activeFrom)) return false;
+                    if (task.activeTo && now > new Date(task.activeTo)) return false;
 
-                if (incompleteTasks.length > 0) {
-                    return res.status(403).json({
-                        success: false,
-                        error: `Platform security policy requires you to complete all mandatory engagement tasks before withdrawing Work & Earn earnings. Incomplete tasks: ${incompleteTasks.map(t => t.title || 'Untitled Task').join(', ')}.`,
-                        code: 'WITHDRAWAL_TASK_REQUIREMENT',
-                        incompleteTasks: incompleteTasks.map(t => ({
-                            id: t._id,
-                            title: t.title || 'Untitled Task'
-                        }))
-                    });
+                    // 2. Global completion capacity
+                    if (task.maxGlobalCompletions > 0 && (task.currentGlobalCompletions || 0) >= task.maxGlobalCompletions) return false;
+
+                    // 3. Country targeting
+                    if (Array.isArray(task.targetCountries) && task.targetCountries.length > 0) {
+                        if (!userCountry) return false;
+                        const matchesCountry = task.targetCountries.some(
+                            c => typeof c === 'string' && c.trim().toLowerCase() === userCountry
+                        );
+                        if (!matchesCountry) return false;
+                    }
+
+                    // 4. Currency targeting
+                    if (Array.isArray(task.targetCurrencies) && task.targetCurrencies.length > 0) {
+                        if (!userCurrency) return false;
+                        const matchesCurrency = task.targetCurrencies.some(
+                            c => typeof c === 'string' && c.trim().toUpperCase() === userCurrency
+                        );
+                        if (!matchesCurrency) return false;
+                    }
+
+                    return true;
+                });
+
+                if (applicableRequiredTasks.length > 0) {
+                    const approvedTaskIds = new Set(
+                        (user.completedTasks || [])
+                            .filter(ct => ct && ct.status === 'Approved' && ct.taskId)
+                            .map(ct => (ct.taskId?._id ? ct.taskId._id.toString() : ct.taskId.toString()))
+                    );
+
+                    const incompleteTasks = applicableRequiredTasks.filter(
+                        task => !approvedTaskIds.has(task._id.toString())
+                    );
+
+                    if (incompleteTasks.length > 0) {
+                        return res.status(403).json({
+                            success: false,
+                            error: `Platform security policy requires you to complete all mandatory engagement tasks before withdrawing Work & Earn earnings. Incomplete tasks: ${incompleteTasks.map(t => t.title || 'Untitled Task').join(', ')}.`,
+                            code: 'WITHDRAWAL_TASK_REQUIREMENT',
+                            incompleteTasks: incompleteTasks.map(t => ({
+                                id: t._id,
+                                title: t.title || 'Untitled Task'
+                            }))
+                        });
+                    }
                 }
             }
         }
