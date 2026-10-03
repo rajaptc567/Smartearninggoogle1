@@ -343,6 +343,17 @@ export const createUserTask = async (req, res) => {
             await user.save();
         }
 
+        const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
+        const initialStatus = shouldPublishNow ? 'Approved' : 'Pending';
+        const initialHistory = shouldPublishNow ? [{
+            action: 'Approved',
+            previousStatus: 'Pending',
+            newStatus: 'Approved',
+            timestamp: new Date(),
+            performedBy: req.user ? req.user.id.toString() : user._id.toString(),
+            details: 'Admin published campaign immediately upon creation.'
+        }] : [];
+
         const task = await UserTask.create({
             userId: user._id,
             userName: user.username,
@@ -381,7 +392,8 @@ export const createUserTask = async (req, res) => {
             surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
             surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
             surveyConfig: isSurveyTask ? surveyConfig : null,
-            status: 'Pending'
+            status: initialStatus,
+            history: initialHistory
         });
         createdTask = task;
 
@@ -425,12 +437,21 @@ export const createUserTask = async (req, res) => {
 
         // Send Notification to Campaign Creator (non-blocking)
         try {
-            await Notification.create({
-                userId: user._id,
-                subject: 'Campaign Submitted ⏳',
-                message: `Your campaign "${task.title}" has been successfully submitted for Admin approval. It will go live once reviewed.`,
-                senderType: 'System'
-            });
+            if (shouldPublishNow) {
+                await Notification.create({
+                    userId: user._id,
+                    subject: 'Campaign Approved! 🟢',
+                    message: `Congratulations! Your admin campaign "${task.title}" has been published and is now live for workers to complete.`,
+                    senderType: 'System'
+                });
+            } else {
+                await Notification.create({
+                    userId: user._id,
+                    subject: 'Campaign Submitted ⏳',
+                    message: `Your campaign "${task.title}" has been successfully submitted for Admin approval. It will go live once reviewed.`,
+                    senderType: 'System'
+                });
+            }
         } catch (notifErr) {
             console.error('Failed to notify campaign creator of submission:', notifErr);
         }
@@ -464,8 +485,10 @@ export const createUserTask = async (req, res) => {
             for (const admin of admins) {
                 await Notification.create({
                     userId: admin._id,
-                    subject: 'New Campaign Submission 📋',
-                    message: `User @${user.username} has submitted a new campaign "${task.title}" for review.`,
+                    subject: shouldPublishNow ? 'New Campaign Published 🚀' : 'New Campaign Submission 📋',
+                    message: shouldPublishNow
+                        ? `Admin @${user.username} has published a new campaign "${task.title}" directly to live status.`
+                        : `User @${user.username} has submitted a new campaign "${task.title}" for review.`,
                     senderType: 'System'
                 });
             }

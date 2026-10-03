@@ -681,6 +681,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         transferredUSD: number;
         userCurrency: string;
         newTaskWalletUSD: number;
+        isPublishedNow?: boolean;
     } | null>(null);
 
     // Browse Tasks Filter & Pagination State
@@ -1462,8 +1463,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         setRewardPerTask(minPayout);
     }, [category, subType, watchTimeTierIndex, settings]);
 
-    const handleCreateCampaign = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleCreateCampaign = async (e?: React.FormEvent, publishNow: boolean = false) => {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
         setFieldErrors({});
 
         if (!isEnabled) {
@@ -1620,7 +1621,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 alert(`Insufficient Admin Campaign Budget. Required: $${grandTotalUSD.toFixed(2)} USD, Available in Admin Budget: $${adminRemainingBudgetUSD.toFixed(2)} USD. Please allocate more budget in Settings.`);
                 return;
             }
-            await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction);
+            await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction, undefined, undefined, publishNow);
             return;
         }
 
@@ -1654,7 +1655,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             return;
         }
 
-        await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction);
+        await executeTaskCreation(finalTitle, legacyRequireTextProof, legacyTextProofInstruction, legacyRequireUsername, legacyUsernameInstruction, legacyRequireUserId, legacyUserIdInstruction, legacyRequireEmail, legacyEmailInstruction, legacyRequireScreenshot, legacyScreenshotInstruction, undefined, undefined, false);
     };
 
     const executeTaskCreation = async (
@@ -1670,7 +1671,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         requireScreenshotArg?: boolean,
         screenshotInstructionArg?: string,
         transferredUserCurrArg?: number,
-        transferredUSDArg?: number
+        transferredUSDArg?: number,
+        publishNowArg?: boolean
     ) => {
         if (!currentUser) return;
 
@@ -1713,7 +1715,8 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 surveyEstimatedMinutes: isSurveyCampaign ? (surveyConfigData.estimatedTimeMinutes || 3) : undefined,
                 surveyQuestionsCount: isSurveyCampaign ? (surveyConfigData.questions?.length || 0) : undefined,
                 surveyApprovalMode: isSurveyCampaign ? ((surveyConfigData as any).approvalMode || 'auto') : undefined,
-                surveyConfig: isSurveyCampaign ? surveyConfigData : undefined
+                surveyConfig: isSurveyCampaign ? surveyConfigData : undefined,
+                publishNow: Boolean(isAdminMode && publishNowArg === true)
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
             dispatch({ type: 'UPDATE_USER', payload: result.user });
@@ -3074,29 +3077,50 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                 </p>
                             </div>
 
-                            <Button 
-                                type="submit" 
-                                variant="primary" 
-                                isLoading={isSubmitting} 
-                                disabled={isSubmitting || (isAdminMode && (!isAdminBudgetEnabled || isInsufficientAdminBudget))}
-                                className={`w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors ${
-                                    isAdminMode 
-                                        ? (!isAdminBudgetEnabled || isInsufficientAdminBudget)
-                                            ? 'bg-gray-400 cursor-not-allowed text-white'
-                                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                }`}
-                            >
-                                {isSubmitting ? 'Launching...' : isAdminMode ? (
-                                    !isAdminBudgetEnabled 
-                                        ? '⚠️ Admin Budget Disabled' 
-                                        : isInsufficientAdminBudget 
-                                            ? `⚠️ Insufficient Admin Budget ($${adminRemainingBudgetUSD.toFixed(2)} vs $${grandTotalUSD.toFixed(2)} Required)`
-                                            : `🚀 Launch Admin Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`
-                                ) : (
-                                    `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`
-                                )}
-                            </Button>
+                            {isAdminMode ? (
+                                <div className="space-y-3">
+                                    <Button 
+                                        type="button" 
+                                        variant="primary" 
+                                        isLoading={isSubmitting} 
+                                        disabled={isSubmitting || !isAdminBudgetEnabled || isInsufficientAdminBudget}
+                                        onClick={(e) => handleCreateCampaign(e, true)}
+                                        className={`w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors ${
+                                            (!isAdminBudgetEnabled || isInsufficientAdminBudget)
+                                                ? 'bg-gray-400 cursor-not-allowed text-white'
+                                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        }`}
+                                    >
+                                        {isSubmitting ? 'Launching...' : (
+                                            !isAdminBudgetEnabled 
+                                                ? '⚠️ Admin Budget Disabled' 
+                                                : isInsufficientAdminBudget 
+                                                    ? `⚠️ Insufficient Admin Budget ($${adminRemainingBudgetUSD.toFixed(2)} vs $${grandTotalUSD.toFixed(2)} Required)`
+                                                    : `🚀 Publish Now (Live) — Total: $${grandTotalUSD.toFixed(2)} USD`
+                                        )}
+                                    </Button>
+                                    <Button 
+                                        type="button" 
+                                        variant="secondary" 
+                                        isLoading={isSubmitting} 
+                                        disabled={isSubmitting || !isAdminBudgetEnabled || isInsufficientAdminBudget}
+                                        onClick={(e) => handleCreateCampaign(e, false)}
+                                        className="w-full py-3 text-sm font-semibold rounded-xl border border-slate-600 hover:bg-slate-800 text-slate-200 transition-colors"
+                                    >
+                                        {isSubmitting ? 'Saving...' : '💾 Save as Pending (Review Later)'}
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button 
+                                    type="submit" 
+                                    variant="primary" 
+                                    isLoading={isSubmitting} 
+                                    disabled={isSubmitting}
+                                    className="w-full py-3.5 text-sm md:text-base font-bold shadow-md rounded-xl transition-colors bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    {isSubmitting ? 'Launching...' : `🚀 Launch Campaign — Total: $${grandTotalUSD.toFixed(2)} USD`}
+                                </Button>
+                            )}
                         </form>
                     </div>
 
@@ -6950,7 +6974,11 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                             <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Campaign Created Successfully!</h3>
                             <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
                                 {isAdminMode ? (
-                                    <>Your campaign has been successfully created and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
+                                    fundingSuccessModal.isPublishedNow ? (
+                                        <>Your campaign has been successfully <strong>published live</strong> to all eligible workers and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
+                                    ) : (
+                                        <>Your campaign has been successfully saved as <strong>Pending</strong> review and funded directly from the <strong>Admin Campaign Budget</strong> into Campaign Escrow (${grandTotalUSD.toFixed(2)} USD). Personal wallet balances were not deducted.</>
+                                    )
                                 ) : fundingSuccessModal.transferredUserCurr > 0 ? (
                                     <>Successfully transferred <strong className="text-emerald-600 dark:text-emerald-400">{fundingSuccessModal.transferredUserCurr.toFixed(2)} {fundingSuccessModal.userCurrency} (${fundingSuccessModal.transferredUSD.toFixed(2)} USD)</strong> from your Investment Module into your Campaign Wallet, and your campaign has been launched!</>
                                 ) : (
