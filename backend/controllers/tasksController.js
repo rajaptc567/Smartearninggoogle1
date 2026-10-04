@@ -284,11 +284,17 @@ export const completeTask = async (req, res) => {
                             throw err;
                         }
                     } else {
-                        await Task.updateOne(
+                        const updateResult = await Task.updateOne(
                             { _id: task._id, status: 'Active' },
                             { $inc: { currentGlobalCompletions: 1 } },
                             { session }
                         );
+
+                        if (updateResult.modifiedCount !== 1) {
+                            const err = new Error('Task completion could not be registered because the task is no longer active.');
+                            err.statusCode = 400;
+                            throw err;
+                        }
                     }
 
                     // 2. Credit user reward and create ledger transaction inside session
@@ -419,11 +425,17 @@ export const verifyTaskSubmission = async (req, res) => {
                         throw err;
                     }
                 } else {
-                    await Task.updateOne(
+                    const updateResult = await Task.updateOne(
                         { _id: task._id },
                         { $inc: { currentGlobalCompletions: 1 } },
                         { session }
                     );
+
+                    if (updateResult.modifiedCount !== 1) {
+                        const err = new Error('Task completion counter could not be updated.');
+                        err.statusCode = 400;
+                        throw err;
+                    }
                 }
 
                 // 3. Create the Transaction ledger document inside the transaction
