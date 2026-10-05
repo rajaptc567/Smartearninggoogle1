@@ -169,6 +169,28 @@ const UserTaskSchema = new mongoose.Schema({
         type: Number,
         default: 1
     },
+    targeting: {
+        countries: {
+            type: [String],
+            default: []
+        },
+        currencies: {
+            type: [String],
+            default: []
+        },
+        genders: {
+            type: [String],
+            default: []
+        },
+        minAge: {
+            type: Number,
+            default: null
+        },
+        maxAge: {
+            type: Number,
+            default: null
+        }
+    },
     date: {
         type: Date,
         default: Date.now
