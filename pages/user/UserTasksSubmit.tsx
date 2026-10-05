@@ -554,6 +554,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const [customCountryInput, setCustomCountryInput] = useState<string>('');
 
     // Advanced E1 Audience Targeting State
+    const [targetingAudienceType, setTargetingAudienceType] = useState<'all' | 'selected'>('all');
     const [targetingSelectedUserIds, setTargetingSelectedUserIds] = useState<string[]>([]);
     const [selectedUserIdsInput, setSelectedUserIdsInput] = useState<string>('');
     const [targetingAccountStatus, setTargetingAccountStatus] = useState<'any' | 'active' | 'inactive'>('any');
@@ -3178,7 +3179,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             Leave all fields empty to allow all eligible workers.
                                         </p>
                                     </div>
-                                    {(targetingCountries.length > 0 || targetingCurrencies.length > 0 || targetingGenders.length > 0 || minAgeInput !== '' || maxAgeInput !== '') && (
+                                    {(targetingCountries.length > 0 || targetingCurrencies.length > 0 || targetingGenders.length > 0 || minAgeInput !== '' || maxAgeInput !== '' || targetingSelectedUserIds.length > 0 || targetingAudienceType !== 'all') && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -3188,6 +3189,9 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                                 setMinAgeInput('');
                                                 setMaxAgeInput('');
                                                 setCustomCountryInput('');
+                                                setTargetingSelectedUserIds([]);
+                                                setSelectedUserIdsInput('');
+                                                setTargetingAudienceType('all');
                                             }}
                                             className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
                                         >
@@ -3195,6 +3199,81 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         </button>
                                     )}
                                 </div>
+
+                                {/* Audience Type Selector */}
+                                <div className="flex gap-4 py-2 border-b border-gray-100 dark:border-gray-800">
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 font-bold">
+                                        <input 
+                                           type="radio" 
+                                           checked={targetingAudienceType === 'all'} 
+                                           onChange={() => { setTargetingAudienceType('all'); setTargetingSelectedUserIds([]); }} 
+                                           className="accent-blue-600"
+                                        />
+                                        All Eligible Users
+                                    </label>
+                                    <label className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 font-bold">
+                                        <input 
+                                           type="radio" 
+                                           checked={targetingAudienceType === 'selected'} 
+                                           onChange={() => setTargetingAudienceType('selected')} 
+                                           className="accent-blue-600"
+                                        />
+                                        Selected Users
+                                    </label>
+                                </div>
+
+                                {/* Selected Users */}
+                                {targetingAudienceType === 'selected' && (
+                                    <div className="space-y-2 border-l-2 border-blue-500 pl-3 py-1">
+                                        <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Selected User IDs (Max 500)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={selectedUserIdsInput}
+                                                onChange={(e) => setSelectedUserIdsInput(e.target.value)}
+                                                placeholder="Enter User ID and press Enter"
+                                                className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const val = selectedUserIdsInput.trim();
+                                                        if (val && !targetingSelectedUserIds.includes(val) && targetingSelectedUserIds.length < 500) {
+                                                            setTargetingSelectedUserIds(prev => [...prev, val]);
+                                                            setSelectedUserIdsInput('');
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const val = selectedUserIdsInput.trim();
+                                                    if (val && !targetingSelectedUserIds.includes(val) && targetingSelectedUserIds.length < 500) {
+                                                        setTargetingSelectedUserIds(prev => [...prev, val]);
+                                                        setSelectedUserIdsInput('');
+                                                    }
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            {targetingSelectedUserIds.filter(Boolean).map(uid => (
+                                                <span key={uid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold">
+                                                    {uid}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTargetingSelectedUserIds(prev => prev.filter(id => id !== uid))}
+                                                        className="hover:text-red-600 font-extrabold ml-1"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* A. Countries */}
                                 <div className="space-y-2">
