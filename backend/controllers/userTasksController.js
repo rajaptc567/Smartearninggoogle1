@@ -110,6 +110,7 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
     const updatedTask = await UserTask.findOneAndUpdate(
         {
             _id: taskId,
+            status: { $ne: 'Rejected' },
             $expr: { $lt: ['$currentCompletions', '$targetQuantity'] },
             completedUsers: { $ne: workerObjId }
         },
@@ -2673,6 +2674,13 @@ export const updateSubmissionStatus = async (req, res) => {
         let targetSubmission = submission;
 
         if (status === 'Approved' && oldStatus !== 'Approved') {
+            if (task && task.status === 'Rejected') {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Cannot approve submission: the campaign associated with this submission has been rejected.'
+                });
+            }
+
             // First claim completion slot atomically
             const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
             if (!claimedTask) {
