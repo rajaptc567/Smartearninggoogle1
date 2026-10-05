@@ -1,4 +1,5 @@
 
+import mongoose from 'mongoose';
 import Setting from '../models/Setting.js';
 import User from '../models/User.js';
 import UserTask from '../models/UserTask.js';
@@ -341,6 +342,12 @@ export const updateSettings = async (req, res) => {
                     });
                 }
                 const taskIdTrimmed = mReq.requiredTaskId.trim();
+                if (!mongoose.isValidObjectId(taskIdTrimmed)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'The selected required task ID is not a valid identifier.'
+                    });
+                }
                 let taskFound = false;
                 try {
                     const ut = await UserTask.findById(taskIdTrimmed).lean();

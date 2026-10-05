@@ -1435,7 +1435,7 @@ const AdminUserTasks: React.FC = () => {
                                         >
                                             <option value="">-- Select a Task or Survey --</option>
                                             <optgroup label="User Tasks &amp; Surveys">
-                                                {userTasks.map(t => (
+                                                {userTasks.filter(t => t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId).map(t => (
                                                     <option key={t._id} value={t._id}>
                                                         {t.isSurvey ? '[Survey]' : '[Task]'} {t.title} ({t.category})
                                                     </option>
@@ -1443,7 +1443,7 @@ const AdminUserTasks: React.FC = () => {
                                             </optgroup>
                                             {tasks && tasks.length > 0 && (
                                                 <optgroup label="Admin Task Hub Tasks">
-                                                    {tasks.map(t => (
+                                                    {tasks.filter(t => t.status === 'Active' || String(t._id) === mandatoryReqTaskId).map(t => (
                                                         <option key={t._id} value={t._id}>
                                                             [Admin Task] {t.title}
                                                         </option>

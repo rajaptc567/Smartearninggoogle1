@@ -354,6 +354,11 @@ export const createUserTask = async (req, res) => {
             details: 'Admin published campaign immediately upon creation.'
         }] : [];
 
+        const effectiveSurveyVersion = isSurveyTask ? (Number(req.body.surveyVersion || surveyConfig?.version) || 1) : 1;
+        if (isSurveyTask && surveyConfig) {
+            surveyConfig.version = effectiveSurveyVersion;
+        }
+
         const task = await UserTask.create({
             userId: user._id,
             userName: user.username,
@@ -392,7 +397,7 @@ export const createUserTask = async (req, res) => {
             surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
             surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
             surveyConfig: isSurveyTask ? surveyConfig : null,
-            surveyVersion: isSurveyTask ? (Number(req.body.surveyVersion || surveyConfig?.version) || 1) : 1,
+            surveyVersion: effectiveSurveyVersion,
             status: initialStatus,
             history: initialHistory
         });
@@ -903,6 +908,21 @@ export const updateUserTaskStatus = async (req, res) => {
 
         task.status = requestedStatus;
         if (adminNotes !== undefined) task.adminNotes = adminNotes;
+
+        if (req.body.surveyVersion !== undefined) {
+            const sv = Math.max(1, parseInt(req.body.surveyVersion, 10) || 1);
+            task.surveyVersion = sv;
+            if (task.surveyConfig) {
+                task.surveyConfig.version = sv;
+                task.markModified('surveyConfig');
+            }
+        } else if (req.body.surveyConfig && typeof req.body.surveyConfig === 'object') {
+            task.surveyConfig = req.body.surveyConfig;
+            if (req.body.surveyConfig.version) {
+                task.surveyVersion = Math.max(1, parseInt(req.body.surveyConfig.version, 10) || 1);
+            }
+            task.markModified('surveyConfig');
+        }
 
         // Clear reviewRequested if status changed by admin/creator
         if (requestedStatus === 'Approved' || requestedStatus === 'Rejected') {
@@ -2038,7 +2058,7 @@ export const submitUserTaskProof = async (req, res) => {
             surveyQualificationStatus: isSurveyTask ? surveyQualificationStatus : 'Completed',
             attentionCheckPassed: isSurveyTask ? attentionCheckPassed : true,
             consentAgreed: isSurveyTask ? consentAgreed : true,
-            surveyVersion: isSurveyTask ? (task.surveyConfig?.version || task.surveyVersion || 1) : 1,
+            surveyVersion: isSurveyTask ? (Number(task.surveyVersion || task.surveyConfig?.version) || 1) : 1,
             checkQuestionResults: isSurveyTask ? checkQuestionResults : [],
             qualityFlags: isSurveyTask ? qualityFlags : [],
             qualityScore: isSurveyTask ? qualityScore : 100,

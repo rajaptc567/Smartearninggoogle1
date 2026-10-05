@@ -260,46 +260,31 @@ export const createWithdrawal = async (req, res) => {
                     } catch (_) {}
 
                     if (adminTask) {
-                        const now = new Date();
-                        const userCountry = (user.country || '').trim().toLowerCase();
-                        const userCurrency = (user.currency || '').trim().toUpperCase();
-
-                        let isApplicable = true;
-                        if (adminTask.status !== 'Active') isApplicable = false;
-                        if (adminTask.activeFrom && now < new Date(adminTask.activeFrom)) isApplicable = false;
-                        if (adminTask.activeTo && now > new Date(adminTask.activeTo)) isApplicable = false;
-                        if (adminTask.maxGlobalCompletions > 0 && (adminTask.currentGlobalCompletions || 0) >= adminTask.maxGlobalCompletions) isApplicable = false;
-                        if (Array.isArray(adminTask.targetCountries) && adminTask.targetCountries.length > 0) {
-                            if (!userCountry || !adminTask.targetCountries.some(c => typeof c === 'string' && c.trim().toLowerCase() === userCountry)) {
-                                isApplicable = false;
-                            }
+                        const approved = (user.completedTasks || []).some(
+                            ct => ct && ct.status === 'Approved' && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
+                        );
+                        if (!approved) {
+                            return res.status(403).json({
+                                success: false,
+                                error: `Platform security policy requires you to complete the mandatory task "${adminTask.title}" before withdrawing Work & Earn earnings.`,
+                                code: 'MANDATORY_REQUIREMENT_UNMET',
+                                mandatoryRequirement: {
+                                    type: 'task',
+                                    taskId: adminTask._id,
+                                    taskTitle: adminTask.title,
+                                    submissionStatus: (user.completedTasks || []).find(
+                                        ct => ct && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
+                                    )?.status || 'Not Started'
+                                }
+                            });
                         }
-                        if (Array.isArray(adminTask.targetCurrencies) && adminTask.targetCurrencies.length > 0) {
-                            if (!userCurrency || !adminTask.targetCurrencies.some(c => typeof c === 'string' && c.trim().toUpperCase() === userCurrency)) {
-                                isApplicable = false;
-                            }
-                        }
-
-                        if (isApplicable) {
-                            const approved = (user.completedTasks || []).some(
-                                ct => ct && ct.status === 'Approved' && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
-                            );
-                            if (!approved) {
-                                return res.status(403).json({
-                                    success: false,
-                                    error: `Platform security policy requires you to complete the mandatory task "${adminTask.title}" before withdrawing Work & Earn earnings.`,
-                                    code: 'MANDATORY_REQUIREMENT_UNMET',
-                                    mandatoryRequirement: {
-                                        type: 'task',
-                                        taskId: adminTask._id,
-                                        taskTitle: adminTask.title,
-                                        submissionStatus: (user.completedTasks || []).find(
-                                            ct => ct && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
-                                        )?.status || 'Not Started'
-                                    }
-                                });
-                            }
-                        }
+                    } else {
+                        // Neither UserTask nor Task exists!
+                        return res.status(503).json({
+                            success: false,
+                            error: 'The mandatory withdrawal requirement is currently unavailable. Please contact support.',
+                            code: 'MANDATORY_REQUIREMENT_CONFIG_INVALID'
+                        });
                     }
                 }
             }
