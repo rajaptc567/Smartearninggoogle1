@@ -99,6 +99,63 @@ const toWorkerSafeUserTask = (task) => {
     return safeTask;
 };
 
+// Concurrency-safe atomic completion slot claiming (Phase D-3)
+const claimTaskCompletionSlot = async (taskId, workerId) => {
+    if (!taskId || !workerId) return null;
+
+    const workerObjId = mongoose.Types.ObjectId.isValid(workerId)
+        ? new mongoose.Types.ObjectId(workerId)
+        : workerId;
+
+    const updatedTask = await UserTask.findOneAndUpdate(
+        {
+            _id: taskId,
+            $expr: { $lt: ['$currentCompletions', '$targetQuantity'] },
+            completedUsers: { $ne: workerObjId }
+        },
+        {
+            $inc: { currentCompletions: 1 },
+            $addToSet: { completedUsers: workerObjId }
+        },
+        { new: true }
+    );
+
+    if (updatedTask && updatedTask.currentCompletions >= updatedTask.targetQuantity && updatedTask.status !== 'Completed') {
+        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Completed' } });
+        updatedTask.status = 'Completed';
+    }
+
+    return updatedTask;
+};
+
+// Compensation helper to release a slot if subsequent submission processing fails
+const releaseTaskCompletionSlot = async (taskId, workerId) => {
+    if (!taskId || !workerId) return null;
+
+    const workerObjId = mongoose.Types.ObjectId.isValid(workerId)
+        ? new mongoose.Types.ObjectId(workerId)
+        : workerId;
+
+    const updatedTask = await UserTask.findOneAndUpdate(
+        {
+            _id: taskId,
+            completedUsers: workerObjId
+        },
+        {
+            $inc: { currentCompletions: -1 },
+            $pull: { completedUsers: workerObjId }
+        },
+        { new: true }
+    );
+
+    if (updatedTask && updatedTask.status === 'Completed' && updatedTask.currentCompletions < updatedTask.targetQuantity) {
+        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Approved' } });
+        updatedTask.status = 'Approved';
+    }
+
+    return updatedTask;
+};
+
 export const getUserTasks = async (req, res) => {
     try {
         if (!req.user) {
@@ -1702,8 +1759,14 @@ const autoApproveStaleSubmissions = async () => {
         });
 
         for (const submission of staleSubmissions) {
+            const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
+            if (!claimedTask) {
+                // Target completion limit reached or worker already completed. Skip auto-approval/rewarding.
+                continue;
+            }
+
             const updatedSub = await UserTaskSubmission.findOneAndUpdate(
-                { _id: submission._id, rewardClaimed: false },
+                { _id: submission._id, rewardClaimed: { $ne: true } },
                 {
                     $set: {
                         status: 'Approved',
@@ -1719,15 +1782,10 @@ const autoApproveStaleSubmissions = async () => {
                 { new: true }
             );
 
-            if (!updatedSub) continue;
-
-            const task = await UserTask.findById(updatedSub.taskId);
-            if (task && task.currentCompletions < task.targetQuantity) {
-                task.currentCompletions += 1;
-                if (task.currentCompletions >= task.targetQuantity) {
-                    task.status = 'Completed';
-                }
-                await task.save();
+            if (!updatedSub) {
+                // Submission was already claimed/rewarded in parallel; revert claimed completion slot
+                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                continue;
             }
 
             const worker = await User.findById(updatedSub.workerId);
@@ -1771,8 +1829,14 @@ const autoApproveStaleSubmissions = async () => {
         });
 
         for (const submission of staleDisputed) {
+            const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
+            if (!claimedTask) {
+                // Target completion limit reached or worker already completed. Skip auto-approval/rewarding.
+                continue;
+            }
+
             const updatedSub = await UserTaskSubmission.findOneAndUpdate(
-                { _id: submission._id, rewardClaimed: false },
+                { _id: submission._id, rewardClaimed: { $ne: true } },
                 {
                     $set: {
                         status: 'Approved',
@@ -1789,7 +1853,11 @@ const autoApproveStaleSubmissions = async () => {
                 { new: true }
             );
 
-            if (!updatedSub) continue;
+            if (!updatedSub) {
+                // Submission was already claimed/rewarded in parallel; revert claimed completion slot
+                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                continue;
+            }
 
             // Mark Dispute document as resolved/closed
             if (updatedSub.disputeId) {
@@ -1798,15 +1866,6 @@ const autoApproveStaleSubmissions = async () => {
                     verdict: 'ReleaseToWorker',
                     adminResponse: 'Auto-approved because creator did not review dispute in time.'
                 });
-            }
-
-            const task = await UserTask.findById(updatedSub.taskId);
-            if (task && task.currentCompletions < task.targetQuantity) {
-                task.currentCompletions += 1;
-                if (task.currentCompletions >= task.targetQuantity) {
-                    task.status = 'Completed';
-                }
-                await task.save();
             }
 
             const worker = await User.findById(updatedSub.workerId);
@@ -2212,43 +2271,45 @@ export const submitUserTaskProof = async (req, res) => {
 
         // If survey task and autoApproval conditions met, auto-approve and credit worker immediately
         if (canAutoApprove) {
-            submission.status = 'Approved';
-            submission.paid = true;
-            submission.rewardClaimed = true;
-            submission.rewardPaidAt = new Date();
-            submission.isAutoApproved = true;
-            submission.autoApproved = true;
-            submission.approvalType = 'auto';
-            submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
-            await submission.save();
+            const claimedTask = await claimTaskCompletionSlot(task._id, worker._id);
+            if (claimedTask) {
+                submission.status = 'Approved';
+                submission.paid = true;
+                submission.rewardClaimed = true;
+                submission.rewardPaidAt = new Date();
+                submission.isAutoApproved = true;
+                submission.autoApproved = true;
+                submission.approvalType = 'auto';
+                submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
+                await submission.save();
 
-            if (task.currentCompletions < task.targetQuantity) {
-                task.currentCompletions += 1;
-                if (task.currentCompletions >= task.targetQuantity) {
-                    task.status = 'Completed';
-                }
-                await task.save();
+                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
+                await worker.save();
+
+                const tx = await Transaction.create({
+                    userId: worker._id,
+                    userName: worker.username,
+                    currency: 'USD',
+                    type: 'Survey Reward',
+                    amount: task.rewardPerTask,
+                    amountUSD: task.rewardPerTask,
+                    campaignId: task._id,
+                    submissionId: submission._id,
+                    sourceWallet: 'CampaignEscrow',
+                    destinationWallet: 'TaskEarnings',
+                    description: `Earned reward for completing survey: "${task.title}"`,
+                    status: 'Approved'
+                });
+                submission.rewardTransactionId = tx._id;
+                await submission.save();
+            } else {
+                // Capacity limit reached or worker already completed task. Keep submission as Pending.
+                submission.status = 'Pending';
+                submission.paid = false;
+                submission.rewardClaimed = false;
+                submission.adminNotes = 'Survey completed, but campaign target completions limit was reached.';
+                await submission.save();
             }
-
-            worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
-            await worker.save();
-
-            const tx = await Transaction.create({
-                userId: worker._id,
-                userName: worker.username,
-                currency: 'USD',
-                type: 'Survey Reward',
-                amount: task.rewardPerTask,
-                amountUSD: task.rewardPerTask,
-                campaignId: task._id,
-                submissionId: submission._id,
-                sourceWallet: 'CampaignEscrow',
-                destinationWallet: 'TaskEarnings',
-                description: `Earned reward for completing survey: "${task.title}"`,
-                status: 'Approved'
-            });
-            submission.rewardTransactionId = tx._id;
-            await submission.save();
         } else if (isScreenout && allowScreeningReward && attentionCheckPassed && checkQuestionsPassed) {
             // Screenout Micro-Reward Automation
             const rawConfiguredReward = settings.surveyConfig?.rateRules?.screeningRewardAmount ?? 
@@ -2453,6 +2514,15 @@ export const updateSubmissionStatus = async (req, res) => {
         let targetSubmission = submission;
 
         if (status === 'Approved' && oldStatus !== 'Approved') {
+            // First claim completion slot atomically
+            const claimedTask = await claimTaskCompletionSlot(submission.taskId, submission.workerId);
+            if (!claimedTask) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Cannot approve submission: campaign target completion limit has been reached.'
+                });
+            }
+
             // Atomic update to claim reward idempotently
             const updatedSub = await UserTaskSubmission.findOneAndUpdate(
                 { _id: req.params.subId, rewardClaimed: { $ne: true } },
@@ -2470,7 +2540,8 @@ export const updateSubmissionStatus = async (req, res) => {
             );
 
             if (!updatedSub) {
-                // Reward was ALREADY claimed or approved. Return existing submission record safely.
+                // Reward was ALREADY claimed or approved. Revert claimed slot and return existing submission record safely.
+                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
                 const currentSub = await UserTaskSubmission.findById(req.params.subId);
                 return res.status(200).json({ success: true, data: currentSub, task: task || null, message: 'Submission already processed or rewarded.' });
             }
@@ -2490,16 +2561,6 @@ export const updateSubmissionStatus = async (req, res) => {
                         verdict: 'ReleaseToWorker',
                         adminResponse: 'Resolved directly by the campaign creator.'
                     });
-                }
-            }
-
-            if (task) {
-                if (task.currentCompletions < task.targetQuantity) {
-                    task.currentCompletions += 1;
-                    if (task.currentCompletions >= task.targetQuantity) {
-                        task.status = 'Completed';
-                    }
-                    await task.save();
                 }
             }
 
