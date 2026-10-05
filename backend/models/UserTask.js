@@ -189,7 +189,31 @@ const UserTaskSchema = new mongoose.Schema({
         maxAge: {
             type: Number,
             default: null
-        }
+        },
+        selectedUserIds: {
+            type: [String],
+            default: []
+        },
+        accountStatus: {
+            type: String,
+            enum: ['any', 'active', 'inactive'],
+            default: 'any'
+        },
+        completionRules: [{
+            taskId: { type: String, required: true },
+            completed: { type: Boolean, required: true }
+        }],
+        profileRules: [{
+            fieldKey: { type: String, required: true },
+            operator: { type: String, required: true },
+            value: { type: mongoose.Schema.Types.Mixed, required: true }
+        }],
+        surveyAnswerRules: [{
+            taskId: { type: String, required: true },
+            questionId: { type: String, required: true },
+            operator: { type: String, required: true },
+            value: { type: mongoose.Schema.Types.Mixed, required: true }
+        }]
     },
     date: {
         type: Date,

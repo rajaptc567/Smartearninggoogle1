@@ -185,6 +185,34 @@ export const getUserTasks = async (req, res) => {
         }
 
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
+
+        // E1: Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
+        const referencedTaskIdsSet = new Set();
+        for (const task of tasks) {
+            const t = task.targeting;
+            if (t) {
+                if (Array.isArray(t.completionRules)) {
+                    for (const cr of t.completionRules) {
+                        if (cr.taskId) referencedTaskIdsSet.add(cr.taskId);
+                    }
+                }
+                if (Array.isArray(t.surveyAnswerRules)) {
+                    for (const sr of t.surveyAnswerRules) {
+                        if (sr.taskId) referencedTaskIdsSet.add(sr.taskId);
+                    }
+                }
+            }
+        }
+
+        let workerSubmissions = [];
+        if (referencedTaskIdsSet.size > 0) {
+            workerSubmissions = await UserTaskSubmission.find({
+                workerId: user._id,
+                taskId: { $in: Array.from(referencedTaskIdsSet) }
+            }).lean();
+        }
+        const eligibilityContext = { submissions: workerSubmissions };
+
         const filteredTasks = [];
 
         for (const task of tasks) {
@@ -196,7 +224,7 @@ export const getUserTasks = async (req, res) => {
                 const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
                 const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
 
-                if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task)) {
+                if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task, eligibilityContext)) {
                     // Return sanitized worker-safe task for eligible non-owner
                     filteredTasks.push(toWorkerSafeUserTask(task));
                 }
@@ -549,7 +577,70 @@ export const createUserTask = async (req, res) => {
                     }
                 }
 
-                normalizedTargeting = { countries, currencies, genders, minAge, maxAge };
+                // Advanced E1 Targeting Fields normalization & security validation
+                const selectedUserIds = Array.isArray(rawTargeting.selectedUserIds)
+                    ? Array.from(new Set(rawTargeting.selectedUserIds.map(id => String(id).trim()).filter(id => id.length > 0))).slice(0, 500)
+                    : [];
+
+                const validAccountStatuses = ['any', 'active', 'inactive'];
+                const accountStatus = validAccountStatuses.includes(String(rawTargeting.accountStatus || '').toLowerCase())
+                    ? String(rawTargeting.accountStatus).toLowerCase()
+                    : 'any';
+
+                const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+                const bannedProfileKeys = ['__proto__', 'constructor', 'prototype', 'username', 'email', 'password', 'role', 'phone', 'whatsapp', 'country', 'address', 'city', 'postalCode', 'telegram', 'gender', 'dateOfBirth', 'currency', 'walletBalance', 'taskWalletBalance', 'taskEarningsBalance', 'status', 'restrictions'];
+
+                const completionRules = Array.isArray(rawTargeting.completionRules)
+                    ? rawTargeting.completionRules
+                        .map(rule => ({
+                            taskId: String(rule?.taskId || '').trim(),
+                            completed: Boolean(rule?.completed)
+                        }))
+                        .filter(rule => rule.taskId.length > 0)
+                        .slice(0, 20)
+                    : [];
+
+                const profileRules = Array.isArray(rawTargeting.profileRules)
+                    ? rawTargeting.profileRules
+                        .map(rule => {
+                            const fieldKey = String(rule?.fieldKey || '').trim();
+                            const operator = String(rule?.operator || '').trim().toLowerCase();
+                            const value = rule?.value;
+                            if (!fieldKey || !validOperators.includes(operator)) return null;
+                            if (/[.$]/.test(fieldKey)) return null; // reject dot or dollar
+                            if (bannedProfileKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) return null; // reject protected core fields
+                            return { fieldKey, operator, value };
+                        })
+                        .filter(Boolean)
+                        .slice(0, 20)
+                    : [];
+
+                const surveyAnswerRules = Array.isArray(rawTargeting.surveyAnswerRules)
+                    ? rawTargeting.surveyAnswerRules
+                        .map(rule => {
+                            const taskId = String(rule?.taskId || '').trim();
+                            const questionId = String(rule?.questionId || '').trim();
+                            const operator = String(rule?.operator || '').trim().toLowerCase();
+                            const value = rule?.value;
+                            if (!taskId || !questionId || !validOperators.includes(operator)) return null;
+                            return { taskId, questionId, operator, value };
+                        })
+                        .filter(Boolean)
+                        .slice(0, 20)
+                    : [];
+
+                normalizedTargeting = {
+                    countries,
+                    currencies,
+                    genders,
+                    minAge,
+                    maxAge,
+                    selectedUserIds,
+                    accountStatus,
+                    completionRules,
+                    profileRules,
+                    surveyAnswerRules
+                };
             }
 
             const [task] = await UserTask.create([{
@@ -2254,10 +2345,31 @@ export const submitUserTaskProof = async (req, res) => {
         const worker = await User.findById(workerId);
         if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
 
-        // Audience Targeting Enforcement (Phase D-2A)
+        // Audience Targeting Enforcement (Phase D-2A & E1)
         const isOwner = task.userId && String(task.userId) === String(worker._id);
         if (!isOwner) {
-            const isEligible = isUserEligibleForUserTask(worker, task);
+            const referencedTaskIds = [];
+            const t = task.targeting || {};
+            if (Array.isArray(t.completionRules)) {
+                for (const cr of t.completionRules) {
+                    if (cr.taskId) referencedTaskIds.push(cr.taskId);
+                }
+            }
+            if (Array.isArray(t.surveyAnswerRules)) {
+                for (const sr of t.surveyAnswerRules) {
+                    if (sr.taskId) referencedTaskIds.push(sr.taskId);
+                }
+            }
+
+            let workerSubmissions = [];
+            if (referencedTaskIds.length > 0) {
+                workerSubmissions = await UserTaskSubmission.find({
+                    workerId: worker._id,
+                    taskId: { $in: referencedTaskIds }
+                }).lean();
+            }
+
+            const isEligible = isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions });
             if (!isEligible) {
                 return res.status(403).json({
                     success: false,

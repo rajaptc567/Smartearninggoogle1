@@ -13,13 +13,6 @@
  *   and evaluate to false without throwing unhandled runtime exceptions.
  */
 
-/**
- * Calculates a user's chronological age in integer years given their date of birth.
- * 
- * @param {string|Date} dateOfBirth - User's date of birth
- * @param {Date} [referenceDate] - Comparison timestamp (defaults to current time)
- * @returns {number|null} Age in full completed years, or null if date is missing/invalid/future
- */
 export const calculateUserAge = (dateOfBirth, referenceDate = new Date()) => {
     if (!dateOfBirth) return null;
     const dob = (dateOfBirth instanceof Date) ? dateOfBirth : new Date(dateOfBirth);
@@ -29,7 +22,6 @@ export const calculateUserAge = (dateOfBirth, referenceDate = new Date()) => {
     const ref = (referenceDate instanceof Date) ? referenceDate : new Date(referenceDate);
     if (isNaN(ref.getTime())) return null;
 
-    // Date of birth cannot be in the future
     if (dob > ref) return null;
 
     let age = ref.getFullYear() - dob.getFullYear();
@@ -41,13 +33,6 @@ export const calculateUserAge = (dateOfBirth, referenceDate = new Date()) => {
     return (typeof age === 'number' && Number.isFinite(age) && age >= 0) ? age : null;
 };
 
-/**
- * Validates an age limit specification.
- * Returns:
- * - null if unconfigured (null, undefined, '')
- * - number if valid non-negative finite integer
- * - 'INVALID' if value is malformed (negative, NaN, non-finite, etc.)
- */
 const parseAgeLimit = (val) => {
     if (val === null || val === undefined || val === '') return null;
     const num = Number(val);
@@ -57,28 +42,80 @@ const parseAgeLimit = (val) => {
     return num;
 };
 
+const evaluateCondition = (actualValue, operator, expectedValue) => {
+    const op = String(operator || 'equals').trim().toLowerCase();
+    const hasActual = actualValue !== undefined && actualValue !== null && actualValue !== '';
+
+    if (!hasActual) {
+        if (op === 'not_equals' || op === 'not_contains' || op === 'not_in') return true;
+        return false;
+    }
+
+    const actStr = String(actualValue).trim().toLowerCase();
+    const expStr = expectedValue !== undefined && expectedValue !== null ? String(expectedValue).trim().toLowerCase() : '';
+
+    switch (op) {
+        case 'equals':
+            if (Array.isArray(actualValue)) {
+                return actualValue.some(v => String(v).trim().toLowerCase() === expStr);
+            }
+            return actStr === expStr || (Number(actualValue) === Number(expectedValue) && !isNaN(Number(actualValue)));
+        
+        case 'not_equals':
+            if (Array.isArray(actualValue)) {
+                return !actualValue.some(v => String(v).trim().toLowerCase() === expStr);
+            }
+            return actStr !== expStr && (Number(actualValue) !== Number(expectedValue) || isNaN(Number(actualValue)));
+
+        case 'contains':
+            if (Array.isArray(actualValue)) {
+                return actualValue.some(v => String(v).trim().toLowerCase().includes(expStr));
+            }
+            return actStr.includes(expStr);
+
+        case 'not_contains':
+            if (Array.isArray(actualValue)) {
+                return !actualValue.some(v => String(v).trim().toLowerCase().includes(expStr));
+            }
+            return !actStr.includes(expStr);
+
+        case 'in':
+            if (Array.isArray(expectedValue)) {
+                return expectedValue.map(v => String(v).trim().toLowerCase()).includes(actStr);
+            }
+            return actStr === expStr;
+
+        case 'not_in':
+            if (Array.isArray(expectedValue)) {
+                return !expectedValue.map(v => String(v).trim().toLowerCase()).includes(actStr);
+            }
+            return actStr !== expStr;
+
+        default:
+            return false;
+    }
+};
+
 /**
  * Evaluates whether a worker/user satisfies the targeting constraints of a UserTask.
  * Pure function: performs no database queries or network requests.
  * 
- * @param {Object} user - The user object containing country, currency, gender, dateOfBirth
+ * @param {Object} user - The user object containing country, currency, gender, dateOfBirth, status, customFields
  * @param {Object} userTask - The UserTask or survey object containing optional targeting
+ * @param {Object} [context] - Optional preloaded data (e.g. submissions) for advanced evaluation
  * @returns {boolean} True if the user is eligible to view/participate in the task
  */
-export const isUserEligibleForUserTask = (user, userTask) => {
-    // A null/undefined user cannot satisfy targeting rules
+export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
     if (!user) return false;
 
-    // If task is missing or has no targeting configuration, audience is unrestricted
     const targeting = userTask?.targeting;
     if (!targeting || typeof targeting !== 'object') {
         return true;
     }
 
-    const { countries, currencies, genders, minAge, maxAge } = targeting;
+    const { countries, currencies, genders, minAge, maxAge, selectedUserIds, accountStatus, completionRules, profileRules, surveyAnswerRules } = targeting;
 
     // 1. Country Targeting
-    // If countries array is configured with one or more non-empty strings, user's country must match
     if (Array.isArray(countries) && countries.length > 0) {
         const cleanCountries = countries
             .filter(c => typeof c === 'string' && c.trim().length > 0)
@@ -93,7 +130,6 @@ export const isUserEligibleForUserTask = (user, userTask) => {
     }
 
     // 2. Currency Targeting
-    // If currencies array is configured with one or more non-empty strings, user's currency must match
     if (Array.isArray(currencies) && currencies.length > 0) {
         const cleanCurrencies = currencies
             .filter(c => typeof c === 'string' && c.trim().length > 0)
@@ -108,7 +144,6 @@ export const isUserEligibleForUserTask = (user, userTask) => {
     }
 
     // 3. Gender Targeting
-    // If genders array is configured with one or more non-empty strings, user's gender must match
     if (Array.isArray(genders) && genders.length > 0) {
         const cleanGenders = genders
             .filter(g => typeof g === 'string' && g.trim().length > 0)
@@ -126,12 +161,10 @@ export const isUserEligibleForUserTask = (user, userTask) => {
     const parsedMinAge = parseAgeLimit(minAge);
     const parsedMaxAge = parseAgeLimit(maxAge);
 
-    // Fail-safe against malformed age configurations
     if (parsedMinAge === 'INVALID' || parsedMaxAge === 'INVALID') {
         return false;
     }
 
-    // If both minAge and maxAge are configured, minAge must not exceed maxAge
     if (parsedMinAge !== null && parsedMaxAge !== null && parsedMinAge > parsedMaxAge) {
         return false;
     }
@@ -139,10 +172,7 @@ export const isUserEligibleForUserTask = (user, userTask) => {
     const hasAgeRestriction = parsedMinAge !== null || parsedMaxAge !== null;
 
     if (hasAgeRestriction) {
-        // Calculate user age from dateOfBirth
         const userAge = calculateUserAge(user.dateOfBirth);
-
-        // When an age restriction exists, a missing, invalid, or future DOB cannot be verified
         if (userAge === null) {
             return false;
         }
@@ -156,7 +186,77 @@ export const isUserEligibleForUserTask = (user, userTask) => {
         }
     }
 
-    // All configured targeting criteria passed (or were unconfigured)
+    // 5. Selected Users Targeting
+    if (Array.isArray(selectedUserIds) && selectedUserIds.length > 0) {
+        const userIdStr = String(user._id || user.id || '');
+        const cleanSelected = selectedUserIds.map(id => String(id).trim());
+        if (!userIdStr || !cleanSelected.includes(userIdStr)) {
+            return false;
+        }
+    }
+
+    // 6. Account Status Targeting
+    const statusRule = String(accountStatus || 'any').trim().toLowerCase();
+    if (statusRule === 'active' && user.status !== 'Active') {
+        return false;
+    }
+    if (statusRule === 'inactive' && user.status === 'Active') {
+        return false;
+    }
+
+    // 7. Completion Rules (AND logic)
+    if (Array.isArray(completionRules) && completionRules.length > 0) {
+        const submissions = Array.isArray(context.submissions) ? context.submissions : [];
+        for (const rule of completionRules) {
+            const targetTaskId = String(rule.taskId || '');
+            const mustBeCompleted = Boolean(rule.completed);
+
+            const matchingSub = submissions.find(s => {
+                const sTaskId = String(s.taskId || s.task?._id || '');
+                const isMatchTask = sTaskId === targetTaskId;
+                const isSuccessful = s.status === 'Approved' || s.status === 'Paid' || s.status === 'Completed' || s.paid === true || s.rewardClaimed === true;
+                return isMatchTask && isSuccessful;
+            });
+
+            const hasCompleted = Boolean(matchingSub);
+            if (mustBeCompleted && !hasCompleted) return false;
+            if (!mustBeCompleted && hasCompleted) return false;
+        }
+    }
+
+    // 8. Profile Rules (AND logic)
+    if (Array.isArray(profileRules) && profileRules.length > 0) {
+        const customFields = user.customFields || {};
+        for (const rule of profileRules) {
+            const fieldKey = String(rule.fieldKey || '').trim();
+            if (!fieldKey) continue;
+
+            const attrObj = customFields[fieldKey];
+            const attrVal = (attrObj && typeof attrObj === 'object' && 'value' in attrObj) ? attrObj.value : attrObj;
+
+            const matches = evaluateCondition(attrVal, rule.operator, rule.value);
+            if (!matches) return false;
+        }
+    }
+
+    // 9. Survey Answer Rules (AND logic)
+    if (Array.isArray(surveyAnswerRules) && surveyAnswerRules.length > 0) {
+        const submissions = Array.isArray(context.submissions) ? context.submissions : [];
+        for (const rule of surveyAnswerRules) {
+            const targetTaskId = String(rule.taskId || '');
+            const questionId = String(rule.questionId || '');
+            if (!targetTaskId || !questionId) continue;
+
+            const sub = submissions.find(s => String(s.taskId || s.task?._id || '') === targetTaskId);
+            const surveyResponses = Array.isArray(sub?.surveyResponses) ? sub.surveyResponses : [];
+            const resp = surveyResponses.find(r => String(r?.questionId || '') === questionId);
+            const respVal = resp ? resp.value : undefined;
+
+            const matches = evaluateCondition(respVal, rule.operator, rule.value);
+            if (!matches) return false;
+        }
+    }
+
     return true;
 };
 

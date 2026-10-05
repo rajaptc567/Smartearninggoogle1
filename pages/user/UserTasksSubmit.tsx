@@ -553,6 +553,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
     const [maxAgeInput, setMaxAgeInput] = useState<number | string | null>('');
     const [customCountryInput, setCustomCountryInput] = useState<string>('');
 
+    // Advanced E1 Audience Targeting State
+    const [targetingSelectedUserIds, setTargetingSelectedUserIds] = useState<string[]>([]);
+    const [targetingAccountStatus, setTargetingAccountStatus] = useState<'any' | 'active' | 'inactive'>('any');
+    const [targetingCompletionRules, setTargetingCompletionRules] = useState<Array<{ taskId: string; completed: boolean }>>([]);
+    const [targetingProfileRules, setTargetingProfileRules] = useState<Array<{ fieldKey: string; operator: string; value: any }>>([]);
+    const [targetingSurveyAnswerRules, setTargetingSurveyAnswerRules] = useState<Array<{ taskId: string; questionId: string; operator: string; value: any }>>([]);
+
     // Survey Campaign Builder State
     const [surveyConfigData, setSurveyConfigData] = useState<SurveyConfigData>({
         category: 'General Opinion Poll',
@@ -1760,7 +1767,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             currencies: cleanCurrencies,
             genders: cleanGenders,
             minAge: pMinAge,
-            maxAge: pMaxAge
+            maxAge: pMaxAge,
+            selectedUserIds: targetingSelectedUserIds,
+            accountStatus: targetingAccountStatus,
+            completionRules: targetingCompletionRules.filter(r => r.taskId.trim()),
+            profileRules: targetingProfileRules.filter(r => r.fieldKey.trim()),
+            surveyAnswerRules: targetingSurveyAnswerRules.filter(r => r.taskId.trim() && r.questionId.trim())
         };
 
         setIsSubmitting(true);
@@ -3359,6 +3371,208 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                             />
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Advanced Audience Targeting Section (E1) */}
+                            <div className="p-4 md:p-5 rounded-xl bg-slate-900/40 border border-slate-700/60 space-y-4">
+                                <div>
+                                    <h5 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                                        <span>⚡</span> Advanced Audience Targeting (E1 Rules)
+                                    </h5>
+                                    <p className="text-[11px] text-slate-400">
+                                        All active rules below are combined using <strong className="text-blue-400 font-bold">AND</strong> logic.
+                                    </p>
+                                </div>
+
+                                {/* Account Status */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-300 mb-1">Account Status Requirement</label>
+                                    <select
+                                        value={targetingAccountStatus}
+                                        onChange={(e) => setTargetingAccountStatus(e.target.value as any)}
+                                        className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                    >
+                                        <option value="any">Any (Active or Inactive)</option>
+                                        <option value="active">Active Workers Only (status === Active)</option>
+                                        <option value="inactive">Inactive Workers Only</option>
+                                    </select>
+                                </div>
+
+                                {/* Completion Rules */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-300">Task Completion Rules</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTargetingCompletionRules(prev => [...prev, { taskId: '', completed: true }])}
+                                            className="text-[11px] font-bold text-blue-400 hover:underline"
+                                        >
+                                            + Add Completion Rule
+                                        </button>
+                                    </div>
+                                    {targetingCompletionRules.map((rule, idx) => (
+                                        <div key={idx} className="flex gap-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={rule.taskId}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingCompletionRules(prev => prev.map((r, i) => i === idx ? { ...r, taskId: val } : r));
+                                                }}
+                                                placeholder="Target Task ID (MongoDB ObjectId)"
+                                                className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <select
+                                                value={String(rule.completed)}
+                                                onChange={(e) => {
+                                                    const val = e.target.value === 'true';
+                                                    setTargetingCompletionRules(prev => prev.map((r, i) => i === idx ? { ...r, completed: val } : r));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            >
+                                                <option value="true">Must Have Completed</option>
+                                                <option value="false">Must NOT Have Completed</option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => setTargetingCompletionRules(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-400 hover:text-red-300 px-2 text-xs font-bold"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Profile Attribute Rules */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-300">Profile Attribute Rules (customFields)</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTargetingProfileRules(prev => [...prev, { fieldKey: 'education', operator: 'equals', value: '' }])}
+                                            className="text-[11px] font-bold text-blue-400 hover:underline"
+                                        >
+                                            + Add Profile Rule
+                                        </button>
+                                    </div>
+                                    {targetingProfileRules.map((rule, idx) => (
+                                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={rule.fieldKey}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                                                    setTargetingProfileRules(prev => prev.map((r, i) => i === idx ? { ...r, fieldKey: val } : r));
+                                                }}
+                                                placeholder="Field Key (e.g. education)"
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <select
+                                                value={rule.operator}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingProfileRules(prev => prev.map((r, i) => i === idx ? { ...r, operator: val } : r));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            >
+                                                <option value="equals">equals</option>
+                                                <option value="not_equals">not_equals</option>
+                                                <option value="contains">contains</option>
+                                                <option value="not_contains">not_contains</option>
+                                                <option value="in">in</option>
+                                                <option value="not_in">not_in</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={rule.value}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingProfileRules(prev => prev.map((r, i) => i === idx ? { ...r, value: val } : r));
+                                                }}
+                                                placeholder="Target Value"
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setTargetingProfileRules(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-400 hover:text-red-300 text-xs font-bold text-center"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Survey Answer Rules */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-slate-300">Survey Answer Rules</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTargetingSurveyAnswerRules(prev => [...prev, { taskId: '', questionId: '', operator: 'equals', value: '' }])}
+                                            className="text-[11px] font-bold text-blue-400 hover:underline"
+                                        >
+                                            + Add Survey Answer Rule
+                                        </button>
+                                    </div>
+                                    {targetingSurveyAnswerRules.map((rule, idx) => (
+                                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={rule.taskId}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingSurveyAnswerRules(prev => prev.map((r, i) => i === idx ? { ...r, taskId: val } : r));
+                                                }}
+                                                placeholder="Survey Task ID"
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={rule.questionId}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingSurveyAnswerRules(prev => prev.map((r, i) => i === idx ? { ...r, questionId: val } : r));
+                                                }}
+                                                placeholder="Question ID"
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <select
+                                                value={rule.operator}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingSurveyAnswerRules(prev => prev.map((r, i) => i === idx ? { ...r, operator: val } : r));
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            >
+                                                <option value="equals">equals</option>
+                                                <option value="not_equals">not_equals</option>
+                                                <option value="contains">contains</option>
+                                                <option value="not_contains">not_contains</option>
+                                                <option value="in">in</option>
+                                                <option value="not_in">not_in</option>
+                                            </select>
+                                            <input
+                                                type="text"
+                                                value={rule.value}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTargetingSurveyAnswerRules(prev => prev.map((r, i) => i === idx ? { ...r, value: val } : r));
+                                                }}
+                                                placeholder="Answer Value"
+                                                className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setTargetingSurveyAnswerRules(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-red-400 hover:text-red-300 text-xs font-bold text-center"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 
