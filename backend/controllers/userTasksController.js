@@ -1180,88 +1180,122 @@ export const updateUserTaskStatus = async (req, res) => {
             details: historyDetails
         });
 
-        // If rejected and was pending/approved/active/on hold (not yet paid/completed), refund user unused portion
+        // If rejected and was pending/approved/active/on hold (not yet paid/completed), refund user unused portion atomically
         if (requestedStatus === 'Rejected') {
             if (oldStatus !== 'Rejected' && oldStatus !== 'Paid' && oldStatus !== 'Completed') {
-                const user = await User.findById(task.userId);
-                if (user) {
-                    let refundAmountUSD = 0;
-                    if (oldStatus === 'Pending') {
-                        const baseFee = task.baseFeeCharged || 0;
-                        refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
-                    } else {
-                        const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
-                        if (remainingSlots > 0 && task.targetQuantity > 0) {
-                            const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
-                            refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
+                await executeWithOptionalTransaction(async (session) => {
+                    const user = await User.findById(task.userId).session(session || null);
+                    if (user) {
+                        let refundAmountUSD = 0;
+                        if (oldStatus === 'Pending') {
+                            const baseFee = task.baseFeeCharged || 0;
+                            refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
                         } else {
-                            refundAmountUSD = 0;
-                        }
-                    }
-
-                    if (refundAmountUSD > 0) {
-                        const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: refundAmountUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                        const totalOriginalFunded = Number(((taskFunding.fromInvestmentUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2)) || refundAmountUSD;
-
-                        let refundFromInvestment = 0;
-                        let refundFromTaskEarnings = 0;
-                        let refundFromRefunds = 0;
-
-                        if (oldStatus === 'Pending' || refundAmountUSD >= totalOriginalFunded) {
-                            refundFromInvestment = taskFunding.fromInvestmentUSD || 0;
-                            refundFromTaskEarnings = taskFunding.fromTaskEarningsUSD || 0;
-                            refundFromRefunds = taskFunding.fromRefundsUSD || 0;
-                        } else {
-                            const ratio = Math.min(1, refundAmountUSD / totalOriginalFunded);
-                            refundFromRefunds = Number(((taskFunding.fromRefundsUSD || 0) * ratio).toFixed(2));
-                            refundFromInvestment = Number(((taskFunding.fromInvestmentUSD || 0) * ratio).toFixed(2));
-                            refundFromTaskEarnings = Number(((taskFunding.fromTaskEarningsUSD || 0) * ratio).toFixed(2));
-
-                            const allocatedSum = Number((refundFromRefunds + refundFromInvestment + refundFromTaskEarnings).toFixed(2));
-                            const diff = Number((refundAmountUSD - allocatedSum).toFixed(2));
-                            if (diff !== 0) {
-                                refundFromInvestment = Number((refundFromInvestment + diff).toFixed(2));
+                            const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+                            if (remainingSlots > 0 && task.targetQuantity > 0) {
+                                const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
+                                refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
+                            } else {
+                                refundAmountUSD = 0;
                             }
                         }
 
-                        // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
-                        user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + refundAmountUSD).toFixed(2));
-                        const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                        user.campaignWalletSources = {
-                            fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + refundFromInvestment).toFixed(2)),
-                            fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + refundFromTaskEarnings).toFixed(2)),
-                            fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + refundFromRefunds).toFixed(2))
-                        };
-                        task.refundedBreakdown = {
-                            fromInvestmentUSD: refundFromInvestment,
-                            fromTaskEarningsUSD: refundFromTaskEarnings,
-                            fromRefundsUSD: refundFromRefunds
-                        };
-                        await user.save();
-                        await Transaction.create({
-                            userId: user._id,
-                            userName: user.username,
-                            currency: 'USD',
-                            type: 'Task Refund',
-                            amount: refundAmountUSD,
-                            amountUSD: refundAmountUSD,
-                            campaignId: task._id,
-                            sourceWallet: 'CampaignEscrow',
-                            destinationWallet: 'CampaignFunds',
-                            sourceBreakdown: {
+                        if (refundAmountUSD > 0) {
+                            const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: refundAmountUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                            const totalOriginalFunded = Number(((taskFunding.fromInvestmentUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2)) || refundAmountUSD;
+
+                            let refundFromInvestment = 0;
+                            let refundFromTaskEarnings = 0;
+                            let refundFromRefunds = 0;
+
+                            if (oldStatus === 'Pending' || refundAmountUSD >= totalOriginalFunded) {
+                                refundFromInvestment = taskFunding.fromInvestmentUSD || 0;
+                                refundFromTaskEarnings = taskFunding.fromTaskEarningsUSD || 0;
+                                refundFromRefunds = taskFunding.fromRefundsUSD || 0;
+                            } else {
+                                const ratio = Math.min(1, refundAmountUSD / totalOriginalFunded);
+                                refundFromRefunds = Number(((taskFunding.fromRefundsUSD || 0) * ratio).toFixed(2));
+                                refundFromInvestment = Number(((taskFunding.fromInvestmentUSD || 0) * ratio).toFixed(2));
+                                refundFromTaskEarnings = Number(((taskFunding.fromTaskEarningsUSD || 0) * ratio).toFixed(2));
+
+                                const allocatedSum = Number((refundFromRefunds + refundFromInvestment + refundFromTaskEarnings).toFixed(2));
+                                const diff = Number((refundAmountUSD - allocatedSum).toFixed(2));
+                                if (diff !== 0) {
+                                    refundFromInvestment = Number((refundFromInvestment + diff).toFixed(2));
+                                }
+                            }
+
+                            // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
+                            user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + refundAmountUSD).toFixed(2));
+                            const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                            user.campaignWalletSources = {
+                                fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + refundFromInvestment).toFixed(2)),
+                                fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + refundFromTaskEarnings).toFixed(2)),
+                                fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + refundFromRefunds).toFixed(2))
+                            };
+                            task.refundedBreakdown = {
                                 fromInvestmentUSD: refundFromInvestment,
                                 fromTaskEarningsUSD: refundFromTaskEarnings,
                                 fromRefundsUSD: refundFromRefunds
-                            },
-                            description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
-                            status: 'Approved'
-                        });
+                            };
+                            await user.save(session ? { session } : undefined);
+                            await Transaction.create([{
+                                userId: user._id,
+                                userName: user.username,
+                                currency: 'USD',
+                                type: 'Task Refund',
+                                amount: refundAmountUSD,
+                                amountUSD: refundAmountUSD,
+                                campaignId: task._id,
+                                sourceWallet: 'CampaignEscrow',
+                                destinationWallet: 'CampaignFunds',
+                                sourceBreakdown: {
+                                    fromInvestmentUSD: refundFromInvestment,
+                                    fromTaskEarningsUSD: refundFromTaskEarnings,
+                                    fromRefundsUSD: refundFromRefunds
+                                },
+                                description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
+                                status: 'Approved'
+                            }], session ? { session } : {});
+                        }
                     }
+
+                    task.status = 'Rejected';
+                    task.reviewRequested = false;
+                    if (adminNotes !== undefined) task.adminNotes = adminNotes;
+                    await task.save(session ? { session } : undefined);
+                });
+            } else if (oldStatus === 'Rejected') {
+                if (adminNotes !== undefined && adminNotes !== task.adminNotes) {
+                    task.adminNotes = adminNotes;
+                    await task.save();
                 }
             }
-        }
+        } else {
+            task.status = requestedStatus;
+            if (adminNotes !== undefined) task.adminNotes = adminNotes;
 
-        await task.save();
+            if (req.body.surveyVersion !== undefined) {
+                const sv = Math.max(1, parseInt(req.body.surveyVersion, 10) || 1);
+                task.surveyVersion = sv;
+                if (task.surveyConfig) {
+                    task.surveyConfig.version = sv;
+                    task.markModified('surveyConfig');
+                }
+            } else if (req.body.surveyConfig && typeof req.body.surveyConfig === 'object') {
+                task.surveyConfig = req.body.surveyConfig;
+                if (req.body.surveyConfig.version) {
+                    task.surveyVersion = Math.max(1, parseInt(req.body.surveyConfig.version, 10) || 1);
+                }
+                task.markModified('surveyConfig');
+            }
+
+            if (requestedStatus === 'Approved') {
+                task.reviewRequested = false;
+            }
+
+            await task.save();
+        }
 
         // System notifications & Audit Logging
         if (requestedStatus === 'On Hold' && oldStatus !== 'On Hold') {
