@@ -821,6 +821,13 @@ export interface UserTask {
     surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
     surveyConfig?: SurveyConfig;
     surveyVersion?: number;
+    targeting?: {
+        countries?: string[];
+        currencies?: string[];
+        genders?: string[];
+        minAge?: number | null;
+        maxAge?: number | null;
+    };
 }
 
 export interface UserTaskSubmission {

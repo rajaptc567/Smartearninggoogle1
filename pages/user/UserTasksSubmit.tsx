@@ -545,6 +545,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         { id: 'screenshot_1', type: 'screenshot', label: 'Screenshot / Image', instruction: 'Please upload screenshot proof of completion.' }
     ]);
 
+    // Audience Targeting State (Phase D-2B)
+    const [targetingCountries, setTargetingCountries] = useState<string[]>([]);
+    const [targetingCurrencies, setTargetingCurrencies] = useState<string[]>([]);
+    const [targetingGenders, setTargetingGenders] = useState<string[]>([]);
+    const [minAgeInput, setMinAgeInput] = useState<number | string | null>('');
+    const [maxAgeInput, setMaxAgeInput] = useState<number | string | null>('');
+    const [customCountryInput, setCustomCountryInput] = useState<string>('');
+
     // Survey Campaign Builder State
     const [surveyConfigData, setSurveyConfigData] = useState<SurveyConfigData>({
         category: 'General Opinion Poll',
@@ -1483,6 +1491,10 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             rewardPerTask?: string;
             proofs?: string;
             proofInstructions?: Record<string, string>;
+            minAge?: string;
+            maxAge?: string;
+            ageRange?: string;
+            [key: string]: any;
         } = {};
         const errorMessages: string[] = [];
         let firstErrorFieldId = '';
@@ -1560,6 +1572,34 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             });
             if (Object.keys(proofInstErrors).length > 0) {
                 errors.proofInstructions = proofInstErrors;
+            }
+        }
+
+        // Validate Audience Targeting Age Inputs if provided
+        const parsedMinAge = minAgeInput !== '' && minAgeInput !== null && minAgeInput !== undefined ? Number(minAgeInput) : null;
+        const parsedMaxAge = maxAgeInput !== '' && maxAgeInput !== null && maxAgeInput !== undefined ? Number(maxAgeInput) : null;
+
+        if (parsedMinAge !== null) {
+            if (!Number.isInteger(parsedMinAge) || parsedMinAge < 0) {
+                errors.minAge = 'Minimum Age must be a non-negative whole number.';
+                errorMessages.push('• Minimum Age must be a non-negative whole number.');
+                if (!firstErrorFieldId) firstErrorFieldId = 'targeting-min-age-field';
+            }
+        }
+
+        if (parsedMaxAge !== null) {
+            if (!Number.isInteger(parsedMaxAge) || parsedMaxAge < 0) {
+                errors.maxAge = 'Maximum Age must be a non-negative whole number.';
+                errorMessages.push('• Maximum Age must be a non-negative whole number.');
+                if (!firstErrorFieldId) firstErrorFieldId = 'targeting-max-age-field';
+            }
+        }
+
+        if (parsedMinAge !== null && parsedMaxAge !== null && Number.isInteger(parsedMinAge) && Number.isInteger(parsedMaxAge)) {
+            if (parsedMinAge > parsedMaxAge) {
+                errors.ageRange = 'Minimum Age cannot exceed Maximum Age.';
+                errorMessages.push('• Audience Targeting error: Minimum Age cannot be greater than Maximum Age.');
+                if (!firstErrorFieldId) firstErrorFieldId = 'targeting-min-age-field';
             }
         }
 
@@ -1688,6 +1728,41 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         const pReqShot = requireScreenshotArg !== undefined ? requireScreenshotArg : requiredProofsList.some(p => p.type === 'screenshot');
         const pShotInst = screenshotInstructionArg !== undefined ? screenshotInstructionArg : requiredProofsList.filter(p => p.type === 'screenshot').map(p => p.instruction).join(' | ') || '';
 
+        // Normalize targeting configuration before sending payload (Phase D-2B)
+        const cleanCountries = Array.from(new Set(
+            targetingCountries
+                .map(c => c.trim())
+                .filter(c => c.length > 0)
+        ));
+
+        const cleanCurrencies = Array.from(new Set(
+            targetingCurrencies
+                .map(c => c.trim().toUpperCase())
+                .filter(c => c.length > 0)
+        ));
+
+        const cleanGenders = Array.from(new Set(
+            targetingGenders
+                .map(g => g.trim())
+                .filter(g => g.length > 0)
+        ));
+
+        const pMinAge = minAgeInput !== '' && minAgeInput !== null && minAgeInput !== undefined
+            ? (Number.isFinite(Number(minAgeInput)) && Number(minAgeInput) >= 0 ? Math.floor(Number(minAgeInput)) : null)
+            : null;
+
+        const pMaxAge = maxAgeInput !== '' && maxAgeInput !== null && maxAgeInput !== undefined
+            ? (Number.isFinite(Number(maxAgeInput)) && Number(maxAgeInput) >= 0 ? Math.floor(Number(maxAgeInput)) : null)
+            : null;
+
+        const targetingPayload = {
+            countries: cleanCountries,
+            currencies: cleanCurrencies,
+            genders: cleanGenders,
+            minAge: pMinAge,
+            maxAge: pMaxAge
+        };
+
         setIsSubmitting(true);
         try {
             const result = await createUserTask({
@@ -1716,6 +1791,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 surveyQuestionsCount: isSurveyCampaign ? (surveyConfigData.questions?.length || 0) : undefined,
                 surveyApprovalMode: isSurveyCampaign ? ((surveyConfigData as any).approvalMode || 'auto') : undefined,
                 surveyConfig: isSurveyCampaign ? surveyConfigData : undefined,
+                targeting: targetingPayload,
                 publishNow: Boolean(isAdminMode && publishNowArg === true)
             });
             dispatch({ type: 'ADD_USER_TASK', payload: result.task });
@@ -1770,6 +1846,12 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             setTitle('');
             setDescription('');
             setLink('');
+            setTargetingCountries([]);
+            setTargetingCurrencies([]);
+            setTargetingGenders([]);
+            setMinAgeInput('');
+            setMaxAgeInput('');
+            setCustomCountryInput('');
 
             // Show success modal with OK button
             const wasPublishedNow = Boolean(isAdminMode && publishNowArg === true);
@@ -3063,6 +3145,222 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                     </div>
                                 </div>
                             )}
+
+                            {/* Audience Targeting Section (Optional) (Phase D-2B) */}
+                            <div className="p-4 md:p-5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/80 space-y-4">
+                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-2.5">
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
+                                            <span>🎯</span> Audience Targeting (Optional)
+                                        </h4>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                                            Leave all fields empty to allow all eligible workers.
+                                        </p>
+                                    </div>
+                                    {(targetingCountries.length > 0 || targetingCurrencies.length > 0 || targetingGenders.length > 0 || minAgeInput !== '' || maxAgeInput !== '') && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setTargetingCountries([]);
+                                                setTargetingCurrencies([]);
+                                                setTargetingGenders([]);
+                                                setMinAgeInput('');
+                                                setMaxAgeInput('');
+                                                setCustomCountryInput('');
+                                            }}
+                                            className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                                        >
+                                            Clear Targeting
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* A. Countries */}
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        Target Countries
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {['Pakistan', 'United States', 'United Kingdom', 'India', 'Canada', 'Australia', 'Germany', 'France', 'Nigeria', 'Philippines', 'United Arab Emirates', 'Turkey'].map((c) => {
+                                            const isSelected = targetingCountries.some(tc => tc.toLowerCase() === c.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setTargetingCountries(prev => prev.filter(tc => tc.toLowerCase() !== c.toLowerCase()));
+                                                        } else {
+                                                            setTargetingCountries(prev => [...prev, c]);
+                                                        }
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                                        isSelected
+                                                            ? 'bg-blue-600 text-white shadow-sm'
+                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                                    }`}
+                                                >
+                                                    {isSelected ? '✓ ' : '+ '}{c}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={customCountryInput}
+                                            onChange={(e) => setCustomCountryInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (customCountryInput.trim()) {
+                                                        const val = customCountryInput.trim();
+                                                        if (!targetingCountries.some(tc => tc.toLowerCase() === val.toLowerCase())) {
+                                                            setTargetingCountries(prev => [...prev, val]);
+                                                        }
+                                                        setCustomCountryInput('');
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Type other country name and press Enter..."
+                                            className="flex-1 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (customCountryInput.trim()) {
+                                                    const val = customCountryInput.trim();
+                                                    if (!targetingCountries.some(tc => tc.toLowerCase() === val.toLowerCase())) {
+                                                        setTargetingCountries(prev => [...prev, val]);
+                                                    }
+                                                    setCustomCountryInput('');
+                                                }
+                                            }}
+                                            className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-xs font-bold text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                    {targetingCountries.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 self-center">Selected:</span>
+                                            {targetingCountries.map(c => (
+                                                <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 text-xs font-bold">
+                                                    {c}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTargetingCountries(prev => prev.filter(tc => tc.toLowerCase() !== c.toLowerCase()))}
+                                                        className="hover:text-red-600 font-extrabold ml-1"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* B. Currencies */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        Target Currencies
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['USD', 'EUR', 'PKR'].map((curr) => {
+                                            const isSelected = targetingCurrencies.includes(curr);
+                                            return (
+                                                <button
+                                                    key={curr}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setTargetingCurrencies(prev => prev.filter(c => c !== curr));
+                                                        } else {
+                                                            setTargetingCurrencies(prev => [...prev, curr]);
+                                                        }
+                                                    }}
+                                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                        isSelected
+                                                            ? 'bg-emerald-600 text-white shadow-sm'
+                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                                    }`}
+                                                >
+                                                    {isSelected ? '✓ ' : '+ '}{curr}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* C. Gender */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        Target Gender
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['Male', 'Female', 'Other'].map((g) => {
+                                            const isSelected = targetingGenders.some(tg => tg.toLowerCase() === g.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={g}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setTargetingGenders(prev => prev.filter(tg => tg.toLowerCase() !== g.toLowerCase()));
+                                                        } else {
+                                                            setTargetingGenders(prev => [...prev, g]);
+                                                        }
+                                                    }}
+                                                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                                                        isSelected
+                                                            ? 'bg-purple-600 text-white shadow-sm'
+                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                                    }`}
+                                                >
+                                                    {isSelected ? '✓ ' : '+ '}{g}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* D & E. Age Range */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        Age Boundaries (Years)
+                                    </label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div id="targeting-min-age-field">
+                                            <label className="block text-[11px] text-gray-500 dark:text-gray-400 font-medium mb-1">
+                                                Minimum Age
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={minAgeInput === null || minAgeInput === undefined ? '' : minAgeInput}
+                                                onChange={(e) => setMinAgeInput(e.target.value === '' ? '' : e.target.value)}
+                                                placeholder="e.g. 18 (Blank = No Min)"
+                                                className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div id="targeting-max-age-field">
+                                            <label className="block text-[11px] text-gray-500 dark:text-gray-400 font-medium mb-1">
+                                                Maximum Age
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={maxAgeInput === null || maxAgeInput === undefined ? '' : maxAgeInput}
+                                                onChange={(e) => setMaxAgeInput(e.target.value === '' ? '' : e.target.value)}
+                                                placeholder="e.g. 65 (Blank = No Max)"
+                                                className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Base Creation Fee Notice Banner above launch campaign button */}
                             <div className="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-1.5">
