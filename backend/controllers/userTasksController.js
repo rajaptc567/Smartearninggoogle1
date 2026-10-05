@@ -191,9 +191,14 @@ export const getUserTasks = async (req, res) => {
             if (isOwner) {
                 // Return full task for campaign owner
                 filteredTasks.push(task);
-            } else if (isUserEligibleForUserTask(user, task)) {
-                // Return sanitized worker-safe task for eligible non-owner
-                filteredTasks.push(toWorkerSafeUserTask(task));
+            } else {
+                const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
+                const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
+
+                if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task)) {
+                    // Return sanitized worker-safe task for eligible non-owner
+                    filteredTasks.push(toWorkerSafeUserTask(task));
+                }
             }
         }
 
