@@ -37,7 +37,7 @@ router.route('/')
     .post(taskActionLimiter, authorize(['user', 'admin']), createUserTask);
 
 router.route('/submissions')
-    .get(getUserTaskSubmissions);
+    .get(authorize(['user', 'admin']), getUserTaskSubmissions);
 
 router.route('/submissions/:subId')
     .put(authorize(['user', 'admin']), updateSubmissionStatus)
