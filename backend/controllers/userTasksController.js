@@ -1765,58 +1765,63 @@ const autoApproveStaleSubmissions = async () => {
                 continue;
             }
 
-            const updatedSub = await UserTaskSubmission.findOneAndUpdate(
-                { _id: submission._id, rewardClaimed: { $ne: true } },
-                {
-                    $set: {
-                        status: 'Approved',
-                        paid: true,
-                        isAutoApproved: true,
-                        autoApproved: true,
-                        approvalType: 'auto',
-                        rewardClaimed: true,
-                        rewardPaidAt: new Date(),
-                        adminNotes: `Auto-approved: creator did not review within the ${timeoutDays}-day limit.`
-                    }
-                },
-                { new: true }
-            );
+            try {
+                const updatedSub = await UserTaskSubmission.findOneAndUpdate(
+                    { _id: submission._id, rewardClaimed: { $ne: true } },
+                    {
+                        $set: {
+                            status: 'Approved',
+                            paid: true,
+                            isAutoApproved: true,
+                            autoApproved: true,
+                            approvalType: 'auto',
+                            rewardClaimed: true,
+                            rewardPaidAt: new Date(),
+                            adminNotes: `Auto-approved: creator did not review within the ${timeoutDays}-day limit.`
+                        }
+                    },
+                    { new: true }
+                );
 
-            if (!updatedSub) {
-                // Submission was already claimed/rewarded in parallel; revert claimed completion slot
-                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
-                continue;
-            }
-
-            const worker = await User.findById(updatedSub.workerId);
-            if (worker) {
-                let rewardInUSD = updatedSub.rewardAmount;
-                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                await worker.save();
-
-                const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                if (!existingTx) {
-                    const tx = await Transaction.create({
-                        userId: worker._id,
-                        userName: worker.username,
-                        currency: 'USD',
-                        type: 'Task Reward',
-                        amount: rewardInUSD,
-                        description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                        status: 'Approved',
-                        submissionId: updatedSub._id,
-                        campaignId: updatedSub.taskId
-                    });
-                    updatedSub.rewardTransactionId = tx._id;
-                    await updatedSub.save();
+                if (!updatedSub) {
+                    // Submission was already claimed/rewarded in parallel; revert claimed completion slot
+                    await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                    continue;
                 }
 
-                await Notification.create({
-                    userId: worker._id,
-                    subject: 'Task Auto-Approved! ⏱️✅',
-                    message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
-                    senderType: 'System'
-                });
+                const worker = await User.findById(updatedSub.workerId);
+                if (worker) {
+                    let rewardInUSD = updatedSub.rewardAmount;
+                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                    await worker.save();
+
+                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: worker._id,
+                            userName: worker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: updatedSub._id,
+                            campaignId: updatedSub.taskId
+                        });
+                        updatedSub.rewardTransactionId = tx._id;
+                        await updatedSub.save();
+                    }
+
+                    await Notification.create({
+                        userId: worker._id,
+                        subject: 'Task Auto-Approved! ⏱️✅',
+                        message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        senderType: 'System'
+                    });
+                }
+            } catch (err) {
+                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                console.error('Error auto-approving stale submission:', err);
             }
         }
 
@@ -1835,68 +1840,73 @@ const autoApproveStaleSubmissions = async () => {
                 continue;
             }
 
-            const updatedSub = await UserTaskSubmission.findOneAndUpdate(
-                { _id: submission._id, rewardClaimed: { $ne: true } },
-                {
-                    $set: {
-                        status: 'Approved',
-                        paid: true,
-                        isAutoApproved: true,
-                        autoApproved: true,
-                        approvalType: 'auto',
-                        rewardClaimed: true,
-                        rewardPaidAt: new Date(),
-                        disputeStage: 'Resolved',
-                        adminNotes: `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit.`
-                    }
-                },
-                { new: true }
-            );
+            try {
+                const updatedSub = await UserTaskSubmission.findOneAndUpdate(
+                    { _id: submission._id, rewardClaimed: { $ne: true } },
+                    {
+                        $set: {
+                            status: 'Approved',
+                            paid: true,
+                            isAutoApproved: true,
+                            autoApproved: true,
+                            approvalType: 'auto',
+                            rewardClaimed: true,
+                            rewardPaidAt: new Date(),
+                            disputeStage: 'Resolved',
+                            adminNotes: `Auto-approved dispute: creator did not review the dispute within the ${disputeReviewDays}-day limit.`
+                        }
+                    },
+                    { new: true }
+                );
 
-            if (!updatedSub) {
-                // Submission was already claimed/rewarded in parallel; revert claimed completion slot
-                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
-                continue;
-            }
-
-            // Mark Dispute document as resolved/closed
-            if (updatedSub.disputeId) {
-                await Dispute.findByIdAndUpdate(updatedSub.disputeId, {
-                    status: 'Resolved',
-                    verdict: 'ReleaseToWorker',
-                    adminResponse: 'Auto-approved because creator did not review dispute in time.'
-                });
-            }
-
-            const worker = await User.findById(updatedSub.workerId);
-            if (worker) {
-                let rewardInUSD = updatedSub.rewardAmount;
-                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                await worker.save();
-
-                const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                if (!existingTx) {
-                    const tx = await Transaction.create({
-                        userId: worker._id,
-                        userName: worker.username,
-                        currency: 'USD',
-                        type: 'Task Reward',
-                        amount: rewardInUSD,
-                        description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                        status: 'Approved',
-                        submissionId: updatedSub._id,
-                        campaignId: updatedSub.taskId
-                    });
-                    updatedSub.rewardTransactionId = tx._id;
-                    await updatedSub.save();
+                if (!updatedSub) {
+                    // Submission was already claimed/rewarded in parallel; revert claimed completion slot
+                    await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                    continue;
                 }
 
-                await Notification.create({
-                    userId: worker._id,
-                    subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
-                    message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
-                    senderType: 'System'
-                });
+                // Mark Dispute document as resolved/closed
+                if (updatedSub.disputeId) {
+                    await Dispute.findByIdAndUpdate(updatedSub.disputeId, {
+                        status: 'Resolved',
+                        verdict: 'ReleaseToWorker',
+                        adminResponse: 'Auto-approved because creator did not review dispute in time.'
+                    });
+                }
+
+                const worker = await User.findById(updatedSub.workerId);
+                if (worker) {
+                    let rewardInUSD = updatedSub.rewardAmount;
+                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                    await worker.save();
+
+                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: worker._id,
+                            userName: worker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: updatedSub._id,
+                            campaignId: updatedSub.taskId
+                        });
+                        updatedSub.rewardTransactionId = tx._id;
+                        await updatedSub.save();
+                    }
+
+                    await Notification.create({
+                        userId: worker._id,
+                        subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
+                        message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        senderType: 'System'
+                    });
+                }
+            } catch (err) {
+                await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                console.error('Error auto-approving stale dispute:', err);
             }
         }
     } catch (err) {
@@ -2523,70 +2533,75 @@ export const updateSubmissionStatus = async (req, res) => {
                 });
             }
 
-            // Atomic update to claim reward idempotently
-            const updatedSub = await UserTaskSubmission.findOneAndUpdate(
-                { _id: req.params.subId, rewardClaimed: { $ne: true } },
-                {
-                    $set: {
-                        status: 'Approved',
-                        paid: true,
-                        rewardClaimed: true,
-                        rewardPaidAt: new Date(),
-                        adminNotes: adminNotes !== undefined ? adminNotes : submission.adminNotes,
-                        ...(oldStatus === 'Disputed' ? { disputeStage: 'Resolved' } : {})
+            try {
+                // Atomic update to claim reward idempotently
+                const updatedSub = await UserTaskSubmission.findOneAndUpdate(
+                    { _id: req.params.subId, rewardClaimed: { $ne: true } },
+                    {
+                        $set: {
+                            status: 'Approved',
+                            paid: true,
+                            rewardClaimed: true,
+                            rewardPaidAt: new Date(),
+                            adminNotes: adminNotes !== undefined ? adminNotes : submission.adminNotes,
+                            ...(oldStatus === 'Disputed' ? { disputeStage: 'Resolved' } : {})
+                        }
+                    },
+                    { new: true }
+                );
+
+                if (!updatedSub) {
+                    // Reward was ALREADY claimed or approved. Revert claimed slot and return existing submission record safely.
+                    await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
+                    const currentSub = await UserTaskSubmission.findById(req.params.subId);
+                    return res.status(200).json({ success: true, data: currentSub, task: task || null, message: 'Submission already processed or rewarded.' });
+                }
+
+                targetSubmission = updatedSub;
+
+                if (oldStatus === 'Disputed') {
+                    if (targetSubmission.disputeId) {
+                        await Dispute.findByIdAndUpdate(targetSubmission.disputeId, {
+                            status: 'Resolved',
+                            verdict: 'ReleaseToWorker',
+                            adminResponse: 'Resolved directly by the campaign creator.'
+                        });
+                    } else {
+                        await Dispute.updateMany({ submissionId: targetSubmission._id, status: { $ne: 'Resolved' } }, {
+                            status: 'Resolved',
+                            verdict: 'ReleaseToWorker',
+                            adminResponse: 'Resolved directly by the campaign creator.'
+                        });
                     }
-                },
-                { new: true }
-            );
+                }
 
-            if (!updatedSub) {
-                // Reward was ALREADY claimed or approved. Revert claimed slot and return existing submission record safely.
+                const worker = await User.findById(targetSubmission.workerId);
+                if (worker) {
+                    let rewardInUSD = targetSubmission.rewardAmount;
+                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                    await worker.save();
+
+                    // Prevent duplicate transaction
+                    const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
+                    if (!existingTx) {
+                        const tx = await Transaction.create({
+                            userId: worker._id,
+                            userName: worker.username,
+                            currency: 'USD',
+                            type: 'Task Reward',
+                            amount: rewardInUSD,
+                            description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
+                            status: 'Approved',
+                            submissionId: targetSubmission._id,
+                            campaignId: targetSubmission.taskId
+                        });
+                        targetSubmission.rewardTransactionId = tx._id;
+                        await targetSubmission.save();
+                    }
+                }
+            } catch (approveErr) {
                 await releaseTaskCompletionSlot(submission.taskId, submission.workerId);
-                const currentSub = await UserTaskSubmission.findById(req.params.subId);
-                return res.status(200).json({ success: true, data: currentSub, task: task || null, message: 'Submission already processed or rewarded.' });
-            }
-
-            targetSubmission = updatedSub;
-
-            if (oldStatus === 'Disputed') {
-                if (targetSubmission.disputeId) {
-                    await Dispute.findByIdAndUpdate(targetSubmission.disputeId, {
-                        status: 'Resolved',
-                        verdict: 'ReleaseToWorker',
-                        adminResponse: 'Resolved directly by the campaign creator.'
-                    });
-                } else {
-                    await Dispute.updateMany({ submissionId: targetSubmission._id, status: { $ne: 'Resolved' } }, {
-                        status: 'Resolved',
-                        verdict: 'ReleaseToWorker',
-                        adminResponse: 'Resolved directly by the campaign creator.'
-                    });
-                }
-            }
-
-            const worker = await User.findById(targetSubmission.workerId);
-            if (worker) {
-                let rewardInUSD = targetSubmission.rewardAmount;
-                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                await worker.save();
-
-                // Prevent duplicate transaction
-                const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
-                if (!existingTx) {
-                    const tx = await Transaction.create({
-                        userId: worker._id,
-                        userName: worker.username,
-                        currency: 'USD',
-                        type: 'Task Reward',
-                        amount: rewardInUSD,
-                        description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
-                        status: 'Approved',
-                        submissionId: targetSubmission._id,
-                        campaignId: targetSubmission.taskId
-                    });
-                    targetSubmission.rewardTransactionId = tx._id;
-                    await targetSubmission.save();
-                }
+                throw approveErr;
             }
         } else {
             await targetSubmission.save();
