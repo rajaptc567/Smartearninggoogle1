@@ -44,52 +44,34 @@ const parseAgeLimit = (val) => {
 
 const evaluateCondition = (actualValue, operator, expectedValue) => {
     const op = String(operator || 'equals').trim().toLowerCase();
-    const hasActual = actualValue !== undefined && actualValue !== null && actualValue !== '';
-
-    if (!hasActual) {
-        if (op === 'not_equals' || op === 'not_contains' || op === 'not_in') return true;
-        return false;
-    }
-
-    const actStr = String(actualValue).trim().toLowerCase();
-    const expStr = expectedValue !== undefined && expectedValue !== null ? String(expectedValue).trim().toLowerCase() : '';
+    
+    // Normalize to arrays for consistent comparison
+    const actualArr = Array.isArray(actualValue) 
+        ? actualValue.map(v => String(v ?? '').trim().toLowerCase()) 
+        : [String(actualValue ?? '').trim().toLowerCase()];
+        
+    const expectedArr = Array.isArray(expectedValue) 
+        ? expectedValue.map(v => String(v ?? '').trim().toLowerCase()) 
+        : [String(expectedValue ?? '').trim().toLowerCase()];
 
     switch (op) {
-        case 'equals':
-            if (Array.isArray(actualValue)) {
-                return actualValue.some(v => String(v).trim().toLowerCase() === expStr);
-            }
-            return actStr === expStr || (Number(actualValue) === Number(expectedValue) && !isNaN(Number(actualValue)));
+        case 'equals': // Match if any actual element matches any expected element
+            return actualArr.some(a => expectedArr.includes(a));
         
-        case 'not_equals':
-            if (Array.isArray(actualValue)) {
-                return !actualValue.some(v => String(v).trim().toLowerCase() === expStr);
-            }
-            return actStr !== expStr && (Number(actualValue) !== Number(expectedValue) || isNaN(Number(actualValue)));
+        case 'not_equals': // True only if NO actual element matches ANY expected element
+            return !actualArr.some(a => expectedArr.includes(a));
 
-        case 'contains':
-            if (Array.isArray(actualValue)) {
-                return actualValue.some(v => String(v).trim().toLowerCase().includes(expStr));
-            }
-            return actStr.includes(expStr);
+        case 'contains': // Match if any actual element contains any expected substring
+            return actualArr.some(a => expectedArr.some(e => a.includes(e)));
 
         case 'not_contains':
-            if (Array.isArray(actualValue)) {
-                return !actualValue.some(v => String(v).trim().toLowerCase().includes(expStr));
-            }
-            return !actStr.includes(expStr);
+            return !actualArr.some(a => expectedArr.some(e => a.includes(e)));
 
-        case 'in':
-            if (Array.isArray(expectedValue)) {
-                return expectedValue.map(v => String(v).trim().toLowerCase()).includes(actStr);
-            }
-            return actStr === expStr;
+        case 'in': // Match if any actual element is exactly in the expected array
+            return actualArr.some(a => expectedArr.includes(a));
 
         case 'not_in':
-            if (Array.isArray(expectedValue)) {
-                return !expectedValue.map(v => String(v).trim().toLowerCase()).includes(actStr);
-            }
-            return actStr !== expStr;
+            return !actualArr.some(a => expectedArr.includes(a));
 
         default:
             return false;

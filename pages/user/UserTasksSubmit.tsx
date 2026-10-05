@@ -555,6 +555,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
     // Advanced E1 Audience Targeting State
     const [targetingSelectedUserIds, setTargetingSelectedUserIds] = useState<string[]>([]);
+    const [selectedUserIdsInput, setSelectedUserIdsInput] = useState<string>('');
     const [targetingAccountStatus, setTargetingAccountStatus] = useState<'any' | 'active' | 'inactive'>('any');
     const [targetingCompletionRules, setTargetingCompletionRules] = useState<Array<{ taskId: string; completed: boolean }>>([]);
     const [targetingProfileRules, setTargetingProfileRules] = useState<Array<{ fieldKey: string; operator: string; value: any }>>([]);
@@ -1864,6 +1865,14 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
             setMinAgeInput('');
             setMaxAgeInput('');
             setCustomCountryInput('');
+            
+            // Reset E1 advanced targeting state
+            setTargetingSelectedUserIds([]);
+            setSelectedUserIdsInput('');
+            setTargetingAccountStatus('any');
+            setTargetingCompletionRules([]);
+            setTargetingProfileRules([]);
+            setTargetingSurveyAnswerRules([]);
 
             // Show success modal with OK button
             const wasPublishedNow = Boolean(isAdminMode && publishNowArg === true);
