@@ -732,6 +732,10 @@ export interface SurveyQuestion {
     minRating?: number;
     maxRating?: number;
     logicRules?: any[];
+    profileMapping?: {
+        enabled: boolean;
+        fieldKey: string;
+    };
 }
 
 export interface SurveyConfig {

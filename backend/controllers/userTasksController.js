@@ -2119,6 +2119,83 @@ export const getUserTaskSubmissions = async (req, res) => {
     }
 };
 
+const applySurveyProfileMappings = async (user, task, surveyResponses, isScreenout) => {
+    try {
+        if (!task || !task.isSurvey || isScreenout) return;
+        const surveyConfig = task.surveyConfig || {};
+        const questions = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
+        if (questions.length === 0) return;
+
+        // Build Response Lookup map
+        const responseMap = new Map();
+        for (const r of surveyResponses) {
+            if (r && r.questionId) {
+                responseMap.set(String(r.questionId), r);
+            }
+        }
+
+        const updatesToApply = {};
+
+        for (const q of questions) {
+            const mapping = q.profileMapping;
+            if (!mapping || !mapping.enabled || !mapping.fieldKey) continue;
+
+            const fieldKey = String(mapping.fieldKey).trim();
+            if (!fieldKey) continue;
+
+            // Strict security checks for fieldKey (Requirement 2 & 9)
+            if (/[.$]/.test(fieldKey)) continue; // reject dot or dollar operators
+            const bannedKeys = ['__proto__', 'constructor', 'prototype', 'username', 'email', 'password', 'role', 'phone', 'whatsapp', 'country', 'address', 'city', 'postalCode', 'telegram', 'gender', 'dateOfBirth', 'currency', 'walletBalance', 'taskWalletBalance', 'taskEarningsBalance', 'status', 'restrictions'];
+            if (bannedKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) continue;
+
+            const response = responseMap.get(String(q.id));
+            if (!response) continue;
+
+            let val = response.value;
+            if (val === undefined || val === null || val === '') continue;
+
+            // Value Normalization (Requirement 7)
+            if (typeof val === 'string') {
+                val = val.trim();
+                if (val.length > 500) {
+                    val = val.substring(0, 500); // apply reasonable server-side limit of 500 characters
+                }
+            } else if (Array.isArray(val)) {
+                val = val.map(v => (typeof v === 'string') ? v.trim().substring(0, 200) : v).filter(Boolean);
+            }
+
+            // Construct Provenance Metadata (Requirement 6)
+            updatesToApply[fieldKey] = {
+                value: val,
+                source: 'survey',
+                sourceTaskId: task._id.toString(),
+                sourceSurveyVersion: Number(task.surveyVersion || surveyConfig.version) || 1,
+                sourceQuestionId: q.id.toString(),
+                updatedAt: new Date()
+            };
+        }
+
+        if (Object.keys(updatesToApply).length === 0) return;
+
+        // Re-fetch user in transaction-safe way if session is active or fallback normally
+        const freshUser = await User.findById(user._id);
+        if (!freshUser) return;
+
+        const currentCustomFields = freshUser.customFields || {};
+        
+        // Merge only the specific mapped fields safely without overwriting other pre-existing customFields (Requirement 10)
+        for (const [k, v] of Object.entries(updatesToApply)) {
+            currentCustomFields[k] = v;
+        }
+
+        freshUser.customFields = currentCustomFields;
+        freshUser.markModified('customFields');
+        await freshUser.save();
+    } catch (err) {
+        console.error('Failed to process survey profile mapping:', err);
+    }
+};
+
 export const submitUserTaskProof = async (req, res) => {
     try {
         const taskId = req.params.id || req.body.taskId;
@@ -2618,6 +2695,11 @@ export const submitUserTaskProof = async (req, res) => {
                 message: `Your completion proof for campaign "${task.title}" has been successfully submitted and is pending review.`,
                 senderType: 'System'
             });
+        }
+        
+        // STEP D2: Apply Survey Answer to Profile Attribute Mapping (only on successful non-screenout valid answers)
+        if (isSurveyTask && !isScreenout) {
+            await applySurveyProfileMappings(worker, task, surveyResponses, isScreenout);
         }
 
         global.appDataVersion = Date.now();

@@ -490,7 +490,7 @@ export const QuestionEditor: React.FC<QuestionEditorProps> = ({
             )}
 
             {/* Conditional Branching / ShowIf Rules */}
-            <div className="pt-3 border-t border-slate-800/80">
+            <div className="pt-3 border-t border-slate-800/80 font-sans">
                 <div className="flex items-center justify-between mb-2">
                     <button
                         type="button"
@@ -562,6 +562,86 @@ export const QuestionEditor: React.FC<QuestionEditorProps> = ({
                                 className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white"
                             />
                         </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Profile Mapping Section */}
+            <div className="pt-3 border-t border-slate-800/80 font-sans">
+                <div className="flex items-center justify-between mb-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(question.profileMapping?.enabled)}
+                            onChange={(e) => {
+                                const nextEnabled = e.target.checked;
+                                onChange({
+                                    ...question,
+                                    profileMapping: {
+                                        enabled: nextEnabled,
+                                        fieldKey: question.profileMapping?.fieldKey || 'education'
+                                    }
+                                });
+                            }}
+                            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/20"
+                        />
+                        <span className="text-xs font-bold text-slate-400 hover:text-slate-200 flex items-center gap-1.5">
+                            <Sliders className="w-3.5 h-3.5 text-blue-400" /> Save Answer to Profile
+                        </span>
+                    </label>
+                </div>
+
+                {Boolean(question.profileMapping?.enabled) && (
+                    <div className="p-3.5 rounded-xl bg-blue-950/10 border border-blue-900/30 space-y-2">
+                        <div className="text-[11px] font-bold text-blue-300">
+                            Custom Attribute Name (User.customFields.[key])
+                        </div>
+                        <div className="flex gap-2 max-w-sm">
+                            <select
+                                value={['education', 'profession', 'employmentStatus', 'householdSize', 'deviceType', 'preferredActivity'].includes(question.profileMapping?.fieldKey || '') ? (question.profileMapping?.fieldKey || 'education') : 'custom'}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    onChange({
+                                        ...question,
+                                        profileMapping: {
+                                            enabled: true,
+                                            fieldKey: val === 'custom' ? '' : val
+                                        }
+                                    });
+                                }}
+                                className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                            >
+                                <option value="education">education</option>
+                                <option value="profession">profession</option>
+                                <option value="employmentStatus">employmentStatus</option>
+                                <option value="householdSize">householdSize</option>
+                                <option value="deviceType">deviceType</option>
+                                <option value="preferredActivity">preferredActivity</option>
+                                <option value="custom">-- Custom Attribute Key --</option>
+                            </select>
+
+                            {(!['education', 'profession', 'employmentStatus', 'householdSize', 'deviceType', 'preferredActivity'].includes(question.profileMapping?.fieldKey || '')) && (
+                                <input
+                                    type="text"
+                                    value={question.profileMapping?.fieldKey || ''}
+                                    onChange={(e) => {
+                                        const cleanVal = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                                        onChange({
+                                            ...question,
+                                            profileMapping: {
+                                                enabled: true,
+                                                fieldKey: cleanVal
+                                            }
+                                        });
+                                    }}
+                                    placeholder="Enter safe custom key"
+                                    className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white flex-1"
+                                />
+                            )}
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-normal">
+                            Successfully completed answers to this question will be mapped into the user's profile with provenance tracking metadata.
+                        </p>
                     </div>
                 )}
             </div>
