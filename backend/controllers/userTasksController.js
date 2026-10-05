@@ -865,13 +865,45 @@ export const updateUserTaskStatus = async (req, res) => {
         const oldStatus = task.status;
         const requestedStatus = status || task.status;
 
-        // Validations for Pause
-        if (requestedStatus === 'On Hold') {
-            if (oldStatus === 'On Hold') {
-                return res.status(400).json({ success: false, error: 'Campaign is already paused.' });
+        const isAdmin = Boolean(req.user && isUserAdmin(req.user));
+
+        // Enforce role-based lifecycle permissions (Bug 1 fix)
+        if (!isAdmin) {
+            // Non-admin owner can ONLY:
+            // 1. Pause an already live campaign: On Hold when oldStatus is Approved/Active
+            // 2. Resume a paused campaign: Approved/Active when oldStatus is On Hold
+            if (requestedStatus === 'On Hold') {
+                if (oldStatus === 'On Hold') {
+                    return res.status(400).json({ success: false, error: 'Campaign is already paused.' });
+                }
+                if (oldStatus !== 'Approved' && oldStatus !== 'Active') {
+                    return res.status(400).json({ success: false, error: 'Unable to pause campaign.' });
+                }
+            } else if (requestedStatus === 'Approved' || requestedStatus === 'Active') {
+                if (oldStatus !== 'On Hold') {
+                    return res.status(403).json({ success: false, error: 'Campaign creators cannot approve their own campaigns.' });
+                }
+            } else if (requestedStatus === 'Rejected') {
+                return res.status(403).json({ success: false, error: 'Only administrators can reject campaigns.' });
+            } else if (requestedStatus !== oldStatus) {
+                return res.status(403).json({ success: false, error: 'Unauthorized campaign status transition.' });
             }
-            if (oldStatus !== 'Approved' && oldStatus !== 'Active') {
-                return res.status(400).json({ success: false, error: 'Unable to pause campaign.' });
+        } else {
+            // Admin validation for pause
+            if (requestedStatus === 'On Hold') {
+                if (oldStatus === 'On Hold') {
+                    return res.status(400).json({ success: false, error: 'Campaign is already paused.' });
+                }
+                if (oldStatus !== 'Approved' && oldStatus !== 'Active') {
+                    return res.status(400).json({ success: false, error: 'Unable to pause campaign.' });
+                }
+            }
+        }
+
+        // Universal guard: completed or paid campaigns cannot be rejected
+        if (requestedStatus === 'Rejected') {
+            if (oldStatus === 'Completed' || oldStatus === 'Paid') {
+                return res.status(400).json({ success: false, error: 'Completed or paid campaigns cannot be rejected.' });
             }
         }
 
@@ -1148,55 +1180,83 @@ export const updateUserTaskStatus = async (req, res) => {
             details: historyDetails
         });
 
-        // If rejected and was pending/approved (not yet paid/completed refund), refund user or restore admin budget
+        // If rejected and was pending/approved/active/on hold (not yet paid/completed), refund user unused portion
         if (requestedStatus === 'Rejected') {
-            const baseFee = task.baseFeeCharged || 0;
-            const totalRefundUSD = Number((task.totalBudget + baseFee).toFixed(2));
-            const refundKey = `admin_budget_refund:rejection:${task._id}`;
-
-            if (oldStatus !== 'Rejected' && oldStatus !== 'Paid') {
+            if (oldStatus !== 'Rejected' && oldStatus !== 'Paid' && oldStatus !== 'Completed') {
                 const user = await User.findById(task.userId);
                 if (user) {
-                    const settings = await Setting.getSettings();
-                    const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278, USDT: 1 };
-                    const userCurr = user.currency || 'USDT';
+                    let refundAmountUSD = 0;
+                    if (oldStatus === 'Pending') {
+                        const baseFee = task.baseFeeCharged || 0;
+                        refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
+                    } else {
+                        const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
+                        if (remainingSlots > 0 && task.targetQuantity > 0) {
+                            const costPerSlotUSD = task.rewardPerTask + (task.adminCommission / task.targetQuantity);
+                            refundAmountUSD = Number((remainingSlots * costPerSlotUSD).toFixed(2));
+                        } else {
+                            refundAmountUSD = 0;
+                        }
+                    }
 
-                    let refundInUserCurr = totalRefundUSD * (rates[userCurr] || 1);
-                    refundInUserCurr = Number(refundInUserCurr.toFixed(2));
+                    if (refundAmountUSD > 0) {
+                        const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: refundAmountUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                        const totalOriginalFunded = Number(((taskFunding.fromInvestmentUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2)) || refundAmountUSD;
 
-                    // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
-                    user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + totalRefundUSD).toFixed(2));
-                    const taskFunding = task.fundingSourceBreakdown || { fromInvestmentUSD: totalRefundUSD, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                    const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                    user.campaignWalletSources = {
-                        fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + (taskFunding.fromInvestmentUSD || 0)).toFixed(2)),
-                        fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + (taskFunding.fromTaskEarningsUSD || 0)).toFixed(2)),
-                        fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + (taskFunding.fromRefundsUSD || 0)).toFixed(2))
-                    };
-                    task.refundedBreakdown = {
-                        fromInvestmentUSD: taskFunding.fromInvestmentUSD || 0,
-                        fromTaskEarningsUSD: taskFunding.fromTaskEarningsUSD || 0,
-                        fromRefundsUSD: taskFunding.fromRefundsUSD || 0
-                    };
-                    await user.save();
-                    await Transaction.create({
-                        userId: user._id,
-                        userName: user.username,
-                        currency: 'USD',
-                        type: 'Task Refund',
-                        amount: totalRefundUSD,
-                        amountUSD: totalRefundUSD,
-                        campaignId: task._id,
-                        sourceWallet: 'CampaignEscrow',
-                        destinationWallet: 'CampaignFunds',
-                        sourceBreakdown: {
-                            fromInvestmentUSD: taskFunding.fromInvestmentUSD || 0,
-                            fromTaskEarningsUSD: taskFunding.fromTaskEarningsUSD || 0,
-                            fromRefundsUSD: taskFunding.fromRefundsUSD || 0
-                        },
-                        description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${totalRefundUSD.toFixed(2)} USD)`,
-                        status: 'Approved'
-                    });
+                        let refundFromInvestment = 0;
+                        let refundFromTaskEarnings = 0;
+                        let refundFromRefunds = 0;
+
+                        if (oldStatus === 'Pending' || refundAmountUSD >= totalOriginalFunded) {
+                            refundFromInvestment = taskFunding.fromInvestmentUSD || 0;
+                            refundFromTaskEarnings = taskFunding.fromTaskEarningsUSD || 0;
+                            refundFromRefunds = taskFunding.fromRefundsUSD || 0;
+                        } else {
+                            const ratio = Math.min(1, refundAmountUSD / totalOriginalFunded);
+                            refundFromRefunds = Number(((taskFunding.fromRefundsUSD || 0) * ratio).toFixed(2));
+                            refundFromInvestment = Number(((taskFunding.fromInvestmentUSD || 0) * ratio).toFixed(2));
+                            refundFromTaskEarnings = Number(((taskFunding.fromTaskEarningsUSD || 0) * ratio).toFixed(2));
+
+                            const allocatedSum = Number((refundFromRefunds + refundFromInvestment + refundFromTaskEarnings).toFixed(2));
+                            const diff = Number((refundAmountUSD - allocatedSum).toFixed(2));
+                            if (diff !== 0) {
+                                refundFromInvestment = Number((refundFromInvestment + diff).toFixed(2));
+                            }
+                        }
+
+                        // Refund directly to Task Wallet Balance in USD and restore source attribution to campaignWalletSources
+                        user.taskWalletBalance = Number(((user.taskWalletBalance || 0) + refundAmountUSD).toFixed(2));
+                        const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                        user.campaignWalletSources = {
+                            fromInvestmentUSD: Number(((curSources.fromInvestmentUSD || 0) + refundFromInvestment).toFixed(2)),
+                            fromTaskEarningsUSD: Number(((curSources.fromTaskEarningsUSD || 0) + refundFromTaskEarnings).toFixed(2)),
+                            fromRefundsUSD: Number(((curSources.fromRefundsUSD || 0) + refundFromRefunds).toFixed(2))
+                        };
+                        task.refundedBreakdown = {
+                            fromInvestmentUSD: refundFromInvestment,
+                            fromTaskEarningsUSD: refundFromTaskEarnings,
+                            fromRefundsUSD: refundFromRefunds
+                        };
+                        await user.save();
+                        await Transaction.create({
+                            userId: user._id,
+                            userName: user.username,
+                            currency: 'USD',
+                            type: 'Task Refund',
+                            amount: refundAmountUSD,
+                            amountUSD: refundAmountUSD,
+                            campaignId: task._id,
+                            sourceWallet: 'CampaignEscrow',
+                            destinationWallet: 'CampaignFunds',
+                            sourceBreakdown: {
+                                fromInvestmentUSD: refundFromInvestment,
+                                fromTaskEarningsUSD: refundFromTaskEarnings,
+                                fromRefundsUSD: refundFromRefunds
+                            },
+                            description: `Refund for rejected user task credited to Campaign Wallet: ${task.title} ($${refundAmountUSD.toFixed(2)} USD)`,
+                            status: 'Approved'
+                        });
+                    }
                 }
             }
         }
