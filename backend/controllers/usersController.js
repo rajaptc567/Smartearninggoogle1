@@ -522,7 +522,7 @@ export const updateUser = async (req, res) => {
         // SECURITY: Role-aware field whitelisting
         
         // Fields standard users are allowed to modify
-        const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country', 'emailMarketingConsent', 'whatsappMarketingConsent', 'termsAccepted', 'privacyPolicyAcknowledged'];
+        const userWhitelist = ['fullName', 'email', 'phone', 'whatsapp', 'country', 'emailMarketingConsent', 'whatsappMarketingConsent', 'termsAccepted', 'privacyPolicyAcknowledged', 'gender', 'dateOfBirth'];
         
         // Fields admins are allowed to modify via this specific endpoint
         const adminWhitelist = [...userWhitelist, 'status', 'restrictions', 'role', 'activePlans', 'walletBalance', 'sponsor', 'emailVerified', 'whatsappVerified', 'termsVersion', 'privacyPolicyVersion', 'marketingConsentVersion'];
@@ -539,6 +539,31 @@ export const updateUser = async (req, res) => {
                 filteredUpdate[key] = req.body[key];
             }
         });
+
+        // Validate gender if updated
+        if (filteredUpdate.gender !== undefined && filteredUpdate.gender !== null && filteredUpdate.gender !== '') {
+            if (typeof filteredUpdate.gender !== 'string') {
+                return res.status(400).json({ success: false, error: 'Gender must be a string value.' });
+            }
+            const canonicalGenders = ['Male', 'Female', 'Other', 'Prefer not to say'];
+            if (!canonicalGenders.includes(filteredUpdate.gender) && filteredUpdate.gender !== userToUpdate.gender) {
+                return res.status(400).json({ success: false, error: 'Invalid gender option.' });
+            }
+        }
+
+        // Validate date of birth if updated
+        if (filteredUpdate.dateOfBirth !== undefined && filteredUpdate.dateOfBirth !== null && filteredUpdate.dateOfBirth !== '') {
+            const dobDate = new Date(filteredUpdate.dateOfBirth);
+            if (isNaN(dobDate.getTime())) {
+                return res.status(400).json({ success: false, error: 'Invalid date of birth.' });
+            }
+            if (dobDate > new Date()) {
+                return res.status(400).json({ success: false, error: 'Date of birth cannot be in the future.' });
+            }
+            filteredUpdate.dateOfBirth = dobDate.toISOString().split('T')[0]; // consistent clean 'YYYY-MM-DD' normalization
+        } else if (filteredUpdate.dateOfBirth === '') {
+            filteredUpdate.dateOfBirth = null;
+        }
 
         // Track consent timestamps when values change
         if (req.body.emailMarketingConsent !== undefined) {

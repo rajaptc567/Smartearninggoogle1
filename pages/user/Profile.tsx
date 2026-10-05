@@ -131,6 +131,35 @@ const Profile: React.FC = () => {
                             <input type="text" value={currentUser.currency} disabled className="mt-1 block w-full rounded-md sm:text-sm bg-gray-100 dark:bg-gray-700/50 border-gray-300 dark:border-gray-600 cursor-not-allowed" />
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Currency is set on registration and cannot be changed.</p>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium">Gender</label>
+                            <select
+                                name="gender"
+                                value={formData.gender || ''}
+                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            >
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                                <option value="Prefer not to say">Prefer not to say</option>
+                                {formData.gender && !['Male', 'Female', 'Other', 'Prefer not to say'].includes(formData.gender) && (
+                                    <option value={formData.gender}>{formData.gender}</option>
+                                )}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Date of Birth</label>
+                            <input
+                                type="date"
+                                name="dateOfBirth"
+                                value={formData.dateOfBirth ? formData.dateOfBirth.substring(0, 10) : ''}
+                                onChange={handleChange}
+                                max={new Date().toISOString().split('T')[0]}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                        </div>
                     </div>
                     <div className="text-right pt-2">
                         <Button type="submit" disabled={isSavingInfo}>
