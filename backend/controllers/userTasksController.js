@@ -2283,35 +2283,40 @@ export const submitUserTaskProof = async (req, res) => {
         if (canAutoApprove) {
             const claimedTask = await claimTaskCompletionSlot(task._id, worker._id);
             if (claimedTask) {
-                submission.status = 'Approved';
-                submission.paid = true;
-                submission.rewardClaimed = true;
-                submission.rewardPaidAt = new Date();
-                submission.isAutoApproved = true;
-                submission.autoApproved = true;
-                submission.approvalType = 'auto';
-                submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
-                await submission.save();
+                try {
+                    submission.status = 'Approved';
+                    submission.paid = true;
+                    submission.rewardClaimed = true;
+                    submission.rewardPaidAt = new Date();
+                    submission.isAutoApproved = true;
+                    submission.autoApproved = true;
+                    submission.approvalType = 'auto';
+                    submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
+                    await submission.save();
 
-                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
-                await worker.save();
+                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
+                    await worker.save();
 
-                const tx = await Transaction.create({
-                    userId: worker._id,
-                    userName: worker.username,
-                    currency: 'USD',
-                    type: 'Survey Reward',
-                    amount: task.rewardPerTask,
-                    amountUSD: task.rewardPerTask,
-                    campaignId: task._id,
-                    submissionId: submission._id,
-                    sourceWallet: 'CampaignEscrow',
-                    destinationWallet: 'TaskEarnings',
-                    description: `Earned reward for completing survey: "${task.title}"`,
-                    status: 'Approved'
-                });
-                submission.rewardTransactionId = tx._id;
-                await submission.save();
+                    const tx = await Transaction.create({
+                        userId: worker._id,
+                        userName: worker.username,
+                        currency: 'USD',
+                        type: 'Survey Reward',
+                        amount: task.rewardPerTask,
+                        amountUSD: task.rewardPerTask,
+                        campaignId: task._id,
+                        submissionId: submission._id,
+                        sourceWallet: 'CampaignEscrow',
+                        destinationWallet: 'TaskEarnings',
+                        description: `Earned reward for completing survey: "${task.title}"`,
+                        status: 'Approved'
+                    });
+                    submission.rewardTransactionId = tx._id;
+                    await submission.save();
+                } catch (autoApproveErr) {
+                    await releaseTaskCompletionSlot(task._id, worker._id);
+                    throw autoApproveErr;
+                }
             } else {
                 // Capacity limit reached or worker already completed task. Keep submission as Pending.
                 submission.status = 'Pending';
