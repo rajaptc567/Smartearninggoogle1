@@ -33,7 +33,7 @@ const upload = multer({
 const router = express.Router();
 
 router.route('/')
-    .get(getUserTasks)
+    .get(authorize(['user', 'admin']), getUserTasks)
     .post(taskActionLimiter, authorize(['user', 'admin']), createUserTask);
 
 router.route('/submissions')

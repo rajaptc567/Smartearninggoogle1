@@ -10,6 +10,7 @@ import Notification from '../models/Notification.js';
 import Withdrawal from '../models/Withdrawal.js';
 import { sendTemplateNotification } from '../utils/automation.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
+import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
 
 // Centralized admin & P0-2 email bypass check
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com'));
@@ -50,8 +51,33 @@ const executeWithOptionalTransaction = async (workFn) => {
 
 export const getUserTasks = async (req, res) => {
     try {
-        const tasks = await UserTask.find().sort({ createdAt: -1 });
-        res.status(200).json({ success: true, count: tasks.length, data: tasks });
+        if (!req.user) {
+            return res.status(401).json({ success: false, error: 'Authentication required to access user tasks.' });
+        }
+
+        // For admin/super_admin, preserve administrative access to all UserTask records
+        if (isUserAdmin(req.user)) {
+            const tasks = await UserTask.find().sort({ createdAt: -1 });
+            return res.status(200).json({ success: true, count: tasks.length, data: tasks });
+        }
+
+        const user = await User.findById(req.user.id).lean();
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found.' });
+        }
+
+        const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
+        const filteredTasks = tasks.filter(task => {
+            // Return campaigns owned by current user (for campaign management UI)
+            const isOwner = task.userId && String(task.userId) === String(user._id);
+            if (isOwner) {
+                return true;
+            }
+            // For campaigns owned by other users, return only those for which user is eligible
+            return isUserEligibleForUserTask(user, task);
+        });
+
+        res.status(200).json({ success: true, count: filteredTasks.length, data: filteredTasks });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -359,6 +385,45 @@ export const createUserTask = async (req, res) => {
             surveyConfig.version = effectiveSurveyVersion;
         }
 
+        // Normalize targeting configuration if provided (Phase D-2A)
+        let normalizedTargeting = undefined;
+        if (req.body.targeting && typeof req.body.targeting === 'object') {
+            const rawTargeting = req.body.targeting;
+            const countries = Array.isArray(rawTargeting.countries)
+                ? rawTargeting.countries.map(c => String(c).trim()).filter(c => c.length > 0)
+                : [];
+            const currencies = Array.isArray(rawTargeting.currencies)
+                ? rawTargeting.currencies.map(c => String(c).trim().toUpperCase()).filter(c => c.length > 0)
+                : [];
+            const genders = Array.isArray(rawTargeting.genders)
+                ? rawTargeting.genders.map(g => String(g).trim()).filter(g => g.length > 0)
+                : [];
+
+            let minAge = null;
+            if (rawTargeting.minAge !== undefined && rawTargeting.minAge !== null && rawTargeting.minAge !== '') {
+                const parsedMin = Number(rawTargeting.minAge);
+                if (Number.isFinite(parsedMin) && !isNaN(parsedMin) && parsedMin >= 0) {
+                    minAge = parsedMin;
+                }
+            }
+
+            let maxAge = null;
+            if (rawTargeting.maxAge !== undefined && rawTargeting.maxAge !== null && rawTargeting.maxAge !== '') {
+                const parsedMax = Number(rawTargeting.maxAge);
+                if (Number.isFinite(parsedMax) && !isNaN(parsedMax) && parsedMax >= 0) {
+                    maxAge = parsedMax;
+                }
+            }
+
+            normalizedTargeting = {
+                countries,
+                currencies,
+                genders,
+                minAge,
+                maxAge
+            };
+        }
+
         const task = await UserTask.create({
             userId: user._id,
             userName: user.username,
@@ -398,6 +463,7 @@ export const createUserTask = async (req, res) => {
             surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
             surveyConfig: isSurveyTask ? surveyConfig : null,
             surveyVersion: effectiveSurveyVersion,
+            targeting: normalizedTargeting,
             status: initialStatus,
             history: initialHistory
         });
@@ -1800,6 +1866,18 @@ export const submitUserTaskProof = async (req, res) => {
 
         const worker = await User.findById(workerId);
         if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
+
+        // Audience Targeting Enforcement (Phase D-2A)
+        const isOwner = task.userId && String(task.userId) === String(worker._id);
+        if (!isOwner) {
+            const isEligible = isUserEligibleForUserTask(worker, task);
+            if (!isEligible) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'You are not eligible for this task based on its audience requirements.'
+                });
+            }
+        }
 
         // Prevent duplicate submission by same worker for same task/survey
         const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
