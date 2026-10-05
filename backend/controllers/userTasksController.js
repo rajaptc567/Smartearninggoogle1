@@ -2156,7 +2156,20 @@ const applySurveyProfileMappings = async (user, task, surveyResponses, isScreeno
             if (bannedKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) continue;
 
             const response = responseMap.get(String(q.id));
-            if (!response) continue; // skipped or branch-unreached question
+            if (!response) continue; // no actual response -> DO NOT MAP
+
+            // Required Fix: Explicitly verify answered/reached/non-skipped questions using submission metadata
+            if (submission) {
+                const skippedArr = Array.isArray(submission.skippedQuestions) ? submission.skippedQuestions.map(String) : [];
+                if (skippedArr.includes(String(q.id))) {
+                    continue; // skipped question -> DO NOT MAP
+                }
+
+                const answeredPathArr = Array.isArray(submission.answeredPath) ? submission.answeredPath.map(String) : [];
+                if (answeredPathArr.length > 0 && !answeredPathArr.includes(String(q.id))) {
+                    continue; // not in valid reached/answered path -> DO NOT MAP
+                }
+            }
 
             let val = response.value;
             if (val === undefined || val === null || val === '') continue;
