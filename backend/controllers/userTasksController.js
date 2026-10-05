@@ -121,8 +121,13 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
     );
 
     if (updatedTask && updatedTask.currentCompletions >= updatedTask.targetQuantity && updatedTask.status !== 'Completed') {
-        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Completed' } });
-        updatedTask.status = 'Completed';
+        try {
+            await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Completed' } });
+            updatedTask.status = 'Completed';
+        } catch (statusErr) {
+            console.error('Warning: Failed to update UserTask status to Completed:', statusErr.message);
+            updatedTask.status = 'Completed';
+        }
     }
 
     return updatedTask;
@@ -149,8 +154,13 @@ const releaseTaskCompletionSlot = async (taskId, workerId) => {
     );
 
     if (updatedTask && updatedTask.status === 'Completed' && updatedTask.currentCompletions < updatedTask.targetQuantity) {
-        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Approved' } });
-        updatedTask.status = 'Approved';
+        try {
+            await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Approved' } });
+            updatedTask.status = 'Approved';
+        } catch (statusErr) {
+            console.error('Warning: Failed to update UserTask status to Approved during slot release:', statusErr.message);
+            updatedTask.status = 'Approved';
+        }
     }
 
     return updatedTask;
