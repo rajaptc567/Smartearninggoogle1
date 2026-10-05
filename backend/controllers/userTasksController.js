@@ -411,7 +411,7 @@ export const createUserTask = async (req, res) => {
 
         // Idempotency / Request Key logic
         const clientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
-        const finalIdempotencyKey = clientIdempotencyKey || `create_campaign:${user._id}:${title}:${targetQuantity}:${rewardPerTask}:${effectiveLink}`;
+        const finalIdempotencyKey = clientIdempotencyKey || null;
 
         let createdTask = null;
         let createdTransaction = null;
@@ -419,11 +419,13 @@ export const createUserTask = async (req, res) => {
         let reservedAmountUSD = 0;
 
         const txResult = await executeWithOptionalTransaction(async (session) => {
-            // Step 1: Idempotency check inside transaction
-            const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey }).session(session || null);
-            if (existingTx) {
-                const existingTask = await UserTask.findById(existingTx.campaignId).session(session || null);
-                return { alreadyExists: true, task: existingTask, transaction: existingTx };
+            // Step 1: Idempotency check inside transaction (only if key is provided by client)
+            if (finalIdempotencyKey) {
+                const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey }).session(session || null);
+                if (existingTx) {
+                    const existingTask = await UserTask.findById(existingTx.campaignId).session(session || null);
+                    return { alreadyExists: true, task: existingTask, transaction: existingTx };
+                }
             }
 
             let sourceFromInvestment = 0;
@@ -608,7 +610,7 @@ export const createUserTask = async (req, res) => {
                     destinationWallet: 'CampaignEscrow',
                     description: `Admin Campaign Budget: ${title} (Budget + Base Fee of ${baseFeeCharged} USD reserved from Admin Budget)`,
                     status: 'Approved',
-                    idempotencyKey: finalIdempotencyKey
+                    ...(finalIdempotencyKey ? { idempotencyKey: finalIdempotencyKey } : {})
                 }], session ? { session } : {});
             } else {
                 [tx] = await Transaction.create([{
@@ -628,7 +630,7 @@ export const createUserTask = async (req, res) => {
                     },
                     description: `Submitted User Task: ${title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
                     status: 'Approved',
-                    idempotencyKey: finalIdempotencyKey
+                    ...(finalIdempotencyKey ? { idempotencyKey: finalIdempotencyKey } : {})
                 }], session ? { session } : {});
             }
 
