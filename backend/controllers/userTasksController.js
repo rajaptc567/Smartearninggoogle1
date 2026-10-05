@@ -2119,9 +2119,16 @@ export const getUserTaskSubmissions = async (req, res) => {
     }
 };
 
-const applySurveyProfileMappings = async (user, task, surveyResponses, isScreenout) => {
+const applySurveyProfileMappings = async (user, task, surveyResponses, isScreenout, submission) => {
     try {
         if (!task || !task.isSurvey || isScreenout) return;
+        
+        // Fix 3: Profile mapping must not accept low-quality / invalid profile data
+        if (submission && (submission.attentionCheckPassed === false || (Array.isArray(submission.qualityFlags) && submission.qualityFlags.length > 0) || submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
+            console.warn(`[D2 Profile Mapping Skipped] Survey submission for task ${task._id} failed quality checks or qualification.`);
+            return;
+        }
+
         const surveyConfig = task.surveyConfig || {};
         const questions = Array.isArray(surveyConfig.questions) ? surveyConfig.questions : [];
         if (questions.length === 0) return;
@@ -2143,28 +2150,29 @@ const applySurveyProfileMappings = async (user, task, surveyResponses, isScreeno
             const fieldKey = String(mapping.fieldKey).trim();
             if (!fieldKey) continue;
 
-            // Strict security checks for fieldKey (Requirement 2 & 9)
+            // Fix 5: Strict security checks for fieldKey
             if (/[.$]/.test(fieldKey)) continue; // reject dot or dollar operators
             const bannedKeys = ['__proto__', 'constructor', 'prototype', 'username', 'email', 'password', 'role', 'phone', 'whatsapp', 'country', 'address', 'city', 'postalCode', 'telegram', 'gender', 'dateOfBirth', 'currency', 'walletBalance', 'taskWalletBalance', 'taskEarningsBalance', 'status', 'restrictions'];
             if (bannedKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) continue;
 
             const response = responseMap.get(String(q.id));
-            if (!response) continue;
+            if (!response) continue; // skipped or branch-unreached question
 
             let val = response.value;
             if (val === undefined || val === null || val === '') continue;
 
-            // Value Normalization (Requirement 7)
+            // Value Normalization
             if (typeof val === 'string') {
                 val = val.trim();
                 if (val.length > 500) {
-                    val = val.substring(0, 500); // apply reasonable server-side limit of 500 characters
+                    val = val.substring(0, 500);
                 }
             } else if (Array.isArray(val)) {
                 val = val.map(v => (typeof v === 'string') ? v.trim().substring(0, 200) : v).filter(Boolean);
+                if (val.length === 0) continue;
             }
 
-            // Construct Provenance Metadata (Requirement 6)
+            // Construct Provenance Metadata (Fix 4)
             updatesToApply[fieldKey] = {
                 value: val,
                 source: 'survey',
@@ -2175,24 +2183,29 @@ const applySurveyProfileMappings = async (user, task, surveyResponses, isScreeno
             };
         }
 
-        if (Object.keys(updatesToApply).length === 0) return;
+        const keysCount = Object.keys(updatesToApply).length;
+        if (keysCount === 0) return;
 
-        // Re-fetch user in transaction-safe way if session is active or fallback normally
-        const freshUser = await User.findById(user._id);
-        if (!freshUser) return;
-
-        const currentCustomFields = freshUser.customFields || {};
-        
-        // Merge only the specific mapped fields safely without overwriting other pre-existing customFields (Requirement 10)
+        // Fix 1: Make custom field update safe against concurrent writes via atomic MongoDB dot-notation update operations
+        // This updates ONLY the specific mapped customFields keys without replacing or removing unrelated customFields.
+        const updateOps = {};
         for (const [k, v] of Object.entries(updatesToApply)) {
-            currentCustomFields[k] = v;
+            updateOps[`customFields.${k}`] = v;
         }
 
-        freshUser.customFields = currentCustomFields;
-        freshUser.markModified('customFields');
-        await freshUser.save();
+        const updateResult = await User.updateOne(
+            { _id: user._id },
+            { $set: updateOps }
+        );
+
+        if (!updateResult || updateResult.matchedCount === 0) {
+            console.error(`[D2 Profile Mapping Error] User ${user._id} not found during atomic customFields update for task ${task._id}`);
+        } else {
+            console.log(`[D2 Profile Mapping Success] Successfully mapped ${keysCount} profile attribute(s) atomically for user ${user._id} from task ${task._id}`);
+        }
     } catch (err) {
-        console.error('Failed to process survey profile mapping:', err);
+        // Fix 2: Do not silently hide profile mapping failures; log with rich context but do not break survey submission
+        console.error(`[D2 Profile Mapping Failure] Error occurred while mapping profile attributes for user ${user?._id} on task ${task?._id}:`, err);
     }
 };
 
@@ -2699,7 +2712,7 @@ export const submitUserTaskProof = async (req, res) => {
         
         // STEP D2: Apply Survey Answer to Profile Attribute Mapping (only on successful non-screenout valid answers)
         if (isSurveyTask && !isScreenout) {
-            await applySurveyProfileMappings(worker, task, surveyResponses, isScreenout);
+            await applySurveyProfileMappings(worker, task, surveyResponses, isScreenout, submission);
         }
 
         global.appDataVersion = Date.now();
