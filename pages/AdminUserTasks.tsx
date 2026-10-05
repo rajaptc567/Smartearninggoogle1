@@ -11,7 +11,7 @@ import UserTasksSubmit from './user/UserTasksSubmit';
 
 const AdminUserTasks: React.FC = () => {
     const { state, dispatch } = useData();
-    const { userTasks, userTaskSubmissions, settings, users, investmentPlans } = state;
+    const { userTasks, userTaskSubmissions, settings, users, investmentPlans, tasks } = state;
 
     const [activeTab, setActiveTab] = useState<'campaigns' | 'submissions' | 'rates' | 'proof-limits' | 'survey-settings' | 'reset-data' | 'create-campaign'>('campaigns');
 
@@ -104,6 +104,9 @@ const AdminUserTasks: React.FC = () => {
     const [surveyMinSecondsPerQuestion, setSurveyMinSecondsPerQuestion] = useState<number>(settings.surveyConfig?.minSecondsPerQuestion ?? 6);
     const [surveyDefaultApprovalMode, setSurveyDefaultApprovalMode] = useState<string>(settings.surveyConfig?.defaultApprovalMode || 'auto');
     const [surveyAttentionCheckPassThreshold, setSurveyAttentionCheckPassThreshold] = useState<number>(settings.surveyConfig?.attentionCheckPassThreshold ?? 100);
+    const [mandatoryReqEnabled, setMandatoryReqEnabled] = useState<boolean>(settings.mandatoryWithdrawalRequirement?.enabled ?? false);
+    const [mandatoryReqTaskId, setMandatoryReqTaskId] = useState<string>(settings.mandatoryWithdrawalRequirement?.requiredTaskId ?? '');
+    const [mandatoryReqVersion, setMandatoryReqVersion] = useState<number>(settings.mandatoryWithdrawalRequirement?.requiredTaskVersion ?? 1);
     const [isSavingSurveySettings, setIsSavingSurveySettings] = useState<boolean>(false);
     const [analyticsTaskId, setAnalyticsTaskId] = useState<string | null>(null);
 
@@ -114,6 +117,12 @@ const AdminUserTasks: React.FC = () => {
             const updatedSettings = {
                 ...settings,
                 surveyCampaignsEnabled: Boolean(surveyCampaignsEnabled),
+                mandatoryWithdrawalRequirement: {
+                    enabled: Boolean(mandatoryReqEnabled),
+                    requiredTaskId: mandatoryReqTaskId.trim(),
+                    requiredTaskVersion: Number(mandatoryReqVersion) || 1,
+                    requirementType: 'task_or_survey'
+                },
                 surveyConfig: {
                     ...settings.surveyConfig,
                     surveyCampaignsEnabled: Boolean(surveyCampaignsEnabled),
@@ -1374,6 +1383,111 @@ const AdminUserTasks: React.FC = () => {
                                     className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
                                 />
                             </div>
+                        </div>
+
+                        {/* Mandatory Work & Earn Withdrawal Requirement */}
+                        <div className="p-6 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 space-y-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400">
+                                            Mandatory Work &amp; Earn Withdrawal Requirement
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${mandatoryReqEnabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+                                            {mandatoryReqEnabled ? 'ENABLED' : 'OFF'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 dark:text-slate-300 mt-1">
+                                        When enabled, members cannot withdraw Work &amp; Earn funds until they have completed the selected campaign or survey.
+                                    </p>
+                                    <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 font-medium mt-0.5">
+                                        • Scope: Applies only to Work &amp; Earn (&apos;isHub&apos;) withdrawals. Investment withdrawals are completely unaffected.
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={mandatoryReqEnabled} 
+                                        onChange={(e) => setMandatoryReqEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                                </label>
+                            </div>
+
+                            {mandatoryReqEnabled && (
+                                <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-indigo-100 dark:border-indigo-900/40">
+                                    <div className="space-y-1.5">
+                                        <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                            Select Required Task or Survey
+                                        </label>
+                                        <select
+                                            value={mandatoryReqTaskId}
+                                            onChange={(e) => {
+                                                const newId = e.target.value;
+                                                setMandatoryReqTaskId(newId);
+                                                const selectedTask = userTasks.find(t => String(t._id) === newId);
+                                                if (selectedTask?.isSurvey) {
+                                                    setMandatoryReqVersion(selectedTask.surveyVersion || selectedTask.surveyConfig?.version || 1);
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 font-medium text-xs text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">-- Select a Task or Survey --</option>
+                                            <optgroup label="User Tasks &amp; Surveys">
+                                                {userTasks.map(t => (
+                                                    <option key={t._id} value={t._id}>
+                                                        {t.isSurvey ? '[Survey]' : '[Task]'} {t.title} ({t.category})
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                            {tasks && tasks.length > 0 && (
+                                                <optgroup label="Admin Task Hub Tasks">
+                                                    {tasks.map(t => (
+                                                        <option key={t._id} value={t._id}>
+                                                            [Admin Task] {t.title}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
+                                            )}
+                                        </select>
+                                    </div>
+
+                                    {(() => {
+                                        const selectedTask = userTasks.find(t => String(t._id) === mandatoryReqTaskId);
+                                        const isSurveySelected = selectedTask ? Boolean(selectedTask.isSurvey) : false;
+
+                                        if (!isSurveySelected) {
+                                            return (
+                                                <div className="flex items-end">
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 p-2.5">
+                                                        For standard tasks, workers must have an <strong>Approved</strong> submission record before withdrawal is permitted.
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div className="space-y-1.5">
+                                                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                    Required Survey Version
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    step="1"
+                                                    value={mandatoryReqVersion}
+                                                    onChange={(e) => setMandatoryReqVersion(Math.max(1, parseInt(e.target.value) || 1))}
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                                />
+                                                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                                    Strict versioning enforced: Submissions for older versions (e.g. version 1) will not unlock withdrawals if version {mandatoryReqVersion} is specified.
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
 
                         <Button type="submit" variant="primary" isLoading={isSavingSurveySettings} className="w-full py-4 text-base font-black uppercase tracking-wider">

@@ -373,6 +373,12 @@ export interface Settings {
     taskCategoryPresets?: any;
     surveyCampaignsEnabled?: boolean;
     surveyConfig?: any;
+    mandatoryWithdrawalRequirement?: {
+        enabled: boolean;
+        requiredTaskId?: string;
+        requiredTaskVersion?: number;
+        requirementType?: 'task_or_survey' | 'survey' | 'task';
+    };
     userTaskProofLimits?: any;
     signUpConfig?: {
         customTitle?: string;
@@ -814,6 +820,7 @@ export interface UserTask {
     surveyQuestionsCount?: number;
     surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
     surveyConfig?: SurveyConfig;
+    surveyVersion?: number;
 }
 
 export interface UserTaskSubmission {

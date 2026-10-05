@@ -613,6 +613,12 @@ const SettingSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: {}
     },
+    mandatoryWithdrawalRequirement: {
+        enabled: { type: Boolean, default: false },
+        requiredTaskId: { type: String, default: '' },
+        requiredTaskVersion: { type: Number, default: 1 },
+        requirementType: { type: String, default: 'task_or_survey' }
+    },
     hubEnabled: { type: Boolean, default: true },
     hubMinDeposit: { type: Number, default: 5 },
     hubMaxDeposit: { type: Number, default: 1000 },

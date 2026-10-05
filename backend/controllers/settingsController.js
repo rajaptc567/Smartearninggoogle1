@@ -1,6 +1,8 @@
 
 import Setting from '../models/Setting.js';
 import User from '../models/User.js';
+import UserTask from '../models/UserTask.js';
+import Task from '../models/Task.js';
 import EmailLog from '../models/EmailLog.js';
 import { canUserAccessInvestmentModule } from '../utils/investmentAccess.js';
 import { sendEmail, APPROVED_SENDERS } from '../services/emailService.js';
@@ -325,6 +327,47 @@ export const updateSettings = async (req, res) => {
 
         if (req.body.campaignConvertEnabled !== undefined) {
             req.body.campaignConvertEnabled = Boolean(req.body.campaignConvertEnabled);
+        }
+
+        // Validate Mandatory Withdrawal Requirement Configuration
+        if (req.body.mandatoryWithdrawalRequirement && typeof req.body.mandatoryWithdrawalRequirement === 'object') {
+            const mReq = req.body.mandatoryWithdrawalRequirement;
+            const isEnabled = Boolean(mReq.enabled);
+            if (isEnabled) {
+                if (!mReq.requiredTaskId || typeof mReq.requiredTaskId !== 'string' || !mReq.requiredTaskId.trim()) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Mandatory withdrawal requirement requires a selected task ID when enabled.'
+                    });
+                }
+                const taskIdTrimmed = mReq.requiredTaskId.trim();
+                let taskFound = false;
+                try {
+                    const ut = await UserTask.findById(taskIdTrimmed).lean();
+                    if (ut) taskFound = true;
+                    else {
+                        const at = await Task.findById(taskIdTrimmed).lean();
+                        if (at) taskFound = true;
+                    }
+                } catch (_) {}
+
+                if (!taskFound) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'The selected required task does not exist.'
+                    });
+                }
+
+                if (mReq.requiredTaskVersion !== undefined && mReq.requiredTaskVersion !== null && mReq.requiredTaskVersion !== '') {
+                    const v = Number(mReq.requiredTaskVersion);
+                    if (!Number.isInteger(v) || v <= 0) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Required task version must be a positive integer.'
+                        });
+                    }
+                }
+            }
         }
 
         // Admin Campaign Budget Accounting Integrity Validation

@@ -392,6 +392,7 @@ export const createUserTask = async (req, res) => {
             surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
             surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
             surveyConfig: isSurveyTask ? surveyConfig : null,
+            surveyVersion: isSurveyTask ? (Number(req.body.surveyVersion || surveyConfig?.version) || 1) : 1,
             status: initialStatus,
             history: initialHistory
         });

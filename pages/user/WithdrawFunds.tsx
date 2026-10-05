@@ -354,6 +354,63 @@ const WithdrawFunds: React.FC = () => {
         });
     }, [tasks, currentUser, isTasksEnabled]);
 
+    // --- PHASE C: MANDATORY REQUIREMENT UNMET STATUS ---
+    const mandatoryRequirementUnmet = useMemo(() => {
+        if (!isTasksEnabled || !settings?.mandatoryWithdrawalRequirement?.enabled || !settings.mandatoryWithdrawalRequirement.requiredTaskId) {
+            return null;
+        }
+        const req = settings.mandatoryWithdrawalRequirement;
+        const reqTaskId = String(req.requiredTaskId).trim();
+        const reqVersion = Number(req.requiredTaskVersion) || 1;
+
+        // 1. Check UserTasks (surveys & campaigns)
+        const ut = (state.userTasks || []).find((t: any) => String(t._id) === reqTaskId);
+        if (ut) {
+            const isSurvey = Boolean(ut.isSurvey);
+            const sub = (state.userTaskSubmissions || []).find((s: any) =>
+                String(s.taskId) === reqTaskId &&
+                String(s.workerId) === String(currentUser?._id || currentUser?.id)
+            );
+            const isApproved = sub && (sub.status === 'Approved' || sub.status === 'Paid');
+            const isQualified = isSurvey ? (sub?.surveyQualificationStatus !== 'Disqualified' && sub?.surveyQualificationStatus !== 'Screenout') : true;
+            const versionMatch = isSurvey && reqVersion ? (Number(sub?.surveyVersion) || 1) === reqVersion : true;
+
+            if (!isApproved || !isQualified || !versionMatch) {
+                return {
+                    type: isSurvey ? 'survey' : 'user_task',
+                    title: ut.title,
+                    taskId: ut._id,
+                    requiredVersion: isSurvey ? reqVersion : undefined,
+                    submissionStatus: sub ? sub.status : 'Not Started',
+                    submissionVersion: sub?.surveyVersion,
+                    isSurvey
+                };
+            }
+            return null;
+        }
+
+        // 2. Check Admin Tasks
+        const at = (tasks || []).find((t: any) => String(t._id) === reqTaskId);
+        if (at) {
+            const approved = (currentUser?.completedTasks || []).some((ct: any) =>
+                ct && ct.status === 'Approved' && String(ct.taskId?._id || ct.taskId) === reqTaskId
+            );
+            if (!approved) {
+                return {
+                    type: 'task',
+                    title: at.title,
+                    taskId: at._id,
+                    submissionStatus: (currentUser?.completedTasks || []).find((ct: any) =>
+                        String(ct.taskId?._id || ct.taskId) === reqTaskId
+                    )?.status || 'Not Started',
+                    isSurvey: false
+                };
+            }
+        }
+
+        return null;
+    }, [isTasksEnabled, settings?.mandatoryWithdrawalRequirement, state.userTasks, state.userTaskSubmissions, tasks, currentUser]);
+
     // --- WORK & EARN CONDITIONAL WITHDRAWAL RULES ENGINE ---
     const ruleEvaluation = useMemo(() => {
         if (!currentUser) return { passed: true, blockedByRule: null, logs: [], currentAttemptNumber: 1 };
@@ -714,8 +771,8 @@ const WithdrawFunds: React.FC = () => {
         );
     }
 
-    // --- RENDER LOCKED SCREEN IF TASKS PENDING ---
-    if (pendingRequiredTasks.length > 0) {
+    // --- RENDER LOCKED SCREEN IF TASKS PENDING OR MANDATORY REQUIREMENT UNMET ---
+    if (pendingRequiredTasks.length > 0 || mandatoryRequirementUnmet) {
         return (
             <div className="max-w-2xl mx-auto mt-10 p-10 bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-2xl border border-red-100 dark:border-red-900/30 text-center animate-fade-in">
                 <div className="flex flex-col items-center">
@@ -728,6 +785,37 @@ const WithdrawFunds: React.FC = () => {
                     </p>
                     
                     <div className="w-full space-y-4 mb-10 text-left">
+                        {mandatoryRequirementUnmet && (
+                            <div className="flex items-center justify-between p-6 bg-indigo-50/50 dark:bg-indigo-950/40 rounded-3xl border border-indigo-200 dark:border-indigo-800 group hover:border-indigo-600 transition-all">
+                                <div className="flex flex-col">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tight">
+                                            {mandatoryRequirementUnmet.title}
+                                        </span>
+                                        {mandatoryRequirementUnmet.requiredVersion && (
+                                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                                                v{mandatoryRequirementUnmet.requiredVersion}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-[9px] text-red-600 font-black uppercase tracking-[0.2em]">
+                                            Mandatory {mandatoryRequirementUnmet.isSurvey ? 'Survey' : 'Requirement'}
+                                        </span>
+                                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">
+                                            • Status: {mandatoryRequirementUnmet.submissionStatus}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => navigate(mandatoryRequirementUnmet.type === 'survey' || mandatoryRequirementUnmet.type === 'user_task' ? '/member/user-tasks' : '/member/tasks')}
+                                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                                >
+                                    Complete {mandatoryRequirementUnmet.isSurvey ? 'Survey' : 'Task'} &rarr;
+                                </button>
+                            </div>
+                        )}
+
                         {pendingRequiredTasks.map(task => (
                             <div key={task._id} className="flex items-center justify-between p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800 group hover:border-blue-600 transition-all">
                                 <div className="flex flex-col">

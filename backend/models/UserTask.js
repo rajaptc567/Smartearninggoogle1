@@ -165,6 +165,10 @@ const UserTaskSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         default: null
     },
+    surveyVersion: {
+        type: Number,
+        default: 1
+    },
     date: {
         type: Date,
         default: Date.now
