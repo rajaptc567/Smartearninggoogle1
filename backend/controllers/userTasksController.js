@@ -409,244 +409,259 @@ export const createUserTask = async (req, res) => {
         const fundingSourceType = isCreatedByAdmin ? 'admin_budget' : 'member_wallet';
         const adminBudgetAllocatedUSD = isCreatedByAdmin ? totalAmountUSD : 0;
 
-        let deductedFromTaskWallet = false;
-        let sourceFromInvestment = 0;
-        let sourceFromTaskEarnings = 0;
-        let sourceFromRefunds = 0;
+        // Idempotency / Request Key logic
+        const clientIdempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || req.body.requestId || req.body.requestKey;
+        const finalIdempotencyKey = clientIdempotencyKey || `create_campaign:${user._id}:${title}:${targetQuantity}:${rewardPerTask}:${effectiveLink}`;
 
-        if (isCreatedByAdmin) {
-            // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD
-            const updatedSetting = await Setting.findOneAndUpdate(
-                {
-                    _id: settings._id,
-                    'adminCampaignBudget.enabled': true,
-                    'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
-                },
-                {
-                    $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
-                    $set: { dataVersion: Date.now() }
-                },
-                { new: true }
-            );
+        let createdTask = null;
+        let createdTransaction = null;
+        let adminBudgetReserved = false;
+        let reservedAmountUSD = 0;
 
-            if (!updatedSetting) {
-                const currentSetting = await Setting.getSettings();
-                if (!currentSetting.adminCampaignBudget?.enabled) {
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: 'Admin Campaign Budget is currently disabled in System Settings.' 
-                    });
-                }
-                const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
-                return res.status(400).json({ 
-                    success: false, 
-                    error: `Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.` 
-                });
+        const txResult = await executeWithOptionalTransaction(async (session) => {
+            // Step 1: Idempotency check inside transaction
+            const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey }).session(session || null);
+            if (existingTx) {
+                const existingTask = await UserTask.findById(existingTx.campaignId).session(session || null);
+                return { alreadyExists: true, task: existingTask, transaction: existingTx };
             }
 
-            adminBudgetReserved = true;
-            reservedAmountUSD = totalAmountUSD;
-        } else {
-            // Existing member wallet check and deduction logic (runs 100% byte-for-byte as before)
-            if ((user.taskWalletBalance || 0) >= totalAmountUSD) {
-                // Track source composition from campaignWalletSources
-                const curSources = user.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
-                let remainingToDeduct = totalAmountUSD;
+            let sourceFromInvestment = 0;
+            let sourceFromTaskEarnings = 0;
+            let sourceFromRefunds = 0;
+            let deductedFromTaskWallet = false;
 
-                // 1. Consume fromRefunds first
-                const deductRefunds = Math.min(curSources.fromRefundsUSD || 0, remainingToDeduct);
-                sourceFromRefunds = deductRefunds;
-                remainingToDeduct = Number((remainingToDeduct - deductRefunds).toFixed(2));
+            if (isCreatedByAdmin) {
+                // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD
+                const updatedSetting = await Setting.findOneAndUpdate(
+                    {
+                        _id: settings._id,
+                        'adminCampaignBudget.enabled': true,
+                        'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
+                    },
+                    {
+                        $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
+                        $set: { dataVersion: Date.now() }
+                    },
+                    { new: true, ...(session ? { session } : {}) }
+                );
 
-                // 2. Consume fromInvestment next
-                const deductInv = Math.min(curSources.fromInvestmentUSD || 0, remainingToDeduct);
-                sourceFromInvestment = deductInv;
-                remainingToDeduct = Number((remainingToDeduct - deductInv).toFixed(2));
-
-                // 3. Consume fromTaskEarnings next
-                const deductEarn = Math.min(curSources.fromTaskEarningsUSD || 0, remainingToDeduct);
-                sourceFromTaskEarnings = deductEarn;
-                remainingToDeduct = Number((remainingToDeduct - deductEarn).toFixed(2));
-
-                // If any leftover due to older unstratified balance, assign to investment
-                if (remainingToDeduct > 0) {
-                    sourceFromInvestment = Number((sourceFromInvestment + remainingToDeduct).toFixed(2));
+                if (!updatedSetting) {
+                    const currentSetting = await Setting.getSettings();
+                    if (!currentSetting.adminCampaignBudget?.enabled) {
+                        throw new Error('Admin Campaign Budget is currently disabled in System Settings.');
+                    }
+                    const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
+                    throw new Error(`Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.`);
                 }
 
-                user.campaignWalletSources = {
-                    fromInvestmentUSD: Math.max(0, Number(((curSources.fromInvestmentUSD || 0) - sourceFromInvestment).toFixed(2))),
-                    fromTaskEarningsUSD: Math.max(0, Number(((curSources.fromTaskEarningsUSD || 0) - sourceFromTaskEarnings).toFixed(2))),
-                    fromRefundsUSD: Math.max(0, Number(((curSources.fromRefundsUSD || 0) - sourceFromRefunds).toFixed(2)))
-                };
-
-                user.taskWalletBalance = Number(((user.taskWalletBalance || 0) - totalAmountUSD).toFixed(2));
-                deductedFromTaskWallet = true;
-            } else if (user.walletBalance >= deductionInUserCurr) {
-                user.walletBalance = Number((user.walletBalance - deductionInUserCurr).toFixed(2));
-                sourceFromInvestment = totalAmountUSD;
+                adminBudgetReserved = true;
+                reservedAmountUSD = totalAmountUSD;
             } else {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: `Insufficient Task Wallet balance. Required: $${totalAmountUSD} USD, Available Task Wallet: $${(user.taskWalletBalance || 0).toFixed(2)} USD` 
-                });
-            }
-
-            // Save user balance updates
-            await user.save();
-        }
-
-        const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
-        const initialStatus = shouldPublishNow ? 'Approved' : 'Pending';
-        const initialHistory = shouldPublishNow ? [{
-            action: 'Approved',
-            previousStatus: 'Pending',
-            newStatus: 'Approved',
-            timestamp: new Date(),
-            performedBy: req.user ? req.user.id.toString() : user._id.toString(),
-            details: 'Admin published campaign immediately upon creation.'
-        }] : [];
-
-        const effectiveSurveyVersion = isSurveyTask ? (Number(req.body.surveyVersion || surveyConfig?.version) || 1) : 1;
-        if (isSurveyTask && surveyConfig) {
-            surveyConfig.version = effectiveSurveyVersion;
-        }
-
-        // Normalize targeting configuration if provided (Phase D-2A)
-        let normalizedTargeting = undefined;
-        if (req.body.targeting && typeof req.body.targeting === 'object') {
-            const rawTargeting = req.body.targeting;
-            const countries = Array.isArray(rawTargeting.countries)
-                ? rawTargeting.countries.map(c => String(c).trim()).filter(c => c.length > 0)
-                : [];
-            const currencies = Array.isArray(rawTargeting.currencies)
-                ? rawTargeting.currencies.map(c => String(c).trim().toUpperCase()).filter(c => c.length > 0)
-                : [];
-            const genders = Array.isArray(rawTargeting.genders)
-                ? rawTargeting.genders.map(g => String(g).trim()).filter(g => g.length > 0)
-                : [];
-
-            let minAge = null;
-            if (rawTargeting.minAge !== undefined && rawTargeting.minAge !== null && rawTargeting.minAge !== '') {
-                const parsedMin = Number(rawTargeting.minAge);
-                if (Number.isFinite(parsedMin) && !isNaN(parsedMin) && parsedMin >= 0) {
-                    minAge = parsedMin;
+                // Re-fetch user in transaction to ensure balance is strictly accurate and locked
+                const userInTx = await User.findById(user._id).session(session || null);
+                if (!userInTx) {
+                    throw new Error('User not found.');
                 }
-            }
 
-            let maxAge = null;
-            if (rawTargeting.maxAge !== undefined && rawTargeting.maxAge !== null && rawTargeting.maxAge !== '') {
-                const parsedMax = Number(rawTargeting.maxAge);
-                if (Number.isFinite(parsedMax) && !isNaN(parsedMax) && parsedMax >= 0) {
-                    maxAge = parsedMax;
+                if ((userInTx.taskWalletBalance || 0) >= totalAmountUSD) {
+                    const curSources = userInTx.campaignWalletSources || { fromInvestmentUSD: 0, fromTaskEarningsUSD: 0, fromRefundsUSD: 0 };
+                    let remainingToDeduct = totalAmountUSD;
+
+                    const deductRefunds = Math.min(curSources.fromRefundsUSD || 0, remainingToDeduct);
+                    sourceFromRefunds = deductRefunds;
+                    remainingToDeduct = Number((remainingToDeduct - deductRefunds).toFixed(2));
+
+                    const deductInv = Math.min(curSources.fromInvestmentUSD || 0, remainingToDeduct);
+                    sourceFromInvestment = deductInv;
+                    remainingToDeduct = Number((remainingToDeduct - deductInv).toFixed(2));
+
+                    const deductEarn = Math.min(curSources.fromTaskEarningsUSD || 0, remainingToDeduct);
+                    sourceFromTaskEarnings = deductEarn;
+                    remainingToDeduct = Number((remainingToDeduct - deductEarn).toFixed(2));
+
+                    if (remainingToDeduct > 0) {
+                        sourceFromInvestment = Number((sourceFromInvestment + remainingToDeduct).toFixed(2));
+                    }
+
+                    userInTx.campaignWalletSources = {
+                        fromInvestmentUSD: Math.max(0, Number(((curSources.fromInvestmentUSD || 0) - sourceFromInvestment).toFixed(2))),
+                        fromTaskEarningsUSD: Math.max(0, Number(((curSources.fromTaskEarningsUSD || 0) - sourceFromTaskEarnings).toFixed(2))),
+                        fromRefundsUSD: Math.max(0, Number(((curSources.fromRefundsUSD || 0) - sourceFromRefunds).toFixed(2)))
+                    };
+
+                    userInTx.taskWalletBalance = Number(((userInTx.taskWalletBalance || 0) - totalAmountUSD).toFixed(2));
+                    deductedFromTaskWallet = true;
+                } else if (userInTx.walletBalance >= deductionInUserCurr) {
+                    userInTx.walletBalance = Number((userInTx.walletBalance - deductionInUserCurr).toFixed(2));
+                    sourceFromInvestment = totalAmountUSD;
+                } else {
+                    throw new Error(`Insufficient Task Wallet balance. Required: $${totalAmountUSD} USD, Available Task Wallet: $${(userInTx.taskWalletBalance || 0).toFixed(2)} USD`);
                 }
+
+                await userInTx.save(session ? { session } : undefined);
             }
 
-            normalizedTargeting = {
-                countries,
-                currencies,
-                genders,
-                minAge,
-                maxAge
-            };
-        }
+            const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
+            const initialStatus = shouldPublishNow ? 'Approved' : 'Pending';
+            const initialHistory = shouldPublishNow ? [{
+                action: 'Approved',
+                previousStatus: 'Pending',
+                newStatus: 'Approved',
+                timestamp: new Date(),
+                performedBy: req.user ? req.user.id.toString() : user._id.toString(),
+                details: 'Admin published campaign immediately upon creation.'
+            }] : [];
 
-        const task = await UserTask.create({
-            userId: user._id,
-            userName: user.username,
-            creatorType,
-            fundingSourceType,
-            adminBudgetAllocatedUSD,
-            category,
-            subType: subType || 'Like',
-            title,
-            description,
-            link: effectiveLink,
-            targetQuantity,
-            rewardPerTask,
-            totalBudget,
-            adminCommission,
-            baseFeeCharged,
-            fundingSourceBreakdown: {
-                fromInvestmentUSD: sourceFromInvestment,
-                fromTaskEarningsUSD: sourceFromTaskEarnings,
-                fromRefundsUSD: sourceFromRefunds
-            },
-            currency: 'USD',
-            requireTextProof: Boolean(requireTextProof),
-            textProofInstruction: textProofInstruction || '',
-            requireUsername: Boolean(requireUsername),
-            usernameInstruction: usernameInstruction || '',
-            requireUserId: Boolean(requireUserId),
-            userIdInstruction: userIdInstruction || '',
-            requireEmail: Boolean(requireEmail),
-            emailInstruction: emailInstruction || '',
-            requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : !isSurveyTask,
-            screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
-            requiredProofs: requiredProofs || [],
-            isSurvey: isSurveyTask,
-            surveyEstimatedMinutes: isSurveyTask ? (Number(req.body.surveyEstimatedMinutes || surveyConfig?.estimatedTimeMinutes) || 5) : 5,
-            surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
-            surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
-            surveyConfig: isSurveyTask ? surveyConfig : null,
-            surveyVersion: effectiveSurveyVersion,
-            targeting: normalizedTargeting,
-            status: initialStatus,
-            history: initialHistory
-        });
-        createdTask = task;
+            const effectiveSurveyVersion = isSurveyTask ? (Number(req.body.surveyVersion || surveyConfig?.version) || 1) : 1;
+            if (isSurveyTask && surveyConfig) {
+                surveyConfig.version = effectiveSurveyVersion;
+            }
 
-        // Create transaction with full source and destination tracking
-        if (isCreatedByAdmin) {
-            const tx = await Transaction.create({
+            let normalizedTargeting = undefined;
+            if (req.body.targeting && typeof req.body.targeting === 'object') {
+                const rawTargeting = req.body.targeting;
+                const countries = Array.isArray(rawTargeting.countries)
+                    ? rawTargeting.countries.map(c => String(c).trim()).filter(c => c.length > 0)
+                    : [];
+                const currencies = Array.isArray(rawTargeting.currencies)
+                    ? rawTargeting.currencies.map(c => String(c).trim().toUpperCase()).filter(c => c.length > 0)
+                    : [];
+                const genders = Array.isArray(rawTargeting.genders)
+                    ? rawTargeting.genders.map(g => String(g).trim()).filter(g => g.length > 0)
+                    : [];
+
+                let minAge = null;
+                if (rawTargeting.minAge !== undefined && rawTargeting.minAge !== null && rawTargeting.minAge !== '') {
+                    const parsedMin = Number(rawTargeting.minAge);
+                    if (Number.isFinite(parsedMin) && !isNaN(parsedMin) && parsedMin >= 0) {
+                        minAge = parsedMin;
+                    }
+                }
+
+                let maxAge = null;
+                if (rawTargeting.maxAge !== undefined && rawTargeting.maxAge !== null && rawTargeting.maxAge !== '') {
+                    const parsedMax = Number(rawTargeting.maxAge);
+                    if (Number.isFinite(parsedMax) && !isNaN(parsedMax) && parsedMax >= 0) {
+                        maxAge = parsedMax;
+                    }
+                }
+
+                normalizedTargeting = { countries, currencies, genders, minAge, maxAge };
+            }
+
+            const [task] = await UserTask.create([{
                 userId: user._id,
                 userName: user.username,
-                currency: 'USD',
-                type: 'Task Budget Deduction',
-                amount: -totalAmountUSD,
-                amountUSD: totalAmountUSD,
-                campaignId: task._id,
-                sourceWallet: 'System',
-                destinationWallet: 'CampaignEscrow',
-                description: `Admin Campaign Budget: ${title} (Budget + Base Fee of ${baseFeeCharged} USD reserved from Admin Budget)`,
-                status: 'Approved'
-            });
-            createdTransaction = tx;
-        } else {
-            const tx = await Transaction.create({
-                userId: user._id,
-                userName: user.username,
-                currency: deductedFromTaskWallet ? 'USD' : userCurr,
-                type: 'Task Budget Deduction',
-                amount: -(deductedFromTaskWallet ? totalAmountUSD : deductionInUserCurr),
-                amountUSD: totalAmountUSD,
-                campaignId: task._id,
-                sourceWallet: deductedFromTaskWallet ? 'CampaignFunds' : 'Investment',
-                destinationWallet: 'CampaignEscrow',
-                sourceBreakdown: {
+                creatorType,
+                fundingSourceType,
+                adminBudgetAllocatedUSD,
+                category,
+                subType: subType || 'Like',
+                title,
+                description,
+                link: effectiveLink,
+                targetQuantity,
+                rewardPerTask,
+                totalBudget,
+                adminCommission,
+                baseFeeCharged,
+                fundingSourceBreakdown: {
                     fromInvestmentUSD: sourceFromInvestment,
                     fromTaskEarningsUSD: sourceFromTaskEarnings,
                     fromRefundsUSD: sourceFromRefunds
                 },
-                description: `Submitted User Task: ${title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
-                status: 'Approved'
+                currency: 'USD',
+                requireTextProof: Boolean(requireTextProof),
+                textProofInstruction: textProofInstruction || '',
+                requireUsername: Boolean(requireUsername),
+                usernameInstruction: usernameInstruction || '',
+                requireUserId: Boolean(requireUserId),
+                userIdInstruction: userIdInstruction || '',
+                requireEmail: Boolean(requireEmail),
+                emailInstruction: emailInstruction || '',
+                requireScreenshot: requireScreenshot !== undefined ? Boolean(requireScreenshot) : !isSurveyTask,
+                screenshotInstruction: screenshotInstruction || (isSurveyTask ? 'Survey responses recorded automatically.' : 'Please upload screenshot proof of completion.'),
+                requiredProofs: requiredProofs || [],
+                isSurvey: isSurveyTask,
+                surveyEstimatedMinutes: isSurveyTask ? (Number(req.body.surveyEstimatedMinutes || surveyConfig?.estimatedTimeMinutes) || 5) : 5,
+                surveyQuestionsCount: isSurveyTask ? (Array.isArray(surveyConfig?.questions) ? surveyConfig.questions.length : (Number(req.body.surveyQuestionsCount) || 0)) : 0,
+                surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
+                surveyConfig: isSurveyTask ? surveyConfig : null,
+                surveyVersion: effectiveSurveyVersion,
+                targeting: normalizedTargeting,
+                status: initialStatus,
+                history: initialHistory
+            }], session ? { session } : {});
+
+            let tx = null;
+            if (isCreatedByAdmin) {
+                [tx] = await Transaction.create([{
+                    userId: user._id,
+                    userName: user.username,
+                    currency: 'USD',
+                    type: 'Task Budget Deduction',
+                    amount: -totalAmountUSD,
+                    amountUSD: totalAmountUSD,
+                    campaignId: task._id,
+                    sourceWallet: 'System',
+                    destinationWallet: 'CampaignEscrow',
+                    description: `Admin Campaign Budget: ${title} (Budget + Base Fee of ${baseFeeCharged} USD reserved from Admin Budget)`,
+                    status: 'Approved',
+                    idempotencyKey: finalIdempotencyKey
+                }], session ? { session } : {});
+            } else {
+                [tx] = await Transaction.create([{
+                    userId: user._id,
+                    userName: user.username,
+                    currency: deductedFromTaskWallet ? 'USD' : userCurr,
+                    type: 'Task Budget Deduction',
+                    amount: -(deductedFromTaskWallet ? totalAmountUSD : deductionInUserCurr),
+                    amountUSD: totalAmountUSD,
+                    campaignId: task._id,
+                    sourceWallet: deductedFromTaskWallet ? 'CampaignFunds' : 'Investment',
+                    destinationWallet: 'CampaignEscrow',
+                    sourceBreakdown: {
+                        fromInvestmentUSD: sourceFromInvestment,
+                        fromTaskEarningsUSD: sourceFromTaskEarnings,
+                        fromRefundsUSD: sourceFromRefunds
+                    },
+                    description: `Submitted User Task: ${title} (Budget + Base Fee of ${baseFeeCharged} USD)`,
+                    status: 'Approved',
+                    idempotencyKey: finalIdempotencyKey
+                }], session ? { session } : {});
+            }
+
+            return { task, transaction: tx };
+        });
+
+        if (txResult.alreadyExists) {
+            global.appDataVersion = Date.now();
+            return res.status(200).json({
+                success: true,
+                message: 'Campaign already created (idempotency key matched).',
+                data: txResult.task || {}
             });
-            createdTransaction = tx;
         }
 
-        // Send Notification to Campaign Creator (non-blocking)
+        createdTask = txResult.task;
+        createdTransaction = txResult.transaction;
+
+        // Send Notification to Campaign Creator (non-blocking, outside of transaction)
         try {
+            const shouldPublishNow = Boolean(isCreatedByAdmin && req.body.publishNow === true);
             if (shouldPublishNow) {
                 await Notification.create({
                     userId: user._id,
                     subject: 'Campaign Approved! 🟢',
-                    message: `Congratulations! Your admin campaign "${task.title}" has been published and is now live for workers to complete.`,
+                    message: `Congratulations! Your admin campaign "${createdTask.title}" has been published and is now live for workers to complete.`,
                     senderType: 'System'
                 });
             } else {
                 await Notification.create({
                     userId: user._id,
                     subject: 'Campaign Submitted ⏳',
-                    message: `Your campaign "${task.title}" has been successfully submitted for Admin approval. It will go live once reviewed.`,
+                    message: `Your campaign "${createdTask.title}" has been successfully submitted for Admin approval. It will go live once reviewed.`,
                     senderType: 'System'
                 });
             }
