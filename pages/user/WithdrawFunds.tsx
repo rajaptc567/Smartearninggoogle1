@@ -392,6 +392,30 @@ const WithdrawFunds: React.FC = () => {
         // 2. Check Admin Tasks
         const at = (tasks || []).find((t: any) => String(t._id) === reqTaskId);
         if (at) {
+            const now = new Date();
+            const userCountry = (currentUser?.country || '').trim().toLowerCase();
+            const userCurrency = (currentUser?.currency || '').trim().toUpperCase();
+
+            let isApplicable = true;
+            if (at.status !== 'Active') isApplicable = false;
+            if (at.activeFrom && now < new Date(at.activeFrom)) isApplicable = false;
+            if (at.activeTo && now > new Date(at.activeTo)) isApplicable = false;
+            if (at.maxGlobalCompletions > 0 && (at.currentGlobalCompletions || 0) >= at.maxGlobalCompletions) isApplicable = false;
+            if (Array.isArray(at.targetCountries) && at.targetCountries.length > 0) {
+                if (!userCountry || !at.targetCountries.some((c: any) => typeof c === 'string' && c.trim().toLowerCase() === userCountry)) {
+                    isApplicable = false;
+                }
+            }
+            if (Array.isArray(at.targetCurrencies) && at.targetCurrencies.length > 0) {
+                if (!userCurrency || !at.targetCurrencies.some((c: any) => typeof c === 'string' && c.trim().toUpperCase() === userCurrency)) {
+                    isApplicable = false;
+                }
+            }
+
+            if (!isApplicable) {
+                return null;
+            }
+
             const approved = (currentUser?.completedTasks || []).some((ct: any) =>
                 ct && ct.status === 'Approved' && String(ct.taskId?._id || ct.taskId) === reqTaskId
             );
@@ -406,6 +430,7 @@ const WithdrawFunds: React.FC = () => {
                     isSurvey: false
                 };
             }
+            return null;
         }
 
         // 3. Fallback: task not found in state -> flag unavailable
