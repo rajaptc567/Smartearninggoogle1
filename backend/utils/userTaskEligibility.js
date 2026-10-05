@@ -45,6 +45,14 @@ const parseAgeLimit = (val) => {
 const evaluateCondition = (actualValue, operator, expectedValue) => {
     const op = String(operator || 'equals').trim().toLowerCase();
     
+    // Check if actual is missing (null, undefined, or empty string)
+    const isMissing = actualValue === undefined || actualValue === null || actualValue === '';
+
+    // Handle missing value semantics (not_* is true, others false)
+    if (isMissing) {
+        return ['not_equals', 'not_contains', 'not_in'].includes(op);
+    }
+    
     // Normalize to arrays for consistent comparison
     const actualArr = Array.isArray(actualValue) 
         ? actualValue.map(v => String(v ?? '').trim().toLowerCase()) 
@@ -55,10 +63,10 @@ const evaluateCondition = (actualValue, operator, expectedValue) => {
         : [String(expectedValue ?? '').trim().toLowerCase()];
 
     switch (op) {
-        case 'equals': // Match if any actual element matches any expected element
+        case 'equals': // True if intersection exists (Scalar matches element, Array matches Array element)
             return actualArr.some(a => expectedArr.includes(a));
         
-        case 'not_equals': // True only if NO actual element matches ANY expected element
+        case 'not_equals': // True only if NO intersection
             return !actualArr.some(a => expectedArr.includes(a));
 
         case 'contains': // Match if any actual element contains any expected substring
