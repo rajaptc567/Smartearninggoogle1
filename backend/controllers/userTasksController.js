@@ -49,6 +49,56 @@ const executeWithOptionalTransaction = async (workFn) => {
     }
 };
 
+const toWorkerSafeUserTask = (task) => {
+    if (!task) return task;
+    const safeTask = {};
+    const allowedFields = [
+        '_id',
+        'userId',
+        'userName',
+        'category',
+        'subType',
+        'title',
+        'description',
+        'link',
+        'targetQuantity',
+        'currentCompletions',
+        'rewardPerTask',
+        'currency',
+        'requireTextProof',
+        'textProofInstruction',
+        'requireUsername',
+        'usernameInstruction',
+        'requireUserId',
+        'userIdInstruction',
+        'requireEmail',
+        'emailInstruction',
+        'requireScreenshot',
+        'screenshotInstruction',
+        'requiredProofs',
+        'status',
+        'reviewRequested',
+        'resubmittedForReview',
+        'userReviewMessage',
+        'isSurvey',
+        'surveyEstimatedMinutes',
+        'surveyQuestionsCount',
+        'surveyConfig',
+        'surveyVersion',
+        'createdAt',
+        'updatedAt',
+        'date'
+    ];
+
+    for (const field of allowedFields) {
+        if (task[field] !== undefined) {
+            safeTask[field] = task[field];
+        }
+    }
+
+    return safeTask;
+};
+
 export const getUserTasks = async (req, res) => {
     try {
         if (!req.user) {
@@ -67,15 +117,18 @@ export const getUserTasks = async (req, res) => {
         }
 
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
-        const filteredTasks = tasks.filter(task => {
-            // Return campaigns owned by current user (for campaign management UI)
+        const filteredTasks = [];
+
+        for (const task of tasks) {
             const isOwner = task.userId && String(task.userId) === String(user._id);
             if (isOwner) {
-                return true;
+                // Return full task for campaign owner
+                filteredTasks.push(task);
+            } else if (isUserEligibleForUserTask(user, task)) {
+                // Return sanitized worker-safe task for eligible non-owner
+                filteredTasks.push(toWorkerSafeUserTask(task));
             }
-            // For campaigns owned by other users, return only those for which user is eligible
-            return isUserEligibleForUserTask(user, task);
-        });
+        }
 
         res.status(200).json({ success: true, count: filteredTasks.length, data: filteredTasks });
     } catch (err) {
