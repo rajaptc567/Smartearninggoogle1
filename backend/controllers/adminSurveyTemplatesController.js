@@ -15,6 +15,17 @@ const seedMasterTemplateIfEmpty = async (userId) => {
             };
             await AdminSurveyTemplate.create(masterDoc);
             console.log('[ADMIN SURVEY TEMPLATES] Default Master Member Survey Template seeded successfully.');
+        } else {
+            // Ensure factory master template reflects updated default rewardConfig (no_reward)
+            const masterTmpl = await AdminSurveyTemplate.findOne({ isMasterDefault: true });
+            if (masterTmpl && masterTmpl.rewardConfig?.mode === 'fixed' && masterTmpl.rewardConfig?.amount === 0.25) {
+                masterTmpl.rewardConfig = {
+                    mode: 'no_reward',
+                    amount: 0,
+                    currency: 'USD'
+                };
+                await masterTmpl.save();
+            }
         }
     } catch (err) {
         console.error('[ADMIN SURVEY TEMPLATES] Failed to seed master template:', err.message);
@@ -116,10 +127,12 @@ export const createAdminSurveyTemplate = async (req, res) => {
             });
         }
 
-        // Default reward mode is 'no_reward' per requirement
+        // Safe reward config: no_reward sets amount 0; fixed/custom preserves non-negative numeric amount
+        const rewardMode = rewardConfig?.mode || 'no_reward';
+        const rawAmount = Number(rewardConfig?.amount);
         const safeRewardConfig = {
-            mode: rewardConfig?.mode || 'no_reward',
-            amount: Number(rewardConfig?.amount) >= 0 ? Number(rewardConfig.amount) : 0,
+            mode: rewardMode,
+            amount: rewardMode === 'no_reward' ? 0 : (Number.isFinite(rawAmount) && rawAmount >= 0 ? Number(rawAmount.toFixed(2)) : 0),
             currency: rewardConfig?.currency || 'USD'
         };
 
@@ -210,9 +223,11 @@ export const updateAdminSurveyTemplate = async (req, res) => {
         if (estimatedTimeMinutes !== undefined) template.estimatedTimeMinutes = Number(estimatedTimeMinutes) || template.estimatedTimeMinutes;
 
         if (rewardConfig) {
+            const rewardMode = rewardConfig.mode || template.rewardConfig?.mode || 'no_reward';
+            const rawAmount = Number(rewardConfig.amount);
             template.rewardConfig = {
-                mode: rewardConfig.mode || template.rewardConfig?.mode || 'no_reward',
-                amount: Number(rewardConfig.amount) >= 0 ? Number(rewardConfig.amount) : 0,
+                mode: rewardMode,
+                amount: rewardMode === 'no_reward' ? 0 : (Number.isFinite(rawAmount) && rawAmount >= 0 ? Number(rawAmount.toFixed(2)) : 0),
                 currency: rewardConfig.currency || template.rewardConfig?.currency || 'USD'
             };
         }

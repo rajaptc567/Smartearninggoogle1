@@ -73,11 +73,22 @@ const UserTaskSchema = new mongoose.Schema({
     rewardPerTask: {
         type: Number,
         required: [true, 'Please specify reward amount per task'],
-        min: 0.01
+        validate: {
+            validator: function(val) {
+                if (typeof val !== 'number' || isNaN(val) || !isFinite(val)) return false;
+                const isAdminSurvey = this?.isAdminResearchSurvey || (this?.getUpdate && (this.getUpdate()?.isAdminResearchSurvey || this.getUpdate()?.$set?.isAdminResearchSurvey));
+                if (isAdminSurvey) {
+                    return val >= 0;
+                }
+                return val >= 0.01;
+            },
+            message: 'Please specify a valid reward amount per task (minimum 0.01 for standard tasks, or 0 for internal research surveys)'
+        }
     },
     totalBudget: {
         type: Number,
-        required: true
+        required: true,
+        min: 0
     },
     adminCommission: {
         type: Number,
@@ -168,6 +179,15 @@ const UserTaskSchema = new mongoose.Schema({
     surveyVersion: {
         type: Number,
         default: 1
+    },
+    isAdminResearchSurvey: {
+        type: Boolean,
+        default: false
+    },
+    sourceAdminSurveyTemplateId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'AdminSurveyTemplate',
+        default: null
     },
     targeting: {
         countries: {

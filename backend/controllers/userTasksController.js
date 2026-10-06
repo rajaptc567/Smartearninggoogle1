@@ -85,6 +85,8 @@ const toWorkerSafeUserTask = (task) => {
         'surveyQuestionsCount',
         'surveyConfig',
         'surveyVersion',
+        'isAdminResearchSurvey',
+        'sourceAdminSurveyTemplateId',
         'createdAt',
         'updatedAt',
         'date'
@@ -254,8 +256,15 @@ export const createUserTask = async (req, res) => {
             requiredProofs
         } = req.body;
 
-        const effectiveUserId = (req.user && !isUserAdmin(req.user)) 
-            ? req.user.id 
+        const isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
+        // Server-side authoritative flag: A non-admin user can NEVER set isAdminResearchSurvey
+        const isAdminResearchSurvey = Boolean(isCreatedByAdmin && (req.body.isAdminResearchSurvey === true || req.body.sourceAdminSurveyTemplateId));
+        const sourceAdminSurveyTemplateId = (isAdminResearchSurvey && req.body.sourceAdminSurveyTemplateId) 
+            ? req.body.sourceAdminSurveyTemplateId 
+            : null;
+
+        const effectiveUserId = (!isCreatedByAdmin) 
+            ? req.user?.id 
             : (userId || req.user?.id);
 
         if (!effectiveUserId) {
@@ -272,10 +281,23 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        const qtyNum = Number(targetQuantity);
+        const qtyNum = Number(targetQuantity !== undefined ? targetQuantity : req.body.workersNeeded);
         const rewardNum = Number(rewardPerTask);
-        if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0 || isNaN(rewardNum) || !isFinite(rewardNum) || rewardNum <= 0) {
-            return res.status(400).json({ success: false, error: 'Target quantity and reward per task must be valid positive numbers.' });
+
+        if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Target quantity must be a valid positive number.' });
+        }
+
+        if (isAdminResearchSurvey) {
+            // Authorized Admin Research Survey: 0 (No Reward) or custom non-negative finite number allowed
+            if (isNaN(rewardNum) || !isFinite(rewardNum) || rewardNum < 0) {
+                return res.status(400).json({ success: false, error: 'Reward per task must be a valid non-negative number.' });
+            }
+        } else {
+            // Normal user or standard paid task: strictly positive reward required
+            if (isNaN(rewardNum) || !isFinite(rewardNum) || rewardNum <= 0) {
+                return res.status(400).json({ success: false, error: 'Target quantity and reward per task must be valid positive numbers.' });
+            }
         }
         
         const settings = await Setting.getSettings();
@@ -403,14 +425,18 @@ export const createUserTask = async (req, res) => {
         }
 
         const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
-        if (targetQuantity < config.minQuantity) {
+        if (qtyNum < config.minQuantity) {
             return res.status(400).json({ success: false, error: `Minimum target quantity is ${config.minQuantity}.` });
         }
-        if (rewardPerTask < config.minRewardAmount) {
-            return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
-        }
-        if (isSurveyTask && rewardPerTask < minSurveyRewardRequired) {
-            return res.status(400).json({ success: false, error: `Minimum reward amount for this survey based on question complexity and duration is ${minSurveyRewardRequired} USD.` });
+
+        // CRITICAL SAFETY RULE: Minimum pricing exemption applies ONLY to authorized Admin Research Surveys
+        if (!isAdminResearchSurvey) {
+            if (rewardNum < config.minRewardAmount) {
+                return res.status(400).json({ success: false, error: `Minimum reward amount per task is ${config.minRewardAmount} USD.` });
+            }
+            if (isSurveyTask && rewardNum < minSurveyRewardRequired) {
+                return res.status(400).json({ success: false, error: `Minimum reward amount for this survey based on question complexity and duration is ${minSurveyRewardRequired} USD.` });
+            }
         }
 
         const user = await User.findById(effectiveUserId);
@@ -419,12 +445,17 @@ export const createUserTask = async (req, res) => {
         }
 
         // Entire setup in USD
-        const subtotal = targetQuantity * rewardPerTask;
-        const adminCommission = Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
+        const effectiveRewardPerTask = Number(rewardNum.toFixed(2));
+        const subtotal = Number((qtyNum * effectiveRewardPerTask).toFixed(2));
+        const adminCommission = (isAdminResearchSurvey && effectiveRewardPerTask === 0) 
+            ? 0 
+            : Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
         const totalBudget = Number((subtotal + adminCommission).toFixed(2));
 
-        // Upfront Deduction Base Fee logic
-        const baseFeeCharged = config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0;
+        // Upfront Deduction Base Fee logic: No base fee liability for free/zero-reward admin research surveys
+        const baseFeeCharged = (isAdminResearchSurvey && effectiveRewardPerTask === 0)
+            ? 0
+            : (config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0);
         const totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
 
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
@@ -432,7 +463,6 @@ export const createUserTask = async (req, res) => {
         let deductionInUserCurr = totalAmountUSD * (rates[userCurr] || 1);
         deductionInUserCurr = Number(deductionInUserCurr.toFixed(2));
 
-        const isCreatedByAdmin = Boolean(req.user && isUserAdmin(req.user));
         const creatorType = isCreatedByAdmin ? 'admin' : 'member';
         const fundingSourceType = isCreatedByAdmin ? 'admin_budget' : 'member_wallet';
         const adminBudgetAllocatedUSD = isCreatedByAdmin ? totalAmountUSD : 0;
@@ -462,31 +492,36 @@ export const createUserTask = async (req, res) => {
             let deductedFromTaskWallet = false;
 
             if (isCreatedByAdmin) {
-                // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD
-                const updatedSetting = await Setting.findOneAndUpdate(
-                    {
-                        _id: settings._id,
-                        'adminCampaignBudget.enabled': true,
-                        'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
-                    },
-                    {
-                        $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
-                        $set: { dataVersion: Date.now() }
-                    },
-                    { new: true, ...(session ? { session } : {}) }
-                );
+                if (totalAmountUSD > 0) {
+                    // Atomic conditional update on Setting: only succeeds if budget is enabled AND remainingBudgetUSD >= totalAmountUSD
+                    const updatedSetting = await Setting.findOneAndUpdate(
+                        {
+                            _id: settings._id,
+                            'adminCampaignBudget.enabled': true,
+                            'adminCampaignBudget.remainingBudgetUSD': { $gte: totalAmountUSD }
+                        },
+                        {
+                            $inc: { 'adminCampaignBudget.remainingBudgetUSD': -totalAmountUSD },
+                            $set: { dataVersion: Date.now() }
+                        },
+                        { new: true, ...(session ? { session } : {}) }
+                    );
 
-                if (!updatedSetting) {
-                    const currentSetting = await Setting.getSettings();
-                    if (!currentSetting.adminCampaignBudget?.enabled) {
-                        throw new Error('Admin Campaign Budget is currently disabled in System Settings.');
+                    if (!updatedSetting) {
+                        const currentSetting = await Setting.getSettings();
+                        if (!currentSetting.adminCampaignBudget?.enabled) {
+                            throw new Error('Admin Campaign Budget is currently disabled in System Settings.');
+                        }
+                        const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
+                        throw new Error(`Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.`);
                     }
-                    const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
-                    throw new Error(`Insufficient Admin Campaign Budget. Required: $${totalAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.`);
-                }
 
-                adminBudgetReserved = true;
-                reservedAmountUSD = totalAmountUSD;
+                    adminBudgetReserved = true;
+                    reservedAmountUSD = totalAmountUSD;
+                } else {
+                    adminBudgetReserved = false;
+                    reservedAmountUSD = 0;
+                }
             } else {
                 // Re-fetch user in transaction to ensure balance is strictly accurate and locked
                 const userInTx = await User.findById(user._id).session(session || null);
@@ -658,8 +693,8 @@ export const createUserTask = async (req, res) => {
                 title,
                 description,
                 link: effectiveLink,
-                targetQuantity,
-                rewardPerTask,
+                targetQuantity: qtyNum,
+                rewardPerTask: effectiveRewardPerTask,
                 totalBudget,
                 adminCommission,
                 baseFeeCharged,
@@ -686,6 +721,8 @@ export const createUserTask = async (req, res) => {
                 surveyApprovalMode: isSurveyTask ? (req.body.surveyApprovalMode || surveyConfig?.approvalMode || 'auto').toLowerCase() : 'auto',
                 surveyConfig: isSurveyTask ? surveyConfig : null,
                 surveyVersion: effectiveSurveyVersion,
+                isAdminResearchSurvey: Boolean(isAdminResearchSurvey),
+                sourceAdminSurveyTemplateId: sourceAdminSurveyTemplateId || null,
                 targeting: normalizedTargeting,
                 status: initialStatus,
                 history: initialHistory
@@ -693,20 +730,22 @@ export const createUserTask = async (req, res) => {
 
             let tx = null;
             if (isCreatedByAdmin) {
-                [tx] = await Transaction.create([{
-                    userId: user._id,
-                    userName: user.username,
-                    currency: 'USD',
-                    type: 'Task Budget Deduction',
-                    amount: -totalAmountUSD,
-                    amountUSD: totalAmountUSD,
-                    campaignId: task._id,
-                    sourceWallet: 'System',
-                    destinationWallet: 'CampaignEscrow',
-                    description: `Admin Campaign Budget: ${title} (Budget + Base Fee of ${baseFeeCharged} USD reserved from Admin Budget)`,
-                    status: 'Approved',
-                    ...(finalIdempotencyKey ? { idempotencyKey: finalIdempotencyKey } : {})
-                }], session ? { session } : {});
+                if (totalAmountUSD > 0) {
+                    [tx] = await Transaction.create([{
+                        userId: user._id,
+                        userName: user.username,
+                        currency: 'USD',
+                        type: 'Task Budget Deduction',
+                        amount: -totalAmountUSD,
+                        amountUSD: totalAmountUSD,
+                        campaignId: task._id,
+                        sourceWallet: 'System',
+                        destinationWallet: 'CampaignEscrow',
+                        description: `Admin Campaign Budget: ${title} (Budget + Base Fee of ${baseFeeCharged} USD reserved from Admin Budget)`,
+                        status: 'Approved',
+                        ...(finalIdempotencyKey ? { idempotencyKey: finalIdempotencyKey } : {})
+                    }], session ? { session } : {});
+                }
             } else {
                 [tx] = await Transaction.create([{
                     userId: user._id,
@@ -2049,30 +2088,34 @@ const autoApproveStaleSubmissions = async () => {
                 const worker = await User.findById(updatedSub.workerId);
                 if (worker) {
                     let rewardInUSD = updatedSub.rewardAmount;
-                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                    await worker.save();
+                    if (rewardInUSD > 0) {
+                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                        await worker.save();
 
-                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                    if (!existingTx) {
-                        const tx = await Transaction.create({
-                            userId: worker._id,
-                            userName: worker.username,
-                            currency: 'USD',
-                            type: 'Task Reward',
-                            amount: rewardInUSD,
-                            description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                            status: 'Approved',
-                            submissionId: updatedSub._id,
-                            campaignId: updatedSub.taskId
-                        });
-                        updatedSub.rewardTransactionId = tx._id;
-                        await updatedSub.save();
+                        const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                        if (!existingTx) {
+                            const tx = await Transaction.create({
+                                userId: worker._id,
+                                userName: worker.username,
+                                currency: 'USD',
+                                type: 'Task Reward',
+                                amount: rewardInUSD,
+                                description: `Completed User Task (Auto-Approved): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                                status: 'Approved',
+                                submissionId: updatedSub._id,
+                                campaignId: updatedSub.taskId
+                            });
+                            updatedSub.rewardTransactionId = tx._id;
+                            await updatedSub.save();
+                        }
                     }
 
                     await Notification.create({
                         userId: worker._id,
                         subject: 'Task Auto-Approved! ⏱️✅',
-                        message: `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        message: rewardInUSD > 0
+                            ? `Your proof for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${timeoutDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`
+                            : `Your submission for campaign "${updatedSub.taskTitle}" was approved. Thank you for your participation!`,
                         senderType: 'System'
                     });
                 }
@@ -2134,30 +2177,34 @@ const autoApproveStaleSubmissions = async () => {
                 const worker = await User.findById(updatedSub.workerId);
                 if (worker) {
                     let rewardInUSD = updatedSub.rewardAmount;
-                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                    await worker.save();
+                    if (rewardInUSD > 0) {
+                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                        await worker.save();
 
-                    const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
-                    if (!existingTx) {
-                        const tx = await Transaction.create({
-                            userId: worker._id,
-                            userName: worker.username,
-                            currency: 'USD',
-                            type: 'Task Reward',
-                            amount: rewardInUSD,
-                            description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
-                            status: 'Approved',
-                            submissionId: updatedSub._id,
-                            campaignId: updatedSub.taskId
-                        });
-                        updatedSub.rewardTransactionId = tx._id;
-                        await updatedSub.save();
+                        const existingTx = await Transaction.findOne({ submissionId: updatedSub._id, type: 'Task Reward' });
+                        if (!existingTx) {
+                            const tx = await Transaction.create({
+                                userId: worker._id,
+                                userName: worker.username,
+                                currency: 'USD',
+                                type: 'Task Reward',
+                                amount: rewardInUSD,
+                                description: `Completed User Task (Auto-Approved Dispute): ${updatedSub.taskTitle || 'Engagement Task'}`,
+                                status: 'Approved',
+                                submissionId: updatedSub._id,
+                                campaignId: updatedSub.taskId
+                            });
+                            updatedSub.rewardTransactionId = tx._id;
+                            await updatedSub.save();
+                        }
                     }
 
                     await Notification.create({
                         userId: worker._id,
                         subject: 'Dispute Auto-Approved! ⏱️⚖️✅',
-                        message: `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`,
+                        message: rewardInUSD > 0
+                            ? `Your dispute for campaign "${updatedSub.taskTitle}" was automatically approved because the creator did not review it within the ${disputeReviewDays}-day time limit. You earned ${updatedSub.rewardAmount} USD!`
+                            : `Your dispute for campaign "${updatedSub.taskTitle}" was resolved and approved.`,
                         senderType: 'System'
                     });
                 }
@@ -2675,25 +2722,27 @@ export const submitUserTaskProof = async (req, res) => {
                     submission.adminNotes = 'Survey auto-approved upon passing all attention, consistency, and qualification checks.';
                     await submission.save();
 
-                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
-                    await worker.save();
+                    if (task.rewardPerTask > 0) {
+                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + task.rewardPerTask).toFixed(2));
+                        await worker.save();
 
-                    const tx = await Transaction.create({
-                        userId: worker._id,
-                        userName: worker.username,
-                        currency: 'USD',
-                        type: 'Survey Reward',
-                        amount: task.rewardPerTask,
-                        amountUSD: task.rewardPerTask,
-                        campaignId: task._id,
-                        submissionId: submission._id,
-                        sourceWallet: 'CampaignEscrow',
-                        destinationWallet: 'TaskEarnings',
-                        description: `Earned reward for completing survey: "${task.title}"`,
-                        status: 'Approved'
-                    });
-                    submission.rewardTransactionId = tx._id;
-                    await submission.save();
+                        const tx = await Transaction.create({
+                            userId: worker._id,
+                            userName: worker.username,
+                            currency: 'USD',
+                            type: 'Survey Reward',
+                            amount: task.rewardPerTask,
+                            amountUSD: task.rewardPerTask,
+                            campaignId: task._id,
+                            submissionId: submission._id,
+                            sourceWallet: 'CampaignEscrow',
+                            destinationWallet: 'TaskEarnings',
+                            description: `Earned reward for completing survey: "${task.title}"`,
+                            status: 'Approved'
+                        });
+                        submission.rewardTransactionId = tx._id;
+                        await submission.save();
+                    }
                 } catch (autoApproveErr) {
                     await releaseTaskCompletionSlot(task._id, worker._id);
                     throw autoApproveErr;
@@ -2976,25 +3025,27 @@ export const updateSubmissionStatus = async (req, res) => {
                 const worker = await User.findById(targetSubmission.workerId);
                 if (worker) {
                     let rewardInUSD = targetSubmission.rewardAmount;
-                    worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
-                    await worker.save();
+                    if (rewardInUSD > 0) {
+                        worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + rewardInUSD).toFixed(2));
+                        await worker.save();
 
-                    // Prevent duplicate transaction
-                    const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
-                    if (!existingTx) {
-                        const tx = await Transaction.create({
-                            userId: worker._id,
-                            userName: worker.username,
-                            currency: 'USD',
-                            type: 'Task Reward',
-                            amount: rewardInUSD,
-                            description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
-                            status: 'Approved',
-                            submissionId: targetSubmission._id,
-                            campaignId: targetSubmission.taskId
-                        });
-                        targetSubmission.rewardTransactionId = tx._id;
-                        await targetSubmission.save();
+                        // Prevent duplicate transaction
+                        const existingTx = await Transaction.findOne({ submissionId: targetSubmission._id, type: 'Task Reward' });
+                        if (!existingTx) {
+                            const tx = await Transaction.create({
+                                userId: worker._id,
+                                userName: worker.username,
+                                currency: 'USD',
+                                type: 'Task Reward',
+                                amount: rewardInUSD,
+                                description: `Completed User Task: ${targetSubmission.taskTitle || 'Engagement Task'}`,
+                                status: 'Approved',
+                                submissionId: targetSubmission._id,
+                                campaignId: targetSubmission.taskId
+                            });
+                            targetSubmission.rewardTransactionId = tx._id;
+                            await targetSubmission.save();
+                        }
                     }
                 }
             } catch (approveErr) {

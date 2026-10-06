@@ -15,8 +15,8 @@ export const MASTER_MEMBER_SURVEY_TEMPLATE = {
     estimatedTimeMinutes: 6,
     isMasterDefault: true,
     rewardConfig: {
-        mode: 'fixed',
-        amount: 0.25,
+        mode: 'no_reward',
+        amount: 0,
         currency: 'USD'
     },
     requirementConfig: {

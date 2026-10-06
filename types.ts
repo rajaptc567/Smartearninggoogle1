@@ -825,6 +825,8 @@ export interface UserTask {
     surveyApprovalMode?: 'auto' | 'creator' | 'admin' | string;
     surveyConfig?: SurveyConfig;
     surveyVersion?: number;
+    isAdminResearchSurvey?: boolean;
+    sourceAdminSurveyTemplateId?: string;
     targeting?: {
         countries?: string[];
         currencies?: string[];

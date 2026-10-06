@@ -318,12 +318,11 @@ export const AdminSurveyTemplates: React.FC = () => {
     const handleOpenUseTemplate = (template: AdminSurveyTemplate) => {
         setUsingTemplate(template);
         setCampaignTitle(template.name);
-        setCampaignDescription(template.description || 'Please complete all survey questions thoughtfully to earn your reward.');
+        setCampaignDescription(template.description || 'Please complete all survey questions thoughtfully to help improve our platform.');
         setCampaignWorkersNeeded(50);
-        const reward = template.rewardConfig?.mode === 'fixed' && template.rewardConfig?.amount > 0
-            ? template.rewardConfig.amount
-            : 0.25;
-        setCampaignRewardPerTask(reward);
+        const isFree = template.rewardConfig?.mode === 'no_reward';
+        const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined ? template.rewardConfig.amount : 0.25);
+        setCampaignRewardPerTask(initialReward);
         setCampaignSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
     };
 
@@ -337,8 +336,9 @@ export const AdminSurveyTemplates: React.FC = () => {
             return;
         }
 
-        if (campaignRewardPerTask <= 0) {
-            alert('Reward per submission must be greater than 0.');
+        const safeReward = Number(campaignRewardPerTask);
+        if (isNaN(safeReward) || safeReward < 0) {
+            alert('Reward per submission cannot be negative.');
             return;
         }
 
@@ -349,8 +349,9 @@ export const AdminSurveyTemplates: React.FC = () => {
 
         setIsLaunchingCampaign(true);
         try {
-            // Reusing existing SmartExn createUserTask flow!
-            const totalBudget = campaignRewardPerTask * campaignWorkersNeeded;
+            // Reusing existing SmartExn createUserTask flow with authoritative admin research bypass
+            const isZeroReward = safeReward === 0;
+            const totalBudget = isZeroReward ? 0 : Number((safeReward * campaignWorkersNeeded).toFixed(2));
 
             const userTaskPayload = {
                 title: campaignTitle.trim(),
@@ -358,11 +359,14 @@ export const AdminSurveyTemplates: React.FC = () => {
                 category: 'Surveys',
                 taskCategory: 'Surveys',
                 subType: usingTemplate.category || 'Opinion Poll',
-                rewardPerTask: Number(campaignRewardPerTask),
+                rewardPerTask: safeReward,
                 workersNeeded: Number(campaignWorkersNeeded),
-                totalBudget: Number(totalBudget.toFixed(2)),
+                totalBudget: totalBudget,
                 isSurvey: true,
                 isSurveyCampaign: true,
+                isAdminResearchSurvey: true,
+                sourceAdminSurveyTemplateId: usingTemplate._id,
+                publishNow: true,
                 surveyCategory: usingTemplate.category || 'General Opinion Poll',
                 surveyEstimatedMinutes: usingTemplate.estimatedTimeMinutes || 5,
                 surveyQuestionsCount: campaignSurveyConfig.questions?.length || 0,
@@ -389,7 +393,7 @@ export const AdminSurveyTemplates: React.FC = () => {
             const createdTask = await createUserTask(userTaskPayload);
             dispatch({ type: 'ADD_USER_TASK', payload: createdTask });
             setUsingTemplate(null);
-            setSuccessMessage(`Survey campaign "${campaignTitle}" created and published successfully using template!`);
+            setSuccessMessage(`Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`);
         } catch (err: any) {
             alert(err.message || 'Failed to create campaign from template');
         } finally {
@@ -1026,17 +1030,85 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     />
                                 </div>
 
+                                <div className="md:col-span-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                            Survey Reward Mode & Pricing
+                                        </label>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCampaignRewardPerTask(0)}
+                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                    Number(campaignRewardPerTask) === 0
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                No Reward / Free ($0.00)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (Number(campaignRewardPerTask) === 0) setCampaignRewardPerTask(0.10);
+                                                }}
+                                                className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border transition-all ${
+                                                    Number(campaignRewardPerTask) > 0
+                                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                Custom Reward
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Preset Quick Pills */}
+                                    <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                                        <span className="text-[10px] uppercase font-bold text-gray-400 mr-1">Presets:</span>
+                                        {[
+                                            { label: 'Free ($0.00)', val: 0 },
+                                            { label: '$0.01', val: 0.01 },
+                                            { label: '$0.05', val: 0.05 },
+                                            { label: '$0.10', val: 0.10 },
+                                            { label: '$0.25', val: 0.25 },
+                                            { label: '$0.50', val: 0.50 },
+                                            { label: '$1.00', val: 1.00 }
+                                        ].map(preset => (
+                                            <button
+                                                key={preset.val}
+                                                type="button"
+                                                onClick={() => setCampaignRewardPerTask(preset.val)}
+                                                className={`px-2 py-0.5 rounded-md text-[11px] font-bold border transition-colors ${
+                                                    Number(campaignRewardPerTask) === preset.val
+                                                        ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-400 font-black'
+                                                        : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">Reward per Worker ($ USD) *</label>
+                                    <label className="block text-xs font-black uppercase text-gray-500 mb-1">
+                                        Reward per Worker ($ USD) *
+                                    </label>
                                     <input
                                         type="number"
                                         step="0.01"
-                                        min="0.01"
+                                        min="0"
                                         required
                                         value={campaignRewardPerTask}
-                                        onChange={(e) => setCampaignRewardPerTask(Number(e.target.value))}
-                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
+                                        onChange={(e) => setCampaignRewardPerTask(Math.max(0, Number(e.target.value)))}
+                                        className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
                                     />
+                                    <span className="text-[10px] text-gray-400 mt-1 block">
+                                        {Number(campaignRewardPerTask) === 0
+                                            ? 'Zero reward internal study. Normal minimums bypassed.'
+                                            : 'Custom admin reward. Normal minimum complexity calculation bypassed.'}
+                                    </span>
                                 </div>
 
                                 <div>
@@ -1049,12 +1121,28 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         onChange={(e) => setCampaignWorkersNeeded(Number(e.target.value))}
                                         className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
                                     />
+                                    <span className="text-[10px] text-gray-400 mt-1 block">
+                                        Target completion responses.
+                                    </span>
                                 </div>
 
-                                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 flex flex-col justify-center">
+                                <div className={`p-3 rounded-xl border flex flex-col justify-center ${
+                                    Number(campaignRewardPerTask) === 0
+                                        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800'
+                                        : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+                                }`}>
                                     <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 block">Total Campaign Budget</span>
-                                    <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
-                                        ${(campaignRewardPerTask * campaignWorkersNeeded).toFixed(2)} USD
+                                    <span className={`text-base font-black font-mono ${
+                                        Number(campaignRewardPerTask) === 0
+                                            ? 'text-blue-600 dark:text-blue-400'
+                                            : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}>
+                                        ${(Number(campaignRewardPerTask) * campaignWorkersNeeded).toFixed(2)} USD
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 mt-0.5">
+                                        {Number(campaignRewardPerTask) === 0
+                                            ? 'Zero financial liability'
+                                            : 'Admin budget allocation'}
                                     </span>
                                 </div>
                             </div>

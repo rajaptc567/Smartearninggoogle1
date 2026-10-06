@@ -1559,10 +1559,19 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
 
         // Validate Reward Per Task
         const submittedReward = rewardPerTask === '' || rewardPerTask === undefined || rewardPerTask === null ? 0 : Number(rewardPerTask);
-        if (isNaN(submittedReward) || submittedReward < minPayout) {
-            errors.rewardPerTask = `Reward per task ($${submittedReward < 0 ? 0 : submittedReward.toFixed(3)}) is below required minimum of $${minPayout.toFixed(3)} USD for ${presetName || 'this campaign'}.`;
-            errorMessages.push(`• Reward per task ($${submittedReward < 0 ? '0.000' : submittedReward.toFixed(3)} USD) is below required minimum of $${minPayout.toFixed(3)} USD.`);
-            if (!firstErrorFieldId) firstErrorFieldId = 'campaign-reward-field';
+        const isAdminSurveyExempt = Boolean(isAdminMode && isSurveyCampaign);
+        if (isAdminSurveyExempt) {
+            if (isNaN(submittedReward) || submittedReward < 0) {
+                errors.rewardPerTask = 'Reward per task cannot be negative.';
+                errorMessages.push('• Reward per task cannot be negative.');
+                if (!firstErrorFieldId) firstErrorFieldId = 'campaign-reward-field';
+            }
+        } else {
+            if (isNaN(submittedReward) || submittedReward < minPayout) {
+                errors.rewardPerTask = `Reward per task ($${submittedReward < 0 ? 0 : submittedReward.toFixed(3)}) is below required minimum of $${minPayout.toFixed(3)} USD for ${presetName || 'this campaign'}.`;
+                errorMessages.push(`• Reward per task ($${submittedReward < 0 ? '0.000' : submittedReward.toFixed(3)} USD) is below required minimum of $${minPayout.toFixed(3)} USD.`);
+                if (!firstErrorFieldId) firstErrorFieldId = 'campaign-reward-field';
+            }
         }
 
         // Validate Required Proofs (Module A)
@@ -1807,6 +1816,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                 screenshotInstruction: pShotInst,
                 requiredProofs: requiredProofsList,
                 isSurvey: isSurveyCampaign,
+                isAdminResearchSurvey: Boolean(isAdminMode && isSurveyCampaign),
                 surveyCategory: isSurveyCampaign ? (subType || surveyConfigData.category) : undefined,
                 surveyEstimatedMinutes: isSurveyCampaign ? (surveyConfigData.estimatedTimeMinutes || 3) : undefined,
                 surveyQuestionsCount: isSurveyCampaign ? (surveyConfigData.questions?.length || 0) : undefined,

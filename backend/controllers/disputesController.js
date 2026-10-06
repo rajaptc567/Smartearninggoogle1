@@ -201,24 +201,26 @@ export const resolveDisputeVerdict = async (req, res) => {
                         }
 
                         if (worker) {
-                            worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + baseRewardUSD).toFixed(2));
-                            await worker.save();
+                            if (baseRewardUSD > 0) {
+                                worker.taskEarningsBalance = Number(((worker.taskEarningsBalance || 0) + baseRewardUSD).toFixed(2));
+                                await worker.save();
 
-                            const existingTx = await Transaction.findOne({ submissionId: submission._id, type: 'Task Reward' });
-                            if (!existingTx) {
-                                const tx = await Transaction.create({
-                                    userId: worker._id,
-                                    userName: worker.username,
-                                    currency: 'USD',
-                                    type: 'Task Reward',
-                                    amount: baseRewardUSD,
-                                    description: `Dispute Won - Task Reward: ${submission.taskTitle || (task ? task.title : 'Engagement Task')}`,
-                                    status: 'Approved',
-                                    submissionId: submission._id,
-                                    campaignId: submission.taskId
-                                });
-                                submission.rewardTransactionId = tx._id;
-                                await submission.save();
+                                const existingTx = await Transaction.findOne({ submissionId: submission._id, type: 'Task Reward' });
+                                if (!existingTx) {
+                                    const tx = await Transaction.create({
+                                        userId: worker._id,
+                                        userName: worker.username,
+                                        currency: 'USD',
+                                        type: 'Task Reward',
+                                        amount: baseRewardUSD,
+                                        description: `Dispute Won - Task Reward: ${submission.taskTitle || (task ? task.title : 'Engagement Task')}`,
+                                        status: 'Approved',
+                                        submissionId: submission._id,
+                                        campaignId: submission.taskId
+                                    });
+                                    submission.rewardTransactionId = tx._id;
+                                    await submission.save();
+                                }
                             }
                         }
 
