@@ -831,6 +831,23 @@ export interface UserTask {
         genders?: string[];
         minAge?: number | null;
         maxAge?: number | null;
+        selectedUserIds?: string[];
+        accountStatus?: 'any' | 'active' | 'inactive';
+        completionRules?: Array<{
+            taskId: string;
+            completed: boolean;
+        }>;
+        profileRules?: Array<{
+            fieldKey: string;
+            operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'in' | 'not_in' | string;
+            value: any;
+        }>;
+        surveyAnswerRules?: Array<{
+            taskId: string;
+            questionId: string;
+            operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'in' | 'not_in' | string;
+            value: any;
+        }>;
     };
 }
 
