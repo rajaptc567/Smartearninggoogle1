@@ -235,12 +235,7 @@ UserSchema.pre('save', async function(next) {
         }
     }
 
-    // Role Safety: Promote master email only if not already at sufficient privilege level
-    if (this.email === 'studio56.pk@gmail.com' && this.role !== 'super_admin') {
-        this.role = 'super_admin';
-    } else if (this.username === 'admin' && this.role === 'user') {
-        this.role = 'admin';
-    }
+    // Role Safety: No hardcoded role promotion allowed (P0 Security)
     
     if (this.isModified('password')) {
         const salt = await bcrypt.genSalt(10);

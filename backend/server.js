@@ -200,34 +200,48 @@ app.use('/uploads', express.static(uploadsDir));
 const seedAdminUser = async () => {
     try {
         if (!mongoose.connection || mongoose.connection.readyState !== 1) {
-            console.log('MongoDB is not connected; skipping admin user seeding.');
             return;
         }
 
-        const adminEmail = 'studio56.pk@gmail.com';
-        const adminPassword = 'raja5207901@'; 
-        
+        const isEnabled = process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED === 'true';
+        if (!isEnabled) return;
+
+        const adminEmail = (process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
+        const adminPassword = process.env.SUPER_ADMIN_BOOTSTRAP_PASSWORD;
+
+        if (!adminEmail || !adminPassword) {
+            console.warn('[BOOTSTRAP WARNING] Super Admin bootstrap enabled but credentials missing.');
+            return;
+        }
+
         const existingUser = await User.findOne({ email: adminEmail });
-        
-        if (!existingUser) {
-            const anyAdmin = await User.findOne({ username: 'admin' });
-            if (!anyAdmin) {
-                await User.create({
-                    username: 'admin',
-                    fullName: 'System Admin',
-                    email: adminEmail,
-                    password: adminPassword,
-                    role: 'super_admin',
-                    phone: '0000000000',
-                    country: 'Pakistan',
-                    status: 'Active',
-                    restrictions: { deposit: false, withdrawal: false, transfer: false, earning: false, dispute: false, excludeFromTicker: true }
-                });
-                console.log('Admin account seeded successfully.');
+        if (existingUser) {
+            console.log(`[BOOTSTRAP] Super Admin account (${adminEmail}) already exists. Skipping password/role modification.`);
+            return;
+        }
+
+        // Create Super Admin using model hashing mechanism
+        await User.create({
+            username: 'admin',
+            fullName: 'System Admin',
+            email: adminEmail,
+            password: adminPassword,
+            role: 'super_admin',
+            phone: '0000000000',
+            country: 'Pakistan',
+            status: 'Active',
+            restrictions: { 
+                deposit: false, 
+                withdrawal: false, 
+                transfer: false, 
+                earning: false, 
+                dispute: false, 
+                excludeFromTicker: true 
             }
-        } 
+        });
+        console.log(`[BOOTSTRAP] Super Admin account (${adminEmail}) seeded successfully.`);
     } catch (error) {
-        console.error('Admin Seeding Error:', error.message);
+        console.error('[BOOTSTRAP ERROR] Admin Seeding failed:', error.message);
     }
 };
 

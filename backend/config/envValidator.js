@@ -64,6 +64,17 @@ export const validateEnvironment = () => {
         warnings.forEach(w => console.warn(`\x1b[33m[CONFIG WARNING]\x1b[0m ${w}`));
     }
 
+    // 4. Validate Super Admin Bootstrap (Production safety)
+    if (process.env.SUPER_ADMIN_BOOTSTRAP_ENABLED === 'true') {
+        if (!process.env.SUPER_ADMIN_EMAIL || !process.env.SUPER_ADMIN_BOOTSTRAP_PASSWORD) {
+            if (isProduction) {
+                errors.push('SUPER_ADMIN_EMAIL and SUPER_ADMIN_BOOTSTRAP_PASSWORD are required when bootstrap is enabled.');
+            } else {
+                warnings.push('Super Admin bootstrap enabled but credentials missing.');
+            }
+        }
+    }
+
     // If critical production errors exist, fail fast
     if (errors.length > 0) {
         console.error('\x1b[31m====================================================\x1b[0m');
