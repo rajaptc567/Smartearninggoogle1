@@ -1588,6 +1588,13 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
         const parsedMinAge = minAgeInput !== '' && minAgeInput !== null && minAgeInput !== undefined ? Number(minAgeInput) : null;
         const parsedMaxAge = maxAgeInput !== '' && maxAgeInput !== null && maxAgeInput !== undefined ? Number(maxAgeInput) : null;
 
+        // Validate Selected Users if audience type is 'selected'
+        if (targetingAudienceType === 'selected' && targetingSelectedUserIds.length === 0) {
+            errors.targetingSelectedUserIds = 'Please add at least one User ID when Selected Users is selected.';
+            errorMessages.push('• Audience Targeting error: Please add at least one User ID when Selected Users is selected.');
+            if (!firstErrorFieldId) firstErrorFieldId = 'targeting-selected-user-ids-input'; // This might not work if ID doesn't exist, but it's okay
+        }
+
         if (parsedMinAge !== null) {
             if (!Number.isInteger(parsedMinAge) || parsedMinAge < 0) {
                 errors.minAge = 'Minimum Age must be a non-negative whole number.';
