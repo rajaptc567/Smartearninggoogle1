@@ -13,7 +13,7 @@ import { sendTemplateNotification } from '../utils/automation.js';
 
 const isUserAdmin = (user) => {
     if (!user) return false;
-    return user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com';
+    return user.role === 'admin' || user.role === 'super_admin';
 };
 
 export const getWithdrawals = async (req, res) => {

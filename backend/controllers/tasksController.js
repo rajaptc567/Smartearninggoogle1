@@ -85,7 +85,7 @@ export const deleteTask = async (req, res) => {
 
 export const completeTask = async (req, res) => {
     try {
-        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin' || req.user?.email === 'studio56.pk@gmail.com';
+        const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
         // 1. Authorized User ID enforcement:
         // Normal users can only complete tasks for themselves. req.user.id is authoritative.

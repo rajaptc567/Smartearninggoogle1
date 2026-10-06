@@ -231,7 +231,7 @@ const normalizePostbackParams = (providerKey, rawParams) => {
 
 const isAuthorizedAdmin = (user) => {
     if (!user) return false;
-    return user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com';
+    return user.role === 'admin' || user.role === 'super_admin';
 };
 
 /**

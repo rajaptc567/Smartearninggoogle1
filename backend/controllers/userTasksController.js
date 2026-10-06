@@ -12,8 +12,8 @@ import { sendTemplateNotification } from '../utils/automation.js';
 import { uploadStream } from '../utils/cloudinaryUploader.js';
 import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
 
-// Centralized admin & P0-2 email bypass check
-const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin' || user.email === 'studio56.pk@gmail.com'));
+// Centralized admin role check
+const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
 
 // Helper for multi-document ACID transactions when replica set is available, with safe fallback
 const executeWithOptionalTransaction = async (workFn) => {
