@@ -45,37 +45,56 @@ const parseAgeLimit = (val) => {
 const evaluateCondition = (actualValue, operator, expectedValue) => {
     const op = String(operator || 'equals').trim().toLowerCase();
     
-    // Check if actual is missing (null, undefined, or empty string)
+    // 1. Missing Value Check
+    // A value is missing if it is null, undefined, or an empty string.
     const isMissing = actualValue === undefined || actualValue === null || actualValue === '';
 
-    // Handle missing value semantics (not_* is true, others false)
+    // 2. Positive vs Negative Operator Handling for Missing Values
+    // Positive operators (equals, contains, in) must NOT match missing values.
+    // Negative operators (not_equals, not_contains, not_in) MUST match missing values (because missing != any expected).
     if (isMissing) {
         return ['not_equals', 'not_contains', 'not_in'].includes(op);
     }
     
-    // Normalize to arrays for consistent comparison
-    const actualArr = Array.isArray(actualValue) 
-        ? actualValue.map(v => String(v ?? '').trim().toLowerCase()) 
-        : [String(actualValue ?? '').trim().toLowerCase()];
-        
-    const expectedArr = Array.isArray(expectedValue) 
-        ? expectedValue.map(v => String(v ?? '').trim().toLowerCase()) 
-        : [String(expectedValue ?? '').trim().toLowerCase()];
+    // 3. Normalization for Deterministic Comparison
+    // We treat everything as arrays of strings for flexible but consistent comparison.
+    // Numbers and booleans are converted to strings.
+    // Arrays are preserved as arrays of their stringified elements.
+    const normalize = (val) => {
+        if (Array.isArray(val)) {
+            return val.map(v => String(v ?? '').trim().toLowerCase()).filter(v => v !== '');
+        }
+        const s = String(val ?? '').trim().toLowerCase();
+        return s === '' ? [] : [s];
+    };
+
+    const actualArr = normalize(actualValue);
+    const expectedArr = normalize(expectedValue);
+
+    // If normalization resulted in empty arrays but it wasn't caught by isMissing, 
+    // it means it was an empty array [].
+    if (actualArr.length === 0) {
+        return ['not_equals', 'not_contains', 'not_in'].includes(op);
+    }
 
     switch (op) {
-        case 'equals': // True if intersection exists (Scalar matches element, Array matches Array element)
+        case 'equals': 
+            // Intersection: Match if any part of the actual value matches any expected value
             return actualArr.some(a => expectedArr.includes(a));
         
-        case 'not_equals': // True only if NO intersection
+        case 'not_equals': 
+            // Disjoint: Match if NO part of the actual value matches any expected value
             return !actualArr.some(a => expectedArr.includes(a));
 
-        case 'contains': // Match if any actual element contains any expected substring
+        case 'contains': 
+            // Substring search: Match if any actual element contains any expected substring
             return actualArr.some(a => expectedArr.some(e => a.includes(e)));
 
         case 'not_contains':
             return !actualArr.some(a => expectedArr.some(e => a.includes(e)));
 
-        case 'in': // Match if any actual element is exactly in the expected array
+        case 'in': 
+            // Membership: Match if any actual element is in the expected set
             return actualArr.some(a => expectedArr.includes(a));
 
         case 'not_in':

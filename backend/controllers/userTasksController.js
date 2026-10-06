@@ -596,7 +596,7 @@ export const createUserTask = async (req, res) => {
                             taskId: String(rule?.taskId || '').trim(),
                             completed: Boolean(rule?.completed)
                         }))
-                        .filter(rule => rule.taskId.length > 0)
+                        .filter(rule => rule.taskId.length > 0 && mongoose.Types.ObjectId.isValid(rule.taskId))
                         .slice(0, 20)
                     : [];
 
@@ -608,7 +608,9 @@ export const createUserTask = async (req, res) => {
                             const value = rule?.value;
                             if (!fieldKey || !validOperators.includes(operator)) return null;
                             if (/[.$]/.test(fieldKey)) return null; // reject dot or dollar
-                            if (bannedProfileKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) return null; // reject protected core fields
+                            // Security: Profile targeting may ONLY read customFields (implied by model structure, but we block protected core fields here)
+                            if (bannedProfileKeys.some(b => fieldKey.toLowerCase() === b.toLowerCase())) return null; 
+                            if (value === undefined || value === null) return null;
                             return { fieldKey, operator, value };
                         })
                         .filter(Boolean)
@@ -623,6 +625,8 @@ export const createUserTask = async (req, res) => {
                             const operator = String(rule?.operator || '').trim().toLowerCase();
                             const value = rule?.value;
                             if (!taskId || !questionId || !validOperators.includes(operator)) return null;
+                            if (!mongoose.Types.ObjectId.isValid(taskId)) return null;
+                            if (value === undefined || value === null) return null;
                             return { taskId, questionId, operator, value };
                         })
                         .filter(Boolean)
