@@ -105,6 +105,18 @@ const evaluateCondition = (actualValue, operator, expectedValue) => {
     }
 };
 
+const isValidObjectId = (id) => {
+    if (!id) return false;
+    return /^[0-9a-fA-F]{24}$/.test(String(id));
+};
+
+const BANNED_PROFILE_KEYS = [
+    '__proto__', 'constructor', 'prototype', 'username', 'email', 'password', 
+    'role', 'phone', 'whatsapp', 'country', 'address', 'city', 'postalCode', 
+    'telegram', 'gender', 'dateOfBirth', 'currency', 'walletBalance', 
+    'taskWalletBalance', 'taskEarningsBalance', 'status', 'restrictions'
+];
+
 /**
  * Evaluates whether a worker/user satisfies the targeting constraints of a UserTask.
  * Pure function: performs no database queries or network requests.
@@ -213,32 +225,58 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
         return false;
     }
 
+    // Success definition helper
+    const isSubmissionSuccessful = (s) => {
+        if (!s) return false;
+        return s.status === 'Approved' || 
+               s.status === 'Paid' || 
+               s.status === 'Completed' || 
+               s.paid === true || 
+               s.rewardClaimed === true;
+    };
+
     // 7. Completion Rules (AND logic)
     if (Array.isArray(completionRules) && completionRules.length > 0) {
         const submissions = Array.isArray(context.submissions) ? context.submissions : [];
         for (const rule of completionRules) {
             const targetTaskId = String(rule.taskId || '');
-            const mustBeCompleted = Boolean(rule.completed);
+            const mustBeCompleted = rule.completed;
 
-            const matchingSub = submissions.find(s => {
+            // Malformed rule guard
+            if (!isValidObjectId(targetTaskId) || typeof mustBeCompleted !== 'boolean') {
+                return false;
+            }
+
+            // Check if user has AT LEAST ONE successful submission for this task
+            const hasSuccessfulSubmission = submissions.some(s => {
                 const sTaskId = String(s.taskId || s.task?._id || '');
-                const isMatchTask = sTaskId === targetTaskId;
-                const isSuccessful = s.status === 'Approved' || s.status === 'Paid' || s.status === 'Completed' || s.paid === true || s.rewardClaimed === true;
-                return isMatchTask && isSuccessful;
+                return sTaskId === targetTaskId && isSubmissionSuccessful(s);
             });
 
-            const hasCompleted = Boolean(matchingSub);
-            if (mustBeCompleted && !hasCompleted) return false;
-            if (!mustBeCompleted && hasCompleted) return false;
+            if (mustBeCompleted && !hasSuccessfulSubmission) return false;
+            if (!mustBeCompleted && hasSuccessfulSubmission) return false;
         }
     }
 
     // 8. Profile Rules (AND logic)
     if (Array.isArray(profileRules) && profileRules.length > 0) {
         const customFields = user.customFields || {};
+        const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+
         for (const rule of profileRules) {
             const fieldKey = String(rule.fieldKey || '').trim();
-            if (!fieldKey) continue;
+            const operator = String(rule.operator || '').trim().toLowerCase();
+
+            // Malformed rule guard
+            if (!fieldKey || !validOperators.includes(operator)) {
+                return false;
+            }
+            if (/[.$]/.test(fieldKey)) {
+                return false;
+            }
+            if (BANNED_PROFILE_KEYS.some(b => fieldKey.toLowerCase() === b.toLowerCase())) {
+                return false;
+            }
 
             const attrObj = customFields[fieldKey];
             const attrVal = (attrObj && typeof attrObj === 'object' && 'value' in attrObj) ? attrObj.value : attrObj;
@@ -251,13 +289,31 @@ export const isUserEligibleForUserTask = (user, userTask, context = {}) => {
     // 9. Survey Answer Rules (AND logic)
     if (Array.isArray(surveyAnswerRules) && surveyAnswerRules.length > 0) {
         const submissions = Array.isArray(context.submissions) ? context.submissions : [];
+        const validOperators = ['equals', 'not_equals', 'contains', 'not_contains', 'in', 'not_in'];
+
         for (const rule of surveyAnswerRules) {
             const targetTaskId = String(rule.taskId || '');
-            const questionId = String(rule.questionId || '');
-            if (!targetTaskId || !questionId) continue;
+            const questionId = String(rule.questionId || '').trim();
+            const operator = String(rule.operator || '').trim().toLowerCase();
 
-            const sub = submissions.find(s => String(s.taskId || s.task?._id || '') === targetTaskId);
-            const surveyResponses = Array.isArray(sub?.surveyResponses) ? sub.surveyResponses : [];
+            // Malformed rule guard
+            if (!isValidObjectId(targetTaskId) || !questionId || !validOperators.includes(operator)) {
+                return false;
+            }
+
+            // Picks the LATEST successful submission for that task
+            // Note: We assume context.submissions is sorted by createdAt ASC, or we handle it here.
+            // To be safe and deterministic, let's filter and pick the one with max createdAt.
+            const successfulSubs = submissions
+                .filter(s => String(s.taskId || s.task?._id || '') === targetTaskId && isSubmissionSuccessful(s))
+                .sort((a, b) => {
+                    const dateA = new Date(a.createdAt || 0).getTime();
+                    const dateB = new Date(b.createdAt || 0).getTime();
+                    return dateB - dateA; // Descending
+                });
+
+            const latestSub = successfulSubs[0];
+            const surveyResponses = Array.isArray(latestSub?.surveyResponses) ? latestSub.surveyResponses : [];
             const resp = surveyResponses.find(r => String(r?.questionId || '') === questionId);
             const respVal = resp ? resp.value : undefined;
 

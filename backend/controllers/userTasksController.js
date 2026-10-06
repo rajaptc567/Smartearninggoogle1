@@ -209,7 +209,7 @@ export const getUserTasks = async (req, res) => {
             workerSubmissions = await UserTaskSubmission.find({
                 workerId: user._id,
                 taskId: { $in: Array.from(referencedTaskIdsSet) }
-            }).lean();
+            }).sort({ createdAt: -1 }).lean();
         }
         const eligibilityContext = { submissions: workerSubmissions };
 
@@ -2370,7 +2370,7 @@ export const submitUserTaskProof = async (req, res) => {
                 workerSubmissions = await UserTaskSubmission.find({
                     workerId: worker._id,
                     taskId: { $in: referencedTaskIds }
-                }).lean();
+                }).sort({ createdAt: -1 }).lean();
             }
 
             const isEligible = isUserEligibleForUserTask(worker, task, { submissions: workerSubmissions });
