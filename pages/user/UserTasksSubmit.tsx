@@ -3235,6 +3235,7 @@ const UserTasksSubmit: React.FC<UserTasksSubmitProps> = ({ initialTab = 'browse'
                                         <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">Selected User IDs (Max 500)</label>
                                         <div className="flex gap-2">
                                             <input
+                                                id="targeting-selected-user-ids-input"
                                                 type="text"
                                                 value={selectedUserIdsInput}
                                                 onChange={(e) => setSelectedUserIdsInput(e.target.value)}
