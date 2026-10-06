@@ -399,6 +399,9 @@ export const AdminSurveyTemplates: React.FC = () => {
             if (result?.user) dispatch({ type: 'UPDATE_USER', payload: result.user });
             if (result?.settings) dispatch({ type: 'UPDATE_SETTINGS', payload: result.settings });
 
+            let mandatoryActivatedSuccessfully = false;
+            let mandatoryErrorMessage: string | null = null;
+
             // If selected to be mandatory withdrawal requirement, safely update System Settings with the new UserTask ID
             if (setAsMandatoryWithdrawal && createdTask?._id) {
                 try {
@@ -414,17 +417,24 @@ export const AdminSurveyTemplates: React.FC = () => {
                     };
                     const settingsRes = await updateSettings(updatedSettings);
                     dispatch({ type: 'UPDATE_SETTINGS', payload: settingsRes });
-                } catch (sErr) {
+                    mandatoryActivatedSuccessfully = true;
+                } catch (sErr: any) {
                     console.error('Failed to update mandatory withdrawal requirement setting on launch:', sErr);
+                    mandatoryErrorMessage = sErr?.message || 'Settings update failed';
                 }
             }
 
             setUsingTemplate(null);
-            setSuccessMessage(
-                setAsMandatoryWithdrawal
-                    ? `Survey campaign "${campaignTitle}" created, published, and set as the active Mandatory Withdrawal Requirement!`
-                    : `Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`
-            );
+            if (setAsMandatoryWithdrawal) {
+                if (mandatoryActivatedSuccessfully) {
+                    setSuccessMessage(`Survey campaign "${campaignTitle}" created, published, and successfully activated as the Mandatory Withdrawal Requirement!`);
+                } else {
+                    alert(`Survey was created successfully, but the Mandatory Withdrawal Requirement could not be activated (${mandatoryErrorMessage || 'Settings save failed'}). Please configure it manually from Task Settings.`);
+                    setSuccessMessage(`Survey campaign "${campaignTitle}" created successfully. (Notice: Mandatory Withdrawal activation failed. Configure manually from Task Settings.)`);
+                }
+            } else {
+                setSuccessMessage(`Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`);
+            }
         } catch (err: any) {
             alert(err.message || 'Failed to create campaign from template');
         } finally {
@@ -1195,24 +1205,46 @@ export const AdminSurveyTemplates: React.FC = () => {
                             </div>
 
                             {/* Mandatory Withdrawal Requirement Toggle */}
-                            <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-4">
-                                <div>
-                                    <span className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 block">
-                                        Set as Active Mandatory Withdrawal Requirement
-                                    </span>
-                                    <p className="text-[11px] text-amber-800/80 dark:text-amber-400 mt-0.5">
-                                        When enabled, members cannot withdraw Work &amp; Earn funds until they have completed and obtained an Approved submission for this survey.
-                                    </p>
+                            <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 space-y-3">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                        <span className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 block">
+                                            Set as Active Mandatory Withdrawal Requirement
+                                        </span>
+                                        <p className="text-[11px] text-amber-800/80 dark:text-amber-400 mt-0.5">
+                                            When enabled, members cannot withdraw Work &amp; Earn funds until they have completed and obtained an Approved submission for this survey.
+                                        </p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={setAsMandatoryWithdrawal} 
+                                            onChange={(e) => setSetAsMandatoryWithdrawal(e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600"></div>
+                                    </label>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={setAsMandatoryWithdrawal} 
-                                        onChange={(e) => setSetAsMandatoryWithdrawal(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600"></div>
-                                </label>
+
+                                {setAsMandatoryWithdrawal && (
+                                    <div className="p-3 bg-white/90 dark:bg-gray-900/90 rounded-xl border border-amber-300 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 space-y-1.5">
+                                        <p className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                            Single Active Requirement Model:
+                                        </p>
+                                        <p className="text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                                            Only one Mandatory Withdrawal Requirement can be active at a time. Activating this survey will replace the currently active requirement.
+                                        </p>
+                                        {settings?.mandatoryWithdrawalRequirement?.enabled && settings.mandatoryWithdrawalRequirement.requiredTaskId && (
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-2">
+                                                <span>Currently Active Prerequisite:</span>
+                                                <span className="font-mono font-bold text-gray-700 dark:text-gray-300 truncate max-w-[240px]">
+                                                    ID {String(settings.mandatoryWithdrawalRequirement.requiredTaskId)} (v{settings.mandatoryWithdrawalRequirement.requiredTaskVersion || 1})
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Submit & Cancel */}
