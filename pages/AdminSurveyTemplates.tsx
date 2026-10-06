@@ -16,7 +16,8 @@ import {
     duplicateAdminSurveyTemplate,
     deleteAdminSurveyTemplate,
     resetDefaultAdminSurveyTemplates,
-    createUserTask
+    createUserTask,
+    updateSettings
 } from '../services/api';
 import {
     FileText,
@@ -92,6 +93,7 @@ export const AdminSurveyTemplates: React.FC = () => {
     const [campaignDescription, setCampaignDescription] = useState<string>('');
     const [campaignWorkersNeeded, setCampaignWorkersNeeded] = useState<number>(50);
     const [campaignRewardPerTask, setCampaignRewardPerTask] = useState<number>(0.25);
+    const [setAsMandatoryWithdrawal, setSetAsMandatoryWithdrawal] = useState<boolean>(false);
     const [campaignSurveyConfig, setCampaignSurveyConfig] = useState<SurveyConfigData>({
         questions: [],
         sections: []
@@ -323,6 +325,7 @@ export const AdminSurveyTemplates: React.FC = () => {
         const isFree = template.rewardConfig?.mode === 'no_reward';
         const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined ? template.rewardConfig.amount : 0.25);
         setCampaignRewardPerTask(initialReward);
+        setSetAsMandatoryWithdrawal(template.requirementConfig?.mode === 'mandatory_before_withdrawal');
         setCampaignSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
     };
 
@@ -390,10 +393,38 @@ export const AdminSurveyTemplates: React.FC = () => {
                 }
             };
 
-            const createdTask = await createUserTask(userTaskPayload);
+            const result: any = await createUserTask(userTaskPayload);
+            const createdTask: any = result?.task || result;
             dispatch({ type: 'ADD_USER_TASK', payload: createdTask });
+            if (result?.user) dispatch({ type: 'UPDATE_USER', payload: result.user });
+            if (result?.settings) dispatch({ type: 'UPDATE_SETTINGS', payload: result.settings });
+
+            // If selected to be mandatory withdrawal requirement, safely update System Settings with the new UserTask ID
+            if (setAsMandatoryWithdrawal && createdTask?._id) {
+                try {
+                    const currentSettings = result?.settings || settings;
+                    const updatedSettings = {
+                        ...currentSettings,
+                        mandatoryWithdrawalRequirement: {
+                            enabled: true,
+                            requiredTaskId: String(createdTask._id),
+                            requiredTaskVersion: Number(createdTask.surveyVersion || createdTask.surveyConfig?.version || 1),
+                            requirementType: 'survey'
+                        }
+                    };
+                    const settingsRes = await updateSettings(updatedSettings);
+                    dispatch({ type: 'UPDATE_SETTINGS', payload: settingsRes });
+                } catch (sErr) {
+                    console.error('Failed to update mandatory withdrawal requirement setting on launch:', sErr);
+                }
+            }
+
             setUsingTemplate(null);
-            setSuccessMessage(`Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`);
+            setSuccessMessage(
+                setAsMandatoryWithdrawal
+                    ? `Survey campaign "${campaignTitle}" created, published, and set as the active Mandatory Withdrawal Requirement!`
+                    : `Survey campaign "${campaignTitle}" created and published successfully as an Admin Research Survey!`
+            );
         } catch (err: any) {
             alert(err.message || 'Failed to create campaign from template');
         } finally {
@@ -1161,6 +1192,27 @@ export const AdminSurveyTemplates: React.FC = () => {
                                         onChange={(updated) => setCampaignSurveyConfig(updated)}
                                     />
                                 </div>
+                            </div>
+
+                            {/* Mandatory Withdrawal Requirement Toggle */}
+                            <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-4">
+                                <div>
+                                    <span className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 block">
+                                        Set as Active Mandatory Withdrawal Requirement
+                                    </span>
+                                    <p className="text-[11px] text-amber-800/80 dark:text-amber-400 mt-0.5">
+                                        When enabled, members cannot withdraw Work &amp; Earn funds until they have completed and obtained an Approved submission for this survey.
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={setAsMandatoryWithdrawal} 
+                                        onChange={(e) => setSetAsMandatoryWithdrawal(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600"></div>
+                                </label>
                             </div>
 
                             {/* Submit & Cancel */}

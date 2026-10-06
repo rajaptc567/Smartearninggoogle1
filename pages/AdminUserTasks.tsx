@@ -1434,15 +1434,41 @@ const AdminUserTasks: React.FC = () => {
                                             className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 font-medium text-xs text-gray-900 dark:text-white"
                                         >
                                             <option value="">-- Select a Task or Survey --</option>
-                                            <optgroup label="User Tasks &amp; Surveys">
-                                                {userTasks.filter(t => t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId).map(t => (
-                                                    <option key={t._id} value={t._id}>
-                                                        {t.isSurvey ? '[Survey]' : '[Task]'} {t.title} ({t.category})
-                                                    </option>
-                                                ))}
-                                            </optgroup>
+                                            {userTasks.some(t => (t.isAdminResearchSurvey || t.sourceAdminSurveyTemplateId) && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId)) && (
+                                                <optgroup label="⭐ Admin Research Surveys (Internal / Isolated)">
+                                                    {userTasks
+                                                        .filter(t => (t.isAdminResearchSurvey || t.sourceAdminSurveyTemplateId) && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId))
+                                                        .map(t => (
+                                                            <option key={t._id} value={t._id}>
+                                                                [Admin Research Survey] {t.title} {Number(t.rewardPerTask) === 0 ? '(Free Research)' : `($${(t.rewardPerTask || 0).toFixed(2)})`} - v{t.surveyVersion || t.surveyConfig?.version || 1}
+                                                            </option>
+                                                        ))}
+                                                </optgroup>
+                                            )}
+                                            {userTasks.some(t => t.isSurvey && !t.isAdminResearchSurvey && !t.sourceAdminSurveyTemplateId && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId)) && (
+                                                <optgroup label="📋 Standard Survey Campaigns">
+                                                    {userTasks
+                                                        .filter(t => t.isSurvey && !t.isAdminResearchSurvey && !t.sourceAdminSurveyTemplateId && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId))
+                                                        .map(t => (
+                                                            <option key={t._id} value={t._id}>
+                                                                [Survey] {t.title} ({t.category}) - v{t.surveyVersion || t.surveyConfig?.version || 1}
+                                                            </option>
+                                                        ))}
+                                                </optgroup>
+                                            )}
+                                            {userTasks.some(t => !t.isSurvey && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId)) && (
+                                                <optgroup label="💼 User Engagement Tasks">
+                                                    {userTasks
+                                                        .filter(t => !t.isSurvey && (t.status === 'Approved' || t.status === 'Active' || String(t._id) === mandatoryReqTaskId))
+                                                        .map(t => (
+                                                            <option key={t._id} value={t._id}>
+                                                                [Task] {t.title} ({t.category})
+                                                            </option>
+                                                        ))}
+                                                </optgroup>
+                                            )}
                                             {tasks && tasks.length > 0 && (
-                                                <optgroup label="Admin Task Hub Tasks">
+                                                <optgroup label="🛡️ Admin Task Hub Tasks">
                                                     {tasks.filter(t => t.status === 'Active' || String(t._id) === mandatoryReqTaskId).map(t => (
                                                         <option key={t._id} value={t._id}>
                                                             [Admin Task] {t.title}
@@ -1456,12 +1482,13 @@ const AdminUserTasks: React.FC = () => {
                                     {(() => {
                                         const selectedTask = userTasks.find(t => String(t._id) === mandatoryReqTaskId);
                                         const isSurveySelected = selectedTask ? Boolean(selectedTask.isSurvey) : false;
+                                        const isAdminResearch = selectedTask ? Boolean(selectedTask.isAdminResearchSurvey || selectedTask.sourceAdminSurveyTemplateId) : false;
 
                                         if (!isSurveySelected) {
                                             return (
                                                 <div className="flex items-end">
                                                     <p className="text-[11px] text-gray-500 dark:text-gray-400 p-2.5">
-                                                        For standard tasks, workers must have an <strong>Approved</strong> submission record before withdrawal is permitted.
+                                                        For standard tasks, workers must have an <strong>Approved</strong> submission record before Work &amp; Earn withdrawal is permitted.
                                                     </p>
                                                 </div>
                                             );
@@ -1469,19 +1496,26 @@ const AdminUserTasks: React.FC = () => {
 
                                         return (
                                             <div className="space-y-1.5">
-                                                <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
-                                                    Required Survey Version
-                                                </label>
+                                                <div className="flex items-center justify-between">
+                                                    <label className="block text-xs font-black uppercase text-gray-700 dark:text-gray-300">
+                                                        Required Survey Version
+                                                    </label>
+                                                    {isAdminResearch && (
+                                                        <span className="px-2 py-0.5 text-[9px] font-black uppercase rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                            Admin Research Survey
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <input
                                                     type="number"
                                                     min="1"
                                                     step="1"
                                                     value={mandatoryReqVersion}
                                                     onChange={(e) => setMandatoryReqVersion(Math.max(1, parseInt(e.target.value) || 1))}
-                                                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
+                                                    className="w-full px-4 py-2 rounded-xl bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 font-mono font-bold text-sm text-gray-900 dark:text-white"
                                                 />
                                                 <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                                                    Strict versioning enforced: Submissions for older versions (e.g. version 1) will not unlock withdrawals if version {mandatoryReqVersion} is specified.
+                                                    Strict versioning: Submissions must be <strong>Approved</strong> and match version {mandatoryReqVersion} to unlock withdrawals. Disqualified or screenout submissions will not satisfy the requirement.
                                                 </p>
                                             </div>
                                         );
