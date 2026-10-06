@@ -1386,3 +1386,30 @@ export interface TemplateLog {
     date?: string;
     createdAt?: string;
 }
+
+export interface AdminSurveyTemplate {
+    _id: string;
+    name: string;
+    description?: string;
+    category?: string;
+    version: number;
+    enabled: boolean;
+    estimatedTimeMinutes: number;
+    rewardConfig: {
+        mode: 'no_reward' | 'fixed' | 'custom';
+        amount: number;
+        currency: string;
+    };
+    requirementConfig: {
+        mode: 'optional' | 'mandatory_all' | 'mandatory_before_withdrawal';
+    };
+    recompletionPolicy: {
+        policy: 'never' | 'on_version_change' | 'every_x_days';
+        intervalDays: number;
+    };
+    surveyConfig: any;
+    isMasterDefault?: boolean;
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}

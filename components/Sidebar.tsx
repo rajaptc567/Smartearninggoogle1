@@ -85,6 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       { to: '/admin/plan-equivalency', label: 'Plan Equivalency', icon: <LinkIcon /> },
       { to: '/admin/tasks', label: 'Withdraw Tasks', icon: <TaskIcon />, badge: pendingWithdrawTasksCount, badgeColor: 'bg-teal-600' },
       { to: '/admin/user-tasks', label: 'User Task', icon: <TaskIcon />, badge: pendingUserTasksTotal, badgeColor: 'bg-blue-500' },
+      { to: '/admin/survey-templates', label: 'Survey Templates', icon: <TemplateIcon /> },
       { to: '/admin/offerwalls', label: 'Offerwalls & S2S', icon: <GlobeSearchIcon /> },
       { to: '/admin/task-categories', label: 'Task Configurator', icon: <SettingsIcon /> },
       { to: '/admin/work-and-earn-editor', label: 'Work & Earn Editor', icon: <SettingsIcon /> },

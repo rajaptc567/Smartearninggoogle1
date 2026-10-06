@@ -36,6 +36,7 @@ const AdminTaskCategories = lazy(() => import('./pages/AdminTaskCategories'));
 const AdminWorkAndEarnEditor = lazy(() => import('./pages/admin/AdminWorkAndEarnEditor'));
 const AdminWithdrawalRules = lazy(() => import('./pages/AdminWithdrawalRules'));
 const AdminTemplates = lazy(() => import('./pages/AdminTemplates'));
+const AdminSurveyTemplates = lazy(() => import('./pages/AdminSurveyTemplates'));
 const AdminNotifications = lazy(() => import('./pages/AdminNotifications'));
 const AdminFinancialReconciliation = lazy(() => import('./pages/admin/AdminFinancialReconciliation'));
 const AdminSeoIntelligence = lazy(() => import('./pages/admin/AdminSeoIntelligence'));
@@ -270,6 +271,7 @@ const App: React.FC = () => {
               <Route path="disputes" element={<AdminDisputes />} />
               <Route path="sent-messages" element={<SentMessages />} />
               <Route path="templates" element={<AdminTemplates />} />
+              <Route path="survey-templates" element={<AdminSurveyTemplates />} />
               <Route path="profile" element={<AdminProfile />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="reconciliation" element={<AdminFinancialReconciliation />} />

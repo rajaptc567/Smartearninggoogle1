@@ -34,6 +34,7 @@ import templateRoutes from './routes/templateRoutes.js';
 import userTaskRoutes from './routes/userTaskRoutes.js';
 import bulkPopupRoutes from './routes/bulkPopupRoutes.js';
 import postbackRoutes from './routes/postbackRoutes.js';
+import adminSurveyTemplateRoutes from './routes/adminSurveyTemplateRoutes.js';
 import { seedVerifiedNetworks } from './controllers/postbackController.js';
 
 // Import password reset actions directly for backward compatibility
@@ -268,6 +269,7 @@ app.use('/api/v1/disputes', disputeRoutes);
 app.use('/api/v1/tasks', taskRoutes); 
 app.use('/api/v1/templates', templateRoutes);
 app.use('/api/v1/user-tasks', userTaskRoutes);
+app.use('/api/v1/admin-survey-templates', adminSurveyTemplateRoutes);
 app.use('/api/v1/bulk-popups', bulkPopupRoutes);
 app.use('/api/v1/postbacks', postbackRoutes);
 

@@ -1,4 +1,4 @@
-import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, UserTask, Template, TemplateLog } from '../types';
+import { User, Deposit, Transaction, Notification, Withdrawal, PaymentMethod, InvestmentPlan, Rule, Settings, Transfer, Log, PasswordResetRequest, Dispute, UserRestrictions, Currency, Task, UserTask, Template, TemplateLog, AdminSurveyTemplate } from '../types';
 
 // Production configuration: Uses environment variable for backend routing with robust fallbacks.
 const getBaseUrl = (): string => {
@@ -1135,4 +1135,83 @@ export const deleteBulkPopup = async (id: string): Promise<void> => {
         headers: getHeaders(),
     });
     await handleResponse(response);
+};
+
+// ==================== ADMIN SURVEY TEMPLATES (PHASE 1) ====================
+
+export const getAdminSurveyTemplates = async (params?: { enabled?: boolean; category?: string }): Promise<AdminSurveyTemplate[]> => {
+    const query = new URLSearchParams();
+    if (params?.enabled !== undefined) query.append('enabled', String(params.enabled));
+    if (params?.category) query.append('category', params.category);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates${queryString}`, {
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data || [];
+};
+
+export const getAdminSurveyTemplate = async (id: string): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/${id}`, {
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const createAdminSurveyTemplate = async (templateData: Partial<AdminSurveyTemplate>): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(templateData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const updateAdminSurveyTemplate = async (id: string, templateData: Partial<AdminSurveyTemplate>): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(templateData),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const toggleAdminSurveyTemplateEnabled = async (id: string): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/${id}/toggle-enabled`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const duplicateAdminSurveyTemplate = async (id: string): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/${id}/duplicate`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const deleteAdminSurveyTemplate = async (id: string, force = false): Promise<void> => {
+    const query = force ? '?force=true' : '';
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/${id}${query}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+    });
+    await handleResponse(response);
+};
+
+export const resetDefaultAdminSurveyTemplates = async (): Promise<AdminSurveyTemplate> => {
+    const response = await fetch(`${API_BASE_URL}/admin-survey-templates/reset-defaults`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
 };
