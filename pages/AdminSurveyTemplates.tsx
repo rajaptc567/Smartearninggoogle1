@@ -217,7 +217,7 @@ export const AdminSurveyTemplates: React.FC = () => {
         setFormCategory(template.category || 'Member Intelligence & Experience');
         setFormEstimatedMinutes(template.estimatedTimeMinutes || 5);
         setFormRewardMode(template.rewardConfig?.mode || 'no_reward');
-        setFormRewardAmount(template.rewardConfig?.amount || 0);
+        setFormRewardAmount(template.rewardConfig?.mode === 'no_reward' ? 0 : (template.rewardConfig?.amount !== undefined ? Number(template.rewardConfig.amount) : 0.05));
         setFormRewardCurrency(template.rewardConfig?.currency || 'USD');
         setFormRequirementMode(template.requirementConfig?.mode || 'optional');
         setFormRecompletionPolicy(template.recompletionPolicy?.policy || 'never');
@@ -270,6 +270,19 @@ export const AdminSurveyTemplates: React.FC = () => {
             return;
         }
 
+        // Validate Reward Configuration
+        let safeRewardAmount = 0;
+        if (formRewardMode === 'fixed' || formRewardMode === 'custom') {
+            const parsed = Number(formRewardAmount);
+            if (!Number.isFinite(parsed) || isNaN(parsed) || parsed < 0.01) {
+                alert(`Please enter a valid reward amount of at least $0.01 for ${formRewardMode === 'fixed' ? 'Fixed' : 'Custom'} Reward mode.`);
+                return;
+            }
+            safeRewardAmount = Number(parsed.toFixed(2));
+        } else {
+            safeRewardAmount = 0;
+        }
+
         setIsSubmittingForm(true);
         try {
             const payload: any = {
@@ -279,7 +292,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 estimatedTimeMinutes: Number(formEstimatedMinutes) || 5,
                 rewardConfig: {
                     mode: formRewardMode,
-                    amount: formRewardMode === 'fixed' ? Number(formRewardAmount) : 0,
+                    amount: safeRewardAmount,
                     currency: formRewardCurrency
                 },
                 requirementConfig: {
@@ -323,7 +336,7 @@ export const AdminSurveyTemplates: React.FC = () => {
         setCampaignDescription(template.description || 'Please complete all survey questions thoughtfully to help improve our platform.');
         setCampaignWorkersNeeded(50);
         const isFree = template.rewardConfig?.mode === 'no_reward';
-        const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined ? template.rewardConfig.amount : 0.25);
+        const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined && Number.isFinite(Number(template.rewardConfig.amount)) ? Number(template.rewardConfig.amount) : 0.25);
         setCampaignRewardPerTask(initialReward);
         setSetAsMandatoryWithdrawal(template.requirementConfig?.mode === 'mandatory_before_withdrawal');
         setCampaignSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
@@ -637,7 +650,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                                             <span className="font-bold text-indigo-600 dark:text-indigo-400">
                                                 {template.rewardConfig?.mode === 'no_reward' && 'No Reward'}
                                                 {template.rewardConfig?.mode === 'fixed' && `Fixed: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
-                                                {template.rewardConfig?.mode === 'custom' && 'Custom'}
+                                                {template.rewardConfig?.mode === 'custom' && `Custom: $${(template.rewardConfig?.amount || 0).toFixed(2)}`}
                                             </span>
                                         </div>
                                         <div className="bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -743,7 +756,9 @@ export const AdminSurveyTemplates: React.FC = () => {
                             <div>
                                 <span className="text-[10px] font-bold uppercase text-gray-400 block">Reward Mode</span>
                                 <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                    {previewTemplate.rewardConfig?.mode} {previewTemplate.rewardConfig?.amount > 0 && `($${previewTemplate.rewardConfig.amount})`}
+                                    {previewTemplate.rewardConfig?.mode === 'no_reward' && 'No Reward ($0.00)'}
+                                    {previewTemplate.rewardConfig?.mode === 'fixed' && `Fixed ($${(previewTemplate.rewardConfig?.amount || 0).toFixed(2)})`}
+                                    {previewTemplate.rewardConfig?.mode === 'custom' && `Custom ($${(previewTemplate.rewardConfig?.amount || 0).toFixed(2)})`}
                                 </span>
                             </div>
                             <div>
@@ -912,25 +927,37 @@ export const AdminSurveyTemplates: React.FC = () => {
                                     <label className="block text-xs font-black uppercase text-gray-500 mb-1">Reward Mode</label>
                                     <select
                                         value={formRewardMode}
-                                        onChange={(e) => setFormRewardMode(e.target.value as any)}
+                                        onChange={(e) => {
+                                            const newMode = e.target.value as any;
+                                            setFormRewardMode(newMode);
+                                            if (newMode === 'no_reward') {
+                                                setFormRewardAmount(0);
+                                            } else if (formRewardAmount <= 0) {
+                                                setFormRewardAmount(newMode === 'fixed' ? 0.25 : 0.05);
+                                            }
+                                        }}
                                         className="w-full px-3 py-2 rounded-xl border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     >
                                         <option value="no_reward">No Reward (Default)</option>
                                         <option value="fixed">Fixed Reward</option>
                                         <option value="custom">Custom Reward</option>
                                     </select>
-                                    {formRewardMode === 'fixed' && (
+                                    {(formRewardMode === 'fixed' || formRewardMode === 'custom') && (
                                         <div className="mt-2 flex items-center gap-2">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 min="0.01"
+                                                required
                                                 value={formRewardAmount}
                                                 onChange={(e) => setFormRewardAmount(Number(e.target.value))}
-                                                placeholder="0.25"
-                                                className="w-24 px-3 py-1.5 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold"
+                                                placeholder={formRewardMode === 'fixed' ? '0.25' : '0.05'}
+                                                className="w-24 px-3 py-1.5 rounded-lg border dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold font-mono"
                                             />
                                             <span className="text-xs font-bold text-gray-500">USD</span>
+                                            <span className="text-[10px] text-gray-400">
+                                                {formRewardMode === 'fixed' ? '(Fixed Payout)' : '(Default Custom Payout)'}
+                                            </span>
                                         </div>
                                     )}
                                 </div>
