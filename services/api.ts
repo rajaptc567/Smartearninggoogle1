@@ -699,6 +699,34 @@ export const renewUserTask = async (id: string, extraSlots: number): Promise<{ t
     return result.data;
 };
 
+export const addAdminCampaignFunds = async (id: string, amount: number, idempotencyKey?: string): Promise<{ task: UserTask; transaction: any; settings?: Settings }> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}/add-funds`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ amount, idempotencyKey }),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const resumeAdminCampaign = async (id: string): Promise<{ task: UserTask }> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}/resume-campaign`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
+export const pauseAdminCampaign = async (id: string): Promise<{ task: UserTask }> => {
+    const response = await fetch(`${API_BASE_URL}/user-tasks/${id}/pause-campaign`, {
+        method: 'POST',
+        headers: getHeaders(),
+    });
+    const result = await handleResponse(response);
+    return result.data;
+};
+
 export const getUserTaskSubmissions = async (): Promise<any[]> => {
     const response = await fetch(`${API_BASE_URL}/user-tasks/submissions`, {
         headers: getHeaders()

@@ -63,8 +63,40 @@ const UserTaskSchema = new mongoose.Schema({
     },
     targetQuantity: {
         type: Number,
-        required: [true, 'Please specify target quantity'],
-        min: 1
+        required: function() {
+            return !this.isUnlimitedResponses;
+        },
+        default: 0,
+        min: 0
+    },
+    isUnlimitedResponses: {
+        type: Boolean,
+        default: false
+    },
+    campaignFundingStatus: {
+        type: String,
+        enum: ['funded', 'low_balance', 'paused_insufficient_funds', 'resumed', 'exhausted', 'disabled'],
+        default: 'funded'
+    },
+    campaignAvailableBalanceUSD: {
+        type: Number,
+        default: 0
+    },
+    campaignTotalFundedUSD: {
+        type: Number,
+        default: 0
+    },
+    campaignTotalSpentUSD: {
+        type: Number,
+        default: 0
+    },
+    lowBalanceThresholdPercent: {
+        type: Number,
+        default: 10
+    },
+    lowBalanceWarningSent: {
+        type: Boolean,
+        default: false
     },
     currentCompletions: {
         type: Number,

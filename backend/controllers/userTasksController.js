@@ -164,6 +164,9 @@ const toWorkerSafeUserTask = (task) => {
         'surveyVersion',
         'isAdminResearchSurvey',
         'isMandatoryForAllUsers',
+        'isUnlimitedResponses',
+        'campaignFundingStatus',
+        'campaignAvailableBalanceUSD',
         'sourceAdminSurveyTemplateId',
         'createdAt',
         'updatedAt',
@@ -179,7 +182,7 @@ const toWorkerSafeUserTask = (task) => {
     return safeTask;
 };
 
-// Concurrency-safe atomic completion slot claiming (Phase D-3)
+// Concurrency-safe atomic completion slot claiming (Phase D-3 & Parts E, F, G, N)
 const claimTaskCompletionSlot = async (taskId, workerId) => {
     if (!taskId || !workerId) return null;
 
@@ -187,27 +190,124 @@ const claimTaskCompletionSlot = async (taskId, workerId) => {
         ? new mongoose.Types.ObjectId(workerId)
         : workerId;
 
-    const updatedTask = await UserTask.findOneAndUpdate(
-        {
-            _id: taskId,
-            status: { $ne: 'Rejected' },
-            $expr: { $lt: ['$currentCompletions', '$targetQuantity'] },
-            completedUsers: { $ne: workerObjId }
-        },
-        {
-            $inc: { currentCompletions: 1 },
-            $addToSet: { completedUsers: workerObjId }
-        },
-        { new: true }
-    );
+    const targetTask = await UserTask.findById(taskId).lean();
+    if (!targetTask) return null;
 
-    if (updatedTask && updatedTask.currentCompletions >= updatedTask.targetQuantity && updatedTask.status !== 'Completed') {
-        try {
-            await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Completed' } });
-            updatedTask.status = 'Completed';
-        } catch (statusErr) {
-            console.error('Warning: Failed to update UserTask status to Completed:', statusErr.message);
-            updatedTask.status = 'Completed';
+    let updatedTask = null;
+
+    if (targetTask.isUnlimitedResponses) {
+        if (targetTask.rewardPerTask === 0) {
+            // Free Unlimited Survey: No cap on slots, only verify not completed yet and active status
+            updatedTask = await UserTask.findOneAndUpdate(
+                {
+                    _id: taskId,
+                    status: { $in: ['Approved', 'Paid', 'Active'] },
+                    completedUsers: { $ne: workerObjId }
+                },
+                {
+                    $inc: { currentCompletions: 1 },
+                    $addToSet: { completedUsers: workerObjId }
+                },
+                { new: true }
+            );
+        } else {
+            // Paid Unlimited Survey: Atomically check and deduct reward from available balance
+            const reward = Number((targetTask.rewardPerTask || 0).toFixed(2));
+            updatedTask = await UserTask.findOneAndUpdate(
+                {
+                    _id: taskId,
+                    status: { $in: ['Approved', 'Paid', 'Active'] },
+                    campaignFundingStatus: { $ne: 'paused_insufficient_funds' },
+                    campaignAvailableBalanceUSD: { $gte: reward },
+                    completedUsers: { $ne: workerObjId }
+                },
+                {
+                    $inc: { 
+                        currentCompletions: 1,
+                        campaignAvailableBalanceUSD: -reward,
+                        campaignTotalSpentUSD: reward
+                    },
+                    $addToSet: { completedUsers: workerObjId }
+                },
+                { new: true }
+            );
+
+            if (updatedTask) {
+                // If balance is now below the reward needed for the next completion, mark as paused_insufficient_funds
+                if (updatedTask.campaignAvailableBalanceUSD < reward) {
+                    try {
+                        await UserTask.findByIdAndUpdate(updatedTask._id, {
+                            $set: { 
+                                campaignFundingStatus: 'paused_insufficient_funds',
+                                status: 'On Hold'
+                            },
+                            $push: {
+                                history: {
+                                    action: 'Funding Pause',
+                                    previousStatus: updatedTask.status,
+                                    newStatus: 'On Hold',
+                                    timestamp: new Date(),
+                                    performedBy: 'System Engine',
+                                    details: `Campaign automatically paused due to zero/insufficient campaign available balance ($${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD remaining).`
+                                }
+                            }
+                        });
+                        updatedTask.campaignFundingStatus = 'paused_insufficient_funds';
+                        updatedTask.status = 'On Hold';
+                    } catch (pErr) {
+                        console.error('Warning: Failed to update funding status to paused_insufficient_funds:', pErr.message);
+                    }
+                }
+
+                // Low Balance Warning Check (Idempotent: Trigger once per threshold crossing)
+                const thresholdPercent = updatedTask.lowBalanceThresholdPercent || 10;
+                const totalFunded = updatedTask.campaignTotalFundedUSD || 0;
+                const warningThreshold = totalFunded * (thresholdPercent / 100);
+
+                if (totalFunded > 0 && updatedTask.campaignAvailableBalanceUSD <= warningThreshold && !updatedTask.lowBalanceWarningSent) {
+                    try {
+                        await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { lowBalanceWarningSent: true } });
+                        updatedTask.lowBalanceWarningSent = true;
+
+                        // Create administrative notification
+                        await Notification.create({
+                            title: 'Survey Campaign Low Balance Warning',
+                            message: `Survey campaign "${updatedTask.title}" has reached a low balance of $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD (at/below ${thresholdPercent}% of $${totalFunded.toFixed(2)} USD total budget). Please add campaign funds to keep it running.`,
+                            type: 'system_alert',
+                            targetRole: 'admin',
+                            category: 'campaign',
+                            relatedId: updatedTask._id
+                        }).catch(() => {});
+                    } catch (notifErr) {
+                        console.error('Warning: Low balance notification error:', notifErr.message);
+                    }
+                }
+            }
+        }
+    } else {
+        // Limited Task / Survey: Standard targetQuantity slot reservation
+        updatedTask = await UserTask.findOneAndUpdate(
+            {
+                _id: taskId,
+                status: { $ne: 'Rejected' },
+                $expr: { $lt: ['$currentCompletions', '$targetQuantity'] },
+                completedUsers: { $ne: workerObjId }
+            },
+            {
+                $inc: { currentCompletions: 1 },
+                $addToSet: { completedUsers: workerObjId }
+            },
+            { new: true }
+        );
+
+        if (updatedTask && updatedTask.currentCompletions >= updatedTask.targetQuantity && updatedTask.status !== 'Completed') {
+            try {
+                await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Completed' } });
+                updatedTask.status = 'Completed';
+            } catch (statusErr) {
+                console.error('Warning: Failed to update UserTask status to Completed:', statusErr.message);
+                updatedTask.status = 'Completed';
+            }
         }
     }
 
@@ -222,19 +322,30 @@ const releaseTaskCompletionSlot = async (taskId, workerId) => {
         ? new mongoose.Types.ObjectId(workerId)
         : workerId;
 
+    const targetTask = await UserTask.findById(taskId).lean();
+    if (!targetTask) return null;
+
+    let updateDoc = {
+        $inc: { currentCompletions: -1 },
+        $pull: { completedUsers: workerObjId }
+    };
+
+    if (targetTask.isUnlimitedResponses && targetTask.rewardPerTask > 0) {
+        const reward = Number((targetTask.rewardPerTask || 0).toFixed(2));
+        updateDoc.$inc.campaignAvailableBalanceUSD = reward;
+        updateDoc.$inc.campaignTotalSpentUSD = -reward;
+    }
+
     const updatedTask = await UserTask.findOneAndUpdate(
         {
             _id: taskId,
             completedUsers: workerObjId
         },
-        {
-            $inc: { currentCompletions: -1 },
-            $pull: { completedUsers: workerObjId }
-        },
+        updateDoc,
         { new: true }
     );
 
-    if (updatedTask && updatedTask.status === 'Completed' && updatedTask.currentCompletions < updatedTask.targetQuantity) {
+    if (updatedTask && updatedTask.status === 'Completed' && !updatedTask.isUnlimitedResponses && updatedTask.currentCompletions < updatedTask.targetQuantity) {
         try {
             await UserTask.findByIdAndUpdate(updatedTask._id, { $set: { status: 'Approved' } });
             updatedTask.status = 'Approved';
@@ -320,9 +431,13 @@ export const getUserTasks = async (req, res) => {
 
                 if (isWorkerAllowed) {
                     const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
-                    const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
+                    const hasAvailableSlots = task.isUnlimitedResponses
+                        ? (task.rewardPerTask === 0 || (task.campaignAvailableBalanceUSD >= task.rewardPerTask && task.campaignFundingStatus !== 'paused_insufficient_funds'))
+                        : ((task.currentCompletions || 0) < (task.targetQuantity || 0));
 
-                    if (isLiveStatus && hasAvailableSlots && isUserEligibleForUserTask(user, task, eligibilityContext)) {
+                    const alreadyCompleted = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === String(user._id));
+
+                    if (isLiveStatus && hasAvailableSlots && !alreadyCompleted && isUserEligibleForUserTask(user, task, eligibilityContext)) {
                         // Return sanitized worker-safe task for eligible non-owner
                         filteredTasks.push(toWorkerSafeUserTask(task));
                     }
@@ -379,10 +494,11 @@ export const createUserTask = async (req, res) => {
             }
         }
 
-        const qtyNum = Number(targetQuantity !== undefined ? targetQuantity : req.body.workersNeeded);
+        const isUnlimitedResponses = Boolean(isAdminResearchSurvey && req.body.isUnlimitedResponses === true);
+        const qtyNum = isUnlimitedResponses ? 0 : Number(targetQuantity !== undefined ? targetQuantity : req.body.workersNeeded);
         const rewardNum = Number(rewardPerTask);
 
-        if (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0) {
+        if (!isUnlimitedResponses && (isNaN(qtyNum) || !isFinite(qtyNum) || qtyNum <= 0)) {
             return res.status(400).json({ success: false, error: 'Target quantity must be a valid positive number.' });
         }
 
@@ -523,7 +639,7 @@ export const createUserTask = async (req, res) => {
         }
 
         const config = settings.userTaskConfig || { minQuantity: 5, minRewardAmount: 0.10, commissionPercent: 10, campaignFeeEnabled: false, campaignFeeAmount: 1.00 };
-        if (qtyNum < config.minQuantity) {
+        if (!isUnlimitedResponses && qtyNum < config.minQuantity) {
             return res.status(400).json({ success: false, error: `Minimum target quantity is ${config.minQuantity}.` });
         }
 
@@ -544,17 +660,48 @@ export const createUserTask = async (req, res) => {
 
         // Entire setup in USD
         const effectiveRewardPerTask = Number(rewardNum.toFixed(2));
-        const subtotal = Number((qtyNum * effectiveRewardPerTask).toFixed(2));
-        const adminCommission = (isAdminResearchSurvey && effectiveRewardPerTask === 0) 
-            ? 0 
-            : Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
-        const totalBudget = Number((subtotal + adminCommission).toFixed(2));
+        let subtotal = 0;
+        let adminCommission = 0;
+        let totalBudget = 0;
+        let baseFeeCharged = 0;
+        let totalAmountUSD = 0;
+        let initialFundingAllocatedUSD = 0;
 
-        // Upfront Deduction Base Fee logic: No base fee liability for free/zero-reward admin research surveys
-        const baseFeeCharged = (isAdminResearchSurvey && effectiveRewardPerTask === 0)
-            ? 0
-            : (config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0);
-        const totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
+        if (isUnlimitedResponses) {
+            if (effectiveRewardPerTask === 0) {
+                // Free unlimited survey: zero financial commitment
+                subtotal = 0;
+                adminCommission = 0;
+                totalBudget = 0;
+                baseFeeCharged = 0;
+                totalAmountUSD = 0;
+                initialFundingAllocatedUSD = 0;
+            } else {
+                // Paid unlimited survey: admin specifies initial campaign funding
+                const initialFund = Number(req.body.initialFundingUSD !== undefined ? req.body.initialFundingUSD : req.body.totalBudget);
+                if (isNaN(initialFund) || !isFinite(initialFund) || initialFund <= 0) {
+                    return res.status(400).json({ success: false, error: 'Please specify a valid initial funding amount for this paid unlimited campaign.' });
+                }
+                initialFundingAllocatedUSD = Number(initialFund.toFixed(2));
+                subtotal = initialFundingAllocatedUSD;
+                adminCommission = 0;
+                totalBudget = initialFundingAllocatedUSD;
+                baseFeeCharged = 0;
+                totalAmountUSD = initialFundingAllocatedUSD;
+            }
+        } else {
+            subtotal = Number((qtyNum * effectiveRewardPerTask).toFixed(2));
+            adminCommission = (isAdminResearchSurvey && effectiveRewardPerTask === 0) 
+                ? 0 
+                : Number((subtotal * (config.commissionPercent / 100)).toFixed(2));
+            totalBudget = Number((subtotal + adminCommission).toFixed(2));
+
+            // Upfront Deduction Base Fee logic: No base fee liability for free/zero-reward admin research surveys
+            baseFeeCharged = (isAdminResearchSurvey && effectiveRewardPerTask === 0)
+                ? 0
+                : (config.campaignFeeEnabled ? (config.campaignFeeAmount || 0) : 0);
+            totalAmountUSD = Number((totalBudget + baseFeeCharged).toFixed(2));
+        }
 
         const rates = settings.exchangeRates || { USD: 1, EUR: 0.92, PKR: 278 };
         const userCurr = user.currency || 'USD';
@@ -786,6 +933,13 @@ export const createUserTask = async (req, res) => {
                 creatorType,
                 fundingSourceType,
                 adminBudgetAllocatedUSD,
+                isUnlimitedResponses,
+                campaignFundingStatus: 'funded',
+                campaignAvailableBalanceUSD: isUnlimitedResponses ? initialFundingAllocatedUSD : 0,
+                campaignTotalFundedUSD: isUnlimitedResponses ? initialFundingAllocatedUSD : 0,
+                campaignTotalSpentUSD: 0,
+                lowBalanceThresholdPercent: Number(req.body.lowBalanceThresholdPercent) || 10,
+                lowBalanceWarningSent: false,
                 category,
                 subType: subType || 'Like',
                 title,
@@ -1185,6 +1339,8 @@ export const updateUserTaskStatus = async (req, res) => {
                 adminRefundUSD = Number((task.adminBudgetRefundAmountUSD || 0).toFixed(2));
             } else if (oldStatus === 'Pending') {
                 adminRefundUSD = totalRefundUSD;
+            } else if (task.isUnlimitedResponses) {
+                adminRefundUSD = Number((task.campaignAvailableBalanceUSD || 0).toFixed(2));
             } else {
                 const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
                 if (remainingSlots > 0 && task.targetQuantity > 0) {
@@ -1744,6 +1900,8 @@ export const deleteUserTask = async (req, res) => {
             } else if (originalStatus === 'Pending') {
                 const baseFee = task.baseFeeCharged || 0;
                 refundAmountUSD = Number((task.totalBudget + baseFee).toFixed(2));
+            } else if (task.isUnlimitedResponses) {
+                refundAmountUSD = Number((task.campaignAvailableBalanceUSD || 0).toFixed(2));
             } else {
                 const remainingSlots = Math.max(0, task.targetQuantity - (task.currentCompletions || 0));
                 if (remainingSlots > 0 && task.targetQuantity > 0) {
@@ -2488,8 +2646,11 @@ export const submitUserTaskProof = async (req, res) => {
         if (task.status !== 'Approved' && task.status !== 'Paid' && task.status !== 'Active') {
             return res.status(400).json({ success: false, error: 'This task campaign is not active or approved yet.' });
         }
-        if (task.currentCompletions >= task.targetQuantity) {
+        if (!task.isUnlimitedResponses && task.currentCompletions >= task.targetQuantity) {
             return res.status(400).json({ success: false, error: 'This task campaign has already reached its target completions.' });
+        }
+        if (task.isUnlimitedResponses && task.rewardPerTask > 0 && (task.campaignAvailableBalanceUSD < task.rewardPerTask || task.campaignFundingStatus === 'paused_insufficient_funds')) {
+            return res.status(400).json({ success: false, error: 'This survey campaign is currently paused due to insufficient campaign funding balance.' });
         }
 
         const worker = await User.findById(workerId);
@@ -2540,8 +2701,9 @@ export const submitUserTaskProof = async (req, res) => {
         }
 
         // Prevent duplicate submission by same worker for same task/survey
+        const isWorkerAlreadyCompleted = Array.isArray(task.completedUsers) && task.completedUsers.some(cu => String(cu?._id || cu) === String(worker._id));
         const existing = await UserTaskSubmission.findOne({ taskId: task._id, workerId: worker._id });
-        if (existing) {
+        if (existing || isWorkerAlreadyCompleted) {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
         }
 
@@ -4237,5 +4399,183 @@ export const getSurveyCampaignAnalytics = async (req, res) => {
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+export const addAdminCampaignFunds = async (req, res) => {
+    try {
+        if (!req.user || !isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Administrative authorization required to add campaign funds.' });
+        }
+
+        const taskId = req.params.id;
+        const task = await UserTask.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, error: 'Task campaign not found.' });
+        }
+
+        const amountNum = Number(req.body.amount);
+        if (isNaN(amountNum) || !isFinite(amountNum) || amountNum <= 0) {
+            return res.status(400).json({ success: false, error: 'Please specify a valid, positive funding amount.' });
+        }
+        const fundAmountUSD = Number(amountNum.toFixed(2));
+
+        const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || `admin_fund_${task._id}_${Date.now()}`;
+
+        const existingTx = await Transaction.findOne({ idempotencyKey });
+        if (existingTx) {
+            const freshTask = await UserTask.findById(taskId);
+            return res.status(200).json({ success: true, message: 'Funding request already processed (idempotent).', task: freshTask, transaction: existingTx });
+        }
+
+        const settings = await Setting.getSettings();
+
+        // Atomically deduct from Admin Campaign Budget in Setting
+        const updatedSetting = await Setting.findOneAndUpdate(
+            {
+                _id: settings._id,
+                'adminCampaignBudget.enabled': true,
+                'adminCampaignBudget.remainingBudgetUSD': { $gte: fundAmountUSD }
+            },
+            {
+                $inc: { 'adminCampaignBudget.remainingBudgetUSD': -fundAmountUSD },
+                $set: { dataVersion: Date.now() }
+            },
+            { new: true }
+        );
+
+        if (!updatedSetting) {
+            const currentSetting = await Setting.getSettings();
+            if (!currentSetting.adminCampaignBudget?.enabled) {
+                return res.status(400).json({ success: false, error: 'Admin Campaign Budget is currently disabled in System Settings.' });
+            }
+            const availableBudget = Number((currentSetting.adminCampaignBudget?.remainingBudgetUSD || 0).toFixed(2));
+            return res.status(400).json({ 
+                success: false, 
+                error: `Insufficient Admin Campaign Budget. Required: $${fundAmountUSD.toFixed(2)} USD, Available: $${availableBudget.toFixed(2)} USD.` 
+            });
+        }
+
+        // Atomically add funds to UserTask
+        const updateFields = {
+            $inc: {
+                campaignAvailableBalanceUSD: fundAmountUSD,
+                campaignTotalFundedUSD: fundAmountUSD,
+                adminBudgetAllocatedUSD: fundAmountUSD,
+                totalBudget: fundAmountUSD
+            },
+            $set: {
+                lowBalanceWarningSent: false
+            },
+            $push: {
+                history: {
+                    action: 'Funds Added',
+                    previousStatus: task.status,
+                    newStatus: task.status,
+                    timestamp: new Date(),
+                    performedBy: req.user.username || req.user.id,
+                    details: `Added $${fundAmountUSD.toFixed(2)} USD funding from Admin Campaign Budget.`
+                }
+            }
+        };
+
+        if (task.campaignFundingStatus === 'paused_insufficient_funds' || task.campaignFundingStatus === 'low_balance') {
+            updateFields.$set.campaignFundingStatus = 'funded';
+        }
+
+        const updatedTask = await UserTask.findByIdAndUpdate(taskId, updateFields, { new: true });
+
+        const tx = await Transaction.create({
+            userId: req.user._id,
+            userName: req.user.username,
+            currency: 'USD',
+            type: 'Admin Campaign Funding',
+            amount: fundAmountUSD,
+            amountUSD: fundAmountUSD,
+            campaignId: task._id,
+            sourceWallet: 'AdminBudget',
+            destinationWallet: 'CampaignEscrow',
+            description: `Added $${fundAmountUSD.toFixed(2)} USD funding to campaign: "${task.title}"`,
+            status: 'Approved',
+            idempotencyKey
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `Successfully added $${fundAmountUSD.toFixed(2)} USD to campaign "${task.title}". Available balance: $${updatedTask.campaignAvailableBalanceUSD.toFixed(2)} USD.`,
+            task: updatedTask,
+            transaction: tx,
+            settings: updatedSetting
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const resumeAdminCampaign = async (req, res) => {
+    try {
+        if (!req.user || !isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Administrative authorization required.' });
+        }
+
+        const taskId = req.params.id;
+        const task = await UserTask.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, error: 'Task campaign not found.' });
+        }
+
+        if (task.isUnlimitedResponses && task.rewardPerTask > 0 && (task.campaignAvailableBalanceUSD || 0) < task.rewardPerTask) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Cannot resume campaign: Available balance ($${(task.campaignAvailableBalanceUSD || 0).toFixed(2)} USD) is less than reward per task ($${task.rewardPerTask.toFixed(2)} USD). Please add funds first.` 
+            });
+        }
+
+        const previousStatus = task.status;
+        task.status = 'Approved';
+        task.campaignFundingStatus = 'funded';
+        task.history.push({
+            action: 'Resumed',
+            previousStatus,
+            newStatus: 'Approved',
+            timestamp: new Date(),
+            performedBy: req.user.username || req.user.id,
+            details: 'Campaign manually resumed by administrator.'
+        });
+        await task.save();
+
+        return res.status(200).json({ success: true, message: `Campaign "${task.title}" has been resumed.`, task });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+export const pauseAdminCampaign = async (req, res) => {
+    try {
+        if (!req.user || !isUserAdmin(req.user)) {
+            return res.status(403).json({ success: false, error: 'Administrative authorization required.' });
+        }
+
+        const taskId = req.params.id;
+        const task = await UserTask.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ success: false, error: 'Task campaign not found.' });
+        }
+
+        const previousStatus = task.status;
+        task.status = 'On Hold';
+        task.history.push({
+            action: 'Paused',
+            previousStatus,
+            newStatus: 'On Hold',
+            timestamp: new Date(),
+            performedBy: req.user.username || req.user.id,
+            details: 'Campaign manually paused by administrator.'
+        });
+        await task.save();
+
+        return res.status(200).json({ success: true, message: `Campaign "${task.title}" has been paused.`, task });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
     }
 };

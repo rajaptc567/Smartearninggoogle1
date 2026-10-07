@@ -17,7 +17,10 @@ import {
     deleteAdminSurveyTemplate,
     resetDefaultAdminSurveyTemplates,
     createUserTask,
-    updateSettings
+    updateSettings,
+    addAdminCampaignFunds,
+    resumeAdminCampaign,
+    pauseAdminCampaign
 } from '../services/api';
 import {
     FileText,
@@ -29,6 +32,7 @@ import {
     ToggleLeft,
     ToggleRight,
     Play,
+    Pause,
     RotateCcw,
     CheckCircle2,
     XCircle,
@@ -45,12 +49,21 @@ import {
     ShieldCheck,
     ArrowRight,
     Settings,
-    HelpCircle
+    HelpCircle,
+    Users,
+    Activity,
+    Wallet,
+    TrendingUp,
+    History
 } from 'lucide-react';
+import { UserTask } from '../types';
 
 export const AdminSurveyTemplates: React.FC = () => {
     const { state, dispatch } = useData();
-    const { settings } = state;
+    const { settings, userTasks } = state;
+
+    // View tab state: 'templates' or 'campaigns'
+    const [activeTab, setActiveTab] = useState<'templates' | 'campaigns'>('templates');
 
     // List state
     const [templates, setTemplates] = useState<AdminSurveyTemplate[]>([]);
@@ -91,14 +104,33 @@ export const AdminSurveyTemplates: React.FC = () => {
     // Form state for "Use Template" (Direct Survey Campaign Launcher)
     const [campaignTitle, setCampaignTitle] = useState<string>('');
     const [campaignDescription, setCampaignDescription] = useState<string>('');
+    const [launchAudienceMode, setLaunchAudienceMode] = useState<'all' | 'selected' | 'advanced'>('all');
+    const [launchSelectedUserIds, setLaunchSelectedUserIds] = useState<string>('');
+    const [launchCountries, setLaunchCountries] = useState<string>('');
+    const [launchCurrencies, setLaunchCurrencies] = useState<string>('');
+    const [launchGenders, setLaunchGenders] = useState<string>('');
+    const [launchMinAge, setLaunchMinAge] = useState<string>('');
+    const [launchMaxAge, setLaunchMaxAge] = useState<string>('');
+    const [launchAccountStatus, setLaunchAccountStatus] = useState<'any' | 'active' | 'inactive'>('any');
+
+    const [launchRequirementMode, setLaunchRequirementMode] = useState<'optional' | 'mandatory_all' | 'mandatory_before_withdrawal'>('optional');
+    const [launchResponseLimitMode, setLaunchResponseLimitMode] = useState<'unlimited' | 'limited'>('unlimited');
     const [campaignWorkersNeeded, setCampaignWorkersNeeded] = useState<number>(50);
     const [campaignRewardPerTask, setCampaignRewardPerTask] = useState<number>(0.25);
+    const [campaignInitialFundingUSD, setCampaignInitialFundingUSD] = useState<number>(50);
+    const [campaignLowBalanceThreshold, setCampaignLowBalanceThreshold] = useState<number>(10);
     const [setAsMandatoryWithdrawal, setSetAsMandatoryWithdrawal] = useState<boolean>(false);
     const [campaignSurveyConfig, setCampaignSurveyConfig] = useState<SurveyConfigData>({
         questions: [],
         sections: []
     });
     const [isLaunchingCampaign, setIsLaunchingCampaign] = useState<boolean>(false);
+
+    // Campaign Funding Management Modals
+    const [fundingModalTask, setFundingModalTask] = useState<UserTask | null>(null);
+    const [addFundsAmount, setAddFundsAmount] = useState<number>(50);
+    const [isAddingFunds, setIsAddingFunds] = useState<boolean>(false);
+    const [historyModalTask, setHistoryModalTask] = useState<UserTask | null>(null);
 
     // Fetch templates on mount
     const fetchTemplates = async () => {
@@ -334,11 +366,24 @@ export const AdminSurveyTemplates: React.FC = () => {
         setUsingTemplate(template);
         setCampaignTitle(template.name);
         setCampaignDescription(template.description || 'Please complete all survey questions thoughtfully to help improve our platform.');
-        setCampaignWorkersNeeded(50);
         const isFree = template.rewardConfig?.mode === 'no_reward';
         const initialReward = isFree ? 0 : (template.rewardConfig?.amount !== undefined && Number.isFinite(Number(template.rewardConfig.amount)) ? Number(template.rewardConfig.amount) : 0.25);
         setCampaignRewardPerTask(initialReward);
-        setSetAsMandatoryWithdrawal(template.requirementConfig?.mode === 'mandatory_before_withdrawal');
+        const reqMode = template.requirementConfig?.mode || 'optional';
+        setLaunchRequirementMode(reqMode);
+        setSetAsMandatoryWithdrawal(reqMode === 'mandatory_before_withdrawal');
+        setLaunchResponseLimitMode('unlimited');
+        setCampaignWorkersNeeded(50);
+        setCampaignInitialFundingUSD(initialReward > 0 ? Number((initialReward * 50).toFixed(2)) : 0);
+        setCampaignLowBalanceThreshold(10);
+        setLaunchAudienceMode('all');
+        setLaunchSelectedUserIds('');
+        setLaunchCountries('');
+        setLaunchCurrencies('');
+        setLaunchGenders('');
+        setLaunchMinAge('');
+        setLaunchMaxAge('');
+        setLaunchAccountStatus('any');
         setCampaignSurveyConfig(template.surveyConfig ? JSON.parse(JSON.stringify(template.surveyConfig)) : { questions: [], sections: [] });
     };
 
@@ -358,18 +403,54 @@ export const AdminSurveyTemplates: React.FC = () => {
             return;
         }
 
-        if (campaignWorkersNeeded <= 0) {
-            alert('Workers needed must be at least 1.');
-            return;
+        const isUnlimited = launchResponseLimitMode === 'unlimited';
+        const isZeroReward = safeReward === 0;
+        let totalBudget = 0;
+        let initialFundingUSD = 0;
+
+        if (isUnlimited) {
+            if (isZeroReward) {
+                totalBudget = 0;
+                initialFundingUSD = 0;
+            } else {
+                initialFundingUSD = Number(campaignInitialFundingUSD);
+                if (isNaN(initialFundingUSD) || initialFundingUSD <= 0) {
+                    alert('Please specify a positive initial funding budget for this paid unlimited survey.');
+                    return;
+                }
+                totalBudget = initialFundingUSD;
+            }
+        } else {
+            if (campaignWorkersNeeded <= 0) {
+                alert('Workers needed must be at least 1.');
+                return;
+            }
+            totalBudget = isZeroReward ? 0 : Number((safeReward * campaignWorkersNeeded).toFixed(2));
         }
 
         setIsLaunchingCampaign(true);
         try {
-            // Reusing existing SmartExn createUserTask flow with authoritative admin research bypass
-            const isZeroReward = safeReward === 0;
-            const totalBudget = isZeroReward ? 0 : Number((safeReward * campaignWorkersNeeded).toFixed(2));
+            const isMandatoryForAll = launchRequirementMode === 'mandatory_all';
+            const isMandatoryWithdrawal = launchRequirementMode === 'mandatory_before_withdrawal' || setAsMandatoryWithdrawal;
 
-            const isMandatoryForAll = usingTemplate.requirementConfig?.mode === 'mandatory_all';
+            // Build targeting payload
+            let targetingPayload: any = undefined;
+            if (launchAudienceMode === 'selected') {
+                const selectedIds = launchSelectedUserIds
+                    .split(/[\n,]+/)
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                targetingPayload = { selectedUserIds: selectedIds };
+            } else if (launchAudienceMode === 'advanced') {
+                targetingPayload = {
+                    countries: launchCountries ? launchCountries.split(',').map(s => s.trim()).filter(Boolean) : [],
+                    currencies: launchCurrencies ? launchCurrencies.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : [],
+                    genders: launchGenders ? launchGenders.split(',').map(s => s.trim()).filter(Boolean) : [],
+                    minAge: launchMinAge === '' ? null : Number(launchMinAge),
+                    maxAge: launchMaxAge === '' ? null : Number(launchMaxAge),
+                    accountStatus: launchAccountStatus
+                };
+            }
 
             const userTaskPayload = {
                 title: campaignTitle.trim(),
@@ -378,7 +459,11 @@ export const AdminSurveyTemplates: React.FC = () => {
                 taskCategory: 'Surveys',
                 subType: usingTemplate.category || 'Opinion Poll',
                 rewardPerTask: safeReward,
-                workersNeeded: Number(campaignWorkersNeeded),
+                isUnlimitedResponses: isUnlimited,
+                initialFundingUSD: isUnlimited ? initialFundingUSD : undefined,
+                lowBalanceThresholdPercent: campaignLowBalanceThreshold,
+                workersNeeded: isUnlimited ? 0 : Number(campaignWorkersNeeded),
+                targetQuantity: isUnlimited ? 0 : Number(campaignWorkersNeeded),
                 totalBudget: totalBudget,
                 isSurvey: true,
                 isSurveyCampaign: true,
@@ -386,6 +471,7 @@ export const AdminSurveyTemplates: React.FC = () => {
                 isMandatoryForAllUsers: isMandatoryForAll,
                 sourceAdminSurveyTemplateId: usingTemplate._id,
                 publishNow: true,
+                targeting: targetingPayload,
                 surveyCategory: usingTemplate.category || 'General Opinion Poll',
                 surveyEstimatedMinutes: usingTemplate.estimatedTimeMinutes || 5,
                 surveyQuestionsCount: campaignSurveyConfig.questions?.length || 0,
@@ -419,7 +505,7 @@ export const AdminSurveyTemplates: React.FC = () => {
             let mandatoryErrorMessage: string | null = null;
 
             // If selected to be mandatory withdrawal requirement, safely update System Settings with the new UserTask ID using partial payload
-            if (setAsMandatoryWithdrawal && createdTask?._id) {
+            if (isMandatoryWithdrawal && createdTask?._id) {
                 try {
                     const partialSettingsPayload = {
                         mandatoryWithdrawalRequirement: {
@@ -439,7 +525,7 @@ export const AdminSurveyTemplates: React.FC = () => {
             }
 
             setUsingTemplate(null);
-            if (setAsMandatoryWithdrawal) {
+            if (isMandatoryWithdrawal) {
                 if (mandatoryActivatedSuccessfully) {
                     setSuccessMessage(`Survey campaign "${campaignTitle}" created, published, and successfully activated as the Mandatory Withdrawal Requirement!`);
                 } else {
@@ -453,6 +539,49 @@ export const AdminSurveyTemplates: React.FC = () => {
             alert(err.message || 'Failed to create campaign from template');
         } finally {
             setIsLaunchingCampaign(false);
+        }
+    };
+
+    // Campaign Action Handlers
+    const handleAddFundsSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!fundingModalTask) return;
+        if (addFundsAmount <= 0) {
+            alert('Please enter a valid positive amount.');
+            return;
+        }
+
+        setIsAddingFunds(true);
+        try {
+            const res = await addAdminCampaignFunds(fundingModalTask._id, addFundsAmount);
+            dispatch({ type: 'UPDATE_USER_TASK', payload: res.task });
+            if (res.settings) dispatch({ type: 'UPDATE_SETTINGS', payload: res.settings });
+            setSuccessMessage(`Successfully added $${addFundsAmount.toFixed(2)} USD to campaign "${fundingModalTask.title}"!`);
+            setFundingModalTask(null);
+        } catch (err: any) {
+            alert(err.message || 'Failed to add funds.');
+        } finally {
+            setIsAddingFunds(false);
+        }
+    };
+
+    const handleResumeCampaign = async (task: UserTask) => {
+        try {
+            const res = await resumeAdminCampaign(task._id);
+            dispatch({ type: 'UPDATE_USER_TASK', payload: res.task });
+            setSuccessMessage(`Campaign "${task.title}" has been resumed!`);
+        } catch (err: any) {
+            alert(err.message || 'Failed to resume campaign.');
+        }
+    };
+
+    const handlePauseCampaign = async (task: UserTask) => {
+        try {
+            const res = await pauseAdminCampaign(task._id);
+            dispatch({ type: 'UPDATE_USER_TASK', payload: res.task });
+            setSuccessMessage(`Campaign "${task.title}" has been paused.`);
+        } catch (err: any) {
+            alert(err.message || 'Failed to pause campaign.');
         }
     };
 

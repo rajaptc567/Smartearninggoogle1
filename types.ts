@@ -790,6 +790,13 @@ export interface UserTask {
     targetQuantity: number;
     completedQuantity?: number;
     currentCompletions: number;
+    isUnlimitedResponses?: boolean;
+    campaignFundingStatus?: 'funded' | 'low_balance' | 'paused_insufficient_funds' | 'resumed' | 'exhausted' | 'disabled' | string;
+    campaignAvailableBalanceUSD?: number;
+    campaignTotalFundedUSD?: number;
+    campaignTotalSpentUSD?: number;
+    lowBalanceThresholdPercent?: number;
+    lowBalanceWarningSent?: boolean;
     rewardPerTask: number;
     totalBudget: number;
     totalBudgetUSD?: number;

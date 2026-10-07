@@ -20,7 +20,10 @@ import {
     transferTaskEarningsToCampaignWallet,
     transferWalletToCampaign,
     resetWorkAndEarnData,
-    getSurveyCampaignAnalytics
+    getSurveyCampaignAnalytics,
+    addAdminCampaignFunds,
+    resumeAdminCampaign,
+    pauseAdminCampaign
 } from '../controllers/userTasksController.js';
 
 // Multer for memory storage (Base64)
@@ -72,6 +75,15 @@ router.route('/simulate-reward')
 
 router.route('/:id/survey-analytics')
     .get(authorize(['user', 'admin']), getSurveyCampaignAnalytics);
+
+router.route('/:id/add-funds')
+    .post(taskActionLimiter, authorize(['admin', 'super_admin']), addAdminCampaignFunds);
+
+router.route('/:id/resume-campaign')
+    .post(taskActionLimiter, authorize(['admin', 'super_admin']), resumeAdminCampaign);
+
+router.route('/:id/pause-campaign')
+    .post(taskActionLimiter, authorize(['admin', 'super_admin']), pauseAdminCampaign);
 
 router.route('/:id')
     .put(authorize(['user', 'admin']), updateUserTaskStatus)
