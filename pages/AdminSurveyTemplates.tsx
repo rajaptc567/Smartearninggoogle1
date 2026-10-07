@@ -415,20 +415,18 @@ export const AdminSurveyTemplates: React.FC = () => {
             let mandatoryActivatedSuccessfully = false;
             let mandatoryErrorMessage: string | null = null;
 
-            // If selected to be mandatory withdrawal requirement, safely update System Settings with the new UserTask ID
+            // If selected to be mandatory withdrawal requirement, safely update System Settings with the new UserTask ID using partial payload
             if (setAsMandatoryWithdrawal && createdTask?._id) {
                 try {
-                    const currentSettings = result?.settings || settings;
-                    const updatedSettings = {
-                        ...currentSettings,
+                    const partialSettingsPayload = {
                         mandatoryWithdrawalRequirement: {
                             enabled: true,
                             requiredTaskId: String(createdTask._id),
                             requiredTaskVersion: Number(createdTask.surveyVersion || createdTask.surveyConfig?.version || 1),
-                            requirementType: 'survey'
+                            requirementType: 'survey' as const
                         }
                     };
-                    const settingsRes = await updateSettings(updatedSettings);
+                    const settingsRes = await updateSettings(partialSettingsPayload);
                     dispatch({ type: 'UPDATE_SETTINGS', payload: settingsRes });
                     mandatoryActivatedSuccessfully = true;
                 } catch (sErr: any) {
