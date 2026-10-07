@@ -186,32 +186,37 @@ export const getUserTasks = async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found.' });
         }
 
+        const settings = await Setting.getSettings();
+        const isTasksEnabled = settings ? settings.isTasksEnabled !== false : true;
+
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
 
         // E1: Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
-        const referencedTaskIdsSet = new Set();
-        for (const task of tasks) {
-            const t = task.targeting;
-            if (t) {
-                if (Array.isArray(t.completionRules)) {
-                    for (const cr of t.completionRules) {
-                        if (cr.taskId) referencedTaskIdsSet.add(cr.taskId);
+        let workerSubmissions = [];
+        if (isTasksEnabled) {
+            const referencedTaskIdsSet = new Set();
+            for (const task of tasks) {
+                const t = task.targeting;
+                if (t) {
+                    if (Array.isArray(t.completionRules)) {
+                        for (const cr of t.completionRules) {
+                            if (cr.taskId) referencedTaskIdsSet.add(cr.taskId);
+                        }
                     }
-                }
-                if (Array.isArray(t.surveyAnswerRules)) {
-                    for (const sr of t.surveyAnswerRules) {
-                        if (sr.taskId) referencedTaskIdsSet.add(sr.taskId);
+                    if (Array.isArray(t.surveyAnswerRules)) {
+                        for (const sr of t.surveyAnswerRules) {
+                            if (sr.taskId) referencedTaskIdsSet.add(sr.taskId);
+                        }
                     }
                 }
             }
-        }
 
-        let workerSubmissions = [];
-        if (referencedTaskIdsSet.size > 0) {
-            workerSubmissions = await UserTaskSubmission.find({
-                workerId: user._id,
-                taskId: { $in: Array.from(referencedTaskIdsSet) }
-            }).sort({ createdAt: -1 }).lean();
+            if (referencedTaskIdsSet.size > 0) {
+                workerSubmissions = await UserTaskSubmission.find({
+                    workerId: user._id,
+                    taskId: { $in: Array.from(referencedTaskIdsSet) }
+                }).sort({ createdAt: -1 }).lean();
+            }
         }
         const eligibilityContext = { submissions: workerSubmissions };
 
@@ -222,7 +227,7 @@ export const getUserTasks = async (req, res) => {
             if (isOwner) {
                 // Return full task for campaign owner
                 filteredTasks.push(task);
-            } else {
+            } else if (isTasksEnabled) {
                 const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
                 const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
 
