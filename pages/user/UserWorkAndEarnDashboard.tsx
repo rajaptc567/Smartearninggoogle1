@@ -746,6 +746,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
 
     // 1. Available Tasks from "Earn Cash & Gig Hub" (userTasks)
     const availableHubTasks = useMemo(() => {
+        if (state.settings?.hubEnabled === false) return [];
         return userTasks.filter(t => {
             const isApproved = t.status === 'Approved' || t.status === 'Paid';
             const isNotMine = t.userId?.toString() !== currentUser._id?.toString();
@@ -761,7 +762,7 @@ const UserWorkAndEarnDashboard: React.FC = () => {
             });
             return isApproved && isNotMine && hasSlots && !alreadySubmitted;
         });
-    }, [userTasks, currentUser._id, currentUser.username, userTaskSubmissions]);
+    }, [userTasks, currentUser._id, currentUser.username, userTaskSubmissions, state.settings?.hubEnabled]);
 
     // 2. My Created Campaigns from "Earn Cash & Gig Hub"
     const myCreatedCampaigns = useMemo(() => {

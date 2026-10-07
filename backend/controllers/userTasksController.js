@@ -15,6 +15,83 @@ import { isUserEligibleForUserTask } from '../utils/userTaskEligibility.js';
 // Centralized admin role check
 const isUserAdmin = (user) => Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
 
+/**
+ * Evaluates whether an authenticated user is authorized to access the Micro Task Hub as a worker.
+ * 
+ * Access Rules:
+ * 1. Admin / Super Admin -> ALWAYS true
+ * 2. If settings.hubEnabled === false -> false for normal workers
+ * 3. If settings.hubEnabled !== false:
+ *    - hubAccessMode === 'all' (or unset) -> true
+ *    - hubAccessMode === 'manual' -> true ONLY if user's _id is in settings.hubAllowedUserIds
+ *    - hubAccessMode === 'plan' -> true ONLY if user has at least one active plan matching settings.hubAllowedPlanIds
+ * 
+ * @param {Object} user - User document or object
+ * @param {Object} settings - System settings document or object
+ * @returns {boolean} Whether worker access to Micro Task Hub is granted
+ */
+export const canUserAccessMicroTaskHub = (user, settings) => {
+    if (!user) return false;
+
+    // 1. Administrators and Super Admins always have access
+    if (isUserAdmin(user)) {
+        return true;
+    }
+
+    // 2. Check Global Micro Task Hub Master Switch
+    if (settings?.hubEnabled === false) {
+        return false;
+    }
+
+    // 3. Evaluate Access Mode
+    const accessMode = settings?.hubAccessMode || 'all';
+
+    if (accessMode === 'all') {
+        return true;
+    }
+
+    if (accessMode === 'manual') {
+        const allowedUserIds = Array.isArray(settings?.hubAllowedUserIds)
+            ? settings.hubAllowedUserIds
+            : [];
+        const userIdStr = (user._id || user.id)?.toString();
+        if (!userIdStr) return false;
+        return allowedUserIds.some(id => id && String(id) === userIdStr);
+    }
+
+    if (accessMode === 'plan') {
+        const allowedPlanIds = Array.isArray(settings?.hubAllowedPlanIds)
+            ? settings.hubAllowedPlanIds
+            : [];
+        if (allowedPlanIds.length === 0) {
+            return false;
+        }
+
+        const normalizedAllowedPlanIds = allowedPlanIds
+            .filter(Boolean)
+            .map(id => String(id).trim());
+
+        if (normalizedAllowedPlanIds.length === 0) {
+            return false;
+        }
+
+        // Match against user.activePlans[].planId
+        if (Array.isArray(user.activePlans) && user.activePlans.length > 0) {
+            const hasMatchingPlan = user.activePlans.some(ap => {
+                const pId = (ap?.planId?._id || ap?.planId || ap?.id)?.toString()?.trim();
+                return pId && normalizedAllowedPlanIds.includes(pId);
+            });
+            if (hasMatchingPlan) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    return false;
+};
+
 // Helper for multi-document ACID transactions when replica set is available, with safe fallback
 const executeWithOptionalTransaction = async (workFn) => {
     let session = null;
@@ -187,13 +264,14 @@ export const getUserTasks = async (req, res) => {
         }
 
         const settings = await Setting.getSettings();
+        const isHubAccessible = canUserAccessMicroTaskHub(user, settings);
         const isTasksEnabled = settings ? settings.isTasksEnabled !== false : true;
 
         const tasks = await UserTask.find().sort({ createdAt: -1 }).lean();
 
         // E1: Preload worker submissions for tasks referenced in completionRules or surveyAnswerRules (N+1 protection)
         let workerSubmissions = [];
-        if (isTasksEnabled) {
+        if (isHubAccessible && isTasksEnabled) {
             const referencedTaskIdsSet = new Set();
             for (const task of tasks) {
                 const t = task.targeting;
@@ -227,7 +305,7 @@ export const getUserTasks = async (req, res) => {
             if (isOwner) {
                 // Return full task for campaign owner
                 filteredTasks.push(task);
-            } else if (isTasksEnabled) {
+            } else if (isHubAccessible && isTasksEnabled) {
                 const isLiveStatus = task.status === 'Approved' || task.status === 'Paid' || task.status === 'Active';
                 const hasAvailableSlots = (task.currentCompletions || 0) < (task.targetQuantity || 0);
 
@@ -2401,6 +2479,16 @@ export const submitUserTaskProof = async (req, res) => {
         const worker = await User.findById(workerId);
         if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
 
+        const settings = await Setting.getSettings();
+
+        // Enforce Global Micro Task Hub Access Policy
+        if (!isUserAdmin(req.user) && !canUserAccessMicroTaskHub(worker, settings)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Micro Task Hub access is currently disabled or restricted for your account.'
+            });
+        }
+
         // Audience Targeting Enforcement (Phase D-2A & E1)
         const isOwner = task.userId && String(task.userId) === String(worker._id);
         if (!isOwner) {
@@ -2440,7 +2528,6 @@ export const submitUserTaskProof = async (req, res) => {
             return res.status(400).json({ success: false, error: 'You have already submitted proof for this task.' });
         }
 
-        const settings = await Setting.getSettings();
         const isSurveyTask = Boolean(task.isSurvey) || String(task.category || '').toLowerCase().includes('survey');
 
         // Killswitch: Reject survey submission if survey campaigns are disabled
