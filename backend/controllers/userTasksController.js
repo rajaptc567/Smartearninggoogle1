@@ -2498,7 +2498,8 @@ export const submitUserTaskProof = async (req, res) => {
         const settings = await Setting.getSettings();
 
         // Enforce Global Micro Task Hub Access Policy
-        if (!isUserAdmin(req.user) && !canUserAccessMicroTaskHub(worker, settings)) {
+        const isMandatoryAllAdminSurvey = Boolean(task.isAdminResearchSurvey && task.isMandatoryForAllUsers);
+        if (!isUserAdmin(req.user) && !isMandatoryAllAdminSurvey && !canUserAccessMicroTaskHub(worker, settings)) {
             return res.status(403).json({
                 success: false,
                 error: 'Micro Task Hub access is currently disabled or restricted for your account.'

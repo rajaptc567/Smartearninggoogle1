@@ -196,123 +196,123 @@ export const createWithdrawal = async (req, res) => {
                     }
                 }
             }
+        }
 
-            // Dedicated Mandatory Requirement Engine (Phase C)
-            const mandatoryReq = settings?.mandatoryWithdrawalRequirement;
-            if (mandatoryReq && mandatoryReq.enabled && mandatoryReq.requiredTaskId) {
-                const reqTaskId = mandatoryReq.requiredTaskId.toString().trim();
-                const reqVersion = Number(mandatoryReq.requiredTaskVersion) || 1;
+        // Dedicated Mandatory Requirement Engine (Phase C)
+        const mandatoryReq = settings?.mandatoryWithdrawalRequirement;
+        if (mandatoryReq && mandatoryReq.enabled && mandatoryReq.requiredTaskId) {
+            const reqTaskId = mandatoryReq.requiredTaskId.toString().trim();
+            const reqVersion = Number(mandatoryReq.requiredTaskVersion) || 1;
 
-                // 1. Try finding as UserTask (survey or campaign)
-                let userTask = null;
+            // 1. Try finding as UserTask (survey or campaign)
+            let userTask = null;
+            try {
+                userTask = await UserTask.findById(reqTaskId).lean();
+            } catch (_) {}
+
+            if (userTask) {
+                const isSurvey = Boolean(userTask.isSurvey);
+
+                // Look up authenticated user's submission for this UserTask
+                const submission = await UserTaskSubmission.findOne({
+                    taskId: userTask._id,
+                    workerId: user._id
+                }).sort({ createdAt: -1 }).lean();
+
+                let isSatisfied = false;
+                let failureReason = '';
+
+                if (!submission) {
+                    isSatisfied = false;
+                    failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
+                } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
+                    isSatisfied = false;
+                    failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
+                } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
+                    isSatisfied = false;
+                    failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
+                } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
+                    isSatisfied = false;
+                    failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
+                } else {
+                    isSatisfied = true;
+                }
+
+                if (!isSatisfied) {
+                    return res.status(403).json({
+                        success: false,
+                        error: failureReason,
+                        code: 'MANDATORY_REQUIREMENT_UNMET',
+                        mandatoryRequirement: {
+                            type: isSurvey ? 'survey' : 'user_task',
+                            taskId: userTask._id,
+                            taskTitle: userTask.title,
+                            requiredVersion: isSurvey ? reqVersion : undefined,
+                            submissionStatus: submission ? submission.status : 'Not Started',
+                            submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
+                        }
+                    });
+                }
+            } else {
+                // 2. Fallback: check if requiredTaskId matches an admin Task
+                let adminTask = null;
                 try {
-                    userTask = await UserTask.findById(reqTaskId).lean();
+                    adminTask = await Task.findById(reqTaskId).lean();
                 } catch (_) {}
 
-                if (userTask) {
-                    const isSurvey = Boolean(userTask.isSurvey);
+                if (adminTask) {
+                    const now = new Date();
+                    const userCountry = (user.country || '').trim().toLowerCase();
+                    const userCurrency = (user.currency || '').trim().toUpperCase();
 
-                    // Look up authenticated user's submission for this UserTask
-                    const submission = await UserTaskSubmission.findOne({
-                        taskId: userTask._id,
-                        workerId: user._id
-                    }).sort({ createdAt: -1 }).lean();
-
-                    let isSatisfied = false;
-                    let failureReason = '';
-
-                    if (!submission) {
-                        isSatisfied = false;
-                        failureReason = `Platform security policy requires you to complete the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" before withdrawing Work & Earn earnings.`;
-                    } else if (submission.status !== 'Approved' && submission.status !== 'Paid') {
-                        isSatisfied = false;
-                        failureReason = `Your submission for the mandatory ${isSurvey ? 'survey' : 'task'} "${userTask.title}" is currently "${submission.status}". It must be Approved before withdrawing Work & Earn earnings.`;
-                    } else if (isSurvey && (submission.surveyQualificationStatus === 'Disqualified' || submission.surveyQualificationStatus === 'Screenout')) {
-                        isSatisfied = false;
-                        failureReason = `Your submission for survey "${userTask.title}" was not qualified (Status: ${submission.surveyQualificationStatus}). You must complete a qualified survey to withdraw.`;
-                    } else if (isSurvey && reqVersion && (Number(submission.surveyVersion) || 1) !== reqVersion) {
-                        isSatisfied = false;
-                        failureReason = `Your completed survey submission is version ${Number(submission.surveyVersion) || 1}, but mandatory withdrawal requirement mandates version ${reqVersion}. Please complete version ${reqVersion}.`;
-                    } else {
-                        isSatisfied = true;
+                    let isApplicable = true;
+                    // 1. Task status is Active
+                    if (adminTask.status !== 'Active') isApplicable = false;
+                    // 2. Current time is within activeFrom / activeTo
+                    if (adminTask.activeFrom && now < new Date(adminTask.activeFrom)) isApplicable = false;
+                    if (adminTask.activeTo && now > new Date(adminTask.activeTo)) isApplicable = false;
+                    // 3. Global completion capacity has not been exhausted
+                    if (adminTask.maxGlobalCompletions > 0 && (adminTask.currentGlobalCompletions || 0) >= adminTask.maxGlobalCompletions) isApplicable = false;
+                    // 4. User country matches targetCountries when targetCountries is configured
+                    if (Array.isArray(adminTask.targetCountries) && adminTask.targetCountries.length > 0) {
+                        if (!userCountry || !adminTask.targetCountries.some(c => typeof c === 'string' && c.trim().toLowerCase() === userCountry)) {
+                            isApplicable = false;
+                        }
+                    }
+                    // 5. User currency matches targetCurrencies when targetCurrencies is configured
+                    if (Array.isArray(adminTask.targetCurrencies) && adminTask.targetCurrencies.length > 0) {
+                        if (!userCurrency || !adminTask.targetCurrencies.some(c => typeof c === 'string' && c.trim().toUpperCase() === userCurrency)) {
+                            isApplicable = false;
+                        }
                     }
 
-                    if (!isSatisfied) {
-                        return res.status(403).json({
-                            success: false,
-                            error: failureReason,
-                            code: 'MANDATORY_REQUIREMENT_UNMET',
-                            mandatoryRequirement: {
-                                type: isSurvey ? 'survey' : 'user_task',
-                                taskId: userTask._id,
-                                taskTitle: userTask.title,
-                                requiredVersion: isSurvey ? reqVersion : undefined,
-                                submissionStatus: submission ? submission.status : 'Not Started',
-                                submissionVersion: submission ? (submission.surveyVersion || 1) : undefined
-                            }
-                        });
+                    if (isApplicable) {
+                        const approved = (user.completedTasks || []).some(
+                            ct => ct && ct.status === 'Approved' && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
+                        );
+                        if (!approved) {
+                            return res.status(403).json({
+                                success: false,
+                                error: `Platform security policy requires you to complete the mandatory task "${adminTask.title}" before withdrawing Work & Earn earnings.`,
+                                code: 'MANDATORY_REQUIREMENT_UNMET',
+                                mandatoryRequirement: {
+                                    type: 'task',
+                                    taskId: adminTask._id,
+                                    taskTitle: adminTask.title,
+                                    submissionStatus: (user.completedTasks || []).find(
+                                        ct => ct && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
+                                    )?.status || 'Not Started'
+                                }
+                            });
+                        }
                     }
                 } else {
-                    // 2. Fallback: check if requiredTaskId matches an admin Task
-                    let adminTask = null;
-                    try {
-                        adminTask = await Task.findById(reqTaskId).lean();
-                    } catch (_) {}
-
-                    if (adminTask) {
-                        const now = new Date();
-                        const userCountry = (user.country || '').trim().toLowerCase();
-                        const userCurrency = (user.currency || '').trim().toUpperCase();
-
-                        let isApplicable = true;
-                        // 1. Task status is Active
-                        if (adminTask.status !== 'Active') isApplicable = false;
-                        // 2. Current time is within activeFrom / activeTo
-                        if (adminTask.activeFrom && now < new Date(adminTask.activeFrom)) isApplicable = false;
-                        if (adminTask.activeTo && now > new Date(adminTask.activeTo)) isApplicable = false;
-                        // 3. Global completion capacity has not been exhausted
-                        if (adminTask.maxGlobalCompletions > 0 && (adminTask.currentGlobalCompletions || 0) >= adminTask.maxGlobalCompletions) isApplicable = false;
-                        // 4. User country matches targetCountries when targetCountries is configured
-                        if (Array.isArray(adminTask.targetCountries) && adminTask.targetCountries.length > 0) {
-                            if (!userCountry || !adminTask.targetCountries.some(c => typeof c === 'string' && c.trim().toLowerCase() === userCountry)) {
-                                isApplicable = false;
-                            }
-                        }
-                        // 5. User currency matches targetCurrencies when targetCurrencies is configured
-                        if (Array.isArray(adminTask.targetCurrencies) && adminTask.targetCurrencies.length > 0) {
-                            if (!userCurrency || !adminTask.targetCurrencies.some(c => typeof c === 'string' && c.trim().toUpperCase() === userCurrency)) {
-                                isApplicable = false;
-                            }
-                        }
-
-                        if (isApplicable) {
-                            const approved = (user.completedTasks || []).some(
-                                ct => ct && ct.status === 'Approved' && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
-                            );
-                            if (!approved) {
-                                return res.status(403).json({
-                                    success: false,
-                                    error: `Platform security policy requires you to complete the mandatory task "${adminTask.title}" before withdrawing Work & Earn earnings.`,
-                                    code: 'MANDATORY_REQUIREMENT_UNMET',
-                                    mandatoryRequirement: {
-                                        type: 'task',
-                                        taskId: adminTask._id,
-                                        taskTitle: adminTask.title,
-                                        submissionStatus: (user.completedTasks || []).find(
-                                            ct => ct && ct.taskId && (ct.taskId._id ? ct.taskId._id.toString() : ct.taskId.toString()) === adminTask._id.toString()
-                                        )?.status || 'Not Started'
-                                    }
-                                });
-                            }
-                        }
-                    } else {
-                        // Neither UserTask nor Task exists!
-                        return res.status(503).json({
-                            success: false,
-                            error: 'The mandatory withdrawal requirement is currently unavailable. Please contact support.',
-                            code: 'MANDATORY_REQUIREMENT_CONFIG_INVALID'
-                        });
-                    }
+                    // Neither UserTask nor Task exists!
+                    return res.status(503).json({
+                        success: false,
+                        error: 'The mandatory withdrawal requirement is currently unavailable. Please contact support.',
+                        code: 'MANDATORY_REQUIREMENT_CONFIG_INVALID'
+                    });
                 }
             }
         }
