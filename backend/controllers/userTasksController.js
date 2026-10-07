@@ -1038,11 +1038,35 @@ export const createUserTask = async (req, res) => {
         });
 
         if (txResult.alreadyExists) {
+            if (adminBudgetReserved && reservedAmountUSD > 0) {
+                try {
+                    const targetSettingId = settingId || (await Setting.getSettings())?._id;
+                    if (targetSettingId) {
+                        await Setting.findOneAndUpdate(
+                            { _id: targetSettingId },
+                            {
+                                $inc: { 'adminCampaignBudget.remainingBudgetUSD': reservedAmountUSD },
+                                $set: { dataVersion: Date.now() }
+                            },
+                            { new: true }
+                        );
+                    }
+                } catch (refundErr) {
+                    console.error('Failed compensating refund for duplicate campaign creation:', refundErr);
+                }
+                adminBudgetReserved = false;
+            }
             global.appDataVersion = Date.now();
+            const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
             return res.status(200).json({
                 success: true,
                 message: 'Campaign already created (idempotency key matched).',
-                data: txResult.task || {}
+                data: {
+                    task: txResult.task || {},
+                    user,
+                    settings: latestSettings,
+                    transaction: txResult.transaction
+                }
             });
         }
 
@@ -1138,11 +1162,30 @@ export const createUserTask = async (req, res) => {
                         { 
                             $inc: { 'adminCampaignBudget.remainingBudgetUSD': reservedAmountUSD },
                             $set: { dataVersion: Date.now() }
-                        }
+                        },
+                        { new: true }
                     );
                 }
             } catch (rollbackErr) {
                 console.error('Failed to rollback Admin Campaign Budget on creation error:', rollbackErr);
+            }
+            adminBudgetReserved = false;
+        }
+        if (finalIdempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
+            const existingTx = await Transaction.findOne({ idempotencyKey: finalIdempotencyKey });
+            if (existingTx) {
+                const existingTask = await UserTask.findById(existingTx.campaignId);
+                const latestSettings = isCreatedByAdmin ? await Setting.findOne() : null;
+                return res.status(200).json({
+                    success: true,
+                    message: 'Campaign already created (idempotent concurrent resolution).',
+                    data: {
+                        task: existingTask,
+                        user,
+                        settings: latestSettings,
+                        transaction: existingTx
+                    }
+                });
             }
         }
         res.status(400).json({ success: false, error: err.message });
@@ -4443,12 +4486,31 @@ export const addAdminCampaignFunds = async (req, res) => {
         }
         const fundAmountUSD = Number(amountNum.toFixed(2));
 
-        const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey || `admin_fund_${task._id}_${Date.now()}`;
+        const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey;
+        const effectiveIdempotencyKey = idempotencyKey || `admin_fund_${task._id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-        const existingTx = await Transaction.findOne({ idempotencyKey });
-        if (existingTx) {
-            const freshTask = await UserTask.findById(taskId);
-            return res.status(200).json({ success: true, message: 'Funding request already processed (idempotent).', task: freshTask, transaction: existingTx });
+        if (idempotencyKey) {
+            const existingTx = await Transaction.findOne({ idempotencyKey });
+            if (existingTx) {
+                // Verify amount and campaign matches
+                const amountMatches = Math.abs(Number(existingTx.amountUSD || existingTx.amount) - fundAmountUSD) < 0.001;
+                const campaignMatches = String(existingTx.campaignId) === String(task._id);
+                if (!amountMatches || !campaignMatches) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `Idempotency key collision detected for ${idempotencyKey}: amount or campaign mismatch.`
+                    });
+                }
+                const freshTask = await UserTask.findById(taskId);
+                const currentSettings = await Setting.getSettings();
+                return res.status(200).json({
+                    success: true,
+                    message: 'Funding request already processed (idempotent).',
+                    task: freshTask,
+                    transaction: existingTx,
+                    settings: currentSettings
+                });
+            }
         }
 
         const settings = await Setting.getSettings();
@@ -4525,7 +4587,7 @@ export const addAdminCampaignFunds = async (req, res) => {
             destinationWallet: 'CampaignEscrow',
             description: `Added $${fundAmountUSD.toFixed(2)} USD funding to campaign: "${task.title}"`,
             status: 'Approved',
-            idempotencyKey
+            idempotencyKey: effectiveIdempotencyKey
         });
 
         return res.status(200).json({
@@ -4557,10 +4619,25 @@ export const addAdminCampaignFunds = async (req, res) => {
                     {
                         $inc: { 'adminCampaignBudget.remainingBudgetUSD': deductedAmountUSD },
                         $set: { dataVersion: Date.now() }
-                    }
+                    },
+                    { new: true }
                 );
             } catch (refundErr) {
                 console.error('CRITICAL: Failed compensating refund to Admin Campaign Budget in addAdminCampaignFunds:', refundErr);
+            }
+        }
+        if (effectiveIdempotencyKey && (err.code === 11000 || (err.message && err.message.includes('duplicate key')))) {
+            const existingTx = await Transaction.findOne({ idempotencyKey: effectiveIdempotencyKey });
+            if (existingTx) {
+                const freshTask = await UserTask.findById(taskId);
+                const currentSettings = await Setting.getSettings();
+                return res.status(200).json({
+                    success: true,
+                    message: 'Funding request already processed (idempotent concurrent resolution).',
+                    task: freshTask,
+                    transaction: existingTx,
+                    settings: currentSettings
+                });
             }
         }
         return res.status(400).json({ success: false, error: err.message });

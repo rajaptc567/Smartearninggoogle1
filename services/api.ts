@@ -700,9 +700,13 @@ export const renewUserTask = async (id: string, extraSlots: number): Promise<{ t
 };
 
 export const addAdminCampaignFunds = async (id: string, amount: number, idempotencyKey?: string): Promise<{ task: UserTask; transaction: any; settings?: Settings }> => {
+    const headers = getHeaders();
+    if (idempotencyKey) {
+        headers['Idempotency-Key'] = idempotencyKey;
+    }
     const response = await fetch(`${API_BASE_URL}/user-tasks/${id}/add-funds`, {
         method: 'POST',
-        headers: getHeaders(),
+        headers,
         body: JSON.stringify({ amount, idempotencyKey }),
     });
     const result = await handleResponse(response);

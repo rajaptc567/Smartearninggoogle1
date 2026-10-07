@@ -128,6 +128,7 @@ export const AdminSurveyTemplates: React.FC = () => {
 
     // Campaign Funding Management Modals
     const [fundingModalTask, setFundingModalTask] = useState<UserTask | null>(null);
+    const [fundingIdempotencyKey, setFundingIdempotencyKey] = useState<string>('');
     const [addFundsAmount, setAddFundsAmount] = useState<number>(50);
     const [isAddingFunds, setIsAddingFunds] = useState<boolean>(false);
     const [historyModalTask, setHistoryModalTask] = useState<UserTask | null>(null);
@@ -551,13 +552,19 @@ export const AdminSurveyTemplates: React.FC = () => {
             return;
         }
 
+        const keyToSend = fundingIdempotencyKey || `admin_fund_${fundingModalTask._id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        if (!fundingIdempotencyKey) {
+            setFundingIdempotencyKey(keyToSend);
+        }
+
         setIsAddingFunds(true);
         try {
-            const res = await addAdminCampaignFunds(fundingModalTask._id, addFundsAmount);
+            const res = await addAdminCampaignFunds(fundingModalTask._id, addFundsAmount, keyToSend);
             dispatch({ type: 'UPDATE_USER_TASK', payload: res.task });
             if (res.settings) dispatch({ type: 'UPDATE_SETTINGS', payload: res.settings });
             setSuccessMessage(`Successfully added $${addFundsAmount.toFixed(2)} USD to campaign "${fundingModalTask.title}"!`);
             setFundingModalTask(null);
+            setFundingIdempotencyKey('');
         } catch (err: any) {
             alert(err.message || 'Failed to add funds.');
         } finally {

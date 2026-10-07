@@ -21,7 +21,7 @@ const TransactionSchema = new mongoose.Schema({
             'Task Wallet Transfer', 'Campaign Creation', 'Task Reward Transfer', 
             'Main To Campaign Wallet Transfer', 'Campaign Wallet To Main Transfer',
             'Task Wallet Conversion', 'Task Earnings Conversion', 'Task Earnings Transfer',
-            'Offerwall Reward', 'Offerwall Reversal', 'Offerwall Deduct'
+            'Offerwall Reward', 'Offerwall Reversal', 'Offerwall Deduct', 'Admin Campaign Funding'
         ],
         required: true,
     },
